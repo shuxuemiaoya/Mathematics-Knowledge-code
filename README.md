@@ -22,6 +22,12 @@ python -m pip install -e .[dev]
 
 ## 常用命令
 
+只安装 MinerU 文档转换技能到 Codex 全局发现目录：
+
+```powershell
+.\tools\install_codex_skills.ps1 -SkillName convert-with-mineru -Force
+```
+
 格式化知识库，先预览：
 
 ```powershell

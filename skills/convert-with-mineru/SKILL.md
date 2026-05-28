@@ -1,9 +1,9 @@
 ---
-name: math-knowledge-ingestion
-description: Convert PDF and DOCX source documents into Markdown for the user's mathematics knowledge base using the MinerU batch pipeline. Use when ingesting new textbooks, exercise books, scanned PDFs, Word files, or when preparing Codex automation that maps source folders into the knowledge-base directory.
+name: convert-with-mineru
+description: Convert PDF and DOCX source documents into Markdown for the user's mathematics knowledge base using the convert_with_mineru PowerShell wrapper and MinerU batch pipeline. Use when the user asks to convert a folder or document path to Markdown, ingest new textbooks, exercise books, scanned PDFs, or Word files into the knowledge-base directory.
 ---
 
-# Math Knowledge Ingestion
+# Convert With MinerU
 
 ## Workflow
 

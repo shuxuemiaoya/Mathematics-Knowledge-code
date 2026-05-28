@@ -45,10 +45,10 @@ mk-mineru "C:\path\to\source-documents" --format textbook
 Repo-local skills live in `skills/`:
 
 - `skills/math-knowledge-formatting`: use for Markdown cleanup and formatter changes.
-- `skills/math-knowledge-ingestion`: use for PDF/DOCX to Markdown ingestion with MinerU.
+- `skills/convert-with-mineru`: use for PDF/DOCX to Markdown conversion with MinerU.
 
 Install them into Codex discovery with:
 
 ```powershell
-.\tools\install_codex_skills.ps1
+.\tools\install_codex_skills.ps1 -SkillName convert-with-mineru -Force
 ```

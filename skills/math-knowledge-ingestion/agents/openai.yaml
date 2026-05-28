@@ -1,4 +1,0 @@
-interface:
-  display_name: "Math Knowledge Ingestion"
-  short_description: "Convert source documents into knowledge-base Markdown"
-  default_prompt: "Use $math-knowledge-ingestion to convert PDFs or DOCX files into the mathematics knowledge base."
