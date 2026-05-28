@@ -8,38 +8,14 @@ logger = get_logger()
 
 def main():
     parser = argparse.ArgumentParser(description="Enterprise Markdown Formatter")
-    parser.add_argument("--dir", type=str, help="Directory containing markdown files")
-    parser.add_argument("--mode", type=str, choices=["textbook", "exercise", "yishu", "bishua", "all_exercises"], help="Formatting mode")
+    parser.add_argument("--dir", type=str, required=True, help="Directory containing markdown files")
+    parser.add_argument("--mode", type=str, required=True,
+                        choices=["textbook", "exercise", "yishu", "bishua", "all_exercises"],
+                        help="Formatting mode: textbook | exercise | yishu | bishua | all_exercises")
     parser.add_argument("--backup", action="store_true", help="Create .bak files before modifying")
     
     args = parser.parse_args()
-    
-    target_dir = args.dir
-    target_mode = args.mode
-    
-    if not target_dir:
-        target_dir = input("请输入要修改的文件所在的目录: ").strip()
-        
-    if not target_mode:
-        print("\n请选择要修改的文件类型:")
-        print("1. 教科书 (textbook)")
-        print("2. 练习册：一书 (yishu)")
-        print("3. 练习册：必刷 (bishua)")
-        print("4. 默认/其他练习册 (exercise)")
-        print("5. 全部练习册 (all_exercises)")
-        mode_input = input("请输入编号或模式名 (默认 1): ").strip()
-        
-        mode_map = {
-            "1": "textbook",
-            "2": "yishu",
-            "3": "bishua",
-            "4": "exercise",
-            "5": "all_exercises",
-            "": "textbook"
-        }
-        target_mode = mode_map.get(mode_input, mode_input)
-        
-    return run_formatter(target_dir, target_mode, args.backup)
+    return run_formatter(args.dir, args.mode, args.backup)
 
 def run_formatter(dir_path: str, mode: str, backup: bool = False):
     root = Path(dir_path).expanduser().resolve()

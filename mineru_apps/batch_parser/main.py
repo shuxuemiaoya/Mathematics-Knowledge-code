@@ -18,8 +18,7 @@ def main():
     parser.add_argument(
         "root_dir",
         type=str,
-        nargs="?",
-        help="Root directory to recursively scan for PDF and DOCX files. If omitted, you will be prompted to enter it."
+        help="Root directory to recursively scan for PDF and DOCX files."
     )
     parser.add_argument(
         "--out-dir",
@@ -43,14 +42,7 @@ def main():
     
     args = parser.parse_args()
     
-    root_dir = args.root_dir
-    if not root_dir:
-        root_dir = input("请输入要扫描的文件夹路径 (按回车退出): ").strip()
-        if not root_dir:
-            logger.info("未输入路径，程序退出。")
-            sys.exit(0)
-    
-    root_dir = os.path.abspath(root_dir)
+    root_dir = os.path.abspath(args.root_dir)
     if not os.path.isdir(root_dir):
         logger.error(f"Error: Directory '{root_dir}' does not exist.")
         sys.exit(1)

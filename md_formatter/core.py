@@ -54,6 +54,13 @@ class BaseFormatter:
         new_text = new_text.replace(r"\overset{⃑}", r"\overrightarrow")
         new_text = new_text.replace(r"\overset{→}", r"\overrightarrow")
         
+        # 修复 Obsidian 无法渲染 \prime 的问题，统一转为普通的撇号 '
+        new_text = new_text.replace(r"^{\prime}", "'")
+        new_text = new_text.replace(r"\prime", "'")
+        
+        # 统一题号和列表的半角括号为全角： (1) -> （1）
+        new_text = re.sub(r'(?<![a-zA-Z0-9_])\(([0-9]+)\)', r'（\1）', new_text)
+        
         # 填空题修正：下划线
         new_text = new_text.replace(r"$\qquad$", r"$\underline{\hspace{2cm}}$")
         
