@@ -3,8 +3,11 @@ import time
 import zipfile
 import io
 import os
-from config import get_logger, MINERU_API_KEY, BASE_URL, MAX_RETRIES
-from core.endpoints import MinerUEndpoints
+import shutil
+from pathlib import Path
+
+from ..config import get_logger, MINERU_API_KEY, MAX_RETRIES
+from .endpoints import MinerUEndpoints
 
 logger = get_logger()
 
@@ -89,9 +92,31 @@ class MinerUClient:
     def download_and_extract_zip(self, zip_url, output_dir, target_filename="full.md"):
         response = self._retry_request("GET", zip_url)
         md_path = None
+        output_root = Path(output_dir).resolve()
+        output_root.mkdir(parents=True, exist_ok=True)
+
         with zipfile.ZipFile(io.BytesIO(response.content)) as z:
-            z.extractall(output_dir)
             for zip_info in z.infolist():
+                target_path = (output_root / zip_info.filename).resolve()
+                if not self._is_relative_to(target_path, output_root):
+                    raise ValueError(f"Unsafe zip member path: {zip_info.filename}")
+
+                if zip_info.is_dir():
+                    target_path.mkdir(parents=True, exist_ok=True)
+                    continue
+
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+                with z.open(zip_info) as source, open(target_path, "wb") as target:
+                    shutil.copyfileobj(source, target)
+
                 if zip_info.filename.endswith(target_filename):
                     md_path = os.path.join(output_dir, zip_info.filename)
         return md_path
+
+    @staticmethod
+    def _is_relative_to(path, parent):
+        try:
+            path.relative_to(parent)
+            return True
+        except ValueError:
+            return False

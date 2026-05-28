@@ -1,0 +1,4 @@
+interface:
+  display_name: "Math Knowledge Formatting"
+  short_description: "Format math Markdown knowledge-base files"
+  default_prompt: "Use $math-knowledge-formatting to clean and format Markdown notes in the mathematics knowledge base."

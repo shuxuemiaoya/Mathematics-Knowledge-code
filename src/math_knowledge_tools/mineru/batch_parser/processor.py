@@ -5,9 +5,9 @@ import shutil
 import uuid
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from config import get_logger, MAX_PARALLEL_TASKS, POLL_INTERVAL
-from core.client import MinerUClient
-from batch_parser.file_utils import (
+from ..config import get_logger, MAX_PARALLEL_TASKS, POLL_INTERVAL
+from ..core.client import MinerUClient
+from .file_utils import (
     get_output_paths,
     should_skip,
     split_pdf_if_needed,
@@ -51,7 +51,12 @@ class Processor:
         logger.info(f"Progress: [{processed}/{self.total}] - Success: {self.success}, Failed: {self.failed}, Skipped: {self.skipped}")
 
     def process_document(self, file_path):
-        output_md, output_image_dir = get_output_paths(file_path, self.base_src_dir, self.out_dir)
+        output_md, output_image_dir = get_output_paths(
+            file_path,
+            self.base_src_dir,
+            self.out_dir,
+            fallback_root=self.root_dir,
+        )
         
         if should_skip(output_md):
             logger.info(f"Skipping {file_path}, target {output_md} already exists.")

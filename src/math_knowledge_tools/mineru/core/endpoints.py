@@ -1,4 +1,4 @@
-from config import BASE_URL
+from ..config import BASE_URL
 
 class MinerUEndpoints:
     """集中存放各类 API 接口地址"""

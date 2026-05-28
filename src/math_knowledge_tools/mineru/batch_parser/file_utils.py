@@ -1,7 +1,8 @@
 import os
 import re
+import shutil
 import fitz  # PyMuPDF
-from config import get_logger, MAX_PAGES_PER_CHUNK
+from ..config import get_logger, MAX_PAGES_PER_CHUNK
 
 logger = get_logger()
 
@@ -29,13 +30,26 @@ def scan_directory(root_dir):
                 tasks.append(os.path.join(dirpath, filename))
     return tasks
 
-def get_output_paths(file_path, root_dir, out_dir):
+def get_output_paths(file_path, root_dir, out_dir, fallback_root=None):
     """
     计算相对路径并生成目标 md 路径和 images 文件夹路径。
     处理同名冲突：若同一目录下同时存在 a.pdf 和 a.docx，DOCX 的输出重命名为 a_docx.md
     """
     rel_path = os.path.relpath(file_path, root_dir)
+    if rel_path == os.pardir or rel_path.startswith(os.pardir + os.sep):
+        if fallback_root is None:
+            raise ValueError(f"{file_path} is outside base source directory {root_dir}")
+        rel_path = os.path.relpath(file_path, fallback_root)
+
+    rel_path = os.path.normpath(rel_path)
+    if os.path.isabs(rel_path) or rel_path == os.pardir or rel_path.startswith(os.pardir + os.sep):
+        raise ValueError(f"Unsafe relative output path: {rel_path}")
+
     target_base = os.path.join(out_dir, rel_path)
+    out_root = os.path.abspath(out_dir)
+    target_abs = os.path.abspath(target_base)
+    if os.path.commonpath([out_root, target_abs]) != out_root:
+        raise ValueError(f"Output path escapes target directory: {target_abs}")
     
     dirpath = os.path.dirname(target_base)
     basename = os.path.basename(target_base)
@@ -96,8 +110,6 @@ def split_pdf_if_needed(pdf_path, temp_dir):
         
     doc.close()
     return chunks
-
-import shutil
 
 def merge_md_files(chunks_data, output_md, output_image_dir):
     """

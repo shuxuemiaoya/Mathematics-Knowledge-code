@@ -78,13 +78,17 @@ class BaseFormatter:
         text = self._replace_common(text)
         return self._cleanup_empty_lines(text)
 
-    def process_file(self, path: Path, backup: bool = False) -> bool:
+    def process_file(self, path: Path, backup: bool = False, dry_run: bool = False) -> bool:
         """处理单个文件。"""
         try:
             txt = path.read_text(encoding="utf-8")
             new_txt = self.format_string(txt)
             
             if new_txt != txt:
+                if dry_run:
+                    logger.info(f"Would update: {path}")
+                    return True
+
                 if backup:
                     backup_path = path.with_suffix(path.suffix + '.bak')
                     shutil.copy2(path, backup_path)
