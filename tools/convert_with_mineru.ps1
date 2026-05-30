@@ -2,9 +2,9 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$RootDir,
 
-    [string]$OutDir = $(if ($env:KNOWLEDGE_BASE_DIR) { $env:KNOWLEDGE_BASE_DIR } else { "C:\mygithub\Secondary-School-Mathematics-Knowledge-Map" }),
+    [string]$OutDir = $env:KNOWLEDGE_BASE_DIR,
 
-    [string]$BaseSrcDir = $(if ($env:SOURCE_MATERIALS_DIR) { $env:SOURCE_MATERIALS_DIR } else { "C:\code\BaiduSyncdisk\数学妙呀资料" }),
+    [string]$BaseSrcDir = $env:SOURCE_MATERIALS_DIR,
 
     [ValidateSet("none", "textbook", "exercise", "yishu", "bishua", "all_exercises")]
     [string]$Format = "none"
@@ -18,5 +18,15 @@ if ($env:PYTHONPATH) {
     $env:PYTHONPATH = $srcPath
 }
 
-python -m math_knowledge_tools.mineru.cli $RootDir --out-dir $OutDir --base-src-dir $BaseSrcDir --format $Format
+$argsList = @($RootDir, "--format", $Format)
+if ($OutDir) {
+    $argsList += "--out-dir"
+    $argsList += $OutDir
+}
+if ($BaseSrcDir) {
+    $argsList += "--base-src-dir"
+    $argsList += $BaseSrcDir
+}
+
+python -m math_knowledge_tools.mineru.cli @argsList
 exit $LASTEXITCODE

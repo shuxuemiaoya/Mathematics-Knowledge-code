@@ -46,6 +46,7 @@ def build_parser():
 
 def run_batch_parser(root_dir, out_dir, base_src_dir, formatter_mode="none"):
     root_dir = os.path.abspath(root_dir)
+    base_src_dir = os.path.abspath(base_src_dir)
     if not os.path.isdir(root_dir):
         logger.error(f"Error: Directory '{root_dir}' does not exist.")
         return False
@@ -67,8 +68,18 @@ def run_batch_parser(root_dir, out_dir, base_src_dir, formatter_mode="none"):
     processor.run()
 
     if formatter_mode != "none":
-        logger.info(f"Running post-processing formatter '{formatter_mode}' on output directory...")
-        return run_formatter(out_dir, formatter_mode, backup=False)
+        # 计算本次任务实际的根输出目录，避免格式化整个知识库
+        try:
+            rel_root = os.path.relpath(root_dir, base_src_dir)
+            if rel_root == os.pardir or rel_root.startswith(os.pardir + os.sep):
+                actual_out_dir = out_dir
+            else:
+                actual_out_dir = os.path.join(out_dir, rel_root)
+        except ValueError:
+            actual_out_dir = out_dir
+            
+        logger.info(f"Running post-processing formatter '{formatter_mode}' on {actual_out_dir}...")
+        return run_formatter(actual_out_dir, formatter_mode, backup=False)
 
     return True
 
