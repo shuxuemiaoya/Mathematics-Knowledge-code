@@ -78,36 +78,52 @@ def should_skip(md_path):
 
 def split_pdf_if_needed(pdf_path, temp_dir):
     """
-    页数检查：若 PDF 页数超过指定阈值，使用 PyMuPDF 进行拆分。
-    命名规范：拆分后的子 PDF 命名必须带有格式化的三位序号（如 chunk_001.pdf）。
+    页数或大小检查：若 PDF 页数超过阈值或大小超过 200MB，进行拆分。
+    动态调整页数以确保每个 chunk 小于 200MB。
     返回拆分后的文件列表。
     """
     doc = fitz.open(pdf_path)
     total_pages = len(doc)
+    limit_200mb = 195 * 1024 * 1024  # 留 5MB 的安全余量
     
     if total_pages <= MAX_PAGES_PER_CHUNK:
-        doc.close()
-        return [pdf_path]
-        
-    logger.info(f"PDF {pdf_path} has {total_pages} pages, splitting...")
+        if os.path.getsize(pdf_path) <= limit_200mb:
+            doc.close()
+            return [pdf_path]
+        else:
+            logger.info(f"PDF {pdf_path} exceeds 195MB, will dynamically split...")
+
+    logger.info(f"Splitting {pdf_path} into chunks...")
     
     chunks = []
     chunk_idx = 1
+    start_page = 0
     
-    for start_page in range(0, total_pages, MAX_PAGES_PER_CHUNK):
-        end_page = min(start_page + MAX_PAGES_PER_CHUNK - 1, total_pages - 1)
+    while start_page < total_pages:
+        pages_to_try = min(MAX_PAGES_PER_CHUNK, total_pages - start_page)
         
-        chunk_doc = fitz.open()
-        chunk_doc.insert_pdf(doc, from_page=start_page, to_page=end_page)
-        
-        chunk_filename = f"chunk_{chunk_idx:03d}.pdf"
-        chunk_path = os.path.join(temp_dir, chunk_filename)
-        chunk_doc.save(chunk_path)
-        chunk_doc.close()
-        
-        chunks.append(chunk_path)
-        chunk_idx += 1
-        
+        while pages_to_try > 0:
+            end_page = start_page + pages_to_try - 1
+            chunk_doc = fitz.open()
+            chunk_doc.insert_pdf(doc, from_page=start_page, to_page=end_page)
+            
+            chunk_filename = f"chunk_{chunk_idx:03d}.pdf"
+            chunk_path = os.path.join(temp_dir, chunk_filename)
+            chunk_doc.save(chunk_path)
+            size = os.path.getsize(chunk_path)
+            chunk_doc.close()
+            
+            if size > limit_200mb and pages_to_try > 1:
+                logger.warning(f"Chunk {chunk_path} size {size/1024/1024:.2f}MB > 195MB, reducing pages from {pages_to_try} to {pages_to_try // 2}...")
+                os.remove(chunk_path)
+                pages_to_try = max(1, pages_to_try // 2)
+            else:
+                chunks.append(chunk_path)
+                logger.info(f"Created {chunk_path} ({size/1024/1024:.2f}MB) with pages {start_page} to {end_page}")
+                chunk_idx += 1
+                start_page = end_page + 1
+                break
+                
     doc.close()
     return chunks
 

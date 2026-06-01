@@ -18,6 +18,10 @@ if ($env:PYTHONPATH) {
     $env:PYTHONPATH = $srcPath
 }
 
+# Fix encoding for Chinese characters in paths
+$OutputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$env:PYTHONIOENCODING = "utf-8"
+
 $argsList = @($RootDir, "--format", $Format)
 if ($OutDir) {
     $argsList += "--out-dir"
