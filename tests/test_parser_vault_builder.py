@@ -9,12 +9,18 @@ def test_vault_builder(tmp_path):
         {"type": "callout", "callout_type": "example", "content": "> [!example] 例1\n> 解答", "parent_hierarchy": ["第一章 集合", "1.1 集合的概念"]}
     ]
     
-    builder = VaultBuilder(str(tmp_path))
-    builder.build_from_chunks(chunks)
+    builder = VaultBuilder(str(tmp_path), mode="highschool_textbook")
+    builder.build_from_chunks(chunks, root_name="my_book")
     
     # 验证目录被正确创建
     assert (tmp_path / "知识点").exists()
     assert (tmp_path / "题").exists()
+    
+    # 验证 Root MOC
+    root_file = tmp_path / "知识点" / "my_book.md"
+    assert root_file.exists()
+    root_content = root_file.read_text(encoding="utf-8")
+    assert "[[第一章 集合]]" in root_content
     
     # 验证第一章 MOC
     ch1_file = tmp_path / "知识点" / "第一章 集合.md"

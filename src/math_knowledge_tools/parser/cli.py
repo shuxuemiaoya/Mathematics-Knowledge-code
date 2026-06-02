@@ -8,6 +8,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Markdown to Zettelkasten Vault Builder")
     parser.add_argument("--input", type=str, required=True, help="Input markdown file")
     parser.add_argument("--output", type=str, required=True, help="Output vault directory")
+    parser.add_argument("--mode", type=str, default="highschool_textbook", help="Parsing mode")
     
     args = parser.parse_args(argv)
     
@@ -26,8 +27,8 @@ def main(argv=None):
     print(f"Extracted {len(chunks)} chunks.")
     
     print(f"Building vault at {output_dir}...")
-    builder = VaultBuilder(str(output_dir))
-    builder.build_from_chunks(chunks)
+    builder = VaultBuilder(str(output_dir), mode=args.mode)
+    builder.build_from_chunks(chunks, root_name=input_file.stem)
     print("Vault built successfully.")
     
     return 0

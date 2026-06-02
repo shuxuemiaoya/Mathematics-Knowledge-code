@@ -11,7 +11,7 @@ def test_obsidian_node():
     assert "[[定义-集合]]" in md_content
 
 def test_categorizer():
-    cat = Categorizer()
+    cat = Categorizer(mode="highschool_textbook")
     
     # Text chunks (including H1/H2) go to 知识点
     c1 = cat.categorize({"type": "text", "content": "一些正文", "parent_hierarchy": ["1.1"]})

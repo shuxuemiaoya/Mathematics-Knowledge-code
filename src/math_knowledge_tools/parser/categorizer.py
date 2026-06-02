@@ -1,7 +1,8 @@
 from typing import Dict, Any
 
 class Categorizer:
-    def __init__(self):
+    def __init__(self, mode: str = "highschool_textbook"):
+        self.mode = mode
         # Mappings based on user specification
         self.callout_map = {
             "example": "题",
@@ -17,9 +18,12 @@ class Categorizer:
         """
         chunk_type = chunk.get("type")
         
-        if chunk_type == "callout":
-            callout_type = chunk.get("callout_type", "")
-            return self.callout_map.get(callout_type, "知识点")
+        if self.mode == "highschool_textbook":
+            if chunk_type == "callout":
+                callout_type = chunk.get("callout_type", "")
+                return self.callout_map.get(callout_type, "知识点")
+                
+            # Default text blocks and H1/H2/H3 nodes are Knowledge Points
+            return "知识点"
             
-        # Default text blocks and H1/H2/H3 nodes are Knowledge Points
         return "知识点"

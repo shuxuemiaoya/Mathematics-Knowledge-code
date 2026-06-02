@@ -6,9 +6,9 @@ from .categorizer import Categorizer
 from .vault_models import ObsidianNode
 
 class VaultBuilder:
-    def __init__(self, vault_dir: str):
+    def __init__(self, vault_dir: str, mode: str = "highschool_textbook"):
         self.vault_dir = Path(vault_dir)
-        self.categorizer = Categorizer()
+        self.categorizer = Categorizer(mode=mode)
         self.nodes: Dict[str, ObsidianNode] = {}
         
     def _get_or_create_node(self, title: str, category: str) -> ObsidianNode:
@@ -24,11 +24,16 @@ class VaultBuilder:
         # Fallback if no title found
         return f"Block_{hash(content)}"
 
-    def build_from_chunks(self, chunks: List[Dict[str, Any]]) -> None:
+    def build_from_chunks(self, chunks: List[Dict[str, Any]], root_name: str) -> None:
+        root_node = self._get_or_create_node(root_name, "知识点")
+        
         for chunk in chunks:
             hierarchy = chunk.get("parent_hierarchy", [])
             content = chunk.get("content", "")
             category = self.categorizer.categorize(chunk)
+            
+            if hierarchy:
+                root_node.add_link(hierarchy[0])
             
             # Make sure all parents exist and link to each other (Strict RKDT)
             for i in range(len(hierarchy)):
