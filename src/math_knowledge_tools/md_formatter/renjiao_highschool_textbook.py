@@ -1,7 +1,7 @@
 import re
 from .core import BaseFormatter
 
-class RenjiaoTextbookFormatter(BaseFormatter):
+class RenjiaoHighschoolTextbookFormatter(BaseFormatter):
     """
     专门针对人教版高中数学教材的格式化器。
     处理目录页码提取、特定版块（如例题、思考）的 Obsidian Callout 映射。

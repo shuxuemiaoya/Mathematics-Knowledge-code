@@ -18,7 +18,6 @@ class ObsidianNode(BaseModel):
         if self.content:
             lines.append(f"{self.content}\n")
         if self.links:
-            lines.append("## 下级链接\n")
             for link in self.links:
                 lines.append(f"- [[{link}]]")
         return "\n".join(lines)

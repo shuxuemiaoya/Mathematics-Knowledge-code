@@ -14,7 +14,6 @@ def test_vault_builder(tmp_path):
     
     # 验证目录被正确创建
     assert (tmp_path / "知识点").exists()
-    assert (tmp_path / "题").exists()
     
     # 验证 Root MOC
     root_file = tmp_path / "知识点" / "my_book.md"
@@ -29,15 +28,9 @@ def test_vault_builder(tmp_path):
     assert "[[1.1 集合的概念]]" in ch1_content
     assert "这是第一章的介绍" in ch1_content
     
-    # 验证 1.1 MOC
+    # 验证 1.1 MOC (should contain the callout text directly)
     sec1_file = tmp_path / "知识点" / "1.1 集合的概念.md"
     assert sec1_file.exists()
     sec1_content = sec1_file.read_text(encoding="utf-8")
-    assert "[[例1]]" in sec1_content
     assert "这是1.1的介绍" in sec1_content
-    
-    # 验证例题文件
-    ex_file = tmp_path / "题" / "例1.md"
-    assert ex_file.exists()
-    ex_content = ex_file.read_text(encoding="utf-8")
-    assert "> [!example] 例1" in ex_content
+    assert "> [!example] 例1" in sec1_content

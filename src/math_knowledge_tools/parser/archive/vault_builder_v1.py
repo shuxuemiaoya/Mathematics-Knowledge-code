@@ -6,9 +6,9 @@ from .categorizer import Categorizer
 from .vault_models import ObsidianNode
 
 class VaultBuilder:
-    def __init__(self, vault_dir: str, mode: str = "highschool_textbook"):
+    def __init__(self, vault_dir: str):
         self.vault_dir = Path(vault_dir)
-        self.categorizer = Categorizer(mode=mode)
+        self.categorizer = Categorizer()
         self.nodes: Dict[str, ObsidianNode] = {}
         
     def _get_or_create_node(self, title: str, category: str) -> ObsidianNode:
@@ -24,16 +24,11 @@ class VaultBuilder:
         # Fallback if no title found
         return f"Block_{hash(content)}"
 
-    def build_from_chunks(self, chunks: List[Dict[str, Any]], root_name: str) -> None:
-        root_node = self._get_or_create_node(root_name, "知识点")
-        
+    def build_from_chunks(self, chunks: List[Dict[str, Any]]) -> None:
         for chunk in chunks:
             hierarchy = chunk.get("parent_hierarchy", [])
             content = chunk.get("content", "")
             category = self.categorizer.categorize(chunk)
-            
-            if hierarchy:
-                root_node.add_link(hierarchy[0])
             
             # Make sure all parents exist and link to each other (Strict RKDT)
             for i in range(len(hierarchy)):
@@ -56,15 +51,14 @@ class VaultBuilder:
                 else:
                     leaf_node.content = content
             
-            # If it's a callout
+            # If it's a callout, it becomes its own separate node and is linked by the leaf node
             elif chunk.get("type") == "callout":
-                callout_type = chunk.get("callout_type", "")
+                callout_title = self._extract_title_from_callout(content)
+                callout_node = self._get_or_create_node(callout_title, category)
+                callout_node.content = content
                 
-                # Do not split any callouts. Append to leaf node content
-                if leaf_node.content:
-                    leaf_node.content += f"\n\n{content}"
-                else:
-                    leaf_node.content = content
+                # Link from leaf to callout
+                leaf_node.add_link(callout_title)
                 
         self._write_to_disk()
         
