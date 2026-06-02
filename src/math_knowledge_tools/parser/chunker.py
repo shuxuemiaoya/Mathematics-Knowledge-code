@@ -34,8 +34,25 @@ class MarkdownChunker:
                     }
                 current_content.clear()
                     
-                level = len(h_match.group(1))
                 title = h_match.group(2).strip()
+                raw_level = len(h_match.group(1))
+                level = raw_level
+                
+                # Hierarchy Override Logic
+                if re.match(r'^第[一二三四五六七八九十百]+章', title):
+                    level = 1
+                elif re.match(r'^\d+\.\d+\s', title):
+                    level = 2
+                elif re.match(r'^\d+\.\d+\.\d+\s', title):
+                    level = 3
+                else:
+                    # If it's not a standard numbered section, it cannot be higher than the current depth
+                    # e.g., if we are inside H2 (len(hierarchy) == 2), and we get `# 探究1` (raw_level=1)
+                    # It must be demoted to level 3 (child of H2).
+                    current_depth = len(hierarchy)
+                    if level <= current_depth:
+                        level = current_depth + 1
+
                 hierarchy = [h for h in hierarchy if h[0] < level]
                 hierarchy.append((level, title))
                 i += 1

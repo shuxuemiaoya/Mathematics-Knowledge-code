@@ -56,14 +56,22 @@ class VaultBuilder:
                 else:
                     leaf_node.content = content
             
-            # If it's a callout, it becomes its own separate node and is linked by the leaf node
+            # If it's a callout
             elif chunk.get("type") == "callout":
-                callout_title = self._extract_title_from_callout(content)
-                callout_node = self._get_or_create_node(callout_title, category)
-                callout_node.content = content
+                callout_type = chunk.get("callout_type", "")
                 
-                # Link from leaf to callout
-                leaf_node.add_link(callout_title)
+                # ONLY split "example" callouts. Do NOT split "explore", "observe", "think", etc.
+                if callout_type == "example":
+                    callout_title = self._extract_title_from_callout(content)
+                    callout_node = self._get_or_create_node(callout_title, category)
+                    callout_node.content = content
+                    leaf_node.add_link(callout_title)
+                else:
+                    # Do not split. Append to leaf node content
+                    if leaf_node.content:
+                        leaf_node.content += f"\n\n{content}"
+                    else:
+                        leaf_node.content = content
                 
         self._write_to_disk()
         
