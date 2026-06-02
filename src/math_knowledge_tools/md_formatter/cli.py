@@ -3,6 +3,7 @@ from pathlib import Path
 from .logger import get_logger
 from .textbook import TextbookFormatter
 from .exercise import ExerciseFormatter
+from .renjiao_textbook import RenjiaoTextbookFormatter
 
 logger = get_logger()
 
@@ -10,8 +11,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Markdown formatter for the mathematics knowledge base")
     parser.add_argument("--dir", type=str, required=True, help="Directory containing markdown files")
     parser.add_argument("--mode", type=str, required=True,
-                        choices=["textbook", "exercise", "yishu", "bishua", "all_exercises"],
-                        help="Formatting mode: textbook | exercise | yishu | bishua | all_exercises")
+                        choices=["textbook", "exercise", "yishu", "bishua", "all_exercises", "renjiao-textbook"],
+                        help="Formatting mode: textbook | exercise | yishu | bishua | all_exercises | renjiao-textbook")
     parser.add_argument("--backup", action="store_true", help="Create .bak files before modifying")
     parser.add_argument("--dry-run", action="store_true", help="Report files that would change without writing them")
     
@@ -36,6 +37,8 @@ def run_formatter(dir_path: str, mode: str, backup: bool = False, dry_run: bool 
         formatter = ExerciseFormatter(variant="bishua")
     elif mode == "all_exercises":
         formatter = ExerciseFormatter(variant="all")
+    elif mode == "renjiao-textbook":
+        formatter = RenjiaoTextbookFormatter()
     else:
         logger.error(f"Unknown mode: {mode}")
         return False
