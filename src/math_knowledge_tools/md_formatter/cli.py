@@ -7,12 +7,25 @@ from .renjiao_textbook import RenjiaoTextbookFormatter
 
 logger = get_logger()
 
+FORMATTERS = {
+    "textbook": lambda: TextbookFormatter(),
+    "exercise": lambda: ExerciseFormatter(variant="default"),
+    "yishu": lambda: ExerciseFormatter(variant="yishu"),
+    "bishua": lambda: ExerciseFormatter(variant="bishua"),
+    "all_exercises": lambda: ExerciseFormatter(variant="all"),
+    "renjiao-textbook": lambda: RenjiaoTextbookFormatter(),
+}
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Markdown formatter for the mathematics knowledge base")
     parser.add_argument("--dir", type=str, required=True, help="Directory containing markdown files")
+    
+    mode_choices = list(FORMATTERS.keys())
+    mode_help = "Formatting mode: " + " | ".join(mode_choices)
+    
     parser.add_argument("--mode", type=str, required=True,
-                        choices=["textbook", "exercise", "yishu", "bishua", "all_exercises", "renjiao-textbook"],
-                        help="Formatting mode: textbook | exercise | yishu | bishua | all_exercises | renjiao-textbook")
+                        choices=mode_choices,
+                        help=mode_help)
     parser.add_argument("--backup", action="store_true", help="Create .bak files before modifying")
     parser.add_argument("--dry-run", action="store_true", help="Report files that would change without writing them")
     
@@ -27,21 +40,11 @@ def run_formatter(dir_path: str, mode: str, backup: bool = False, dry_run: bool 
         logger.error(f"Invalid directory: {root}")
         return False
         
-    if mode == "textbook":
-        formatter = TextbookFormatter()
-    elif mode == "exercise":
-        formatter = ExerciseFormatter(variant="default")
-    elif mode == "yishu":
-        formatter = ExerciseFormatter(variant="yishu")
-    elif mode == "bishua":
-        formatter = ExerciseFormatter(variant="bishua")
-    elif mode == "all_exercises":
-        formatter = ExerciseFormatter(variant="all")
-    elif mode == "renjiao-textbook":
-        formatter = RenjiaoTextbookFormatter()
-    else:
+    if mode not in FORMATTERS:
         logger.error(f"Unknown mode: {mode}")
         return False
+        
+    formatter = FORMATTERS[mode]()
 
     processed_count = 0
     updated_count = 0
