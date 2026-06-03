@@ -59,8 +59,8 @@ def run_formatter(dir_path: str, mode: str, backup: bool = False, dry_run: bool 
     root = Path(dir_path).expanduser().resolve()
     logger.info(f"Starting formatter on {root} with mode={mode}, dry_run={dry_run}")
     
-    if not root.exists() or not root.is_dir():
-        logger.error(f"Invalid directory: {root}")
+    if not root.exists():
+        logger.error(f"Invalid path: {root}")
         return False
         
     if mode not in FORMATTERS:
@@ -72,7 +72,12 @@ def run_formatter(dir_path: str, mode: str, backup: bool = False, dry_run: bool 
     processed_count = 0
     updated_count = 0
     
-    for p in root.rglob("*.md"):
+    if root.is_file():
+        files = [root] if root.suffix.lower() == '.md' else []
+    else:
+        files = root.rglob("*.md")
+        
+    for p in files:
         if any(part.startswith('.') for part in p.parts):
             continue
             

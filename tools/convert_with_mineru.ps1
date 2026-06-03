@@ -32,5 +32,5 @@ if ($BaseSrcDir) {
     $argsList += $BaseSrcDir
 }
 
-python -m math_knowledge_tools.mineru.cli @argsList
+python -m mathos.ingestion.mineru.cli @argsList
 exit $LASTEXITCODE
