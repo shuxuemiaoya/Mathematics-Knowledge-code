@@ -1,9 +1,12 @@
 """Two-phase LLM-assisted Rule Builder for generating new formatter classes."""
 
 import ast
+import os
 import re
 from pathlib import Path
 from typing import Optional
+
+from openai import OpenAI
 
 from .logger import get_logger
 
@@ -23,6 +26,10 @@ class RuleBuilder:
         self.target_dir = Path(target_dir)
         self.name = name
         self.toc_lines = toc_lines
+        api_key = os.getenv("DEEPSEEK_API_KEY")
+        if not api_key:
+            raise ValueError("DEEPSEEK_API_KEY must be set in environment variables. See .env setup.")
+        self.llm_client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com/v1")
 
     def _find_first_md(self) -> Optional[Path]:
         """Find the first .md file in target_dir."""
@@ -157,3 +164,74 @@ class RuleBuilder:
         target.write_text(code, encoding="utf-8")
         logger.info(f"Saved formatter to: {target}")
         return target
+
+    def _call_llm(self, system_prompt: str) -> str:
+        """Call DeepSeek LLM and return the response content."""
+        response = self.llm_client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {"role": "system", "content": system_prompt},
+            ],
+            temperature=0.3,
+        )
+        content = response.choices[0].message.content
+        # Strip markdown fences if the LLM wraps the code
+        content = content.strip()
+        if content.startswith("```python"):
+            content = content[len("```python"):].strip()
+        if content.startswith("```"):
+            content = content[3:].strip()
+        if content.endswith("```"):
+            content = content[:-3].strip()
+        return content
+
+    def _read_source_file(self, relative_path: str) -> str:
+        """Read a source file from the formatter package for use in prompts."""
+        path = Path(__file__).parent / relative_path
+        return path.read_text(encoding="utf-8")
+
+    def phase1_heading_rules(self) -> str:
+        """Phase 1: Extract TOC → LLM → return generated Python code.
+        
+        Returns the generated Python code string.
+        """
+        md_file = self._find_first_md()
+        if not md_file:
+            raise FileNotFoundError(f"No .md files found in {self.target_dir}")
+
+        toc_content = self._extract_toc(md_file)
+        logger.info(f"Extracted TOC ({len(toc_content)} chars) from {md_file}")
+
+        prompt = self._load_prompt(
+            "phase1_heading_rules.md",
+            base_formatter_source=self._read_source_file("core.py"),
+            example_formatter_source=self._read_source_file("renjiao_highschool_textbook.py"),
+            toc_content=toc_content,
+        )
+
+        code = self._call_llm(prompt)
+        return code
+
+    def phase2_beautification_rules(self, phase1_code: str) -> str:
+        """Phase 2: Extract H1 section → LLM → return updated Python code.
+        
+        Args:
+            phase1_code: The confirmed Phase 1 generated class code.
+        
+        Returns the updated Python code string with beautification rules added.
+        """
+        md_file = self._find_first_md()
+        if not md_file:
+            raise FileNotFoundError(f"No .md files found in {self.target_dir}")
+
+        h1_content = self._extract_first_h1_section(md_file)
+        logger.info(f"Extracted H1 section ({len(h1_content)} chars) from {md_file}")
+
+        prompt = self._load_prompt(
+            "phase2_beautification.md",
+            phase1_code=phase1_code,
+            h1_section_content=h1_content,
+        )
+
+        code = self._call_llm(prompt)
+        return code

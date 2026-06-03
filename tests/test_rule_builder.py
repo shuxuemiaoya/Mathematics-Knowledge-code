@@ -2,7 +2,16 @@
 import pytest
 import textwrap
 from pathlib import Path
+from unittest.mock import patch, MagicMock
+import os
+
 from mathos.formatter.rule_builder import RuleBuilder
+
+@pytest.fixture(autouse=True)
+def mock_env():
+    with patch.dict("os.environ", {"DEEPSEEK_API_KEY": "dummy-key"}):
+        yield
+
 
 
 @pytest.fixture
@@ -124,3 +133,39 @@ class TestValidateCode:
         rb = RuleBuilder(target_dir=Path("."), name="test")
         is_valid, error = rb._validate_code(code)
         assert not is_valid
+
+MOCK_PHASE1_CODE = textwrap.dedent("""\
+    import re
+    from .core import BaseFormatter
+
+    class TestTextbookFormatter(BaseFormatter):
+        def __init__(self):
+            super().__init__()
+            self.re_toc = re.compile(r'^.+(?:\\.{3,}|…{3,})\\s*\\d+\\s*$', re.MULTILINE)
+            self.re_chapter = re.compile(r'(?m)^#\\s+(第[一二三四五六七八九十]+章[^\\r\\n]*)$')
+
+        def format_string(self, text: str) -> str:
+            new = self._replace_common(text)
+            new = self.re_toc.sub('', new)
+            new = self.re_chapter.sub(r'# \\1', new)
+            return self._cleanup_empty_lines(new)
+""")
+
+
+class TestPhase1Integration:
+    @patch.dict("os.environ", {"DEEPSEEK_API_KEY": "test-key"})
+    @patch("mathos.formatter.rule_builder.OpenAI")
+    def test_phase1_returns_valid_code(self, mock_openai_class, tmp_md_with_toc):
+        mock_client = MagicMock()
+        mock_openai_class.return_value = mock_client
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = MOCK_PHASE1_CODE
+        mock_client.chat.completions.create.return_value = mock_response
+
+        rb = RuleBuilder(target_dir=tmp_md_with_toc, name="test-textbook")
+        code = rb.phase1_heading_rules()
+
+        is_valid, error = rb._validate_code(code)
+        assert is_valid, f"Generated code is invalid: {error}"
+        assert "TestTextbookFormatter" in code
