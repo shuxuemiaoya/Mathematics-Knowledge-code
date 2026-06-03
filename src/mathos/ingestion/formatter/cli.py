@@ -14,6 +14,7 @@ FORMATTERS = {
     "bishua": lambda: ExerciseFormatter(variant="bishua"),
     "all_exercises": lambda: ExerciseFormatter(variant="all"),
     "renjiao-highschool-textbook": lambda: RenjiaoHighschoolTextbookFormatter(),
+    "zheda_youfu": lambda: ExerciseFormatter(variant="all"),
 }
 
 def main(argv=None):

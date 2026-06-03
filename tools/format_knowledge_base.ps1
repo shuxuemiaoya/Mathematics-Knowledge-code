@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("textbook", "exercise", "yishu", "bishua", "all_exercises")]
+    [ValidateSet("none", "textbook", "exercise", "yishu", "bishua", "all_exercises", "zheda_youfu")]
     [string]$Mode = "textbook",
 
     [string]$Dir = $(if ($env:KNOWLEDGE_BASE_DIR) { $env:KNOWLEDGE_BASE_DIR } else { "C:\mygithub\Secondary-School-Mathematics-Knowledge-Map" }),
