@@ -21,7 +21,7 @@ dev = [
 
 [project.scripts]
 math-knowledge = "mathos.cli:main"
-mk-format = "mathos.ingestion.formatter.cli:main"
+mk-format = "mathos.formatter.cli:main"
 mk-mineru = "mathos.ingestion.mineru.cli:main"
 mk-vault = "mathos.vault.cli:main"
 mk-extract = "mathos.extraction.cli:main"

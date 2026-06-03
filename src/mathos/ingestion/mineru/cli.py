@@ -1,7 +1,7 @@
 import argparse
 import os
 
-from ..formatter.cli import run_formatter
+from mathos.formatter.cli import run_formatter
 from .batch_parser.file_utils import scan_directory
 from .batch_parser.processor import Processor
 from .config import (

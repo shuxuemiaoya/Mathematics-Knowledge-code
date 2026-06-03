@@ -1,5 +1,5 @@
 ---
-name: math-knowledge-formatting
+name: mathos-formatter
 description: Format and review Markdown in the user's secondary-school mathematics knowledge base. Use when cleaning OCR or MinerU Markdown, applying textbook or exercise formatting modes, editing formatter rules, running dry-run and backup workflows, or preparing Codex automation for Markdown cleanup.
 ---
 

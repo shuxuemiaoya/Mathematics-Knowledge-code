@@ -17,7 +17,7 @@ if ($env:PYTHONPATH) {
 }
 
 $commandArgs = @(
-    "-m", "mathos.ingestion.formatter.cli",
+    "-m", "mathos.formatter.cli",
     "--dir", $Dir,
     "--mode", $Mode
 )

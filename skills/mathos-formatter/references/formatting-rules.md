@@ -2,10 +2,10 @@
 
 ## Package Paths
 
-- CLI: `src/math_knowledge_tools/md_formatter/cli.py`
-- Shared rules: `src/math_knowledge_tools/md_formatter/core.py`
-- Textbook rules: `src/math_knowledge_tools/md_formatter/textbook.py`
-- Exercise rules: `src/math_knowledge_tools/md_formatter/exercise.py`
+- CLI: `src/mathos/formatter/cli.py`
+- Shared rules: `src/mathos/formatter/core.py`
+- Textbook rules: `src/mathos/formatter/textbook.py`
+- Exercise rules: `src/mathos/formatter/exercise.py`
 
 ## Safe Run Pattern
 
