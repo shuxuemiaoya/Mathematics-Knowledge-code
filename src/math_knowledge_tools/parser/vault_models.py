@@ -6,6 +6,7 @@ class ObsidianNode(BaseModel):
     content: str = ""
     category: str
     links: list[str] = Field(default_factory=list)
+    hierarchy: list[str] = Field(default_factory=list)
     
     def add_link(self, target_title: str) -> None:
         if target_title not in self.links:

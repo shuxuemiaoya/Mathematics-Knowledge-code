@@ -35,10 +35,11 @@ class VaultBuilder:
             if hierarchy:
                 root_node.add_link(hierarchy[0])
             
-            # Make sure all parents exist and link to each other (Strict RKDT)
             for i in range(len(hierarchy)):
                 parent_title = hierarchy[i]
                 parent_node = self._get_or_create_node(parent_title, "知识点")
+                if not parent_node.hierarchy:
+                    parent_node.hierarchy = hierarchy[:i+1]
                 if i < len(hierarchy) - 1:
                     child_title = hierarchy[i+1]
                     parent_node.add_link(child_title)
@@ -72,8 +73,18 @@ class VaultBuilder:
         self.vault_dir.mkdir(parents=True, exist_ok=True)
         for node in self.nodes.values():
             cat_dir = self.vault_dir / node.category
-            cat_dir.mkdir(parents=True, exist_ok=True)
             
-            safe_title = re.sub(r'[\\/*?:"<>|]', '_', node.title)
-            file_path = cat_dir / f"{safe_title}.md"
+            # Resolve nested directory from hierarchy
+            if node.hierarchy and len(node.hierarchy) > 1:
+                # Exclude the node itself to get parent folders
+                folder_parts = node.hierarchy[:-1]
+                folder_parts = [re.sub(r'[\\/*?:"<>|]', '_', p).strip(' .') or 'Untitled' for p in folder_parts]
+                nested_dir = cat_dir.joinpath(*folder_parts)
+            else:
+                nested_dir = cat_dir
+                
+            nested_dir.mkdir(parents=True, exist_ok=True)
+            
+            safe_title = re.sub(r'[\\/*?:"<>|]', '_', node.title).strip(' .') or 'Untitled'
+            file_path = nested_dir / f"{safe_title}.md"
             file_path.write_text(node.to_markdown(), encoding="utf-8")
