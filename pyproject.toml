@@ -23,6 +23,10 @@ dev = [
 math-knowledge = "math_knowledge_tools.cli:main"
 mk-format = "math_knowledge_tools.md_formatter.cli:main"
 mk-mineru = "math_knowledge_tools.mineru.cli:main"
+mk-vault = "math_knowledge_tools.parser.cli:main"
+mk-extract = "math_knowledge_tools.ontology.cli:main"
+mk-graph = "math_knowledge_tools.graph_backend.cli:main"
+mk-obsidian = "math_knowledge_tools.obsidian_integration.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

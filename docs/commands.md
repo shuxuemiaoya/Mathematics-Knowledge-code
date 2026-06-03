@@ -28,11 +28,26 @@ Modes:
 mk-mineru "C:\path\to\source-documents" --format textbook
 ```
 
+## Zettelkasten Builder (Sprint 3A)
+
+```powershell
+mk-vault --input "C:\path\to\textbook.md" --output "C:\path\to\vault_dir" --mode highschool_textbook
+```
+
+## Ontology Extractor (Sprint 3B)
+
+Ensure you set the API key before running:
+```powershell
+$env:DEEPSEEK_API_KEY="sk-..."
+mk-extract --vault_dir "C:\path\to\vault_dir"
+```
+
 Defaults come from `.env`:
 
 - `KNOWLEDGE_BASE_DIR`
 - `SOURCE_MATERIALS_DIR`
 - `MINERU_API_KEY`
+- `DEEPSEEK_API_KEY`
 
 ## Unified CLI
 

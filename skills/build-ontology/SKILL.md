@@ -1,0 +1,31 @@
+---
+name: build-ontology
+description: Use when merging scattered extracted JSON ontologies into a single global graph and exporting to Neo4j CSVs for GraphRAG.
+---
+
+# Merging Ontology to GraphRAG (Phase 3C Track 1)
+
+## Overview
+Use this skill when transitioning from scattered LLM extractions (Phase 3B) into a unified backend database for AI logic and GraphRAG. It involves a Map-Reduce style merge to prevent Token limits, followed by CSV exporting.
+
+## When to Use
+- When you need to build the `global_ontology.json`.
+- When you need to deploy the knowledge graph to a Neo4j database.
+
+## Core Process
+1. **Global Merge**: The script reads thousands of `*.candidates.json` files and uses exact-match deduplication to merge identical concepts into a single `global_ontology.json`.
+2. **Neo4j Export**: Translates the global JSON into `nodes.csv` and `edges.csv` standard formats.
+
+## Command Reference
+Step 1: Merge
+```powershell
+python -m src.math_knowledge_tools.graph_backend.cli merge --input "path/to/candidates_dir" --output "global_ontology.json"
+```
+
+Step 2: Export
+```powershell
+python -m src.math_knowledge_tools.graph_backend.cli export --input "global_ontology.json" --output-dir "path/to/export_dir"
+```
+
+## Common Mistakes / Red Flags
+- ❌ **LLM Merge**: NEVER try to pass the thousands of JSONs to an LLM to "summarize or merge" them. You will exceed the context window and hallucinate data. Always use the deterministic python `merge` command.

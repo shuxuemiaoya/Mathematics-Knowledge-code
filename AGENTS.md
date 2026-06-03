@@ -32,6 +32,19 @@ Convert source documents:
 mk-mineru "C:\path\to\source-documents" --format textbook
 ```
 
+Build Zettelkasten Vault (Sprint 3A):
+
+```powershell
+mk-vault --input "C:\path\to\textbook.md" --output "C:\path\to\vault_dir" --mode highschool_textbook
+```
+
+Extract Ontology Candidates (Sprint 3B):
+
+```powershell
+$env:DEEPSEEK_API_KEY="sk-..."
+mk-extract --vault_dir "C:\path\to\vault_dir"
+```
+
 ## Safety Rules
 
 - Run `--dry-run` before broad formatting changes.
