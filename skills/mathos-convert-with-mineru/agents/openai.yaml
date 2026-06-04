@@ -1,4 +1,0 @@
-interface:
-  display_name: "MathOS Convert With MinerU"
-  short_description: "Convert source documents into knowledge-base Markdown"
-  default_prompt: "Use $mathos-convert-with-mineru to convert PDFs or DOCX files into the mathematics knowledge base."

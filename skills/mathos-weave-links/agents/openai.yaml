@@ -1,4 +1,0 @@
-interface:
-  display_name: "MathOS Weave Links"
-  short_description: "Inject safe Obsidian wikilinks from ontology terms"
-  default_prompt: "Use $mathos-weave-links to inject safe Obsidian wikilinks into mathematics Markdown from an ontology."

@@ -1,4 +1,0 @@
-interface:
-  display_name: "MathOS Formatter"
-  short_description: "Format math Markdown knowledge-base files"
-  default_prompt: "Use $mathos-formatter to clean and format Markdown notes in the mathematics knowledge base."

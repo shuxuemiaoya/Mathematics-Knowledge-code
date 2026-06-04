@@ -1,4 +1,0 @@
-interface:
-  display_name: "MathOS Chunk Markdown"
-  short_description: "Split clean Markdown into logical chunks"
-  default_prompt: "Use $mathos-chunk-markdown to parse clean mathematics Markdown into structured chunks."

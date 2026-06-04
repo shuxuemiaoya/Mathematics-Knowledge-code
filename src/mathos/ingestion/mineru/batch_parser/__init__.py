@@ -1,1 +1,0 @@
-"""Batch document parsing helpers."""

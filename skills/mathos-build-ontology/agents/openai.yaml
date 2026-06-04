@@ -1,4 +1,0 @@
-interface:
-  display_name: "MathOS Build Ontology"
-  short_description: "Merge candidate concepts and export graph data"
-  default_prompt: "Use $mathos-build-ontology to merge extracted candidates into a global ontology and graph export."

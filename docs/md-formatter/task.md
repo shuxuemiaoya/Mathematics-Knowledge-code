@@ -1,9 +1,0 @@
-- [x] Create `md_formatter` package in `Mathematics-Knowledge-code`
-  - [x] Implement `logger.py`
-  - [x] Implement `core.py` with `BaseFormatter` and compiled regexes
-  - [x] Implement `textbook.py` with `TextbookFormatter`
-  - [x] Implement `exercise.py` with `ExerciseFormatter`
-  - [x] Implement `cli.py` for standalone execution
-- [x] Integrate into `mineru_apps` pipeline (optional formatting step)
-- [x] Verify functionality
-- [x] Delete old scripts

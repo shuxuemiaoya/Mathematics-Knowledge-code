@@ -1,4 +1,0 @@
-interface:
-  display_name: "MathOS Extract Candidate"
-  short_description: "Extract ontology candidates from vault notes"
-  default_prompt: "Use $mathos-extract-candidate to extract mathematical concepts and prerequisites from parsed vault notes."

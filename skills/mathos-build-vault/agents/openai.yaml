@@ -1,4 +1,0 @@
-interface:
-  display_name: "MathOS Build Vault"
-  short_description: "Convert structured Markdown into an Obsidian vault"
-  default_prompt: "Use $mathos-build-vault to split hierarchical mathematics Markdown into a nested Obsidian vault."
