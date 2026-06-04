@@ -1,5 +1,5 @@
 ---
-name: chunk-markdown
+name: mathos-chunk-markdown
 description: Use when breaking down a clean markdown document into smaller Chunk structures based on regular expressions.
 ---
 

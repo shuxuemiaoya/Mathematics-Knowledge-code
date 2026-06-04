@@ -2,7 +2,7 @@
 
 Use the local project at `C:\mygithub\Mathematics-Knowledge-code`.
 
-1. Read `AGENTS.md` and `skills/convert-with-mineru/SKILL.md`.
+1. Read `AGENTS.md` and `skills/mathos-convert-with-mineru/SKILL.md`.
 2. Confirm the source root contains only the PDF/DOCX batch intended for conversion.
 3. Confirm `MINERU_API_KEY` is available through `.env` or the environment.
 4. Run:

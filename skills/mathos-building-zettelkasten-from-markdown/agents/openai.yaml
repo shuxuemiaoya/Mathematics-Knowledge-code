@@ -1,0 +1,4 @@
+interface:
+  display_name: "MathOS Build Zettelkasten"
+  short_description: "Preserve RKDT hierarchy while building note graphs"
+  default_prompt: "Use $mathos-building-zettelkasten-from-markdown to convert large Markdown files into structured Zettelkasten notes."

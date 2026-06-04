@@ -1,5 +1,5 @@
 ---
-name: building-zettelkasten-from-markdown
+name: mathos-building-zettelkasten-from-markdown
 description: Use when converting large markdown files into Zettelkasten knowledge graphs, building Vault Builders, or chunking markdown. Enforces RKDT strict hierarchy, Root MOC preservation, and selective callout splitting.
 ---
 

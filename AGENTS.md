@@ -57,11 +57,11 @@ mk-extract --vault_dir "C:\path\to\vault_dir"
 
 Repo-local skills live in `skills/`:
 
-- `skills/math-knowledge-formatting`: use for Markdown cleanup and formatter changes.
-- `skills/convert-with-mineru`: use for PDF/DOCX to Markdown conversion with MinerU.
+- `skills/mathos-formatter`: use for Markdown cleanup and formatter changes.
+- `skills/mathos-convert-with-mineru`: use for PDF/DOCX to Markdown conversion with MinerU.
 
 Install them into Codex discovery with:
 
 ```powershell
-.\tools\install_codex_skills.ps1 -SkillName convert-with-mineru -Force
+Copy-Item -LiteralPath .\skills\mathos-convert-with-mineru -Destination "$HOME\.codex\skills" -Recurse -Force
 ```

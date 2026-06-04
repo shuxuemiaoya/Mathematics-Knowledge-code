@@ -1,5 +1,5 @@
 ---
-name: build-canvas
+name: mathos-build-canvas
 description: Use when building a hybrid Tree-to-Web Canvas (Left-to-Right layout) in Obsidian and materializing virtual concepts into physical Markdown hub files.
 ---
 
@@ -14,19 +14,15 @@ Use this skill when generating the ultimate Obsidian visualization: a Left-To-Ri
 
 ## Core Process & Code Links
 1. **Concept Hub Generation**: Materialize all entities in `global_ontology.json` into a single folder containing hundreds of `.md` files. **CRITICAL**: You MUST use the `concept-hub-naming` skill to ask the user what to name this folder!
-   - Script: `src/math_knowledge_tools/obsidian_integration/concept_generator.py`
-2. **Tree-to-Web Canvas**: Use `src/math_knowledge_tools/obsidian_integration/canvas_builder.py` to generate the `.canvas` file.
+   - Script: implementation not currently present in `src/mathos`.
+2. **Tree-to-Web Canvas**: Use `src/mathos/projection/canvas_builder.py` to generate the `.canvas` file.
    - **Level 0 (x=-380)**: Chapter headings.
    - **Level 1 (x=-20)**: Physical document files.
    - **Level 2 (x=440)**: Materialized concepts (linked to documents).
    - **Level 3 (x=880)**: Prerequisites (linked to concepts).
 
 ## Command Reference
-To generate concepts and build the canvas:
-```powershell
-python -m src.math_knowledge_tools.obsidian_integration.cli generate-concepts --ontology "global_ontology.json" --output-dir "path/to/vault/<USER_NAMED_FOLDER>"
-python -m src.math_knowledge_tools.obsidian_integration.cli build-canvas --vault-dir "path/to/vault" --ontology "global_ontology.json"
-```
+There is no dedicated CLI for this module yet. Use `mathos.projection.canvas_builder.HybridCanvasBuilder` from Python, or add a small CLI before documenting a command.
 
 ## Common Mistakes / Red Flags
 - ❌ **Hardcoding the Concept Folder Name**: Never hardcode the folder name (e.g., `概念库`). Always ask the user.

@@ -1,5 +1,5 @@
 ---
-name: build-ontology
+name: mathos-build-ontology
 description: Use when merging scattered extracted JSON ontologies into a single global graph and exporting to Neo4j CSVs for GraphRAG.
 ---
 
@@ -17,15 +17,7 @@ Use this skill when transitioning from scattered LLM extractions (Phase 3B) into
 2. **Neo4j Export**: Translates the global JSON into `nodes.csv` and `edges.csv` standard formats.
 
 ## Command Reference
-Step 1: Merge
-```powershell
-python -m src.math_knowledge_tools.graph_backend.cli merge --input "path/to/candidates_dir" --output "global_ontology.json"
-```
-
-Step 2: Export
-```powershell
-python -m src.math_knowledge_tools.graph_backend.cli export --input "global_ontology.json" --output-dir "path/to/export_dir"
-```
+There is no dedicated CLI for this module yet. Use `mathos.ontology.global_merger.GlobalMerger` and `mathos.ontology.neo4j_exporter.Neo4jExporter` from Python, or add a small CLI before documenting commands.
 
 ## Common Mistakes / Red Flags
 - ❌ **LLM Merge**: NEVER try to pass the thousands of JSONs to an LLM to "summarize or merge" them. You will exceed the context window and hallucinate data. Always use the deterministic python `merge` command.

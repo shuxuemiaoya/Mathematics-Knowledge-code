@@ -1,5 +1,5 @@
 ---
-name: build-vault
+name: mathos-build-vault
 description: Use when converting a large hierarchical Markdown document (like a textbook) into a parsed Obsidian vault while strictly preserving the physical folder hierarchy (H1/H2/H3).
 ---
 
@@ -16,10 +16,7 @@ Use this skill when you need to split a large, flat Markdown document (such as a
 **NEVER** flatten the markdown files into a single directory. The command utilizes `vault_builder.py` which must read the `parent_hierarchy` of each chunk and create actual nested directories (e.g., `知识点/第六章/6.1/6.1.1.md`).
 
 ## Command Reference
-To parse a markdown file into a vault:
-```powershell
-python -m src.math_knowledge_tools.parser.cli --input "path/to/textbook.md" --output "path/to/parsed_vault"
-```
+There is no working CLI for this stage yet. `mathos.vault.vault_builder` currently needs import cleanup before it can be used as a command.
 
 ## Common Mistakes / Red Flags
 - ❌ **Flattening directories**: If the output vault only contains files at the root level, the parser is broken and the tree topology is lost.

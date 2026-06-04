@@ -1,0 +1,4 @@
+interface:
+  display_name: "MathOS Build Canvas"
+  short_description: "Generate Obsidian canvas views for ontology graphs"
+  default_prompt: "Use $mathos-build-canvas to generate an Obsidian canvas from the mathematics ontology and vault structure."

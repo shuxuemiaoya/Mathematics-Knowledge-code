@@ -27,10 +27,10 @@ Use the installed CLI:
 mk-format --dir "C:\mygithub\Secondary-School-Mathematics-Knowledge-Map\高中\课本" --mode textbook --dry-run
 ```
 
-Or the repo wrapper without installation:
+Or run the module directly without console-script installation:
 
 ```powershell
-.\tools\format_knowledge_base.ps1 -Dir "C:\mygithub\Secondary-School-Mathematics-Knowledge-Map\高中\课本" -Mode textbook -DryRun
+python -m mathos.formatter.cli --dir "C:\mygithub\Secondary-School-Mathematics-Knowledge-Map\高中\课本" --mode textbook --dry-run
 ```
 
 ## References
