@@ -315,3 +315,16 @@ def test_extract_structure_repeated_page_leader_h1_terminates_toc():
     assert result.toc_block is not None
     assert result.toc_block.text == "# 目录\n\n# 第一章 集合 …… 1\n"
     assert result.h1_sections[2].heading == "第一章 集合 …… 1"
+
+
+def test_extract_structure_ignores_code_fence_openers_indented_four_spaces():
+    markdown = """# Before
+
+    ```
+# After
+"""
+
+    result = core.extract_structure(markdown, source_label="indented-opener.md")
+
+    assert [heading.text for heading in result.headings] == ["Before", "After"]
+    assert result.protected_blocks == []

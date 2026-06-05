@@ -63,6 +63,13 @@ def _is_code_fence_close(line: str, fence_character: str, fence_length: int) -> 
     )
 
 
+def _match_code_fence_open(line: str) -> re.Match[str] | None:
+    leading_spaces = len(line) - len(line.lstrip(" "))
+    if leading_spaces > 3:
+        return None
+    return CODE_FENCE_OPEN_RE.match(line.lstrip(" "))
+
+
 def _normalize_toc_page_heading(text: str) -> str:
     return TOC_ENTRY_PAGE_RE.sub("", text).strip()
 
@@ -95,7 +102,7 @@ def _extract_protected_blocks(lines: list[str]) -> list[TextBlock]:
                 in_math = False
             continue
 
-        code_fence_match = CODE_FENCE_OPEN_RE.match(stripped)
+        code_fence_match = _match_code_fence_open(line)
         if code_fence_match:
             code_fence = code_fence_match.group(1)
             code_fence_character = code_fence[0]
