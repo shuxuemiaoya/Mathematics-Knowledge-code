@@ -186,42 +186,34 @@ def _line_in_blocks(line_number: int, blocks: list[TextBlock], kinds: set[str]) 
     return any(block.kind in kinds and block.start_line <= line_number <= block.end_line for block in blocks)
 
 
-def _protect_multiline_blocks(markdown: str) -> tuple[str, dict[str, str]]:
-    lines = markdown.splitlines(keepends=True)
-    protected_blocks = _extract_protected_blocks(_line_offsets(markdown))
-    replacements: dict[str, str] = {}
-    protected_parts: list[str] = []
-    current_line = 1
-
-    for block in protected_blocks:
-        if block.kind not in {"code_fence", "math_block"}:
-            continue
-        protected_parts.extend(lines[current_line - 1:block.start_line - 1])
-        original = "".join(lines[block.start_line - 1:block.end_line])
-        token = f"__MATHOS_PROTECTED_{len(replacements)}__"
-        line_ending_match = re.search(r"(\r\n|\n|\r)$", original)
-        placeholder = token + (line_ending_match.group(1) if line_ending_match else "")
-        replacements[placeholder] = original
-        protected_parts.append(placeholder)
-        current_line = block.end_line + 1
-
-    protected_parts.extend(lines[current_line - 1:])
-    return "".join(protected_parts), replacements
-
-
-def _restore_multiline_blocks(markdown: str, replacements: dict[str, str]) -> str:
-    restored = markdown
-    for token, value in replacements.items():
-        restored = restored.replace(token, value)
-    return restored
+def _apply_rules_to_span(markdown: str, rules: list[HeadingRule]) -> str:
+    result = markdown
+    for rule in rules:
+        result = re.sub(rule.pattern, rule.replacement, result, flags=rule.flags)
+    return result
 
 
 def apply_heading_rules(markdown: str, rules: list[HeadingRule]) -> str:
-    protected, replacements = _protect_multiline_blocks(markdown)
-    result = protected
-    for rule in rules:
-        result = re.sub(rule.pattern, rule.replacement, result, flags=rule.flags)
-    return _restore_multiline_blocks(result, replacements)
+    lines = markdown.splitlines(keepends=True)
+    protected_blocks = [
+        block
+        for block in _extract_protected_blocks(_line_offsets(markdown))
+        if block.kind in {"code_fence", "math_block"}
+    ]
+    if not protected_blocks:
+        return _apply_rules_to_span(markdown, rules)
+
+    result_parts: list[str] = []
+    current_line = 1
+    for block in protected_blocks:
+        if current_line < block.start_line:
+            result_parts.append(_apply_rules_to_span("".join(lines[current_line - 1:block.start_line - 1]), rules))
+        result_parts.append("".join(lines[block.start_line - 1:block.end_line]))
+        current_line = block.end_line + 1
+
+    if current_line <= len(lines):
+        result_parts.append(_apply_rules_to_span("".join(lines[current_line - 1:]), rules))
+    return "".join(result_parts)
 
 
 def _extract_toc_block(lines: list[str], headings: list[Heading]) -> TextBlock | None:

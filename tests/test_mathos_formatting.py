@@ -378,3 +378,70 @@ def test_heading_rules_reject_invalid_regex():
 
     with pytest.raises(core.FormattingError, match="invalid regex"):
         core.validate_heading_rules(rules)
+
+
+def test_heading_rules_broad_rule_preserves_code_fence_exactly():
+    rules = core.validate_heading_rules(
+        {
+            "rules": [
+                {
+                    "id": "broad",
+                    "pattern": r"^(.+)$",
+                    "replacement": r"# \1",
+                    "flags": ["MULTILINE"],
+                }
+            ]
+        }
+    )
+    code_block = "```python\nprint('keep me')\n```\n"
+    markdown = f"intro\n\n{code_block}\noutro\n"
+
+    cleaned = core.apply_heading_rules(markdown, rules)
+
+    assert code_block in cleaned
+    assert "# ```python" not in cleaned
+    assert "# print('keep me')" not in cleaned
+
+
+def test_heading_rules_broad_rule_preserves_math_block_exactly():
+    rules = core.validate_heading_rules(
+        {
+            "rules": [
+                {
+                    "id": "broad",
+                    "pattern": r"^(.+)$",
+                    "replacement": r"# \1",
+                    "flags": ["MULTILINE"],
+                }
+            ]
+        }
+    )
+    math_block = "$$\na^2 + b^2 = c^2\n$$\n"
+    markdown = f"intro\n\n{math_block}\noutro\n"
+
+    cleaned = core.apply_heading_rules(markdown, rules)
+
+    assert math_block in cleaned
+    assert "# $$" not in cleaned
+    assert "# a^2 + b^2 = c^2" not in cleaned
+
+
+def test_heading_rules_broad_rule_still_applies_to_normal_text():
+    rules = core.validate_heading_rules(
+        {
+            "rules": [
+                {
+                    "id": "broad",
+                    "pattern": r"^(.+)$",
+                    "replacement": r"# \1",
+                    "flags": ["MULTILINE"],
+                }
+            ]
+        }
+    )
+    markdown = "intro\n\n```\nkeep code\n```\n\noutro\n"
+
+    cleaned = core.apply_heading_rules(markdown, rules)
+
+    assert cleaned.startswith("# intro\n")
+    assert cleaned.endswith("\n# outro\n")
