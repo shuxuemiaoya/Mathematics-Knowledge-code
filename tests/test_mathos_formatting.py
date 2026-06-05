@@ -254,3 +254,20 @@ $$
 
     assert [heading.text for heading in result.headings] == ["Before", "After"]
     assert [block.kind for block in result.protected_blocks] == ["math_block"]
+
+
+def test_extract_structure_honors_longer_backtick_fence_lengths():
+    markdown = """# Before
+
+````text
+```
+# not heading
+````
+
+# After
+"""
+
+    result = core.extract_structure(markdown, source_label="long-fence.md")
+
+    assert [heading.text for heading in result.headings] == ["Before", "After"]
+    assert [block.kind for block in result.protected_blocks] == ["code_fence"]

@@ -48,7 +48,15 @@ HEADING_LIKE_RE = re.compile(
     r"(阅读与思考|探究与发现|信息技术应用|文献阅读|小结|复习参考题).*)$"
 )
 TOC_ENTRY_PAGE_RE = re.compile(r"(?:…+|\.{2,}|·{2,}|．{2,})\s*\d+\s*$")
-CODE_FENCE_RE = re.compile(r"^(```|~~~)")
+CODE_FENCE_OPEN_RE = re.compile(r"^(`{3,}|~{3,}).*$")
+
+
+def _is_code_fence_close(line: str, fence_character: str, fence_length: int) -> bool:
+    candidate = line.rstrip()
+    return (
+        len(candidate) >= fence_length
+        and all(character == fence_character for character in candidate)
+    )
 
 
 def _line_offsets(markdown: str) -> list[str]:
@@ -57,7 +65,8 @@ def _line_offsets(markdown: str) -> list[str]:
 
 def _extract_protected_blocks(lines: list[str]) -> list[TextBlock]:
     blocks: list[TextBlock] = []
-    code_fence_marker = ""
+    code_fence_character = ""
+    code_fence_length = 0
     code_start = 0
     in_math = False
     math_start = 0
@@ -65,11 +74,11 @@ def _extract_protected_blocks(lines: list[str]) -> list[TextBlock]:
     for index, line in enumerate(lines, start=1):
         stripped = line.strip()
 
-        if code_fence_marker:
-            code_fence_match = CODE_FENCE_RE.match(stripped)
-            if code_fence_match and code_fence_match.group(1) == code_fence_marker:
+        if code_fence_character:
+            if _is_code_fence_close(line, code_fence_character, code_fence_length):
                 blocks.append(TextBlock("code_fence", "\n".join(lines[code_start - 1:index]), code_start, index))
-                code_fence_marker = ""
+                code_fence_character = ""
+                code_fence_length = 0
             continue
 
         if in_math:
@@ -78,9 +87,11 @@ def _extract_protected_blocks(lines: list[str]) -> list[TextBlock]:
                 in_math = False
             continue
 
-        code_fence_match = CODE_FENCE_RE.match(stripped)
+        code_fence_match = CODE_FENCE_OPEN_RE.match(stripped)
         if code_fence_match:
-            code_fence_marker = code_fence_match.group(1)
+            code_fence = code_fence_match.group(1)
+            code_fence_character = code_fence[0]
+            code_fence_length = len(code_fence)
             code_start = index
             continue
         if stripped == "$$":
@@ -90,7 +101,7 @@ def _extract_protected_blocks(lines: list[str]) -> list[TextBlock]:
         if re.search(r"!\[[^\]]*\]\([^)]+\)", line):
             blocks.append(TextBlock("image", line, index, index))
 
-    if code_fence_marker:
+    if code_fence_character:
         blocks.append(TextBlock("code_fence", "\n".join(lines[code_start - 1:]), code_start, len(lines)))
     if in_math:
         blocks.append(TextBlock("math_block", "\n".join(lines[math_start - 1:]), math_start, len(lines)))
