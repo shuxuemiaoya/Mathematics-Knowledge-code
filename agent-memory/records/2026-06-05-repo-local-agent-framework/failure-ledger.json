@@ -1,0 +1,21 @@
+{
+  "stage": "repo-local knowledge-graph agent framework",
+  "skill": "",
+  "command_or_workflow": "docs/superpowers/plans/2026-06-05-repo-local-knowledge-graph-agent.md",
+  "status": "completed",
+  "failure_counts": {
+    "process_crash": 0,
+    "non_zero_exit": 0,
+    "conversion_failure": 0,
+    "missing_dependency": 0,
+    "missing_api_key": 0,
+    "stalled_polling": 0,
+    "missing_output": 0,
+    "skipped_file": 0,
+    "warning": 1
+  },
+  "failed_items": [],
+  "log_paths": [],
+  "stopped": false,
+  "stop_reason": ""
+}
