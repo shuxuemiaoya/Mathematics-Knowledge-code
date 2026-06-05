@@ -328,3 +328,17 @@ def test_extract_structure_ignores_code_fence_openers_indented_four_spaces():
 
     assert [heading.text for heading in result.headings] == ["Before", "After"]
     assert result.protected_blocks == []
+
+
+def test_extract_structure_parses_atx_closing_hash_sequences():
+    markdown = """# 目录 ###
+
+## 1.1 标题 ##
+
+# 标题#
+"""
+
+    result = core.extract_structure(markdown, source_label="closing-hashes.md")
+
+    assert [heading.text for heading in result.headings] == ["目录", "1.1 标题", "标题#"]
+    assert result.toc_block is not None

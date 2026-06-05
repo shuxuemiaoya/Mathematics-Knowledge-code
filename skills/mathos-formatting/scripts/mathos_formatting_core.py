@@ -41,6 +41,7 @@ class MarkdownStructure:
 
 
 HEADING_RE = re.compile(r"^ {0,3}(#{1,6})\s+(.+?)\s*$")
+ATX_CLOSING_SEQUENCE_RE = re.compile(r"\s+#+\s*$")
 TOC_HEADING_RE = re.compile(r"^#{1,6}\s*(目录|目\s*录|contents?)\s*$", re.IGNORECASE)
 HEADING_LIKE_RE = re.compile(
     r"^(第[一二三四五六七八九十百千万0-9]+[章节篇部].+|"
@@ -72,6 +73,10 @@ def _match_code_fence_open(line: str) -> re.Match[str] | None:
 
 def _normalize_toc_page_heading(text: str) -> str:
     return TOC_ENTRY_PAGE_RE.sub("", text).strip()
+
+
+def _normalize_atx_heading_text(text: str) -> str:
+    return ATX_CLOSING_SEQUENCE_RE.sub("", text)
 
 
 def _line_offsets(markdown: str) -> list[str]:
@@ -189,7 +194,7 @@ def extract_structure(markdown: str, source_label: str) -> MarkdownStructure:
         heading_match = HEADING_RE.match(line)
         if heading_match:
             level = len(heading_match.group(1))
-            headings.append(Heading(level, heading_match.group(2), line_number))
+            headings.append(Heading(level, _normalize_atx_heading_text(heading_match.group(2)), line_number))
             distribution[level] = distribution.get(level, 0) + 1
             continue
         stripped = line.strip()
