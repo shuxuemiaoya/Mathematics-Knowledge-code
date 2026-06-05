@@ -8,15 +8,15 @@
 
 ## User-Approved Notes
 
-- 
+-
 
 ## Future Work
 
-- 
+-
 
 ## Decisions
 
-- 
+-
 
 ## Boundary Reminder
 
