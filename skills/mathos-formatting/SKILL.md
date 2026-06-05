@@ -5,6 +5,8 @@ description: Use when learning, previewing, approving, or reusing adaptive Markd
 
 # MathOS Formatting Operator
 
+Status: scaffolded. This skill becomes operational only after the MathOS formatting implementation plan tasks are complete; the current CLI and provider modules are stubs.
+
 Use this skill for adaptive Markdown formatting after PDF or Word conversion.
 
 Unknown file types must use backup-only learning:

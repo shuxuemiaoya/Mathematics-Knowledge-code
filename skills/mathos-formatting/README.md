@@ -1,6 +1,6 @@
 # mathos-formatting
 
-Status: active after implementation.
+Status: scaffolded; active after implementation is complete.
 
 This repo-local skill manages adaptive Markdown formatting for MathOS.
 
