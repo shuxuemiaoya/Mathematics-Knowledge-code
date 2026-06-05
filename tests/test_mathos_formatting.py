@@ -271,3 +271,47 @@ def test_extract_structure_honors_longer_backtick_fence_lengths():
 
     assert [heading.text for heading in result.headings] == ["Before", "After"]
     assert [block.kind for block in result.protected_blocks] == ["code_fence"]
+
+
+def test_extract_structure_allows_indented_closing_code_fence():
+    markdown = """# Before
+
+```text
+# not heading
+   ```
+
+# After
+"""
+
+    result = core.extract_structure(markdown, source_label="indented-close.md")
+
+    assert [heading.text for heading in result.headings] == ["Before", "After"]
+
+
+def test_extract_structure_finds_atx_headings_indented_up_to_three_spaces():
+    markdown = """   # Indented Heading
+    # code-like heading
+
+# After
+"""
+
+    result = core.extract_structure(markdown, source_label="indented-heading.md")
+
+    assert [heading.text for heading in result.headings] == ["Indented Heading", "After"]
+
+
+def test_extract_structure_repeated_page_leader_h1_terminates_toc():
+    markdown = """# 目录
+
+# 第一章 集合 …… 1
+
+# 第一章 集合 …… 1
+
+## 1.1 集合的概念
+"""
+
+    result = core.extract_structure(markdown, source_label="repeated-toc.md")
+
+    assert result.toc_block is not None
+    assert result.toc_block.text == "# 目录\n\n# 第一章 集合 …… 1\n"
+    assert result.h1_sections[2].heading == "第一章 集合 …… 1"

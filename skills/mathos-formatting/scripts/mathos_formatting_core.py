@@ -40,7 +40,7 @@ class MarkdownStructure:
     protected_blocks: list[TextBlock]
 
 
-HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
+HEADING_RE = re.compile(r"^ {0,3}(#{1,6})\s+(.+?)\s*$")
 TOC_HEADING_RE = re.compile(r"^#{1,6}\s*(目录|目\s*录|contents?)\s*$", re.IGNORECASE)
 HEADING_LIKE_RE = re.compile(
     r"^(第[一二三四五六七八九十百千万0-9]+[章节篇部].+|"
@@ -53,10 +53,18 @@ CODE_FENCE_OPEN_RE = re.compile(r"^(`{3,}|~{3,}).*$")
 
 def _is_code_fence_close(line: str, fence_character: str, fence_length: int) -> bool:
     candidate = line.rstrip()
+    leading_spaces = len(candidate) - len(candidate.lstrip(" "))
+    if leading_spaces > 3:
+        return False
+    candidate = candidate.lstrip(" ")
     return (
         len(candidate) >= fence_length
         and all(character == fence_character for character in candidate)
     )
+
+
+def _normalize_toc_page_heading(text: str) -> str:
+    return TOC_ENTRY_PAGE_RE.sub("", text).strip()
 
 
 def _line_offsets(markdown: str) -> list[str]:
@@ -125,16 +133,21 @@ def _extract_toc_block(lines: list[str], headings: list[Heading]) -> TextBlock |
     if toc_heading is None:
         return None
 
-    following_h1 = next(
-        (
-            heading
-            for heading in headings
-            if heading.level == 1
-            and heading.line_number > toc_heading.line_number
-            and not TOC_ENTRY_PAGE_RE.search(heading.text)
-        ),
-        None,
-    )
+    following_h1 = None
+    toc_page_titles: set[str] = set()
+    for heading in headings:
+        if heading.level != 1 or heading.line_number <= toc_heading.line_number:
+            continue
+        if TOC_ENTRY_PAGE_RE.search(heading.text):
+            normalized_title = _normalize_toc_page_heading(heading.text)
+            if normalized_title in toc_page_titles:
+                following_h1 = heading
+                break
+            toc_page_titles.add(normalized_title)
+            continue
+        following_h1 = heading
+        break
+
     end_line = (following_h1.line_number - 1) if following_h1 else len(lines)
     text = "\n".join(lines[toc_heading.line_number - 1:end_line])
     return TextBlock("toc", text, toc_heading.line_number, end_line)
