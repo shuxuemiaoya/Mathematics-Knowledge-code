@@ -3,6 +3,8 @@ import py_compile
 import subprocess
 import sys
 
+import pytest
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SKILL_ROOT = REPO_ROOT / "skills" / "mathos-formatting"
@@ -342,3 +344,37 @@ def test_extract_structure_parses_atx_closing_hash_sequences():
 
     assert [heading.text for heading in result.headings] == ["目录", "1.1 标题", "标题#"]
     assert result.toc_block is not None
+
+
+def test_heading_rules_validate_and_apply_outside_protected_blocks():
+    rules = {
+        "rules": [
+            {
+                "id": "chapter",
+                "pattern": r"^(第一章 .+?)(?: …… \d+)?$",
+                "replacement": r"# \1",
+                "flags": ["MULTILINE"],
+            },
+            {
+                "id": "section",
+                "pattern": r"^(1\.1 .+?)(?:…… \d+)?$",
+                "replacement": r"## \1",
+                "flags": ["MULTILINE"],
+            },
+        ],
+        "notes": ["align chapter and section headings"],
+    }
+    markdown = "第一章 集合 …… 1\n\n1.1 集合的概念…… 2\n\n```\n1.1 keep code\n```\n"
+
+    validated = core.validate_heading_rules(rules)
+    cleaned = core.apply_heading_rules(markdown, validated)
+
+    assert cleaned.startswith("# 第一章 集合\n\n## 1.1 集合的概念")
+    assert "```\n1.1 keep code\n```" in cleaned
+
+
+def test_heading_rules_reject_invalid_regex():
+    rules = {"rules": [{"id": "bad", "pattern": "(", "replacement": "# x", "flags": []}]}
+
+    with pytest.raises(core.FormattingError, match="invalid regex"):
+        core.validate_heading_rules(rules)

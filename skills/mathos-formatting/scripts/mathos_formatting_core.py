@@ -40,6 +40,18 @@ class MarkdownStructure:
     protected_blocks: list[TextBlock]
 
 
+@dataclass(frozen=True)
+class HeadingRule:
+    rule_id: str
+    pattern: str
+    replacement: str
+    flags: int
+
+
+class FormattingError(RuntimeError):
+    """Raised when formatting configuration or execution is unsafe."""
+
+
 HEADING_RE = re.compile(r"^ {0,3}(#{1,6})\s+(.+?)\s*$")
 ATX_CLOSING_SEQUENCE_RE = re.compile(r"\s+#+\s*$")
 TOC_HEADING_RE = re.compile(r"^#{1,6}\s*(目录|目\s*录|contents?)\s*$", re.IGNORECASE)
@@ -50,6 +62,10 @@ HEADING_LIKE_RE = re.compile(
 )
 TOC_ENTRY_PAGE_RE = re.compile(r"(?:…+|\.{2,}|·{2,}|．{2,})\s*\d+\s*$")
 CODE_FENCE_OPEN_RE = re.compile(r"^(`{3,}|~{3,}).*$")
+FLAG_MAP = {
+    "MULTILINE": re.MULTILINE,
+    "IGNORECASE": re.IGNORECASE,
+}
 
 
 def _is_code_fence_close(line: str, fence_character: str, fence_length: int) -> bool:
@@ -81,6 +97,43 @@ def _normalize_atx_heading_text(text: str) -> str:
 
 def _line_offsets(markdown: str) -> list[str]:
     return markdown.splitlines()
+
+
+def _compile_flags(raw_flags: list[str]) -> int:
+    flags = 0
+    for flag in raw_flags:
+        if flag not in FLAG_MAP:
+            raise FormattingError(f"unsupported regex flag: {flag}")
+        flags |= FLAG_MAP[flag]
+    return flags
+
+
+def validate_heading_rules(payload: dict) -> list[HeadingRule]:
+    raw_rules = payload.get("rules")
+    if not isinstance(raw_rules, list) or not raw_rules:
+        raise FormattingError("heading rules must contain a non-empty rules list")
+
+    validated: list[HeadingRule] = []
+    for raw_rule in raw_rules:
+        rule_id = raw_rule.get("id")
+        pattern = raw_rule.get("pattern")
+        replacement = raw_rule.get("replacement")
+        raw_flags = raw_rule.get("flags", [])
+        if not isinstance(rule_id, str) or not rule_id:
+            raise FormattingError("heading rule id must be a non-empty string")
+        if not isinstance(pattern, str) or not pattern:
+            raise FormattingError(f"heading rule {rule_id} pattern must be a non-empty string")
+        if not isinstance(replacement, str):
+            raise FormattingError(f"heading rule {rule_id} replacement must be a string")
+        if not isinstance(raw_flags, list) or not all(isinstance(flag, str) for flag in raw_flags):
+            raise FormattingError(f"heading rule {rule_id} flags must be a string list")
+        flags = _compile_flags(raw_flags)
+        try:
+            re.compile(pattern, flags)
+        except re.error as exc:
+            raise FormattingError(f"invalid regex in heading rule {rule_id}: {exc}") from exc
+        validated.append(HeadingRule(rule_id, pattern, replacement, flags))
+    return validated
 
 
 def _extract_protected_blocks(lines: list[str]) -> list[TextBlock]:
@@ -131,6 +184,44 @@ def _extract_protected_blocks(lines: list[str]) -> list[TextBlock]:
 
 def _line_in_blocks(line_number: int, blocks: list[TextBlock], kinds: set[str]) -> bool:
     return any(block.kind in kinds and block.start_line <= line_number <= block.end_line for block in blocks)
+
+
+def _protect_multiline_blocks(markdown: str) -> tuple[str, dict[str, str]]:
+    lines = markdown.splitlines(keepends=True)
+    protected_blocks = _extract_protected_blocks(_line_offsets(markdown))
+    replacements: dict[str, str] = {}
+    protected_parts: list[str] = []
+    current_line = 1
+
+    for block in protected_blocks:
+        if block.kind not in {"code_fence", "math_block"}:
+            continue
+        protected_parts.extend(lines[current_line - 1:block.start_line - 1])
+        original = "".join(lines[block.start_line - 1:block.end_line])
+        token = f"__MATHOS_PROTECTED_{len(replacements)}__"
+        line_ending_match = re.search(r"(\r\n|\n|\r)$", original)
+        placeholder = token + (line_ending_match.group(1) if line_ending_match else "")
+        replacements[placeholder] = original
+        protected_parts.append(placeholder)
+        current_line = block.end_line + 1
+
+    protected_parts.extend(lines[current_line - 1:])
+    return "".join(protected_parts), replacements
+
+
+def _restore_multiline_blocks(markdown: str, replacements: dict[str, str]) -> str:
+    restored = markdown
+    for token, value in replacements.items():
+        restored = restored.replace(token, value)
+    return restored
+
+
+def apply_heading_rules(markdown: str, rules: list[HeadingRule]) -> str:
+    protected, replacements = _protect_multiline_blocks(markdown)
+    result = protected
+    for rule in rules:
+        result = re.sub(rule.pattern, rule.replacement, result, flags=rule.flags)
+    return _restore_multiline_blocks(result, replacements)
 
 
 def _extract_toc_block(lines: list[str], headings: list[Heading]) -> TextBlock | None:
