@@ -84,3 +84,59 @@ def test_formatting_skill_registry_marks_scaffold_non_operational():
     assert "not operational until implementation tasks complete" in section
     assert "reserved, inactive" not in section
     assert "must not contain a `skill.md`" not in section
+
+
+import importlib.util
+
+
+CORE_PATH = SKILL_ROOT / "scripts" / "mathos_formatting_core.py"
+core_spec = importlib.util.spec_from_file_location("mathos_formatting_core", CORE_PATH)
+core = importlib.util.module_from_spec(core_spec)
+assert core_spec.loader is not None
+sys.modules["mathos_formatting_core"] = core
+core_spec.loader.exec_module(core)
+
+
+SAMPLE_MARKDOWN = """# 数学
+
+# 目录
+
+# 第一章 集合与常用逻辑用语 …… 1
+1.1 集合的概念…… 2
+阅读与思考 集合中元素的个数 …… 15
+
+# 第一章 集合与常用逻辑用语
+
+## 1.1 集合的概念
+
+集合是数学语言。
+
+```python
+# not a markdown heading
+```
+
+$$
+# not a markdown heading either
+$$
+
+![](images/a.png)
+"""
+
+
+def test_extract_structure_finds_headings_toc_h1_and_protected_blocks():
+    result = core.extract_structure(SAMPLE_MARKDOWN, source_label="sample.md")
+
+    assert result.source_label == "sample.md"
+    assert [heading.text for heading in result.headings[:4]] == [
+        "数学",
+        "目录",
+        "第一章 集合与常用逻辑用语 …… 1",
+        "第一章 集合与常用逻辑用语",
+    ]
+    assert result.toc_block is not None
+    assert "1.1 集合的概念" in result.toc_block.text
+    assert result.heading_level_distribution == {1: 4, 2: 1}
+    assert result.h1_sections[0].heading == "数学"
+    assert any(block.kind == "code_fence" for block in result.protected_blocks)
+    assert any(block.kind == "math_block" for block in result.protected_blocks)
+    assert any(block.kind == "image" for block in result.protected_blocks)
