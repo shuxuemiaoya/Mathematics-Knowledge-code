@@ -222,3 +222,35 @@ $$
             5,
         )
     ]
+
+
+def test_extract_structure_ignores_math_delimiter_inside_code_fence():
+    markdown = """# Before
+
+```text
+$$
+```
+
+# After
+"""
+
+    result = core.extract_structure(markdown, source_label="code-math.md")
+
+    assert [heading.text for heading in result.headings] == ["Before", "After"]
+    assert [block.kind for block in result.protected_blocks] == ["code_fence"]
+
+
+def test_extract_structure_ignores_code_fence_marker_inside_math_block():
+    markdown = """# Before
+
+$$
+```text
+$$
+
+# After
+"""
+
+    result = core.extract_structure(markdown, source_label="math-code.md")
+
+    assert [heading.text for heading in result.headings] == ["Before", "After"]
+    assert [block.kind for block in result.protected_blocks] == ["math_block"]

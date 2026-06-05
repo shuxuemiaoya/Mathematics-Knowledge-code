@@ -64,23 +64,28 @@ def _extract_protected_blocks(lines: list[str]) -> list[TextBlock]:
 
     for index, line in enumerate(lines, start=1):
         stripped = line.strip()
-        code_fence_match = CODE_FENCE_RE.match(stripped)
-        if code_fence_match:
-            marker = code_fence_match.group(1)
-            if code_fence_marker == marker:
+
+        if code_fence_marker:
+            code_fence_match = CODE_FENCE_RE.match(stripped)
+            if code_fence_match and code_fence_match.group(1) == code_fence_marker:
                 blocks.append(TextBlock("code_fence", "\n".join(lines[code_start - 1:index]), code_start, index))
                 code_fence_marker = ""
-            elif not code_fence_marker:
-                code_fence_marker = marker
-                code_start = index
             continue
-        if stripped == "$$":
-            if in_math:
+
+        if in_math:
+            if stripped == "$$":
                 blocks.append(TextBlock("math_block", "\n".join(lines[math_start - 1:index]), math_start, index))
                 in_math = False
-            else:
-                in_math = True
-                math_start = index
+            continue
+
+        code_fence_match = CODE_FENCE_RE.match(stripped)
+        if code_fence_match:
+            code_fence_marker = code_fence_match.group(1)
+            code_start = index
+            continue
+        if stripped == "$$":
+            in_math = True
+            math_start = index
             continue
         if re.search(r"!\[[^\]]*\]\([^)]+\)", line):
             blocks.append(TextBlock("image", line, index, index))
