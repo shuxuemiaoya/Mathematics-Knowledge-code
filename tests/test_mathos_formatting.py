@@ -135,8 +135,90 @@ def test_extract_structure_finds_headings_toc_h1_and_protected_blocks():
     ]
     assert result.toc_block is not None
     assert "1.1 集合的概念" in result.toc_block.text
+    assert result.heading_like_lines == [
+        "1.1 集合的概念…… 2",
+        "阅读与思考 集合中元素的个数 …… 15",
+    ]
     assert result.heading_level_distribution == {1: 4, 2: 1}
     assert result.h1_sections[0].heading == "数学"
     assert any(block.kind == "code_fence" for block in result.protected_blocks)
     assert any(block.kind == "math_block" for block in result.protected_blocks)
     assert any(block.kind == "image" for block in result.protected_blocks)
+
+
+def test_extract_structure_keeps_fullwidth_dot_leader_entries_in_toc():
+    markdown = """# 目录
+
+# 第一章 集合 ．．．． 1
+
+# 第一章 集合
+"""
+
+    result = core.extract_structure(markdown, source_label="toc.md")
+
+    assert result.toc_block is not None
+    assert "# 第一章 集合 ．．．． 1" in result.toc_block.text
+    assert result.toc_block.end_line == 4
+
+
+def test_extract_structure_protects_unclosed_backtick_code_fence_through_eof():
+    markdown = """# 正文
+
+```python
+# not a heading
+## not another heading
+"""
+
+    result = core.extract_structure(markdown, source_label="code.md")
+
+    assert [heading.text for heading in result.headings] == ["正文"]
+    assert result.protected_blocks == [
+        core.TextBlock(
+            "code_fence",
+            "```python\n# not a heading\n## not another heading",
+            3,
+            5,
+        )
+    ]
+
+
+def test_extract_structure_protects_tilde_code_fences():
+    markdown = """# 正文
+
+~~~python
+# not a heading
+~~~
+
+## 真实小节
+"""
+
+    result = core.extract_structure(markdown, source_label="tilde.md")
+
+    assert [heading.text for heading in result.headings] == ["正文", "真实小节"]
+    assert any(
+        block.kind == "code_fence"
+        and block.start_line == 3
+        and block.end_line == 5
+        for block in result.protected_blocks
+    )
+
+
+def test_extract_structure_protects_unclosed_math_block_through_eof():
+    markdown = """# 正文
+
+$$
+# not a heading
+## not another heading
+"""
+
+    result = core.extract_structure(markdown, source_label="math.md")
+
+    assert [heading.text for heading in result.headings] == ["正文"]
+    assert result.protected_blocks == [
+        core.TextBlock(
+            "math_block",
+            "$$\n# not a heading\n## not another heading",
+            3,
+            5,
+        )
+    ]

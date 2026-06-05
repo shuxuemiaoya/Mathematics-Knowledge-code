@@ -47,7 +47,8 @@ HEADING_LIKE_RE = re.compile(
     r"\d+(?:\.\d+)+\s+.+|"
     r"(阅读与思考|探究与发现|信息技术应用|文献阅读|小结|复习参考题).*)$"
 )
-TOC_ENTRY_PAGE_RE = re.compile(r"(?:…+|\.{2,}|·{2,})\s*\d+\s*$")
+TOC_ENTRY_PAGE_RE = re.compile(r"(?:…+|\.{2,}|·{2,}|．{2,})\s*\d+\s*$")
+CODE_FENCE_RE = re.compile(r"^(```|~~~)")
 
 
 def _line_offsets(markdown: str) -> list[str]:
@@ -56,19 +57,21 @@ def _line_offsets(markdown: str) -> list[str]:
 
 def _extract_protected_blocks(lines: list[str]) -> list[TextBlock]:
     blocks: list[TextBlock] = []
-    in_code = False
+    code_fence_marker = ""
     code_start = 0
     in_math = False
     math_start = 0
 
     for index, line in enumerate(lines, start=1):
         stripped = line.strip()
-        if stripped.startswith("```"):
-            if in_code:
+        code_fence_match = CODE_FENCE_RE.match(stripped)
+        if code_fence_match:
+            marker = code_fence_match.group(1)
+            if code_fence_marker == marker:
                 blocks.append(TextBlock("code_fence", "\n".join(lines[code_start - 1:index]), code_start, index))
-                in_code = False
-            else:
-                in_code = True
+                code_fence_marker = ""
+            elif not code_fence_marker:
+                code_fence_marker = marker
                 code_start = index
             continue
         if stripped == "$$":
@@ -81,6 +84,11 @@ def _extract_protected_blocks(lines: list[str]) -> list[TextBlock]:
             continue
         if re.search(r"!\[[^\]]*\]\([^)]+\)", line):
             blocks.append(TextBlock("image", line, index, index))
+
+    if code_fence_marker:
+        blocks.append(TextBlock("code_fence", "\n".join(lines[code_start - 1:]), code_start, len(lines)))
+    if in_math:
+        blocks.append(TextBlock("math_block", "\n".join(lines[math_start - 1:]), math_start, len(lines)))
 
     return blocks
 
