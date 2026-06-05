@@ -1,0 +1,69 @@
+{
+  "stage": "pdf-to-md",
+  "skill": "skills/mathos-pdf-to-md",
+  "failure_counts": {
+    "conversion_failure": 11,
+    "missing_api_key": 0,
+    "api_error": 6,
+    "missing_output": 0
+  },
+  "failed_items": [
+    {
+      "source_pdf": "C:\\code\\BaiduSyncdisk\\数学妙呀资料\\小学\\人教版数学\\四年级上册\\2025秋一遍过数学RJ4上教师用书（答案版）.pdf",
+      "category": "conversion_failure",
+      "message": "HTTPSConnectionPool(host='mineru.net', port=443): Max retries exceeded with url: /api/v4/file-urls/batch (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))"
+    },
+    {
+      "source_pdf": "C:\\code\\BaiduSyncdisk\\数学妙呀资料\\小学\\人教版数学\\五年级上册\\2025秋一遍过数学RJ5上测评卷（答案版）.pdf",
+      "category": "conversion_failure",
+      "message": "HTTPSConnectionPool(host='mineru.net', port=443): Max retries exceeded with url: /api/v4/file-urls/batch (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))"
+    },
+    {
+      "source_pdf": "C:\\code\\BaiduSyncdisk\\数学妙呀资料\\小学\\人教版数学\\五年级上册\\2025秋一遍过数学RJ5上.pdf",
+      "category": "conversion_failure",
+      "message": "HTTPSConnectionPool(host='mineru.net', port=443): Max retries exceeded with url: /api/v4/file-urls/batch (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))"
+    },
+    {
+      "source_pdf": "C:\\code\\BaiduSyncdisk\\数学妙呀资料\\小学\\人教版数学\\六年级上册\\2025秋一遍过数学RJ6上测评卷（答案版）.pdf",
+      "category": "api_error",
+      "message": "Polling timed out for batch 563159fb-4118-4ccc-94ba-7435ac8e20a9"
+    },
+    {
+      "source_pdf": "C:\\code\\BaiduSyncdisk\\数学妙呀资料\\小学\\人教版数学\\四年级上册\\2025秋一遍过数学RJ4上测评卷.pdf",
+      "category": "api_error",
+      "message": "Polling timed out for batch 9b9de3bd-2982-4c28-9963-0e5567d16f44"
+    },
+    {
+      "source_pdf": "C:\\code\\BaiduSyncdisk\\数学妙呀资料\\小学\\人教版数学\\六年级上册\\2025秋一遍过数学RJ6上测评卷.pdf",
+      "category": "api_error",
+      "message": "Polling timed out for batch 4c11efaf-8bf9-4dfb-9945-0372180abfdf"
+    },
+    {
+      "source_pdf": "C:\\code\\BaiduSyncdisk\\数学妙呀资料\\小学\\人教版数学\\六年级上册\\2025秋一遍过数学RJ6上教师用书（答案版）.pdf",
+      "category": "conversion_failure",
+      "message": "HTTPSConnectionPool(host='mineru.net', port=443): Max retries exceeded with url: /api/v4/extract-results/batch/ed30a586-9e65-411b-b6f9-9943f8bd1269 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))"
+    },
+    {
+      "source_pdf": "C:\\code\\BaiduSyncdisk\\数学妙呀资料\\小学\\人教版数学\\五年级上册\\2025秋一遍过数学RJ5上测评卷.pdf",
+      "category": "api_error",
+      "message": "Polling timed out for batch 638471bd-5f01-4a0f-a086-803cfd7d0282"
+    },
+    {
+      "source_pdf": "C:\\code\\BaiduSyncdisk\\数学妙呀资料\\小学\\人教版数学\\四年级上册\\2025秋一遍过数学RJ4上测评卷（答案版）.pdf",
+      "category": "api_error",
+      "message": "Polling timed out for batch 5faae383-b44c-4b9f-9677-39a77f9912bd"
+    },
+    {
+      "source_pdf": "C:\\code\\BaiduSyncdisk\\数学妙呀资料\\小学\\人教版数学\\四年级上册\\2025秋一遍过数学RJ4上.pdf",
+      "category": "api_error",
+      "message": "Polling timed out for batch 09935a45-d130-4657-b24e-75b2b89346c2"
+    },
+    {
+      "source_pdf": "C:\\code\\BaiduSyncdisk\\数学妙呀资料\\小学\\人教版数学\\五年级上册\\2025秋一遍过数学RJ5上教师用书（答案版）.pdf",
+      "category": "conversion_failure",
+      "message": "HTTPSConnectionPool(host='mineru.net', port=443): Max retries exceeded with url: /api/v4/extract-results/batch/e7a08c80-3e4b-44b0-aee5-934a869e08a6 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))"
+    }
+  ],
+  "stopped": true,
+  "stop_reason": "one or more conversions failed"
+}

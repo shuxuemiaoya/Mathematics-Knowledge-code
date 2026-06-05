@@ -1,0 +1,41 @@
+{
+  "settings": {
+    "api_key": "***",
+    "base_url": "https://mineru.net",
+    "max_parallel_tasks": 10,
+    "poll_interval": 10,
+    "max_retries": 180
+  },
+  "jobs": [
+    {
+      "source_pdf": "C:\\Mathematics-Knowledge\\agent-memory\\tmp\\mathos-pdf-to-md-single\\小学\\人教版数学\\六年级上册\\2025秋一遍过数学RJ6上.pdf",
+      "target_md": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\人教版数学\\六年级上册\\2025秋一遍过数学RJ6上.md"
+    }
+  ],
+  "skipped": [],
+  "results": [
+    {
+      "source_pdf": "C:\\Mathematics-Knowledge\\agent-memory\\tmp\\mathos-pdf-to-md-single\\小学\\人教版数学\\六年级上册\\2025秋一遍过数学RJ6上.pdf",
+      "target_md": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\人教版数学\\六年级上册\\2025秋一遍过数学RJ6上.md",
+      "status": "converted",
+      "parts": 1,
+      "assets": 586,
+      "message": "",
+      "split_parts": [
+        {
+          "upload_path": "C:\\Mathematics-Knowledge\\agent-memory\\tmp\\mathos-pdf-to-md-single\\小学\\人教版数学\\六年级上册\\2025秋一遍过数学RJ6上.pdf",
+          "part_index": 1,
+          "part_count": 1,
+          "start_page": 1,
+          "end_page": 82,
+          "requires_split": false,
+          "data_id": "2025_RJ6.7cff6ea7f36e3d63.001-of-001"
+        }
+      ],
+      "zip_paths": [
+        "agent-memory\\records\\2026-06-05-160625-pdf-to-md-source\\zips\\2025秋一遍过数学RJ6上\\part-001.zip"
+      ]
+    }
+  ],
+  "failures": []
+}

@@ -1,0 +1,3 @@
+MathOS PDF to Markdown skill.
+
+This skill uses the MinerU API according to the local reference file in `references/`.

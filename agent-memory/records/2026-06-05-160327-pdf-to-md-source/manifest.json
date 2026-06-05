@@ -1,0 +1,24 @@
+{
+  "settings": {
+    "api_key": "***",
+    "base_url": "https://mineru.net/api/v4",
+    "max_parallel_tasks": 10,
+    "poll_interval": 5,
+    "max_retries": 5
+  },
+  "jobs": [
+    {
+      "source_pdf": "C:\\Mathematics-Knowledge\\agent-memory\\tmp\\mathos-pdf-to-md-single\\小学\\人教版数学\\六年级上册\\2025秋一遍过数学RJ6上.pdf",
+      "target_md": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\人教版数学\\六年级上册\\2025秋一遍过数学RJ6上.md"
+    }
+  ],
+  "skipped": [],
+  "results": [],
+  "failures": [
+    {
+      "source_pdf": "C:\\Mathematics-Knowledge\\agent-memory\\tmp\\mathos-pdf-to-md-single\\小学\\人教版数学\\六年级上册\\2025秋一遍过数学RJ6上.pdf",
+      "category": "api_error",
+      "message": "MinerU HTTP 404"
+    }
+  ]
+}

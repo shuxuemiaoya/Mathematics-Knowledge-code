@@ -1,0 +1,19 @@
+{
+  "stage": "pdf-to-md",
+  "skill": "skills/mathos-pdf-to-md",
+  "failure_counts": {
+    "conversion_failure": 1,
+    "missing_api_key": 0,
+    "api_error": 1,
+    "missing_output": 0
+  },
+  "failed_items": [
+    {
+      "source_pdf": "C:\\Mathematics-Knowledge\\agent-memory\\tmp\\mathos-pdf-to-md-single\\小学\\人教版数学\\六年级上册\\2025秋一遍过数学RJ6上.pdf",
+      "category": "api_error",
+      "message": "Polling timed out for batch bef86854-379c-483c-8b97-6637bee1b84f"
+    }
+  ],
+  "stopped": true,
+  "stop_reason": "one or more conversions failed"
+}
