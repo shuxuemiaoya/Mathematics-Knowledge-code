@@ -1,9 +1,12 @@
 # mathos-formatting
 
-Status: reserved, inactive.
+Status: active after implementation.
 
-This directory reserves the future repo-local skill slot for batch Markdown formatting.
+This repo-local skill manages adaptive Markdown formatting for MathOS.
 
-Do not add `SKILL.md` until the detailed behavior is designed and approved.
+The skill uses a two-step LLM-assisted workflow:
 
-The first-version Knowledge-Graph Implementation Operator must report that this skill is not active yet if a task requires it.
+1. Extract headings and table-of-contents samples so the provider can propose regex heading rules.
+2. Extract one h1 section so the provider can propose a Python content cleaner.
+
+Unknown file types are modified only through fresh candidate backups. Approved reusable programs are saved under `plugins/approved/` only after user approval.
