@@ -1,13 +1,13 @@
 ---
 name: mathos-formatting
-description: Use when learning, previewing, approving, or reusing adaptive Markdown formatting programs for MathOS generated Markdown.
+description: Scaffold for future MathOS adaptive Markdown formatting; do not use operationally until implementation tasks are complete.
 ---
 
 # MathOS Formatting Operator
 
-Status: scaffolded. This skill becomes operational only after the MathOS formatting implementation plan tasks are complete; the current CLI and provider modules are stubs.
+Status: scaffolded and non-operational. The current CLI and provider modules are stubs.
 
-Use this skill for adaptive Markdown formatting after PDF or Word conversion.
+This scaffold documents the future adaptive Markdown formatting workflow; do not run it as an operational skill until implementation is complete.
 
 Unknown file types must use backup-only learning:
 

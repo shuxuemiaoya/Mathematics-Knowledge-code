@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import sys
+
 
 def main() -> int:
-    return 0
+    sys.stderr.write(
+        "mathos-formatting is scaffolded and not operational until "
+        "implementation tasks are complete.\n"
+    )
+    return 2
 
 
 if __name__ == "__main__":

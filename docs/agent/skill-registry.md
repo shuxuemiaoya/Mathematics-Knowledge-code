@@ -33,8 +33,8 @@ This slot must not contain a `SKILL.md` until its detailed behavior is designed 
 
 ### `skills/mathos-formatting`
 
-Status: reserved, inactive.
+Status: scaffolded, non-operational.
 
-Purpose: future batch Markdown formatting workflow.
+Purpose: future adaptive Markdown formatting workflow.
 
-This slot must not contain a `SKILL.md` until its detailed behavior is designed and approved.
+This scaffold is not operational until implementation tasks complete. It may contain `SKILL.md` and stub scripts only to document the future workflow and fail closed.
