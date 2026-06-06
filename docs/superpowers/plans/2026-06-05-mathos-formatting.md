@@ -1621,7 +1621,7 @@ Acceptance note: completed in `ad120c2`. Verified focused CLI smoke tests, `pyth
 - Modify: `skills/mathos-formatting/scripts/mathos_provider.py`
 - Test: `tests/test_mathos_formatting.py`
 
-- [ ] **Step 1: Write failing learning command test using fixture artifacts**
+- [x] **Step 1: Write failing learning command test using fixture artifacts**
 
 Append:
 
@@ -1661,7 +1661,7 @@ def test_cli_candidate_from_artifacts_creates_backup_report_and_candidate_plugin
     assert markdown.read_text(encoding="utf-8") == "第一章 集合 …… 1\n\na  b\n"
 ```
 
-- [ ] **Step 2: Run learning command test to verify it fails**
+- [x] **Step 2: Run learning command test to verify it fails**
 
 Run:
 
@@ -1671,7 +1671,7 @@ python -m pytest tests/test_mathos_formatting.py::test_cli_candidate_from_artifa
 
 Expected: FAIL because the command does not exist.
 
-- [ ] **Step 3: Add a helper for candidate runs from already-generated artifacts**
+- [x] **Step 3: Add a helper for candidate runs from already-generated artifacts**
 
 Add to `mathos_formatting_core.py`:
 
@@ -1707,7 +1707,7 @@ def run_candidate_from_artifacts(markdown_path: Path, heading_rules_path: Path, 
     return CandidateRunResult(candidate_path, report_path, plugin_result.summary, plugin_result.warnings)
 ```
 
-- [ ] **Step 4: Add `candidate-from-artifacts` CLI command**
+- [x] **Step 4: Add `candidate-from-artifacts` CLI command**
 
 Modify `mathos_formatting.py`:
 
@@ -1743,7 +1743,7 @@ Add this parser block inside `build_parser()`:
     artifact_parser.set_defaults(func=command_candidate_from_artifacts)
 ```
 
-- [ ] **Step 5: Run learning command test to verify it passes**
+- [x] **Step 5: Run learning command test to verify it passes**
 
 Run:
 
@@ -1753,12 +1753,14 @@ python -m pytest tests/test_mathos_formatting.py::test_cli_candidate_from_artifa
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add skills/mathos-formatting/scripts/mathos_formatting.py skills/mathos-formatting/scripts/mathos_formatting_core.py tests/test_mathos_formatting.py
 git commit -m "feat: run formatting candidates from generated artifacts"
 ```
+
+Acceptance note: completed in `85f4f4f`. Verified focused candidate-from-artifacts test, `python -m py_compile skills/mathos-formatting/scripts/mathos_formatting.py skills/mathos-formatting/scripts/mathos_formatting_core.py`, `git diff --check`, and `python -m pytest -q` on 2026-06-06.
 
 ## Task 10: Add Approval CLI Command
 
