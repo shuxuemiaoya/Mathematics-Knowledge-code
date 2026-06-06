@@ -84,11 +84,12 @@ def _strip_single_line_ending(text: str) -> tuple[str, bool]:
     return text, False
 
 
-def _is_diff_content_line(line: str) -> bool:
-    return (
-        line.startswith(("+", "-", " "))
-        and not line.startswith(("+++", "---"))
-    )
+def _is_diff_content_line(line: str, original_name: str, candidate_name: str) -> bool:
+    if line in {f"--- {original_name}", f"+++ {candidate_name}"}:
+        return False
+    if line.startswith("@@"):
+        return False
+    return line.startswith(("+", "-", " "))
 
 
 def unified_markdown_diff(original_text: str, candidate_text: str, original_name: str, candidate_name: str) -> str:
@@ -102,7 +103,7 @@ def unified_markdown_diff(original_text: str, candidate_text: str, original_name
     ):
         line, had_line_ending = _strip_single_line_ending(raw_line)
         diff_lines.append(line)
-        if _is_diff_content_line(line) and not had_line_ending:
+        if _is_diff_content_line(line, original_name, candidate_name) and not had_line_ending:
             diff_lines.append(r"\ No newline at end of file")
     return "\n".join(diff_lines) + ("\n" if diff_lines else "")
 

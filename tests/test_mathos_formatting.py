@@ -512,6 +512,24 @@ def test_unified_markdown_diff_shows_newline_only_changes():
     assert any("No newline at end of file" in line for line in diff_lines)
 
 
+def test_unified_markdown_diff_marks_removed_content_starting_with_dashes_without_newline():
+    diff_text = core.unified_markdown_diff("--- heading", "changed", "orig.md", "cand.md")
+    diff_lines = diff_text.splitlines()
+    removed_index = diff_lines.index("---- heading")
+
+    assert "---- heading" in diff_lines
+    assert diff_lines[removed_index + 1] == r"\ No newline at end of file"
+
+
+def test_unified_markdown_diff_marks_added_content_starting_with_pluses_without_newline():
+    diff_text = core.unified_markdown_diff("changed", "+++ heading", "orig.md", "cand.md")
+    diff_lines = diff_text.splitlines()
+    added_index = diff_lines.index("++++ heading")
+
+    assert "++++ heading" in diff_lines
+    assert diff_lines[added_index + 1] == r"\ No newline at end of file"
+
+
 def test_write_review_report_contains_diff_and_warnings(tmp_path):
     original = tmp_path / "book.md"
     candidate = tmp_path / ".mathos-formatting" / "book.candidate.md"
