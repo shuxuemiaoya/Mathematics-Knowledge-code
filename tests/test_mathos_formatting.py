@@ -1,5 +1,6 @@
 from pathlib import Path
 import importlib.util
+import json
 import py_compile
 import subprocess
 import sys
@@ -804,3 +805,61 @@ def test_parse_python_artifact_strips_markdown_fence():
 
     assert parsed.startswith("PLUGIN_ID")
     assert "```" not in parsed
+
+
+def test_save_approved_program_writes_required_files(tmp_path):
+    approved_root = tmp_path / "approved"
+    original = tmp_path / "before.md"
+    candidate = tmp_path / "after.md"
+    plugin = tmp_path / "content_cleaner.py"
+    original.write_text("第一章 集合 …… 1\n", encoding="utf-8")
+    candidate.write_text("# 第一章 集合\n", encoding="utf-8")
+    plugin.write_text(SAFE_PLUGIN, encoding="utf-8")
+    heading_rules = {"rules": [{"id": "chapter", "pattern": "^x$", "replacement": "# x", "flags": []}]}
+
+    program_dir = core.save_approved_program(
+        approved_root=approved_root,
+        plugin_id="safe_plugin",
+        heading_rules=heading_rules,
+        plugin_path=plugin,
+        original_path=original,
+        candidate_path=candidate,
+        approving_source_path=original,
+        operations_summary=["chapter heading normalized"],
+    )
+
+    assert (program_dir / "heading_rules.json").exists()
+    assert (program_dir / "content_cleaner.py").exists()
+    assert (program_dir / "approval.md").exists()
+    assert (program_dir / "sample_before.md").read_text(encoding="utf-8") == "第一章 集合 …… 1\n"
+    metadata = json.loads((program_dir / "metadata.json").read_text(encoding="utf-8"))
+    assert metadata["plugin_id"] == "safe_plugin"
+    assert metadata["allowed_scope"] == "manual-only"
+
+
+def test_apply_approved_program_reuses_without_provider(tmp_path):
+    approved_root = tmp_path / "approved"
+    target = tmp_path / "target.md"
+    target.write_text("第一章 集合 …… 1\n\na  b\n", encoding="utf-8")
+    original = tmp_path / "before.md"
+    candidate = tmp_path / "after.md"
+    plugin = tmp_path / "content_cleaner.py"
+    original.write_text("x\n", encoding="utf-8")
+    candidate.write_text("x\n", encoding="utf-8")
+    plugin.write_text(SAFE_PLUGIN, encoding="utf-8")
+    heading_rules = {
+        "rules": [
+            {
+                "id": "chapter",
+                "pattern": r"^(第一章 .+?)(?: …… \d+)?$",
+                "replacement": r"# \1",
+                "flags": ["MULTILINE"],
+            }
+        ]
+    }
+    core.save_approved_program(approved_root, "safe_plugin", heading_rules, plugin, original, candidate, original, ["summary"])
+
+    result = core.apply_approved_program(approved_root / "safe_plugin", target)
+
+    assert result.candidate_path.read_text(encoding="utf-8") == "# 第一章 集合\n\na b\n"
+    assert target.read_text(encoding="utf-8") == "第一章 集合 …… 1\n\na  b\n"

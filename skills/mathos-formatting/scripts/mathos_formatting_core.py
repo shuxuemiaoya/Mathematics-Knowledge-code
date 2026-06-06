@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import ast
 from dataclasses import dataclass
+from datetime import datetime, timezone
 import difflib
+import hashlib
 import importlib.util
+import json
 import re
 import shutil
 import sys
@@ -58,6 +61,14 @@ class HeadingRule:
 @dataclass(frozen=True)
 class PluginResult:
     cleaned_markdown: str
+    summary: list[str]
+    warnings: list[str]
+
+
+@dataclass(frozen=True)
+class ApprovedApplyResult:
+    candidate_path: Path
+    report_path: Path
     summary: list[str]
     warnings: list[str]
 
@@ -443,6 +454,103 @@ def apply_heading_rules(markdown: str, rules: list[HeadingRule]) -> str:
     if current_line <= len(lines):
         result_parts.append(_apply_rules_to_span("".join(lines[current_line - 1:]), rules))
     return "".join(result_parts)
+
+
+def _sha256_text(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def save_approved_program(
+    approved_root: Path,
+    plugin_id: str,
+    heading_rules: dict,
+    plugin_path: Path,
+    original_path: Path,
+    candidate_path: Path,
+    approving_source_path: Path,
+    operations_summary: list[str],
+) -> Path:
+    if not re.fullmatch(r"[a-zA-Z0-9_-]+", plugin_id):
+        raise FormattingError("plugin id may contain only letters, numbers, underscores, and hyphens")
+
+    validate_heading_rules(heading_rules)
+    load_safe_plugin(plugin_path)
+
+    program_dir = approved_root / plugin_id
+    if program_dir.exists():
+        raise FormattingError(f"approved plugin already exists: {plugin_id}")
+    program_dir.mkdir(parents=True)
+
+    original_text = original_path.read_text(encoding="utf-8")
+    candidate_text = candidate_path.read_text(encoding="utf-8")
+    original_structure = extract_structure(original_text, str(original_path))
+    candidate_structure = extract_structure(candidate_text, str(candidate_path))
+    h1_sample = candidate_structure.h1_sections[0].text if candidate_structure.h1_sections else candidate_text[:2000]
+
+    (program_dir / "heading_rules.json").write_text(
+        json.dumps(heading_rules, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    shutil.copy2(plugin_path, program_dir / "content_cleaner.py")
+    (program_dir / "sample_before.md").write_text(original_text, encoding="utf-8")
+    (program_dir / "sample_after.md").write_text(candidate_text, encoding="utf-8")
+
+    metadata = {
+        "plugin_id": plugin_id,
+        "version": "1.0.0",
+        "approval_timestamp": datetime.now(timezone.utc).isoformat(),
+        "source_file_family_evidence": str(approving_source_path),
+        "heading_signature": candidate_structure.heading_level_distribution,
+        "toc_signature": bool(original_structure.toc_block),
+        "h1_sample_hash": _sha256_text(h1_sample),
+        "operations_summary": operations_summary,
+        "original_approving_file_path": str(approving_source_path),
+        "allowed_scope": "manual-only",
+    }
+    (program_dir / "metadata.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+    (program_dir / "approval.md").write_text(
+        "\n".join(
+            [
+                "# Approval",
+                "",
+                f"Approved program: `{plugin_id}`",
+                f"Approving source: `{approving_source_path}`",
+                "",
+                "Allowed scope: `manual-only`",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return program_dir
+
+
+def apply_approved_program(program_dir: Path, target_path: Path) -> ApprovedApplyResult:
+    heading_rules_payload = json.loads((program_dir / "heading_rules.json").read_text(encoding="utf-8"))
+    rules = validate_heading_rules(heading_rules_payload)
+    plugin = load_safe_plugin(program_dir / "content_cleaner.py")
+
+    candidate_path = create_fresh_candidate(target_path)
+    markdown = candidate_path.read_text(encoding="utf-8")
+    markdown = apply_heading_rules(markdown, rules)
+    plugin_result = run_plugin(plugin, markdown)
+    candidate_path.write_text(plugin_result.cleaned_markdown, encoding="utf-8")
+
+    report_path = candidate_path.parent / f"{target_path.stem}.approved-report.md"
+    write_review_report(
+        original_path=target_path,
+        candidate_path=candidate_path,
+        report_path=report_path,
+        heading_summary=[rule.rule_id for rule in rules],
+        plugin_summary=plugin_result.summary,
+        warnings=plugin_result.warnings,
+    )
+    return ApprovedApplyResult(
+        candidate_path=candidate_path,
+        report_path=report_path,
+        summary=plugin_result.summary,
+        warnings=plugin_result.warnings,
+    )
 
 
 def _extract_toc_block(lines: list[str], headings: list[Heading]) -> TextBlock | None:
