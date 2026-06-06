@@ -452,3 +452,43 @@ def test_heading_rules_broad_rule_still_applies_to_normal_text():
 
     assert cleaned.startswith("# intro\n")
     assert cleaned.endswith("\n# outro\n")
+
+
+def test_candidate_backup_is_recreated_from_original_each_iteration(tmp_path):
+    original = tmp_path / "book.md"
+    original.write_text("第一章 集合 …… 1\n\nbody\n", encoding="utf-8")
+
+    first_candidate = core.create_fresh_candidate(original)
+    first_candidate.write_text("mutated candidate\n", encoding="utf-8")
+
+    second_candidate = core.create_fresh_candidate(original)
+
+    assert first_candidate == second_candidate
+    assert second_candidate.read_text(encoding="utf-8") == "第一章 集合 …… 1\n\nbody\n"
+    assert original.read_text(encoding="utf-8") == "第一章 集合 …… 1\n\nbody\n"
+
+
+def test_write_review_report_contains_diff_and_warnings(tmp_path):
+    original = tmp_path / "book.md"
+    candidate = tmp_path / ".mathos-formatting" / "book.candidate.md"
+    report = tmp_path / ".mathos-formatting" / "book.report.md"
+    original.write_text("第一章 集合 …… 1\n", encoding="utf-8")
+    candidate.parent.mkdir()
+    candidate.write_text("# 第一章 集合\n", encoding="utf-8")
+
+    path = core.write_review_report(
+        original_path=original,
+        candidate_path=candidate,
+        report_path=report,
+        heading_summary=["chapter -> h1"],
+        plugin_summary=["removed page number"],
+        warnings=["sample warning"],
+    )
+
+    text = path.read_text(encoding="utf-8")
+    assert "Source file:" in text
+    assert "Candidate file:" in text
+    assert "chapter -> h1" in text
+    assert "sample warning" in text
+    assert "-第一章 集合 …… 1" in text
+    assert "+# 第一章 集合" in text

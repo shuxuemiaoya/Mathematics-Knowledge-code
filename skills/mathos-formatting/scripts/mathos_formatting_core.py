@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import difflib
 import re
+import shutil
+from pathlib import Path
 
 
 @dataclass(frozen=True)
@@ -50,6 +53,89 @@ class HeadingRule:
 
 class FormattingError(RuntimeError):
     """Raised when formatting configuration or execution is unsafe."""
+
+
+def candidate_path_for(original_path: Path) -> Path:
+    return original_path.parent / ".mathos-formatting" / f"{original_path.stem}.candidate{original_path.suffix}"
+
+
+def create_fresh_candidate(original_path: Path) -> Path:
+    original_path = original_path.resolve()
+    if not original_path.exists():
+        raise FormattingError(f"source Markdown file does not exist: {original_path}")
+    if original_path.suffix.lower() != ".md":
+        raise FormattingError(f"source file must be Markdown: {original_path}")
+
+    candidate_path = candidate_path_for(original_path)
+    candidate_path.parent.mkdir(parents=True, exist_ok=True)
+    if candidate_path.exists():
+        candidate_path.unlink()
+    shutil.copy2(original_path, candidate_path)
+    return candidate_path
+
+
+def unified_markdown_diff(original_text: str, candidate_text: str, original_name: str, candidate_name: str) -> str:
+    return "".join(
+        difflib.unified_diff(
+            original_text.splitlines(keepends=True),
+            candidate_text.splitlines(keepends=True),
+            fromfile=original_name,
+            tofile=candidate_name,
+            lineterm="",
+        )
+    )
+
+
+def write_review_report(
+    original_path: Path,
+    candidate_path: Path,
+    report_path: Path,
+    heading_summary: list[str],
+    plugin_summary: list[str],
+    warnings: list[str],
+) -> Path:
+    original_text = original_path.read_text(encoding="utf-8")
+    candidate_text = candidate_path.read_text(encoding="utf-8")
+    diff_text = unified_markdown_diff(
+        original_text,
+        candidate_text,
+        str(original_path),
+        str(candidate_path),
+    )
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report = [
+        "# MathOS Formatting Candidate Report",
+        "",
+        f"Source file: `{original_path}`",
+        f"Candidate file: `{candidate_path}`",
+        "",
+        "## Heading Rules Summary",
+        "",
+        *[f"- {item}" for item in heading_summary],
+        "",
+        "## Content Plugin Summary",
+        "",
+        *[f"- {item}" for item in plugin_summary],
+        "",
+        "## Warnings",
+        "",
+        *[f"- {item}" for item in warnings],
+        "",
+        "## Diff",
+        "",
+        "```diff",
+        diff_text,
+        "```",
+        "",
+        "## Next Actions",
+        "",
+        "- approve",
+        "- revise",
+        "- discard",
+        "",
+    ]
+    report_path.write_text("\n".join(report), encoding="utf-8")
+    return report_path
 
 
 HEADING_RE = re.compile(r"^ {0,3}(#{1,6})\s+(.+?)\s*$")
