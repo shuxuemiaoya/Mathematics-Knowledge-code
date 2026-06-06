@@ -1248,7 +1248,7 @@ Acceptance note: completed in `7b65169`. Verified required provider tests, `pyth
 - Modify: `skills/mathos-formatting/scripts/mathos_formatting_core.py`
 - Test: `tests/test_mathos_formatting.py`
 
-- [ ] **Step 1: Write failing approval and reuse tests**
+- [x] **Step 1: Write failing approval and reuse tests**
 
 Append:
 
@@ -1305,7 +1305,7 @@ def test_apply_approved_program_reuses_without_provider(tmp_path):
     assert target.read_text(encoding="utf-8") == "第一章 集合 …… 1\n\na  b\n"
 ```
 
-- [ ] **Step 2: Run approval tests to verify they fail**
+- [x] **Step 2: Run approval tests to verify they fail**
 
 Run:
 
@@ -1315,7 +1315,7 @@ python -m pytest tests/test_mathos_formatting.py::test_save_approved_program_wri
 
 Expected: FAIL with missing `save_approved_program`.
 
-- [ ] **Step 3: Implement approval save and approved reuse**
+- [x] **Step 3: Implement approval save and approved reuse**
 
 Add:
 
@@ -1423,7 +1423,7 @@ def apply_approved_program(program_dir: Path, target_path: Path) -> ApprovedAppl
     )
 ```
 
-- [ ] **Step 4: Run approval tests to verify they pass**
+- [x] **Step 4: Run approval tests to verify they pass**
 
 Run:
 
@@ -1433,12 +1433,14 @@ python -m pytest tests/test_mathos_formatting.py::test_save_approved_program_wri
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add skills/mathos-formatting/scripts/mathos_formatting_core.py tests/test_mathos_formatting.py
 git commit -m "feat: approve and reuse formatting programs"
 ```
+
+Acceptance note: completed in `8bf9272`. Verified focused approval/reuse tests, `python -m py_compile skills/mathos-formatting/scripts/mathos_formatting_core.py`, and `python -m pytest -q` on 2026-06-06.
 
 ## Task 8: Implement CLI Orchestration
 
