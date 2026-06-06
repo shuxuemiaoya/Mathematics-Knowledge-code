@@ -33,8 +33,8 @@ This slot must not contain a `SKILL.md` until its detailed behavior is designed 
 
 ### `skills/mathos-formatting`
 
-Status: scaffolded, non-operational.
+Status: operational.
 
-Purpose: future adaptive Markdown formatting workflow.
+Purpose: MathOS adaptive Markdown formatting workflow.
 
-This scaffold is not operational until implementation tasks complete. It may contain `SKILL.md` and stub scripts only to document the future workflow and fail closed.
+Use candidate backup learning for unknown Markdown types, require user approval before saving reusable programs, and store approved manual-only programs under `plugins/approved/`.

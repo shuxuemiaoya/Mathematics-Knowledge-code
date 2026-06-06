@@ -66,11 +66,11 @@ def test_formatting_skill_scaffold_contract():
     combined_text = f"{skill_text}\n{readme_text}".lower()
 
     assert "name: mathos-formatting" in skill_text
-    assert "scaffolded" in skill_text.lower()
-    assert "scaffold for future mathos adaptive markdown formatting" in skill_text.lower()
-    assert "do not use operationally until implementation tasks are complete" in skill_text.lower()
-    assert "do not run it as an operational skill until implementation is complete" in skill_text.lower()
-    assert "active after implementation is complete" in readme_text.lower()
+    assert "adaptive markdown formatting operator" in skill_text.lower()
+    assert "status: operational" in combined_text
+    assert "candidate-from-artifacts" in combined_text
+    assert "apply-approved" in combined_text
+    assert "approve" in combined_text
     assert "candidate backup" in combined_text
     assert "user approval" in combined_text
 
@@ -92,9 +92,9 @@ def test_formatting_cli_requires_an_explicit_command():
 def test_formatting_skill_registry_marks_scaffold_non_operational():
     section = _registry_section("skills/mathos-formatting").lower()
 
-    assert "scaffolded" in section
-    assert "non-operational" in section
-    assert "not operational until implementation tasks complete" in section
+    assert "mathos adaptive markdown formatting" in section
+    assert "candidate backup" in section
+    assert "user approval" in section
     assert "reserved, inactive" not in section
     assert "must not contain a `skill.md`" not in section
 
@@ -1005,3 +1005,16 @@ def test_cli_approve_saves_program_after_candidate_review(tmp_path):
     payload = json.loads(result.stdout)
     assert payload["status"] == "approved"
     assert (approved_root / "safe_plugin" / "metadata.json").exists()
+
+
+def test_skill_docs_name_backup_approval_and_secret_boundaries():
+    skill_text = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+    readme_text = (SKILL_ROOT / "README.md").read_text(encoding="utf-8")
+    reference_text = (SKILL_ROOT / "references" / "formatting-program-format.md").read_text(encoding="utf-8")
+    combined = "\n".join([skill_text, readme_text, reference_text])
+
+    assert "candidate backup" in combined
+    assert "user approval" in combined
+    assert "DEEPSEEK_API_KEY" not in combined
+    assert "plugins/approved" in combined
+    assert "manual-only" in combined
