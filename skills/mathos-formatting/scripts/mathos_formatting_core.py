@@ -75,14 +75,16 @@ def create_fresh_candidate(original_path: Path) -> Path:
 
 
 def unified_markdown_diff(original_text: str, candidate_text: str, original_name: str, candidate_name: str) -> str:
-    return "".join(
+    diff_lines = list(
         difflib.unified_diff(
-            original_text.splitlines(keepends=True),
-            candidate_text.splitlines(keepends=True),
+            original_text.splitlines(),
+            candidate_text.splitlines(),
             fromfile=original_name,
             tofile=candidate_name,
+            lineterm="",
         )
     )
+    return "\n".join(diff_lines) + ("\n" if diff_lines else "")
 
 
 def write_review_report(

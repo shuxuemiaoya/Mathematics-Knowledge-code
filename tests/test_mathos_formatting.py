@@ -479,6 +479,18 @@ def test_unified_markdown_diff_keeps_control_lines_separate():
     assert "+b" in diff_lines
 
 
+def test_unified_markdown_diff_separates_content_without_trailing_newlines():
+    diff_text = core.unified_markdown_diff("a", "b", "orig.md", "cand.md")
+    diff_lines = diff_text.splitlines()
+
+    assert any(line.startswith("--- orig.md") for line in diff_lines)
+    assert any(line.startswith("+++ cand.md") for line in diff_lines)
+    assert any(line.startswith("@@") for line in diff_lines)
+    assert "-a" in diff_lines
+    assert "+b" in diff_lines
+    assert all("-a+b" not in line for line in diff_lines)
+
+
 def test_write_review_report_contains_diff_and_warnings(tmp_path):
     original = tmp_path / "book.md"
     candidate = tmp_path / ".mathos-formatting" / "book.candidate.md"
