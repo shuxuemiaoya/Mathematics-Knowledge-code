@@ -69,6 +69,23 @@ def command_candidate_from_artifacts(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_approve(args: argparse.Namespace) -> int:
+    heading_rules_path = Path(args.heading_rules)
+    heading_rules = json.loads(heading_rules_path.read_text(encoding="utf-8"))
+    program_dir = core.save_approved_program(
+        approved_root=Path(args.approved_root),
+        plugin_id=args.plugin_id,
+        heading_rules=heading_rules,
+        plugin_path=Path(args.plugin),
+        original_path=Path(args.original),
+        candidate_path=Path(args.candidate),
+        approving_source_path=Path(args.original),
+        operations_summary=args.summary,
+    )
+    _print_json({"status": "approved", "program_dir": str(program_dir)})
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="MathOS adaptive Markdown formatting operator")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -90,6 +107,16 @@ def build_parser() -> argparse.ArgumentParser:
     candidate_parser.add_argument("--heading-rules", required=True)
     candidate_parser.add_argument("--plugin", required=True)
     candidate_parser.set_defaults(func=command_candidate_from_artifacts)
+
+    approve_parser = subparsers.add_parser("approve", help="Save an approved candidate result as a reusable program")
+    approve_parser.add_argument("--approved-root", required=True)
+    approve_parser.add_argument("--plugin-id", required=True)
+    approve_parser.add_argument("--heading-rules", required=True)
+    approve_parser.add_argument("--plugin", required=True)
+    approve_parser.add_argument("--original", required=True)
+    approve_parser.add_argument("--candidate", required=True)
+    approve_parser.add_argument("--summary", action="append", default=["user approved candidate result"])
+    approve_parser.set_defaults(func=command_approve)
     return parser
 
 

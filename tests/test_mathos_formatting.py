@@ -962,3 +962,46 @@ def test_cli_candidate_from_artifacts_creates_backup_report_and_candidate_plugin
     assert candidate.read_text(encoding="utf-8") == "# 第一章 集合\n\na b\n"
     assert report.exists()
     assert markdown.read_text(encoding="utf-8") == "第一章 集合 …… 1\n\na  b\n"
+
+
+def test_cli_approve_saves_program_after_candidate_review(tmp_path):
+    approved_root = tmp_path / "approved"
+    original = tmp_path / "book.md"
+    candidate = tmp_path / ".mathos-formatting" / "book.candidate.md"
+    heading_rules = tmp_path / "heading_rules.json"
+    plugin = tmp_path / "content_cleaner.py"
+    original.write_text("第一章 集合 …… 1\n", encoding="utf-8")
+    candidate.parent.mkdir()
+    candidate.write_text("# 第一章 集合\n", encoding="utf-8")
+    heading_rules.write_text(
+        json.dumps({"rules": [{"id": "chapter", "pattern": "^x$", "replacement": "# x", "flags": []}]}),
+        encoding="utf-8",
+    )
+    plugin.write_text(SAFE_PLUGIN, encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(CLI_PATH),
+            "approve",
+            "--approved-root",
+            str(approved_root),
+            "--plugin-id",
+            "safe_plugin",
+            "--heading-rules",
+            str(heading_rules),
+            "--plugin",
+            str(plugin),
+            "--original",
+            str(original),
+            "--candidate",
+            str(candidate),
+        ],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "approved"
+    assert (approved_root / "safe_plugin" / "metadata.json").exists()
