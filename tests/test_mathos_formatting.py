@@ -380,6 +380,13 @@ def test_heading_rules_reject_invalid_regex():
         core.validate_heading_rules(rules)
 
 
+def test_heading_rules_reject_non_object_rule():
+    rules = {"rules": ["bad"]}
+
+    with pytest.raises(core.FormattingError, match="heading rule must be an object"):
+        core.validate_heading_rules(rules)
+
+
 def test_heading_rules_broad_rule_preserves_code_fence_exactly():
     rules = core.validate_heading_rules(
         {

@@ -115,6 +115,8 @@ def validate_heading_rules(payload: dict) -> list[HeadingRule]:
 
     validated: list[HeadingRule] = []
     for raw_rule in raw_rules:
+        if not isinstance(raw_rule, dict):
+            raise FormattingError("heading rule must be an object")
         rule_id = raw_rule.get("id")
         pattern = raw_rule.get("pattern")
         replacement = raw_rule.get("replacement")
