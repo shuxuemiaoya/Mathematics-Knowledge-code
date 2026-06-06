@@ -1,4 +1,5 @@
 from pathlib import Path
+import importlib.util
 import py_compile
 import subprocess
 import sys
@@ -9,6 +10,13 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SKILL_ROOT = REPO_ROOT / "skills" / "mathos-formatting"
 REGISTRY_PATH = REPO_ROOT / "docs" / "agent" / "skill-registry.md"
+PROVIDER_PATH = SKILL_ROOT / "scripts" / "mathos_provider.py"
+
+provider_spec = importlib.util.spec_from_file_location("mathos_provider", PROVIDER_PATH)
+provider = importlib.util.module_from_spec(provider_spec)
+assert provider_spec.loader is not None
+sys.modules["mathos_provider"] = provider
+provider_spec.loader.exec_module(provider)
 
 
 def _registry_section(skill_path: str) -> str:
@@ -753,3 +761,46 @@ def test_plugin_runner_removes_invalid_module_from_registry(tmp_path):
         core.load_safe_plugin(plugin_path)
 
     assert expected_module_name not in sys.modules
+
+
+def test_load_provider_settings_reads_deepseek_without_exposing_secret(tmp_path):
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "DEEPSEEK_API_KEY=secret-value\n"
+        "DEEPSEEK_BASE_URL=https://api.deepseek.com\n"
+        "DEEPSEEK_MODEL=deepseek-chat\n",
+        encoding="utf-8",
+    )
+
+    settings = provider.load_provider_settings(env_path)
+
+    assert settings.api_key == "secret-value"
+    assert settings.base_url == "https://api.deepseek.com"
+    assert settings.model == "deepseek-chat"
+    assert "secret-value" not in repr(settings)
+
+
+def test_parse_heading_rules_artifact_accepts_json_only():
+    artifact = provider.parse_heading_rules_artifact(
+        '{"rules": [{"id": "x", "pattern": "^x$", "replacement": "# x", "flags": []}]}'
+    )
+
+    assert artifact["rules"][0]["id"] == "x"
+
+
+def test_parse_python_artifact_strips_markdown_fence():
+    text = (
+        "```python\n"
+        "PLUGIN_ID = 'x'\n"
+        "PLUGIN_VERSION = '1.0.0'\n\n"
+        "def analyze(markdown: str) -> dict:\n"
+        "    return {'summary': [], 'warnings': []}\n\n"
+        "def clean(markdown: str) -> str:\n"
+        "    return markdown\n"
+        "```"
+    )
+
+    parsed = provider.parse_python_artifact(text)
+
+    assert parsed.startswith("PLUGIN_ID")
+    assert "```" not in parsed
