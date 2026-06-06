@@ -538,6 +538,33 @@ def test_write_review_report_contains_diff_and_warnings(tmp_path):
     assert "+# 第一章 集合" in text
 
 
+def test_write_review_report_uses_safe_diff_fence_for_backticks(tmp_path):
+    original = tmp_path / "book.md"
+    candidate = tmp_path / ".mathos-formatting" / "book.candidate.md"
+    report = tmp_path / ".mathos-formatting" / "book.report.md"
+    original.write_text("before\n```\nkeep\n```\nold line\n", encoding="utf-8")
+    candidate.parent.mkdir()
+    candidate.write_text("before\n```\nkeep\n```\nnew line\n", encoding="utf-8")
+
+    path = core.write_review_report(
+        original_path=original,
+        candidate_path=candidate,
+        report_path=report,
+        heading_summary=[],
+        plugin_summary=[],
+        warnings=[],
+    )
+
+    text = path.read_text(encoding="utf-8")
+    assert " ```" in text
+    assert "````diff" in text
+    assert "-old line" in text
+    assert "+new line" in text
+    assert "\n````\n\n## Next Actions" in text
+    assert text.index("````diff") < text.index("-old line") < text.index("## Next Actions")
+    assert "- approve" in text
+
+
 def test_write_review_report_rejects_original_path_collision_without_writing(tmp_path):
     original = tmp_path / "book.md"
     candidate = tmp_path / ".mathos-formatting" / "book.candidate.md"

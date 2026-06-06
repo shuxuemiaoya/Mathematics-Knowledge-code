@@ -116,6 +116,11 @@ def _validate_report_path(original_path: Path, candidate_path: Path, report_path
         raise FormattingError(f"report path must not overwrite source or candidate: {report_path}")
 
 
+def _markdown_code_fence_for(text: str) -> str:
+    longest_backtick_run = max((len(match.group(0)) for match in re.finditer(r"`+", text)), default=0)
+    return "`" * max(3, longest_backtick_run + 1)
+
+
 def write_review_report(
     original_path: Path,
     candidate_path: Path,
@@ -133,6 +138,7 @@ def write_review_report(
         str(original_path),
         str(candidate_path),
     )
+    diff_fence = _markdown_code_fence_for(diff_text)
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report = [
         "# MathOS Formatting Candidate Report",
@@ -154,9 +160,9 @@ def write_review_report(
         "",
         "## Diff",
         "",
-        "```diff",
+        f"{diff_fence}diff",
         diff_text,
-        "```",
+        diff_fence,
         "",
         "## Next Actions",
         "",
