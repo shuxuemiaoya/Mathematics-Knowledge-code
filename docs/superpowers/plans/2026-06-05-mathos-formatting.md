@@ -1064,7 +1064,7 @@ Acceptance note: completed in `f66d013` and hardened in `5deacf8` to reject `__b
 - Modify: `skills/mathos-formatting/scripts/mathos_formatting_core.py`
 - Test: `tests/test_mathos_formatting.py`
 
-- [ ] **Step 1: Write failing provider tests**
+- [x] **Step 1: Write failing provider tests**
 
 Append:
 
@@ -1107,7 +1107,7 @@ def test_parse_python_artifact_strips_markdown_fence():
     assert "```" not in parsed
 ```
 
-- [ ] **Step 2: Run provider tests to verify they fail**
+- [x] **Step 2: Run provider tests to verify they fail**
 
 Run:
 
@@ -1117,7 +1117,7 @@ python -m pytest tests/test_mathos_formatting.py::test_load_provider_settings_re
 
 Expected: FAIL with missing provider functions.
 
-- [ ] **Step 3: Implement provider settings and parsers**
+- [x] **Step 3: Implement provider settings and parsers**
 
 Add to `mathos_provider.py`:
 
@@ -1188,7 +1188,7 @@ def parse_python_artifact(text: str) -> str:
     return stripped
 ```
 
-- [ ] **Step 4: Add provider call helper**
+- [x] **Step 4: Add provider call helper**
 
 Append to `mathos_provider.py`:
 
@@ -1223,7 +1223,7 @@ def call_deepseek_chat(settings: ProviderSettings, system_prompt: str, user_payl
         raise ProviderError("provider response missing choices[0].message.content") from exc
 ```
 
-- [ ] **Step 5: Run provider tests to verify they pass**
+- [x] **Step 5: Run provider tests to verify they pass**
 
 Run:
 
@@ -1233,12 +1233,14 @@ python -m pytest tests/test_mathos_formatting.py::test_load_provider_settings_re
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add skills/mathos-formatting/scripts/mathos_provider.py tests/test_mathos_formatting.py
 git commit -m "feat: add formatting provider adapter"
 ```
+
+Acceptance note: completed in `7b65169`. Verified required provider tests, `python -m pytest tests/test_mathos_formatting.py -q`, and `python -m py_compile skills/mathos-formatting/scripts/mathos_provider.py` on 2026-06-06.
 
 ## Task 7: Implement Approval Save And Approved Plugin Reuse
 
