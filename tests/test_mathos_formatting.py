@@ -916,3 +916,49 @@ def test_cli_apply_approved_writes_candidate_not_original(tmp_path):
     payload = json.loads(result.stdout)
     assert Path(payload["candidate_path"]).exists()
     assert target.read_text(encoding="utf-8") == "第一章 集合 …… 1\n\na  b\n"
+
+
+def test_cli_candidate_from_artifacts_creates_backup_report_and_candidate_plugin(tmp_path):
+    markdown = tmp_path / "book.md"
+    heading_rules_path = tmp_path / "heading_rules.json"
+    plugin_path = tmp_path / "generated_plugin.py"
+    markdown.write_text("第一章 集合 …… 1\n\na  b\n", encoding="utf-8")
+    heading_rules_path.write_text(
+        json.dumps(
+            {
+                "rules": [
+                    {
+                        "id": "chapter",
+                        "pattern": r"^(第一章 .+?)(?: …… \d+)?$",
+                        "replacement": r"# \1",
+                        "flags": ["MULTILINE"],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    plugin_path.write_text(SAFE_PLUGIN, encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(CLI_PATH),
+            "candidate-from-artifacts",
+            str(markdown),
+            "--heading-rules",
+            str(heading_rules_path),
+            "--plugin",
+            str(plugin_path),
+        ],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    payload = json.loads(result.stdout)
+    candidate = Path(payload["candidate_path"])
+    report = Path(payload["report_path"])
+    assert candidate.read_text(encoding="utf-8") == "# 第一章 集合\n\na b\n"
+    assert report.exists()
+    assert markdown.read_text(encoding="utf-8") == "第一章 集合 …… 1\n\na  b\n"

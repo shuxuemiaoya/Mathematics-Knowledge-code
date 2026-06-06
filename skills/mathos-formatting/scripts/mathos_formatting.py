@@ -51,6 +51,24 @@ def command_apply_approved(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_candidate_from_artifacts(args: argparse.Namespace) -> int:
+    result = core.run_candidate_from_artifacts(
+        markdown_path=Path(args.markdown),
+        heading_rules_path=Path(args.heading_rules),
+        plugin_path=Path(args.plugin),
+    )
+    _print_json(
+        {
+            "status": "candidate-written",
+            "candidate_path": str(result.candidate_path),
+            "report_path": str(result.report_path),
+            "summary": result.summary,
+            "warnings": result.warnings,
+        }
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="MathOS adaptive Markdown formatting operator")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -63,6 +81,15 @@ def build_parser() -> argparse.ArgumentParser:
     apply_parser.add_argument("program_dir")
     apply_parser.add_argument("markdown")
     apply_parser.set_defaults(func=command_apply_approved)
+
+    candidate_parser = subparsers.add_parser(
+        "candidate-from-artifacts",
+        help="Create a fresh candidate backup from generated heading rules and a plugin",
+    )
+    candidate_parser.add_argument("markdown")
+    candidate_parser.add_argument("--heading-rules", required=True)
+    candidate_parser.add_argument("--plugin", required=True)
+    candidate_parser.set_defaults(func=command_candidate_from_artifacts)
     return parser
 
 

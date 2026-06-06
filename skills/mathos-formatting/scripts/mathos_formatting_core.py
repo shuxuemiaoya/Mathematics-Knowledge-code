@@ -73,6 +73,14 @@ class ApprovedApplyResult:
     warnings: list[str]
 
 
+@dataclass(frozen=True)
+class CandidateRunResult:
+    candidate_path: Path
+    report_path: Path
+    summary: list[str]
+    warnings: list[str]
+
+
 class FormattingError(RuntimeError):
     """Raised when formatting configuration or execution is unsafe."""
 
@@ -551,6 +559,29 @@ def apply_approved_program(program_dir: Path, target_path: Path) -> ApprovedAppl
         summary=plugin_result.summary,
         warnings=plugin_result.warnings,
     )
+
+
+def run_candidate_from_artifacts(markdown_path: Path, heading_rules_path: Path, plugin_path: Path) -> CandidateRunResult:
+    heading_payload = json.loads(heading_rules_path.read_text(encoding="utf-8"))
+    rules = validate_heading_rules(heading_payload)
+    plugin = load_safe_plugin(plugin_path)
+    candidate_path = create_fresh_candidate(markdown_path)
+
+    markdown = candidate_path.read_text(encoding="utf-8")
+    markdown = apply_heading_rules(markdown, rules)
+    plugin_result = run_plugin(plugin, markdown)
+    candidate_path.write_text(plugin_result.cleaned_markdown, encoding="utf-8")
+
+    report_path = candidate_path.parent / f"{markdown_path.stem}.candidate-report.md"
+    write_review_report(
+        original_path=markdown_path,
+        candidate_path=candidate_path,
+        report_path=report_path,
+        heading_summary=[rule.rule_id for rule in rules],
+        plugin_summary=plugin_result.summary,
+        warnings=plugin_result.warnings,
+    )
+    return CandidateRunResult(candidate_path, report_path, plugin_result.summary, plugin_result.warnings)
 
 
 def _extract_toc_block(lines: list[str], headings: list[Heading]) -> TextBlock | None:
