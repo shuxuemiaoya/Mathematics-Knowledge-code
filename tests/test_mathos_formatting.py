@@ -12,6 +12,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SKILL_ROOT = REPO_ROOT / "skills" / "mathos-formatting"
 REGISTRY_PATH = REPO_ROOT / "docs" / "agent" / "skill-registry.md"
 PROVIDER_PATH = SKILL_ROOT / "scripts" / "mathos_provider.py"
+CLI_PATH = SKILL_ROOT / "scripts" / "mathos_formatting.py"
 
 provider_spec = importlib.util.spec_from_file_location("mathos_provider", PROVIDER_PATH)
 provider = importlib.util.module_from_spec(provider_spec)
@@ -74,7 +75,7 @@ def test_formatting_skill_scaffold_contract():
     assert "user approval" in combined_text
 
 
-def test_formatting_cli_fails_closed_while_scaffolded():
+def test_formatting_cli_requires_an_explicit_command():
     result = subprocess.run(
         [sys.executable, str(SKILL_ROOT / "scripts" / "mathos_formatting.py")],
         capture_output=True,
@@ -83,8 +84,9 @@ def test_formatting_cli_fails_closed_while_scaffolded():
     )
 
     assert result.returncode == 2
-    assert "scaffold" in result.stderr.lower()
-    assert "not operational" in result.stderr.lower()
+    assert "the following arguments are required: command" in result.stderr.lower()
+    assert "inspect" in result.stderr
+    assert "apply-approved" in result.stderr
 
 
 def test_formatting_skill_registry_marks_scaffold_non_operational():
@@ -862,4 +864,55 @@ def test_apply_approved_program_reuses_without_provider(tmp_path):
     result = core.apply_approved_program(approved_root / "safe_plugin", target)
 
     assert result.candidate_path.read_text(encoding="utf-8") == "# 第一章 集合\n\na b\n"
+    assert target.read_text(encoding="utf-8") == "第一章 集合 …… 1\n\na  b\n"
+
+
+def test_cli_inspect_outputs_structure_json(tmp_path):
+    markdown = tmp_path / "book.md"
+    markdown.write_text(SAMPLE_MARKDOWN, encoding="utf-8")
+
+    result = subprocess.run(
+        [sys.executable, str(CLI_PATH), "inspect", str(markdown)],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    payload = json.loads(result.stdout)
+    assert payload["source_label"].endswith("book.md")
+    assert payload["heading_count"] >= 1
+    assert payload["toc_found"] is True
+
+
+def test_cli_apply_approved_writes_candidate_not_original(tmp_path):
+    approved_root = tmp_path / "approved"
+    target = tmp_path / "target.md"
+    target.write_text("第一章 集合 …… 1\n\na  b\n", encoding="utf-8")
+    original = tmp_path / "before.md"
+    candidate = tmp_path / "after.md"
+    plugin = tmp_path / "content_cleaner.py"
+    original.write_text("x\n", encoding="utf-8")
+    candidate.write_text("x\n", encoding="utf-8")
+    plugin.write_text(SAFE_PLUGIN, encoding="utf-8")
+    heading_rules = {
+        "rules": [
+            {
+                "id": "chapter",
+                "pattern": r"^(第一章 .+?)(?: …… \d+)?$",
+                "replacement": r"# \1",
+                "flags": ["MULTILINE"],
+            }
+        ]
+    }
+    core.save_approved_program(approved_root, "safe_plugin", heading_rules, plugin, original, candidate, original, ["summary"])
+
+    result = subprocess.run(
+        [sys.executable, str(CLI_PATH), "apply-approved", str(approved_root / "safe_plugin"), str(target)],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    payload = json.loads(result.stdout)
+    assert Path(payload["candidate_path"]).exists()
     assert target.read_text(encoding="utf-8") == "第一章 集合 …… 1\n\na  b\n"
