@@ -882,7 +882,7 @@ git commit -m "feat: create formatting candidates and review reports"
 - Modify: `skills/mathos-formatting/scripts/mathos_formatting_core.py`
 - Test: `tests/test_mathos_formatting.py`
 
-- [ ] **Step 1: Write failing plugin safety tests**
+- [x] **Step 1: Write failing plugin safety tests**
 
 Append:
 
@@ -933,7 +933,7 @@ def test_plugin_runner_rejects_environment_access(tmp_path):
         core.load_safe_plugin(plugin_path)
 ```
 
-- [ ] **Step 2: Run plugin tests to verify they fail**
+- [x] **Step 2: Run plugin tests to verify they fail**
 
 Run:
 
@@ -943,7 +943,7 @@ python -m pytest tests/test_mathos_formatting.py::test_plugin_runner_accepts_tex
 
 Expected: FAIL with missing `load_safe_plugin`.
 
-- [ ] **Step 3: Implement static safety checks and runner**
+- [x] **Step 3: Implement static safety checks and runner**
 
 Add:
 
@@ -1038,7 +1038,7 @@ def run_plugin(plugin: ModuleType, markdown: str) -> PluginResult:
     return PluginResult(cleaned_markdown=cleaned, summary=summary, warnings=warnings)
 ```
 
-- [ ] **Step 4: Run plugin tests to verify they pass**
+- [x] **Step 4: Run plugin tests to verify they pass**
 
 Run:
 
@@ -1048,12 +1048,14 @@ python -m pytest tests/test_mathos_formatting.py::test_plugin_runner_accepts_tex
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add skills/mathos-formatting/scripts/mathos_formatting_core.py tests/test_mathos_formatting.py
 git commit -m "feat: validate and run text-only formatting plugins"
 ```
+
+Acceptance note: completed in `f66d013` and hardened in `5deacf8` to reject `__builtins__` subscript access and remove invalid plugin modules from `sys.modules`. Verified with `python -m pytest tests/test_mathos_formatting.py -v` and `python -m pytest -q` on 2026-06-06.
 
 ## Task 6: Implement Provider Adapter And Structured Artifact Parsing
 
