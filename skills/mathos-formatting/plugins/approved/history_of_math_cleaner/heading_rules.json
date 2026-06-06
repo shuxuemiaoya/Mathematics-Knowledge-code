@@ -1,0 +1,15 @@
+{
+  "rules": [
+    {
+      "id": "combine_chapter_headings",
+      "pattern": "(?m)^#\\s+(\\d+)\\s*\\r?\\n\\s*\\r?\\n#\\s+([^\\n\\r]+)",
+      "replacement": "# \\1 \\2",
+      "flags": [
+        "MULTILINE"
+      ]
+    }
+  ],
+  "notes": [
+    "Combines chapter numbers and chapter titles into single H1 headings."
+  ]
+}
