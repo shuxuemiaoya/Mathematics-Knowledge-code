@@ -81,7 +81,6 @@ def unified_markdown_diff(original_text: str, candidate_text: str, original_name
             candidate_text.splitlines(keepends=True),
             fromfile=original_name,
             tofile=candidate_name,
-            lineterm="",
         )
     )
 

@@ -468,6 +468,17 @@ def test_candidate_backup_is_recreated_from_original_each_iteration(tmp_path):
     assert original.read_text(encoding="utf-8") == "第一章 集合 …… 1\n\nbody\n"
 
 
+def test_unified_markdown_diff_keeps_control_lines_separate():
+    diff_text = core.unified_markdown_diff("a\n", "b\n", "orig.md", "cand.md")
+    diff_lines = diff_text.splitlines()
+
+    assert any(line.startswith("--- orig.md") for line in diff_lines)
+    assert any(line.startswith("+++ cand.md") for line in diff_lines)
+    assert any(line.startswith("@@") for line in diff_lines)
+    assert "-a" in diff_lines
+    assert "+b" in diff_lines
+
+
 def test_write_review_report_contains_diff_and_warnings(tmp_path):
     original = tmp_path / "book.md"
     candidate = tmp_path / ".mathos-formatting" / "book.candidate.md"
