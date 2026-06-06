@@ -1450,7 +1450,7 @@ Acceptance note: completed in `8bf9272`. Verified focused approval/reuse tests, 
 - Modify: `skills/mathos-formatting/scripts/mathos_provider.py`
 - Test: `tests/test_mathos_formatting.py`
 
-- [ ] **Step 1: Write failing CLI smoke tests**
+- [x] **Step 1: Write failing CLI smoke tests**
 
 Append:
 
@@ -1503,7 +1503,7 @@ def test_cli_apply_approved_writes_candidate_not_original(tmp_path):
     assert target.read_text(encoding="utf-8") == "第一章 集合 …… 1\n\na  b\n"
 ```
 
-- [ ] **Step 2: Run CLI tests to verify they fail**
+- [x] **Step 2: Run CLI tests to verify they fail**
 
 Run:
 
@@ -1513,7 +1513,7 @@ python -m pytest tests/test_mathos_formatting.py::test_cli_inspect_outputs_struc
 
 Expected: FAIL because the CLI does not implement commands.
 
-- [ ] **Step 3: Implement CLI commands**
+- [x] **Step 3: Implement CLI commands**
 
 Replace `mathos_formatting.py` with:
 
@@ -1595,7 +1595,7 @@ if __name__ == "__main__":
     raise SystemExit(main())
 ```
 
-- [ ] **Step 4: Run CLI tests to verify they pass**
+- [x] **Step 4: Run CLI tests to verify they pass**
 
 Run:
 
@@ -1605,12 +1605,14 @@ python -m pytest tests/test_mathos_formatting.py::test_cli_inspect_outputs_struc
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add skills/mathos-formatting/scripts/mathos_formatting.py tests/test_mathos_formatting.py
 git commit -m "feat: add formatting operator cli"
 ```
+
+Acceptance note: completed in `ad120c2`. Verified focused CLI smoke tests, `python -m py_compile skills/mathos-formatting/scripts/mathos_formatting.py`, `git diff --check`, and `python -m pytest -q` on 2026-06-06.
 
 ## Task 9: Add Learning Command With Fakeable Provider Hooks
 
