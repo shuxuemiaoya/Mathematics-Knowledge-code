@@ -65,6 +65,8 @@ def create_fresh_candidate(original_path: Path) -> Path:
         raise FormattingError(f"source Markdown file does not exist: {original_path}")
     if original_path.suffix.lower() != ".md":
         raise FormattingError(f"source file must be Markdown: {original_path}")
+    if not original_path.is_file():
+        raise FormattingError(f"source Markdown file must be a file: {original_path}")
 
     candidate_path = candidate_path_for(original_path)
     candidate_path.parent.mkdir(parents=True, exist_ok=True)
@@ -74,17 +76,44 @@ def create_fresh_candidate(original_path: Path) -> Path:
     return candidate_path
 
 
-def unified_markdown_diff(original_text: str, candidate_text: str, original_name: str, candidate_name: str) -> str:
-    diff_lines = list(
-        difflib.unified_diff(
-            original_text.splitlines(),
-            candidate_text.splitlines(),
-            fromfile=original_name,
-            tofile=candidate_name,
-            lineterm="",
-        )
+def _strip_single_line_ending(text: str) -> tuple[str, bool]:
+    if text.endswith("\r\n"):
+        return text[:-2], True
+    if text.endswith(("\n", "\r")):
+        return text[:-1], True
+    return text, False
+
+
+def _is_diff_content_line(line: str) -> bool:
+    return (
+        line.startswith(("+", "-", " "))
+        and not line.startswith(("+++", "---"))
     )
+
+
+def unified_markdown_diff(original_text: str, candidate_text: str, original_name: str, candidate_name: str) -> str:
+    diff_lines: list[str] = []
+    for raw_line in difflib.unified_diff(
+        original_text.splitlines(keepends=True),
+        candidate_text.splitlines(keepends=True),
+        fromfile=original_name,
+        tofile=candidate_name,
+        lineterm="",
+    ):
+        line, had_line_ending = _strip_single_line_ending(raw_line)
+        diff_lines.append(line)
+        if _is_diff_content_line(line) and not had_line_ending:
+            diff_lines.append(r"\ No newline at end of file")
     return "\n".join(diff_lines) + ("\n" if diff_lines else "")
+
+
+def _validate_report_path(original_path: Path, candidate_path: Path, report_path: Path) -> None:
+    resolved_report = report_path.resolve(strict=False)
+    if resolved_report in {
+        original_path.resolve(strict=False),
+        candidate_path.resolve(strict=False),
+    }:
+        raise FormattingError(f"report path must not overwrite source or candidate: {report_path}")
 
 
 def write_review_report(
@@ -95,6 +124,7 @@ def write_review_report(
     plugin_summary: list[str],
     warnings: list[str],
 ) -> Path:
+    _validate_report_path(original_path, candidate_path, report_path)
     original_text = original_path.read_text(encoding="utf-8")
     candidate_text = candidate_path.read_text(encoding="utf-8")
     diff_text = unified_markdown_diff(

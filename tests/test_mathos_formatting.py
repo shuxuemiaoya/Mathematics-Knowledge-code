@@ -468,6 +468,14 @@ def test_candidate_backup_is_recreated_from_original_each_iteration(tmp_path):
     assert original.read_text(encoding="utf-8") == "第一章 集合 …… 1\n\nbody\n"
 
 
+def test_create_fresh_candidate_rejects_markdown_directory(tmp_path):
+    original = tmp_path / "book.md"
+    original.mkdir()
+
+    with pytest.raises(core.FormattingError, match="source Markdown file must be a file"):
+        core.create_fresh_candidate(original)
+
+
 def test_unified_markdown_diff_keeps_control_lines_separate():
     diff_text = core.unified_markdown_diff("a\n", "b\n", "orig.md", "cand.md")
     diff_lines = diff_text.splitlines()
@@ -489,6 +497,19 @@ def test_unified_markdown_diff_separates_content_without_trailing_newlines():
     assert "-a" in diff_lines
     assert "+b" in diff_lines
     assert all("-a+b" not in line for line in diff_lines)
+
+
+def test_unified_markdown_diff_shows_newline_only_changes():
+    diff_text = core.unified_markdown_diff("a", "a\n", "orig.md", "cand.md")
+    diff_lines = diff_text.splitlines()
+
+    assert diff_text
+    assert any(line.startswith("--- orig.md") for line in diff_lines)
+    assert any(line.startswith("+++ cand.md") for line in diff_lines)
+    assert any(line.startswith("@@") for line in diff_lines)
+    assert "-a" in diff_lines
+    assert "+a" in diff_lines
+    assert any("No newline at end of file" in line for line in diff_lines)
 
 
 def test_write_review_report_contains_diff_and_warnings(tmp_path):
@@ -515,3 +536,49 @@ def test_write_review_report_contains_diff_and_warnings(tmp_path):
     assert "sample warning" in text
     assert "-第一章 集合 …… 1" in text
     assert "+# 第一章 集合" in text
+
+
+def test_write_review_report_rejects_original_path_collision_without_writing(tmp_path):
+    original = tmp_path / "book.md"
+    candidate = tmp_path / ".mathos-formatting" / "book.candidate.md"
+    original_text = "original body\n"
+    candidate_text = "candidate body\n"
+    original.write_text(original_text, encoding="utf-8")
+    candidate.parent.mkdir()
+    candidate.write_text(candidate_text, encoding="utf-8")
+
+    with pytest.raises(core.FormattingError, match="report path must not overwrite"):
+        core.write_review_report(
+            original_path=original,
+            candidate_path=candidate,
+            report_path=original,
+            heading_summary=[],
+            plugin_summary=[],
+            warnings=[],
+        )
+
+    assert original.read_text(encoding="utf-8") == original_text
+    assert candidate.read_text(encoding="utf-8") == candidate_text
+
+
+def test_write_review_report_rejects_candidate_path_collision_without_writing(tmp_path):
+    original = tmp_path / "book.md"
+    candidate = tmp_path / ".mathos-formatting" / "book.candidate.md"
+    original_text = "original body\n"
+    candidate_text = "candidate body\n"
+    original.write_text(original_text, encoding="utf-8")
+    candidate.parent.mkdir()
+    candidate.write_text(candidate_text, encoding="utf-8")
+
+    with pytest.raises(core.FormattingError, match="report path must not overwrite"):
+        core.write_review_report(
+            original_path=original,
+            candidate_path=candidate,
+            report_path=candidate,
+            heading_summary=[],
+            plugin_summary=[],
+            warnings=[],
+        )
+
+    assert original.read_text(encoding="utf-8") == original_text
+    assert candidate.read_text(encoding="utf-8") == candidate_text
