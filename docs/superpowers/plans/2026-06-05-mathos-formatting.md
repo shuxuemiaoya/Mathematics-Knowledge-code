@@ -1768,7 +1768,7 @@ Acceptance note: completed in `85f4f4f`. Verified focused candidate-from-artifac
 - Modify: `skills/mathos-formatting/scripts/mathos_formatting.py`
 - Test: `tests/test_mathos_formatting.py`
 
-- [ ] **Step 1: Write failing approval CLI test**
+- [x] **Step 1: Write failing approval CLI test**
 
 Append:
 
@@ -1816,7 +1816,7 @@ def test_cli_approve_saves_program_after_candidate_review(tmp_path):
     assert (approved_root / "safe_plugin" / "metadata.json").exists()
 ```
 
-- [ ] **Step 2: Run approval CLI test to verify it fails**
+- [x] **Step 2: Run approval CLI test to verify it fails**
 
 Run:
 
@@ -1826,7 +1826,7 @@ python -m pytest tests/test_mathos_formatting.py::test_cli_approve_saves_program
 
 Expected: FAIL because the command does not exist.
 
-- [ ] **Step 3: Add approval CLI command**
+- [x] **Step 3: Add approval CLI command**
 
 Add to `mathos_formatting.py`:
 
@@ -1862,7 +1862,7 @@ Add this parser block inside `build_parser()`:
     approve_parser.set_defaults(func=command_approve)
 ```
 
-- [ ] **Step 4: Run approval CLI test to verify it passes**
+- [x] **Step 4: Run approval CLI test to verify it passes**
 
 Run:
 
@@ -1872,12 +1872,14 @@ python -m pytest tests/test_mathos_formatting.py::test_cli_approve_saves_program
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add skills/mathos-formatting/scripts/mathos_formatting.py tests/test_mathos_formatting.py
 git commit -m "feat: approve formatting programs from cli"
 ```
+
+Acceptance note: completed in `4383991`. Verified focused approval CLI test, `python -m py_compile skills/mathos-formatting/scripts/mathos_formatting.py`, `git diff --check`, and `python -m pytest -q` on 2026-06-06.
 
 ## Task 11: Final Documentation And Full Verification
 
