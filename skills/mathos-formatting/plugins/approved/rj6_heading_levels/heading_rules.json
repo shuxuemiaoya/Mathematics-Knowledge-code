@@ -1,0 +1,12 @@
+{
+  "rules": [
+    {
+      "id": "keep_existing_heading_text_for_contextual_plugin",
+      "pattern": "^(#{1,6})\\s+(.+)$",
+      "replacement": "\\1 \\2",
+      "flags": [
+        "MULTILINE"
+      ]
+    }
+  ]
+}

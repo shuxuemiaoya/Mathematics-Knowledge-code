@@ -32,14 +32,14 @@ Do not edit the knowledge-base repository unless the user explicitly asks for co
 
 ## Active And Reserved Skills
 
-Active first-version skill:
+Active skills:
 
 - `skills/mathos-pdf-to-md`
+- `skills/mathos-formatting`
 
 Reserved future skill slots:
 
 - `skills/mathos-word-to-md`
-- `skills/mathos-formatting`
 
 Reserved skill slots are named but inactive until a human-approved implementation creates a `SKILL.md`.
 
@@ -66,6 +66,15 @@ For `mathos-pdf-to-md`, examples include:
 - Stalled polling.
 - Missing output folders.
 - A command exits non-zero after retries defined by the active skill.
+
+For `mathos-formatting`, examples include:
+
+- Missing source Markdown.
+- Unsafe generated plugin code.
+- Invalid heading-rule JSON.
+- Missing candidate backup or report.
+- Attempting to modify originals during unknown-type learning.
+- Approval requested without an explicit successful user review.
 
 ## Required Output Summary
 

@@ -38,3 +38,7 @@ Status: operational.
 Purpose: MathOS adaptive Markdown formatting workflow.
 
 Use candidate backup learning for unknown Markdown types, require user approval before saving reusable programs, and store approved manual-only programs under `plugins/approved/`.
+
+Approved manual-only programs:
+
+- `rj6_heading_levels`: approved after successful user review for `Secondary-School-Mathematics-Knowledge-Map/小学/人教版数学/六年级上册` heading hierarchy normalization. Reuse with `apply-approved` only on matching 人教版数学六年级上册 / 一遍过 RJ6 Markdown family unless the user asks for a new candidate review.

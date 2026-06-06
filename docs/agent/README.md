@@ -13,10 +13,15 @@ It is not a content-quality reviewer and it is not a self-modifying meta-agent.
 - `docs/agent/operator-lifecycle.md`: execution and reporting lifecycle.
 - `agent-memory/README.md`: run memory boundaries and templates.
 
-## First-Version Focus
+## Active Stages
 
-The first concrete stage is PDF to Markdown conversion through `skills/mathos-pdf-to-md`.
+The active stages are:
 
-The agent should monitor operational health for that stage and stop if repeated failures make the run unsafe or unproductive.
+- PDF to Markdown conversion through `skills/mathos-pdf-to-md`.
+- Markdown formatting through `skills/mathos-formatting`.
+
+The agent should monitor operational health for each active stage and stop if repeated failures make the run unsafe or unproductive.
 
 The agent must summarize outputs for every completed or stopped stage.
+
+Formatting runs must preserve original Markdown during unknown-type learning, write candidate backups and reports, and save reusable programs only after explicit user approval.
