@@ -667,6 +667,39 @@ def clean(markdown: str) -> str:
 '''
 
 
+UNSAFE_BUILTINS_SUBSCRIPT_PLUGIN = '''
+PLUGIN_ID = "unsafe_builtins_subscript_plugin"
+PLUGIN_VERSION = "1.0.0"
+
+def analyze(markdown: str) -> dict:
+    return {"warnings": [], "summary": []}
+
+def clean(markdown: str) -> str:
+    return __builtins__["open"]("secrets.txt").read()
+'''
+
+
+UNSAFE_BUILTINS_IMPORT_SUBSCRIPT_PLUGIN = '''
+PLUGIN_ID = "unsafe_builtins_import_subscript_plugin"
+PLUGIN_VERSION = "1.0.0"
+
+def analyze(markdown: str) -> dict:
+    return {"warnings": [], "summary": []}
+
+def clean(markdown: str) -> str:
+    return __builtins__["__import__"]("os").getcwd()
+'''
+
+
+MISSING_ATTRIBUTE_PLUGIN = '''
+PLUGIN_ID = "missing_attribute_plugin"
+PLUGIN_VERSION = "1.0.0"
+
+def clean(markdown: str) -> str:
+    return markdown
+'''
+
+
 def test_plugin_runner_accepts_text_only_safe_plugin(tmp_path):
     plugin_path = tmp_path / "content_cleaner.py"
     plugin_path.write_text(SAFE_PLUGIN, encoding="utf-8")
@@ -693,3 +726,30 @@ def test_plugin_runner_rejects_builtins_file_access(tmp_path):
 
     with pytest.raises(core.FormattingError, match="unsafe attribute access"):
         core.load_safe_plugin(plugin_path)
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        UNSAFE_BUILTINS_SUBSCRIPT_PLUGIN,
+        UNSAFE_BUILTINS_IMPORT_SUBSCRIPT_PLUGIN,
+    ],
+)
+def test_plugin_runner_rejects_builtins_subscript_access(tmp_path, source):
+    plugin_path = tmp_path / "content_cleaner.py"
+    plugin_path.write_text(source, encoding="utf-8")
+
+    with pytest.raises(core.FormattingError, match="unsafe subscript access"):
+        core.load_safe_plugin(plugin_path)
+
+
+def test_plugin_runner_removes_invalid_module_from_registry(tmp_path):
+    plugin_path = tmp_path / "content_cleaner.py"
+    plugin_path.write_text(MISSING_ATTRIBUTE_PLUGIN, encoding="utf-8")
+
+    expected_module_name = f"mathos_candidate_{abs(hash(plugin_path.resolve()))}"
+
+    with pytest.raises(core.FormattingError, match="plugin missing required attribute: analyze"):
+        core.load_safe_plugin(plugin_path)
+
+    assert expected_module_name not in sys.modules

@@ -111,6 +111,9 @@ def _validate_plugin_ast(source: str) -> None:
         elif isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
             if node.value.id in UNSAFE_ATTRIBUTE_ROOTS:
                 raise FormattingError(f"unsafe attribute access: {node.value.id}.{node.attr}")
+        elif isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name):
+            if node.value.id in UNSAFE_ATTRIBUTE_ROOTS:
+                raise FormattingError(f"unsafe subscript access: {node.value.id}")
 
 
 def load_safe_plugin(plugin_path: Path) -> ModuleType:
@@ -124,18 +127,18 @@ def load_safe_plugin(plugin_path: Path) -> ModuleType:
     sys.modules[module_name] = module
     try:
         spec.loader.exec_module(module)
+        for attr in ["PLUGIN_ID", "PLUGIN_VERSION", "analyze", "clean"]:
+            if not hasattr(module, attr):
+                raise FormattingError(f"plugin missing required attribute: {attr}")
+        probe = module.clean("probe")
+        if not isinstance(probe, str):
+            raise FormattingError("plugin clean() must return a string")
+        analysis = module.analyze("probe")
+        if not isinstance(analysis, dict):
+            raise FormattingError("plugin analyze() must return a dict")
     except Exception:
         sys.modules.pop(module_name, None)
         raise
-    for attr in ["PLUGIN_ID", "PLUGIN_VERSION", "analyze", "clean"]:
-        if not hasattr(module, attr):
-            raise FormattingError(f"plugin missing required attribute: {attr}")
-    probe = module.clean("probe")
-    if not isinstance(probe, str):
-        raise FormattingError("plugin clean() must return a string")
-    analysis = module.analyze("probe")
-    if not isinstance(analysis, dict):
-        raise FormattingError("plugin analyze() must return a dict")
     return module
 
 
