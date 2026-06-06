@@ -1889,7 +1889,7 @@ Acceptance note: completed in `4383991`. Verified focused approval CLI test, `py
 - Modify: `skills/mathos-formatting/references/formatting-program-format.md`
 - Test: `tests/test_mathos_formatting.py`
 
-- [ ] **Step 1: Add a docs coverage test**
+- [x] **Step 1: Add a docs coverage test**
 
 Append:
 
@@ -1907,7 +1907,7 @@ def test_skill_docs_name_backup_approval_and_secret_boundaries():
     assert "manual-only" in combined
 ```
 
-- [ ] **Step 2: Run docs test to verify it passes or exposes missing wording**
+- [x] **Step 2: Run docs test to verify it passes or exposes missing wording**
 
 Run:
 
@@ -1917,7 +1917,7 @@ python -m pytest tests/test_mathos_formatting.py::test_skill_docs_name_backup_ap
 
 Expected: PASS. If it fails, add the exact missing phrase to the relevant doc and rerun.
 
-- [ ] **Step 3: Run the full formatter test file**
+- [x] **Step 3: Run the full formatter test file**
 
 Run:
 
@@ -1927,7 +1927,7 @@ python -m pytest tests/test_mathos_formatting.py -v
 
 Expected: all tests in `tests/test_mathos_formatting.py` PASS.
 
-- [ ] **Step 4: Run the broader test suite if the unrelated deletion has been resolved**
+- [x] **Step 4: Run the broader test suite if the unrelated deletion has been resolved**
 
 First inspect status:
 
@@ -1949,12 +1949,14 @@ python -m pytest -v
 
 Expected: formatter tests pass either way. Full suite pass is expected only when unrelated workspace changes do not remove existing tests.
 
-- [ ] **Step 5: Commit docs and any verification fixes**
+- [x] **Step 5: Commit docs and any verification fixes**
 
 ```powershell
 git add skills/mathos-formatting/SKILL.md skills/mathos-formatting/README.md skills/mathos-formatting/references/formatting-program-format.md tests/test_mathos_formatting.py
 git commit -m "docs: document mathos formatting workflow"
 ```
+
+Acceptance note: completed in `2dc4444`; registry wording was also updated from scaffolded to operational. Verified docs/registry tests and `python -m pytest tests/test_mathos_formatting.py -v` on 2026-06-06. Full-suite verification was intentionally skipped because unrelated `tests/test_mathos_pdf_to_md.py` remains deleted in the working tree.
 
 ## Self-Review Checklist
 
