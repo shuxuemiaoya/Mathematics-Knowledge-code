@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import ast
 from dataclasses import dataclass
 import difflib
+import importlib.util
 import re
 import shutil
+import sys
 from pathlib import Path
+from types import ModuleType
 
 
 @dataclass(frozen=True)
@@ -51,8 +55,104 @@ class HeadingRule:
     flags: int
 
 
+@dataclass(frozen=True)
+class PluginResult:
+    cleaned_markdown: str
+    summary: list[str]
+    warnings: list[str]
+
+
 class FormattingError(RuntimeError):
     """Raised when formatting configuration or execution is unsafe."""
+
+
+SAFE_IMPORTS = {"re", "math", "typing"}
+UNSAFE_CALL_NAMES = {
+    "open",
+    "exec",
+    "eval",
+    "compile",
+    "__import__",
+    "getattr",
+    "globals",
+    "locals",
+    "vars",
+}
+UNSAFE_ATTRIBUTE_ROOTS = {
+    "__builtins__",
+    "builtins",
+    "os",
+    "sys",
+    "subprocess",
+    "pathlib",
+    "socket",
+    "requests",
+    "urllib",
+    "http",
+    "shutil",
+}
+
+
+def _validate_plugin_ast(source: str) -> None:
+    tree = ast.parse(source)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                root = alias.name.split(".")[0]
+                if root not in SAFE_IMPORTS:
+                    raise FormattingError(f"unsafe import: {alias.name}")
+        elif isinstance(node, ast.ImportFrom):
+            root = (node.module or "").split(".")[0]
+            if root not in SAFE_IMPORTS:
+                raise FormattingError(f"unsafe import: {node.module}")
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            if node.func.id in UNSAFE_CALL_NAMES:
+                raise FormattingError(f"unsafe call: {node.func.id}")
+        elif isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
+            if node.value.id in UNSAFE_ATTRIBUTE_ROOTS:
+                raise FormattingError(f"unsafe attribute access: {node.value.id}.{node.attr}")
+
+
+def load_safe_plugin(plugin_path: Path) -> ModuleType:
+    source = plugin_path.read_text(encoding="utf-8")
+    _validate_plugin_ast(source)
+    module_name = f"mathos_candidate_{abs(hash(plugin_path.resolve()))}"
+    spec = importlib.util.spec_from_file_location(module_name, plugin_path)
+    if spec is None or spec.loader is None:
+        raise FormattingError(f"cannot load plugin: {plugin_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    try:
+        spec.loader.exec_module(module)
+    except Exception:
+        sys.modules.pop(module_name, None)
+        raise
+    for attr in ["PLUGIN_ID", "PLUGIN_VERSION", "analyze", "clean"]:
+        if not hasattr(module, attr):
+            raise FormattingError(f"plugin missing required attribute: {attr}")
+    probe = module.clean("probe")
+    if not isinstance(probe, str):
+        raise FormattingError("plugin clean() must return a string")
+    analysis = module.analyze("probe")
+    if not isinstance(analysis, dict):
+        raise FormattingError("plugin analyze() must return a dict")
+    return module
+
+
+def run_plugin(plugin: ModuleType, markdown: str) -> PluginResult:
+    analysis = plugin.analyze(markdown)
+    if not isinstance(analysis, dict):
+        raise FormattingError("plugin analyze() must return a dict")
+    cleaned = plugin.clean(markdown)
+    if not isinstance(cleaned, str):
+        raise FormattingError("plugin clean() must return a string")
+    summary = analysis.get("summary", [])
+    warnings = analysis.get("warnings", [])
+    if not isinstance(summary, list) or not all(isinstance(item, str) for item in summary):
+        raise FormattingError("plugin analysis summary must be a string list")
+    if not isinstance(warnings, list) or not all(isinstance(item, str) for item in warnings):
+        raise FormattingError("plugin analysis warnings must be a string list")
+    return PluginResult(cleaned_markdown=cleaned, summary=summary, warnings=warnings)
 
 
 def candidate_path_for(original_path: Path) -> Path:

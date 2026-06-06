@@ -627,3 +627,69 @@ def test_write_review_report_rejects_candidate_path_collision_without_writing(tm
 
     assert original.read_text(encoding="utf-8") == original_text
     assert candidate.read_text(encoding="utf-8") == candidate_text
+
+
+SAFE_PLUGIN = '''
+PLUGIN_ID = "safe_plugin"
+PLUGIN_VERSION = "1.0.0"
+
+def analyze(markdown: str) -> dict:
+    return {"warnings": [], "summary": ["normalize whitespace"]}
+
+def clean(markdown: str) -> str:
+    return markdown.replace("  ", " ")
+'''
+
+
+UNSAFE_PLUGIN = '''
+import os
+
+PLUGIN_ID = "unsafe_plugin"
+PLUGIN_VERSION = "1.0.0"
+
+def analyze(markdown: str) -> dict:
+    return {"warnings": [], "summary": []}
+
+def clean(markdown: str) -> str:
+    return os.environ.get("SECRET", markdown)
+'''
+
+
+UNSAFE_BUILTINS_PLUGIN = '''
+PLUGIN_ID = "unsafe_builtins_plugin"
+PLUGIN_VERSION = "1.0.0"
+
+def analyze(markdown: str) -> dict:
+    return {"warnings": [], "summary": []}
+
+def clean(markdown: str) -> str:
+    return __builtins__.open("secrets.txt").read()
+'''
+
+
+def test_plugin_runner_accepts_text_only_safe_plugin(tmp_path):
+    plugin_path = tmp_path / "content_cleaner.py"
+    plugin_path.write_text(SAFE_PLUGIN, encoding="utf-8")
+
+    plugin = core.load_safe_plugin(plugin_path)
+    result = core.run_plugin(plugin, "a  b")
+
+    assert result.cleaned_markdown == "a b"
+    assert result.summary == ["normalize whitespace"]
+    assert result.warnings == []
+
+
+def test_plugin_runner_rejects_environment_access(tmp_path):
+    plugin_path = tmp_path / "content_cleaner.py"
+    plugin_path.write_text(UNSAFE_PLUGIN, encoding="utf-8")
+
+    with pytest.raises(core.FormattingError, match="unsafe import"):
+        core.load_safe_plugin(plugin_path)
+
+
+def test_plugin_runner_rejects_builtins_file_access(tmp_path):
+    plugin_path = tmp_path / "content_cleaner.py"
+    plugin_path.write_text(UNSAFE_BUILTINS_PLUGIN, encoding="utf-8")
+
+    with pytest.raises(core.FormattingError, match="unsafe attribute access"):
+        core.load_safe_plugin(plugin_path)
