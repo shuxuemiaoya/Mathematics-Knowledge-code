@@ -1153,3 +1153,74 @@ def clean(markdown: str) -> str:
 
     assert result.cleaned_markdown == "# 第一章\n\na b\n"
     assert result.summary == ["normalized spaces"]
+
+
+class FakeFormattingProvider:
+    base_url = "https://fake.deepseek.local"
+    model = "deepseek-test"
+
+    def __init__(self):
+        self.calls = []
+
+    def chat(self, system_prompt: str, user_payload: str, timeout_seconds: int = 120) -> str:
+        self.calls.append((system_prompt, user_payload, timeout_seconds))
+        if "Heading Rules Prompt" in system_prompt:
+            return json.dumps(
+                {
+                    "rules": [
+                        {
+                            "id": "toc_chapter",
+                            "pattern": r"^# (第一章 .+?)(?: …… \d+)?$",
+                            "replacement": r"# \1",
+                            "flags": ["MULTILINE"],
+                        },
+                        {
+                            "id": "section_heading",
+                            "pattern": r"^1\\.1 (.+)$",
+                            "replacement": r"## 1.1 \1",
+                            "flags": ["MULTILINE"],
+                        },
+                    ]
+                },
+                ensure_ascii=False,
+            )
+        return """```python
+PLUGIN_ID = "image_text_cleaner"
+PLUGIN_VERSION = "1.0.0"
+
+def analyze(markdown: str) -> dict:
+    return {"summary": ["normalized image alt text"], "warnings": []}
+
+def clean(markdown: str) -> str:
+    return markdown.replace("![](images/a.png)", "![figure](images/a.png)")
+```"""
+
+
+def test_run_learning_from_provider_writes_artifacts_and_keeps_original(tmp_path):
+    markdown = tmp_path / "book.md"
+    original_text = SAMPLE_MARKDOWN
+    markdown.write_text(original_text, encoding="utf-8")
+    provider_client = FakeFormattingProvider()
+
+    result = core.run_learning_from_provider(
+        markdown_path=markdown,
+        provider_client=provider_client,
+        heading_prompt="# Heading Rules Prompt",
+        content_prompt="# Content Cleaner Prompt",
+        work_dir=tmp_path / ".mathos-formatting" / "book",
+    )
+
+    assert result.status == "candidate-written"
+    assert markdown.read_text(encoding="utf-8") == original_text
+    assert result.candidate_path.exists()
+    assert result.report_path.exists()
+    assert (result.work_dir / "toc_sample.md").exists()
+    assert (result.work_dir / "heading_rules_response.json").exists()
+    assert (result.work_dir / "heading_rules.json").exists()
+    assert (result.work_dir / "h1_sample.md").exists()
+    assert (result.work_dir / "content_cleaner_response.py").exists()
+    assert (result.work_dir / "content_cleaner.py").exists()
+    assert (result.work_dir / "run-state.json").exists()
+    candidate_text = result.candidate_path.read_text(encoding="utf-8")
+    assert "![figure](images/a.png)" in candidate_text
+    assert len(provider_client.calls) == 2

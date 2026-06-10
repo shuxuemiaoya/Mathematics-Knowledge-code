@@ -95,6 +95,18 @@ class LearningRunState:
     approved: bool
 
 
+@dataclass(frozen=True)
+class LearningRunResult:
+    status: str
+    work_dir: Path
+    candidate_path: Path
+    report_path: Path
+    artifacts: dict[str, Path]
+    summary: list[str]
+    warnings: list[str]
+    errors: list[str]
+
+
 class FormattingError(RuntimeError):
     """Raised when formatting configuration or execution is unsafe."""
 
@@ -740,3 +752,118 @@ def run_content_plugin_protecting_headings(plugin: ModuleType, markdown: str) ->
     if before_headings != after_headings:
         raise FormattingError("content cleaner modified heading lines")
     return result
+
+
+def _write_text_artifact(path: Path, text: str) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def _provider_identity(provider_client: object) -> tuple[str, str]:
+    return (
+        str(getattr(provider_client, "base_url", "")),
+        str(getattr(provider_client, "model", "")),
+    )
+
+
+def parse_python_artifact_from_text(text: str) -> str:
+    stripped = text.strip()
+    fence = re.fullmatch(r"```(?:python)?\s*(.*?)```", stripped, flags=re.DOTALL)
+    if fence:
+        stripped = fence.group(1).strip()
+    if "def clean(" not in stripped or "def analyze(" not in stripped:
+        raise FormattingError("python artifact must define analyze() and clean()")
+    return stripped
+
+
+def run_learning_from_provider(
+    markdown_path: Path,
+    provider_client: object,
+    heading_prompt: str,
+    content_prompt: str,
+    work_dir: Path | None = None,
+    timeout_seconds: int = 120,
+    h1_index: int = 0,
+) -> LearningRunResult:
+    markdown_path = markdown_path.resolve()
+    work_dir = work_dir or learning_work_dir_for(markdown_path)
+    candidate_path = learning_candidate_path_for(markdown_path, work_dir)
+    report_path = work_dir / "candidate-report.md"
+    artifacts: dict[str, Path] = {}
+    warnings: list[str] = []
+    errors: list[str] = []
+    provider_base_url, provider_model = _provider_identity(provider_client)
+
+    def state(stage: str, status: str) -> None:
+        write_learning_state(
+            work_dir,
+            LearningRunState(
+                source_path=markdown_path,
+                candidate_path=candidate_path,
+                provider_base_url=provider_base_url,
+                provider_model=provider_model,
+                stage=stage,
+                status=status,
+                artifacts=artifacts,
+                warnings=warnings,
+                errors=errors,
+                approved=False,
+            ),
+        )
+
+    try:
+        original_text = markdown_path.read_text(encoding="utf-8")
+        original_structure = extract_structure(original_text, str(markdown_path))
+        toc_sample = extract_toc_sample(original_text, original_structure)
+        artifacts["toc_sample"] = _write_text_artifact(work_dir / "toc_sample.md", toc_sample)
+        artifacts["heading_prompt"] = _write_text_artifact(work_dir / "heading_rules_prompt.md", heading_prompt)
+        heading_response = provider_client.chat(heading_prompt, toc_sample, timeout_seconds=timeout_seconds)
+        artifacts["heading_response"] = _write_text_artifact(work_dir / "heading_rules_response.json", heading_response)
+        heading_payload = json.loads(heading_response)
+        rules = validate_heading_rules(heading_payload)
+        artifacts["heading_rules"] = _write_text_artifact(
+            work_dir / "heading_rules.json",
+            json.dumps(heading_payload, ensure_ascii=False, indent=2),
+        )
+
+        work_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(markdown_path, candidate_path)
+        stage1_text = apply_heading_rules(candidate_path.read_text(encoding="utf-8"), rules)
+        candidate_path.write_text(stage1_text, encoding="utf-8")
+        artifacts["stage1_report"] = write_review_report(
+            original_path=markdown_path,
+            candidate_path=candidate_path,
+            report_path=work_dir / "stage1_heading_report.md",
+            heading_summary=[rule.rule_id for rule in rules],
+            plugin_summary=[],
+            warnings=[],
+        )
+
+        updated_structure = extract_structure(stage1_text, str(candidate_path))
+        h1_sample = extract_h1_sample(stage1_text, updated_structure, h1_index=h1_index)
+        artifacts["h1_sample"] = _write_text_artifact(work_dir / "h1_sample.md", h1_sample)
+        artifacts["content_prompt"] = _write_text_artifact(work_dir / "content_cleaner_prompt.md", content_prompt)
+        content_response = provider_client.chat(content_prompt, h1_sample, timeout_seconds=timeout_seconds)
+        artifacts["content_response"] = _write_text_artifact(work_dir / "content_cleaner_response.py", content_response)
+        plugin_source = parse_python_artifact_from_text(content_response)
+        artifacts["content_cleaner"] = _write_text_artifact(work_dir / "content_cleaner.py", plugin_source)
+        plugin = load_safe_plugin(artifacts["content_cleaner"])
+        plugin_result = run_content_plugin_protecting_headings(plugin, stage1_text)
+        candidate_path.write_text(plugin_result.cleaned_markdown, encoding="utf-8")
+        artifacts["candidate"] = candidate_path
+        artifacts["report"] = write_review_report(
+            original_path=markdown_path,
+            candidate_path=candidate_path,
+            report_path=report_path,
+            heading_summary=[rule.rule_id for rule in rules],
+            plugin_summary=plugin_result.summary,
+            warnings=plugin_result.warnings,
+        )
+        warnings.extend(plugin_result.warnings)
+        state("complete", "candidate-written")
+        return LearningRunResult("candidate-written", work_dir, candidate_path, report_path, artifacts, plugin_result.summary, warnings, errors)
+    except Exception as exc:
+        errors.append(str(exc))
+        state("failed", "failed")
+        raise
