@@ -717,3 +717,9 @@ def extract_toc_sample(markdown: str, structure: MarkdownStructure, max_followin
     end_index = min(len(lines), structure.toc_block.end_line + max_following_lines)
     sample_lines = lines[start_index:end_index]
     return "\n".join(sample_lines).strip() + "\n"
+
+
+def extract_h1_sample(markdown: str, structure: MarkdownStructure, h1_index: int = 0) -> str:
+    if h1_index < 0 or h1_index >= len(structure.h1_sections):
+        raise FormattingError("H1 section not found")
+    return structure.h1_sections[h1_index].text.strip() + "\n"

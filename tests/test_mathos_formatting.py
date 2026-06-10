@@ -1082,3 +1082,29 @@ def test_extract_toc_sample_contains_toc_and_heading_context():
     assert "1.1 分数乘整数" in sample
     assert "# 第一章 分数乘法" in sample
     assert sample.index("# 目录") < sample.index("# 第一章 分数乘法")
+
+
+def test_extract_h1_sample_uses_requested_h1_section():
+    markdown = """# 第一章
+
+正文一
+
+# 第二章
+
+正文二
+"""
+    structure = core.extract_structure(markdown, "candidate.md")
+
+    sample = core.extract_h1_sample(markdown, structure, h1_index=1)
+
+    assert sample.startswith("# 第二章")
+    assert "正文二" in sample
+    assert "正文一" not in sample
+
+
+def test_extract_h1_sample_rejects_missing_h1():
+    markdown = "正文\n"
+    structure = core.extract_structure(markdown, "candidate.md")
+
+    with pytest.raises(core.FormattingError, match="H1 section not found"):
+        core.extract_h1_sample(markdown, structure, h1_index=0)
