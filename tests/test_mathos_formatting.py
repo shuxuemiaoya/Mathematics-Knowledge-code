@@ -1108,3 +1108,48 @@ def test_extract_h1_sample_rejects_missing_h1():
 
     with pytest.raises(core.FormattingError, match="H1 section not found"):
         core.extract_h1_sample(markdown, structure, h1_index=0)
+
+
+def test_run_content_plugin_rejects_heading_changes(tmp_path):
+    plugin_path = tmp_path / "bad_cleaner.py"
+    plugin_path.write_text(
+        '''
+PLUGIN_ID = "bad_cleaner"
+PLUGIN_VERSION = "1.0.0"
+
+def analyze(markdown: str) -> dict:
+    return {"summary": [], "warnings": []}
+
+def clean(markdown: str) -> str:
+    return markdown.replace("# 第一章", "# Changed")
+''',
+        encoding="utf-8",
+    )
+    plugin = core.load_safe_plugin(plugin_path)
+    markdown = "# 第一章\n\n正文\n"
+
+    with pytest.raises(core.FormattingError, match="content cleaner modified heading lines"):
+        core.run_content_plugin_protecting_headings(plugin, markdown)
+
+
+def test_run_content_plugin_allows_text_changes(tmp_path):
+    plugin_path = tmp_path / "text_cleaner.py"
+    plugin_path.write_text(
+        '''
+PLUGIN_ID = "text_cleaner"
+PLUGIN_VERSION = "1.0.0"
+
+def analyze(markdown: str) -> dict:
+    return {"summary": ["normalized spaces"], "warnings": []}
+
+def clean(markdown: str) -> str:
+    return markdown.replace("a  b", "a b")
+''',
+        encoding="utf-8",
+    )
+    plugin = core.load_safe_plugin(plugin_path)
+
+    result = core.run_content_plugin_protecting_headings(plugin, "# 第一章\n\na  b\n")
+
+    assert result.cleaned_markdown == "# 第一章\n\na b\n"
+    assert result.summary == ["normalized spaces"]

@@ -723,3 +723,20 @@ def extract_h1_sample(markdown: str, structure: MarkdownStructure, h1_index: int
     if h1_index < 0 or h1_index >= len(structure.h1_sections):
         raise FormattingError("H1 section not found")
     return structure.h1_sections[h1_index].text.strip() + "\n"
+
+
+def _heading_lines(markdown: str) -> list[str]:
+    return [
+        line.rstrip("\r\n")
+        for line in markdown.splitlines()
+        if HEADING_RE.match(line)
+    ]
+
+
+def run_content_plugin_protecting_headings(plugin: ModuleType, markdown: str) -> PluginResult:
+    before_headings = _heading_lines(markdown)
+    result = run_plugin(plugin, markdown)
+    after_headings = _heading_lines(result.cleaned_markdown)
+    if before_headings != after_headings:
+        raise FormattingError("content cleaner modified heading lines")
+    return result
