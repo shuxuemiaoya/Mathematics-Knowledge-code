@@ -1297,3 +1297,17 @@ def test_learning_restores_stage1_candidate_when_content_changes_heading(tmp_pat
     assert state["status"] == "failed"
     assert state["stage"] == "stage2-apply"
 
+
+def test_provider_client_exposes_redacted_identity(monkeypatch):
+    settings = provider.ProviderSettings(
+        api_key="secret-value",
+        base_url="https://api.deepseek.com",
+        model="deepseek-chat",
+    )
+    client = provider.DeepSeekProviderClient(settings)
+
+    assert client.base_url == "https://api.deepseek.com"
+    assert client.model == "deepseek-chat"
+    assert "secret-value" not in repr(client)
+
+

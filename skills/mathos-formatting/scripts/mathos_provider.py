@@ -105,3 +105,23 @@ def call_deepseek_chat(
         raise ProviderError("provider response missing choices[0].message.content") from exc
     except json.JSONDecodeError as exc:
         raise ProviderError("provider response is not valid JSON") from exc
+
+
+@dataclass(frozen=True)
+class DeepSeekProviderClient:
+    settings: ProviderSettings
+
+    @property
+    def base_url(self) -> str:
+        return self.settings.base_url
+
+    @property
+    def model(self) -> str:
+        return self.settings.model
+
+    def __repr__(self) -> str:
+        return f"DeepSeekProviderClient(base_url={self.base_url!r}, model={self.model!r})"
+
+    def chat(self, system_prompt: str, user_payload: str, timeout_seconds: int = 120) -> str:
+        return call_deepseek_chat(self.settings, system_prompt, user_payload, timeout_seconds)
+
