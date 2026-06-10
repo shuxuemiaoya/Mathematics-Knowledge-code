@@ -13,6 +13,7 @@ if str(SCRIPT_DIR) not in sys.path:
 
 
 import mathos_formatting_core as core
+import mathos_provider as provider
 
 
 def _print_json(payload: dict) -> None:
@@ -86,6 +87,34 @@ def command_approve(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_learn_from_provider(args: argparse.Namespace) -> int:
+    settings = provider.load_provider_settings(Path(args.env))
+    provider_client = provider.DeepSeekProviderClient(settings)
+    heading_prompt = (SCRIPT_DIR.parent / "agents" / "heading_rules_prompt.md").read_text(encoding="utf-8")
+    content_prompt = (SCRIPT_DIR.parent / "agents" / "content_cleaner_prompt.md").read_text(encoding="utf-8")
+    result = core.run_learning_from_provider(
+        markdown_path=Path(args.markdown),
+        provider_client=provider_client,
+        heading_prompt=heading_prompt,
+        content_prompt=content_prompt,
+        work_dir=Path(args.work_dir) if args.work_dir else None,
+        timeout_seconds=args.timeout_seconds,
+        h1_index=args.h1_index,
+    )
+    _print_json(
+        {
+            "status": result.status,
+            "work_dir": str(result.work_dir),
+            "candidate_path": str(result.candidate_path),
+            "report_path": str(result.report_path),
+            "summary": result.summary,
+            "warnings": result.warnings,
+            "errors": result.errors,
+        }
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="MathOS adaptive Markdown formatting operator")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -117,6 +146,14 @@ def build_parser() -> argparse.ArgumentParser:
     approve_parser.add_argument("--candidate", required=True)
     approve_parser.add_argument("--summary", action="append", default=["user approved candidate result"])
     approve_parser.set_defaults(func=command_approve)
+
+    learn_parser = subparsers.add_parser("learn-from-provider", help="Learn heading and content cleanup artifacts through DeepSeek")
+    learn_parser.add_argument("markdown")
+    learn_parser.add_argument("--env", required=True)
+    learn_parser.add_argument("--work-dir")
+    learn_parser.add_argument("--timeout-seconds", type=int, default=120)
+    learn_parser.add_argument("--h1-index", type=int, default=0)
+    learn_parser.set_defaults(func=command_learn_from_provider)
     return parser
 
 

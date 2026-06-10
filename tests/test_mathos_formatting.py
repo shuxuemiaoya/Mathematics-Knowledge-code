@@ -1311,3 +1311,34 @@ def test_provider_client_exposes_redacted_identity(monkeypatch):
     assert "secret-value" not in repr(client)
 
 
+def test_cli_learn_from_provider_outputs_json_with_env(tmp_path, monkeypatch):
+    markdown = tmp_path / "book.md"
+    markdown.write_text(SAMPLE_MARKDOWN, encoding="utf-8")
+    env_path = tmp_path / ".env"
+    env_path.write_text("DEEPSEEK_API_KEY=secret\nDEEPSEEK_MODEL=deepseek-chat\n", encoding="utf-8")
+
+    fake_cli = importlib.util.spec_from_file_location("mathos_formatting_cli_test", CLI_PATH)
+    cli = importlib.util.module_from_spec(fake_cli)
+    assert fake_cli.loader is not None
+    sys.modules["mathos_formatting_cli_test"] = cli
+    fake_cli.loader.exec_module(cli)
+
+    class CliFakeProvider(FakeFormattingProvider):
+        pass
+
+    monkeypatch.setattr(cli.provider, "DeepSeekProviderClient", lambda settings: CliFakeProvider())
+
+    exit_code = cli.main([
+        "learn-from-provider",
+        str(markdown),
+        "--env",
+        str(env_path),
+        "--work-dir",
+        str(tmp_path / ".mathos-formatting" / "book"),
+    ])
+
+    assert exit_code == 0
+    assert (tmp_path / ".mathos-formatting" / "book" / "candidate.md").exists()
+
+
+
