@@ -794,8 +794,9 @@ def run_learning_from_provider(
     warnings: list[str] = []
     errors: list[str] = []
     provider_base_url, provider_model = _provider_identity(provider_client)
+    current_stage = "inspect"
 
-    def state(stage: str, status: str) -> None:
+    def state(stage: str | None, status: str) -> None:
         write_learning_state(
             work_dir,
             LearningRunState(
@@ -803,7 +804,7 @@ def run_learning_from_provider(
                 candidate_path=candidate_path,
                 provider_base_url=provider_base_url,
                 provider_model=provider_model,
-                stage=stage,
+                stage=stage or current_stage,
                 status=status,
                 artifacts=artifacts,
                 warnings=warnings,
@@ -815,8 +816,12 @@ def run_learning_from_provider(
     try:
         original_text = markdown_path.read_text(encoding="utf-8")
         original_structure = extract_structure(original_text, str(markdown_path))
+
+        current_stage = "toc-sample"
         toc_sample = extract_toc_sample(original_text, original_structure)
         artifacts["toc_sample"] = _write_text_artifact(work_dir / "toc_sample.md", toc_sample)
+
+        current_stage = "heading-provider"
         artifacts["heading_prompt"] = _write_text_artifact(work_dir / "heading_rules_prompt.md", heading_prompt)
         heading_response = provider_client.chat(heading_prompt, toc_sample, timeout_seconds=timeout_seconds)
         artifacts["heading_response"] = _write_text_artifact(work_dir / "heading_rules_response.json", heading_response)
@@ -827,6 +832,7 @@ def run_learning_from_provider(
             json.dumps(heading_payload, ensure_ascii=False, indent=2),
         )
 
+        current_stage = "stage1-apply"
         work_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy2(markdown_path, candidate_path)
         stage1_text = apply_heading_rules(candidate_path.read_text(encoding="utf-8"), rules)
@@ -840,16 +846,26 @@ def run_learning_from_provider(
             warnings=[],
         )
 
+        current_stage = "h1-sample"
         updated_structure = extract_structure(stage1_text, str(candidate_path))
         h1_sample = extract_h1_sample(stage1_text, updated_structure, h1_index=h1_index)
         artifacts["h1_sample"] = _write_text_artifact(work_dir / "h1_sample.md", h1_sample)
+
+        current_stage = "content-provider"
         artifacts["content_prompt"] = _write_text_artifact(work_dir / "content_cleaner_prompt.md", content_prompt)
         content_response = provider_client.chat(content_prompt, h1_sample, timeout_seconds=timeout_seconds)
         artifacts["content_response"] = _write_text_artifact(work_dir / "content_cleaner_response.py", content_response)
         plugin_source = parse_python_artifact_from_text(content_response)
         artifacts["content_cleaner"] = _write_text_artifact(work_dir / "content_cleaner.py", plugin_source)
         plugin = load_safe_plugin(artifacts["content_cleaner"])
-        plugin_result = run_content_plugin_protecting_headings(plugin, stage1_text)
+
+        current_stage = "stage2-apply"
+        try:
+            plugin_result = run_content_plugin_protecting_headings(plugin, stage1_text)
+        except FormattingError:
+            candidate_path.write_text(stage1_text, encoding="utf-8")
+            raise
+
         candidate_path.write_text(plugin_result.cleaned_markdown, encoding="utf-8")
         artifacts["candidate"] = candidate_path
         artifacts["report"] = write_review_report(
@@ -864,6 +880,7 @@ def run_learning_from_provider(
         state("complete", "candidate-written")
         return LearningRunResult("candidate-written", work_dir, candidate_path, report_path, artifacts, plugin_result.summary, warnings, errors)
     except Exception as exc:
-        errors.append(str(exc))
-        state("failed", "failed")
+        if not errors:
+            errors.append(str(exc))
+        state(None, "failed")
         raise

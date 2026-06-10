@@ -1224,3 +1224,76 @@ def test_run_learning_from_provider_writes_artifacts_and_keeps_original(tmp_path
     candidate_text = result.candidate_path.read_text(encoding="utf-8")
     assert "![figure](images/a.png)" in candidate_text
     assert len(provider_client.calls) == 2
+
+
+class CountingProvider:
+    base_url = "https://fake.deepseek.local"
+    model = "deepseek-test"
+
+    def __init__(self):
+        self.calls = 0
+
+    def chat(self, system_prompt: str, user_payload: str, timeout_seconds: int = 120) -> str:
+        self.calls += 1
+        return "{}"
+
+
+def test_learning_without_toc_stops_before_provider_and_candidate(tmp_path):
+    markdown = tmp_path / "book.md"
+    markdown.write_text("# 第一章\n\n正文\n", encoding="utf-8")
+    provider_client = CountingProvider()
+    work_dir = tmp_path / ".mathos-formatting" / "book"
+
+    with pytest.raises(core.FormattingError, match="TOC not found"):
+        core.run_learning_from_provider(
+            markdown,
+            provider_client,
+            heading_prompt="# Heading Rules Prompt",
+            content_prompt="# Content Cleaner Prompt",
+            work_dir=work_dir,
+        )
+
+    assert provider_client.calls == 0
+    assert not (work_dir / "candidate.md").exists()
+    state = json.loads((work_dir / "run-state.json").read_text(encoding="utf-8"))
+    assert state["status"] == "failed"
+    assert state["stage"] == "toc-sample"
+    assert state["errors"] == ["TOC not found"]
+
+
+class HeadingMutatingProvider(FakeFormattingProvider):
+    def chat(self, system_prompt: str, user_payload: str, timeout_seconds: int = 120) -> str:
+        if "Heading Rules Prompt" in system_prompt:
+            return super().chat(system_prompt, user_payload, timeout_seconds)
+        return """```python
+PLUGIN_ID = "bad_heading_cleaner"
+PLUGIN_VERSION = "1.0.0"
+
+def analyze(markdown: str) -> dict:
+    return {"summary": [], "warnings": []}
+
+def clean(markdown: str) -> str:
+    return markdown.replace("# 第一章", "# Changed")
+```"""
+
+
+def test_learning_restores_stage1_candidate_when_content_changes_heading(tmp_path):
+    markdown = tmp_path / "book.md"
+    markdown.write_text(SAMPLE_MARKDOWN, encoding="utf-8")
+    work_dir = tmp_path / ".mathos-formatting" / "book"
+
+    with pytest.raises(core.FormattingError, match="content cleaner modified heading lines"):
+        core.run_learning_from_provider(
+            markdown,
+            HeadingMutatingProvider(),
+            heading_prompt="# Heading Rules Prompt",
+            content_prompt="# Content Cleaner Prompt",
+            work_dir=work_dir,
+        )
+
+    candidate_text = (work_dir / "candidate.md").read_text(encoding="utf-8")
+    assert "# Changed" not in candidate_text
+    state = json.loads((work_dir / "run-state.json").read_text(encoding="utf-8"))
+    assert state["status"] == "failed"
+    assert state["stage"] == "stage2-apply"
+
