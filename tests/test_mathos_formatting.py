@@ -1052,3 +1052,33 @@ def test_write_learning_state_records_error_without_secrets(tmp_path):
     assert payload["errors"] == ["TOC not found"]
     assert payload["artifacts"]["toc_sample"].endswith("toc_sample.md")
     assert "api_key" not in state_path.read_text(encoding="utf-8").lower()
+
+
+def test_extract_toc_sample_requires_detected_toc():
+    markdown = "# 第一章\n\n正文\n"
+    structure = core.extract_structure(markdown, "no-toc.md")
+
+    with pytest.raises(core.FormattingError, match="TOC not found"):
+        core.extract_toc_sample(markdown, structure)
+
+
+def test_extract_toc_sample_contains_toc_and_heading_context():
+    markdown = """# 数学
+
+# 目录
+
+# 第一章 分数乘法 …… 1
+1.1 分数乘整数 …… 2
+
+# 第一章 分数乘法
+
+正文
+"""
+    structure = core.extract_structure(markdown, "book.md")
+
+    sample = core.extract_toc_sample(markdown, structure)
+
+    assert "# 目录" in sample
+    assert "1.1 分数乘整数" in sample
+    assert "# 第一章 分数乘法" in sample
+    assert sample.index("# 目录") < sample.index("# 第一章 分数乘法")
