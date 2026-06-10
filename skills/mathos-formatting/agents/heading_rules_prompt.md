@@ -19,3 +19,8 @@ Return JSON only with this shape:
 ```
 
 Rules must preserve math blocks, code fences, image links, and tables unless the payload explicitly requests changes to them.
+
+The input sample must contain a table of contents. If the sample does not contain a TOC, return JSON with an empty `rules` list and a note explaining that a TOC is required.
+
+Use the TOC to infer the intended heading hierarchy. Return deterministic regex rules only; do not include prose outside JSON.
+

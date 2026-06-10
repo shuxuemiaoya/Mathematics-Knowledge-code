@@ -16,3 +16,6 @@ def clean(markdown: str) -> str:
 ```
 
 The plugin receives Markdown text and returns Markdown text. Do not read files, write files, access environment variables, call subprocesses, or use network APIs.
+
+The input sample is one complete H1 section after heading normalization. The cleaner is for image/text formatting only and must not modify heading lines.
+

@@ -1341,4 +1341,19 @@ def test_cli_learn_from_provider_outputs_json_with_env(tmp_path, monkeypatch):
     assert (tmp_path / ".mathos-formatting" / "book" / "candidate.md").exists()
 
 
+def test_provider_learning_docs_name_toc_h1_and_heading_protection():
+    heading_prompt = (SKILL_ROOT / "agents" / "heading_rules_prompt.md").read_text(encoding="utf-8")
+    content_prompt = (SKILL_ROOT / "agents" / "content_cleaner_prompt.md").read_text(encoding="utf-8")
+    skill_text = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+    readme_text = (SKILL_ROOT / "README.md").read_text(encoding="utf-8")
+    combined = "\n".join([heading_prompt, content_prompt, skill_text, readme_text]).lower()
+
+    assert "learn-from-provider" in combined
+    assert "toc" in combined or "table of contents" in combined
+    assert "complete h1" in combined
+    assert "image/text" in combined
+    assert "must not modify heading" in combined
+
+
+
 
