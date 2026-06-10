@@ -81,6 +81,20 @@ class CandidateRunResult:
     warnings: list[str]
 
 
+@dataclass(frozen=True)
+class LearningRunState:
+    source_path: Path
+    candidate_path: Path
+    provider_base_url: str
+    provider_model: str
+    stage: str
+    status: str
+    artifacts: dict[str, Path]
+    warnings: list[str]
+    errors: list[str]
+    approved: bool
+
+
 class FormattingError(RuntimeError):
     """Raised when formatting configuration or execution is unsafe."""
 
@@ -179,6 +193,38 @@ def run_plugin(plugin: ModuleType, markdown: str) -> PluginResult:
 
 def candidate_path_for(original_path: Path) -> Path:
     return original_path.parent / ".mathos-formatting" / f"{original_path.stem}.candidate{original_path.suffix}"
+
+
+def learning_work_dir_for(markdown_path: Path) -> Path:
+    return markdown_path.parent / ".mathos-formatting" / markdown_path.stem
+
+
+def learning_candidate_path_for(markdown_path: Path, work_dir: Path | None = None) -> Path:
+    base = work_dir if work_dir is not None else learning_work_dir_for(markdown_path)
+    return base / "candidate.md"
+
+
+def _json_path_map(paths: dict[str, Path]) -> dict[str, str]:
+    return {key: str(value) for key, value in paths.items()}
+
+
+def write_learning_state(work_dir: Path, state: LearningRunState) -> Path:
+    work_dir.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "source_path": str(state.source_path),
+        "candidate_path": str(state.candidate_path),
+        "provider_base_url": state.provider_base_url,
+        "provider_model": state.provider_model,
+        "stage": state.stage,
+        "status": state.status,
+        "artifacts": _json_path_map(state.artifacts),
+        "warnings": state.warnings,
+        "errors": state.errors,
+        "approved": state.approved,
+    }
+    state_path = work_dir / "run-state.json"
+    state_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return state_path
 
 
 def create_fresh_candidate(original_path: Path) -> Path:

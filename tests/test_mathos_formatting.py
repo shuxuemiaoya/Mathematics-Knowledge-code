@@ -1018,3 +1018,37 @@ def test_skill_docs_name_backup_approval_and_secret_boundaries():
     assert "DEEPSEEK_API_KEY" not in combined
     assert "plugins/approved" in combined
     assert "manual-only" in combined
+
+
+def test_learning_work_dir_defaults_to_nested_source_stem(tmp_path):
+    markdown = tmp_path / "book.md"
+    markdown.write_text("# 目录\n\n# 第一章 …… 1\n", encoding="utf-8")
+
+    path = core.learning_work_dir_for(markdown)
+
+    assert path == tmp_path / ".mathos-formatting" / "book"
+
+
+def test_write_learning_state_records_error_without_secrets(tmp_path):
+    work_dir = tmp_path / ".mathos-formatting" / "book"
+    state = core.LearningRunState(
+        source_path=tmp_path / "book.md",
+        candidate_path=work_dir / "candidate.md",
+        provider_base_url="https://api.deepseek.com",
+        provider_model="deepseek-chat",
+        stage="heading-provider",
+        status="failed",
+        artifacts={"toc_sample": work_dir / "toc_sample.md"},
+        warnings=["sample warning"],
+        errors=["TOC not found"],
+        approved=False,
+    )
+
+    state_path = core.write_learning_state(work_dir, state)
+
+    payload = json.loads(state_path.read_text(encoding="utf-8"))
+    assert payload["status"] == "failed"
+    assert payload["stage"] == "heading-provider"
+    assert payload["errors"] == ["TOC not found"]
+    assert payload["artifacts"]["toc_sample"].endswith("toc_sample.md")
+    assert "api_key" not in state_path.read_text(encoding="utf-8").lower()
