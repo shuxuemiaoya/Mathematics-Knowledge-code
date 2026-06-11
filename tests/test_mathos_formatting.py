@@ -330,6 +330,23 @@ def test_extract_structure_repeated_page_leader_h1_terminates_toc():
     assert result.h1_sections[2].heading == "第一章 集合 …… 1"
 
 
+def test_extract_structure_space_separated_page_numbers():
+    markdown = """# 目录
+
+# 第一章 集合 1
+
+# 第一章 集合
+
+## 1.1 集合的概念
+"""
+    result = core.extract_structure(markdown, source_label="space-separated-toc.md")
+    assert result.toc_block is not None
+    assert "# 第一章 集合 1" in result.toc_block.text
+    # The first real H1 should start at "# 第一章 集合"
+    assert result.toc_block.end_line == 4
+
+
+
 def test_extract_structure_ignores_code_fence_openers_indented_four_spaces():
     markdown = """# Before
 
@@ -463,6 +480,25 @@ def test_heading_rules_broad_rule_still_applies_to_normal_text():
 
     assert cleaned.startswith("# intro\n")
     assert cleaned.endswith("\n# outro\n")
+
+
+def test_heading_rules_translates_js_backreferences():
+    rules = core.validate_heading_rules(
+        {
+            "rules": [
+                {
+                    "id": "js-style",
+                    "pattern": r"^Chapter (\w+) - (.+)$",
+                    "replacement": "## $1: $2 ($0)",
+                    "flags": ["MULTILINE"],
+                }
+            ]
+        }
+    )
+    markdown = "Chapter One - Introduction\n"
+    cleaned = core.apply_heading_rules(markdown, rules)
+    assert cleaned == "## One: Introduction (Chapter One - Introduction)\n"
+
 
 
 def test_candidate_backup_is_recreated_from_original_each_iteration(tmp_path):
@@ -789,6 +825,65 @@ def test_parse_heading_rules_artifact_accepts_json_only():
     )
 
     assert artifact["rules"][0]["id"] == "x"
+
+
+def test_parse_heading_rules_artifact_strips_markdown_fence():
+    text = (
+        "```json\n"
+        '{"rules": [{"id": "x", "pattern": "^x$", "replacement": "# x", "flags": []}]}\n'
+        "```"
+    )
+    artifact = provider.parse_heading_rules_artifact(text)
+    assert artifact["rules"][0]["id"] == "x"
+
+
+def test_parse_json_artifact_from_text_strips_markdown_fence():
+    text = (
+        "```json\n"
+        '{"rules": []}\n'
+        "```"
+    )
+    parsed = core.parse_json_artifact_from_text(text)
+    assert parsed == '{"rules": []}'
+
+
+def test_normalize_heading_for_matching():
+    assert core.normalize_heading_for_matching("# 第七章 相交线与平行线 1") == "第七章 相交线与平行线"
+    assert core.normalize_heading_for_matching("7.1 相交线 2") == "7.1 相交线"
+    assert core.normalize_heading_for_matching("观察与猜想 看图时的错觉 10") == "观察与猜想 看图时的错觉"
+    assert core.normalize_heading_for_matching("第一章 集合与常用逻辑用语 …… 1") == "第一章 集合与常用逻辑用语"
+    assert core.normalize_heading_for_matching("# 练习") == "练习"
+
+
+def test_strip_toc_block():
+    markdown = "intro\n\n# 目录\n\n1.1 A ... 1\n1.2 B ... 2\n\n# 第一章 A\nbody\n"
+    toc_block = core.TextBlock("toc", "TOC text", 3, 6)
+    stripped = core.strip_toc_block(markdown, toc_block)
+    assert "目录" not in stripped
+    assert "A ... 1" not in stripped
+    assert "第一章 A" in stripped
+
+
+def test_demote_non_toc_headings():
+    toc_headings = {"第七章 相交线与平行线", "7.1 相交线", "观察与猜想 看图时的错觉"}
+    markdown = (
+        "# 第七章 相交线与平行线\n"
+        "## 7.1 相交线\n"
+        "# 练习\n"
+        "### 观察与猜想 看图时的错觉\n"
+        "# 思考\n"
+    )
+    demoted = core.demote_non_toc_headings(markdown, toc_headings)
+    expected = (
+        "# 第七章 相交线与平行线\n"
+        "## 7.1 相交线\n"
+        "#### 练习\n"
+        "### 观察与猜想 看图时的错觉\n"
+        "#### 思考\n"
+    )
+    assert demoted == expected
+
+
 
 
 def test_parse_python_artifact_strips_markdown_fence():
