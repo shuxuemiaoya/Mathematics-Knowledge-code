@@ -1222,7 +1222,7 @@ class FakeFormattingProvider:
     def __init__(self):
         self.calls = []
 
-    def chat(self, system_prompt: str, user_payload: str, timeout_seconds: int = 120) -> str:
+    def chat(self, system_prompt: str, user_payload: str, timeout_seconds: int = 120, response_format: dict | None = None) -> str:
         self.calls.append((system_prompt, user_payload, timeout_seconds))
         if "Heading Rules Prompt" in system_prompt:
             return json.dumps(
@@ -1316,7 +1316,7 @@ class CountingProvider:
     def __init__(self):
         self.calls = 0
 
-    def chat(self, system_prompt: str, user_payload: str, timeout_seconds: int = 120) -> str:
+    def chat(self, system_prompt: str, user_payload: str, timeout_seconds: int = 120, response_format: dict | None = None) -> str:
         self.calls += 1
         return "{}"
 
@@ -1345,9 +1345,9 @@ def test_learning_without_toc_stops_before_provider_and_candidate(tmp_path):
 
 
 class HeadingMutatingProvider(FakeFormattingProvider):
-    def chat(self, system_prompt: str, user_payload: str, timeout_seconds: int = 120) -> str:
+    def chat(self, system_prompt: str, user_payload: str, timeout_seconds: int = 120, response_format: dict | None = None) -> str:
         if "Heading Rules Prompt" in system_prompt:
-            return super().chat(system_prompt, user_payload, timeout_seconds)
+            return super().chat(system_prompt, user_payload, timeout_seconds, response_format)
         return """```python
 PLUGIN_ID = "bad_heading_cleaner"
 PLUGIN_VERSION = "1.0.0"

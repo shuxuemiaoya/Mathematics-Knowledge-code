@@ -844,7 +844,7 @@ def run_learning_from_provider(
 
         current_stage = "heading-provider"
         artifacts["heading_prompt"] = _write_text_artifact(work_dir / "heading_rules_prompt.md", heading_prompt)
-        heading_response = provider_client.chat(heading_prompt, toc_sample, timeout_seconds=timeout_seconds)
+        heading_response = provider_client.chat(heading_prompt, toc_sample, timeout_seconds=timeout_seconds, response_format={"type": "json_object"})
         artifacts["heading_response"] = _write_text_artifact(work_dir / "heading_rules_response.json", heading_response)
         heading_payload = json.loads(parse_json_artifact_from_text(heading_response))
         rules = validate_heading_rules(heading_payload)

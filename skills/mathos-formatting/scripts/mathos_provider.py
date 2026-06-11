@@ -79,18 +79,21 @@ def call_deepseek_chat(
     system_prompt: str,
     user_payload: str,
     timeout_seconds: int = 120,
+    response_format: dict | None = None,
 ) -> str:
     endpoint = f"{settings.base_url}/chat/completions"
-    payload = json.dumps(
-        {
-            "model": settings.model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_payload},
-            ],
-            "temperature": 0.1,
-        }
-    ).encode("utf-8")
+    data_dict = {
+        "model": settings.model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_payload},
+        ],
+        "temperature": 0.0,
+        "max_tokens": 4096,
+    }
+    if response_format:
+        data_dict["response_format"] = response_format
+    payload = json.dumps(data_dict).encode("utf-8")
     req = request.Request(
         endpoint,
         data=payload,
@@ -126,6 +129,18 @@ class DeepSeekProviderClient:
     def __repr__(self) -> str:
         return f"DeepSeekProviderClient(base_url={self.base_url!r}, model={self.model!r})"
 
-    def chat(self, system_prompt: str, user_payload: str, timeout_seconds: int = 120) -> str:
-        return call_deepseek_chat(self.settings, system_prompt, user_payload, timeout_seconds)
+    def chat(
+        self,
+        system_prompt: str,
+        user_payload: str,
+        timeout_seconds: int = 120,
+        response_format: dict | None = None,
+    ) -> str:
+        return call_deepseek_chat(
+            self.settings,
+            system_prompt,
+            user_payload,
+            timeout_seconds,
+            response_format,
+        )
 
