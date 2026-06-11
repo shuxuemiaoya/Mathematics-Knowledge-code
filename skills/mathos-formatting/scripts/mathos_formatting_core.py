@@ -604,13 +604,7 @@ def apply_approved_program(program_dir: Path, target_path: Path) -> ApprovedAppl
 
     candidate_path = create_fresh_candidate(target_path)
     markdown = candidate_path.read_text(encoding="utf-8")
-    structure = extract_structure(markdown, str(candidate_path))
-    toc_headings = set()
-    if structure.toc_block:
-        toc_headings = extract_toc_normalized_headings(structure.toc_block.text)
-        markdown = strip_toc_block(markdown, structure.toc_block)
     markdown = apply_heading_rules(markdown, rules)
-    markdown = demote_non_toc_headings(markdown, toc_headings)
     plugin_result = run_plugin(plugin, markdown)
     candidate_path.write_text(plugin_result.cleaned_markdown, encoding="utf-8")
 
@@ -638,13 +632,7 @@ def run_candidate_from_artifacts(markdown_path: Path, heading_rules_path: Path, 
     candidate_path = create_fresh_candidate(markdown_path)
 
     markdown = candidate_path.read_text(encoding="utf-8")
-    structure = extract_structure(markdown, str(candidate_path))
-    toc_headings = set()
-    if structure.toc_block:
-        toc_headings = extract_toc_normalized_headings(structure.toc_block.text)
-        markdown = strip_toc_block(markdown, structure.toc_block)
     markdown = apply_heading_rules(markdown, rules)
-    markdown = demote_non_toc_headings(markdown, toc_headings)
     plugin_result = run_plugin(plugin, markdown)
     candidate_path.write_text(plugin_result.cleaned_markdown, encoding="utf-8")
 
@@ -806,67 +794,6 @@ def parse_json_artifact_from_text(text: str) -> str:
     return stripped
 
 
-def normalize_heading_for_matching(text: str) -> str:
-    text = text.lstrip("#").strip()
-    text = re.sub(r"(?:…+|\.{2,}|·{2,}|．{2,})\s*\d+\s*$", "", text)
-    text = re.sub(r"\s+\d+\s*$", "", text)
-    return text.strip()
-
-
-def extract_toc_normalized_headings(toc_text: str) -> set[str]:
-    headings = set()
-    for line in toc_text.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        if TOC_HEADING_RE.match(line):
-            continue
-        norm = normalize_heading_for_matching(line)
-        if norm:
-            headings.add(norm)
-    return headings
-
-
-def strip_toc_block(markdown: str, toc_block: TextBlock) -> str:
-    lines = markdown.splitlines(keepends=True)
-    start = toc_block.start_line - 1
-    end = toc_block.end_line
-    if 0 <= start < len(lines) and start < end <= len(lines):
-        del lines[start:end]
-    return "".join(lines)
-
-
-def demote_non_toc_headings(markdown: str, toc_headings: set[str]) -> str:
-    if not toc_headings:
-        return markdown
-    lines = markdown.splitlines(keepends=True)
-    toc_levels = set()
-    for line in lines:
-        match = HEADING_RE.match(line)
-        if match:
-            level = len(match.group(1))
-            title = _normalize_atx_heading_text(match.group(2))
-            norm = normalize_heading_for_matching(title)
-            if norm in toc_headings:
-                toc_levels.add(level)
-    if not toc_levels:
-        toc_levels = {1, 2, 3}
-    max_toc_level = max(toc_levels)
-    shift = max_toc_level
-    new_lines = []
-    for line in lines:
-        match = HEADING_RE.match(line)
-        if match:
-            level = len(match.group(1))
-            title = match.group(2)
-            norm = normalize_heading_for_matching(_normalize_atx_heading_text(title))
-            if norm not in toc_headings and level <= max_toc_level:
-                new_level = min(6, level + shift)
-                line_ending = "\r\n" if line.endswith("\r\n") else "\n"
-                new_lines.append("#" * new_level + " " + title + line_ending)
-                continue
-        new_lines.append(line)
-    return "".join(new_lines)
 
 
 
@@ -930,13 +857,7 @@ def run_learning_from_provider(
         work_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy2(markdown_path, candidate_path)
         candidate_text = candidate_path.read_text(encoding="utf-8")
-        structure_before = extract_structure(candidate_text, str(candidate_path))
-        toc_headings = set()
-        if structure_before.toc_block:
-            toc_headings = extract_toc_normalized_headings(structure_before.toc_block.text)
-            candidate_text = strip_toc_block(candidate_text, structure_before.toc_block)
         stage1_text = apply_heading_rules(candidate_text, rules)
-        stage1_text = demote_non_toc_headings(stage1_text, toc_headings)
         candidate_path.write_text(stage1_text, encoding="utf-8")
         artifacts["stage1_report"] = write_review_report(
             original_path=markdown_path,

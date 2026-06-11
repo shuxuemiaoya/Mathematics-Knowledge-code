@@ -49,8 +49,12 @@ def load_provider_settings(env_path: Path) -> ProviderSettings:
 
 
 def parse_heading_rules_artifact(text: str) -> dict:
+    stripped = text.strip()
+    fence = re.fullmatch(r"```(?:json)?\s*(.*?)```", stripped, flags=re.DOTALL)
+    if fence:
+        stripped = fence.group(1).strip()
     try:
-        payload = json.loads(text)
+        payload = json.loads(stripped)
     except json.JSONDecodeError as exc:
         raise ProviderError(f"heading rules response is not valid JSON: {exc}") from exc
     if not isinstance(payload, dict) or "rules" not in payload:

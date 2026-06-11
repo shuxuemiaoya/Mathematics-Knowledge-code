@@ -847,41 +847,6 @@ def test_parse_json_artifact_from_text_strips_markdown_fence():
     assert parsed == '{"rules": []}'
 
 
-def test_normalize_heading_for_matching():
-    assert core.normalize_heading_for_matching("# 第七章 相交线与平行线 1") == "第七章 相交线与平行线"
-    assert core.normalize_heading_for_matching("7.1 相交线 2") == "7.1 相交线"
-    assert core.normalize_heading_for_matching("观察与猜想 看图时的错觉 10") == "观察与猜想 看图时的错觉"
-    assert core.normalize_heading_for_matching("第一章 集合与常用逻辑用语 …… 1") == "第一章 集合与常用逻辑用语"
-    assert core.normalize_heading_for_matching("# 练习") == "练习"
-
-
-def test_strip_toc_block():
-    markdown = "intro\n\n# 目录\n\n1.1 A ... 1\n1.2 B ... 2\n\n# 第一章 A\nbody\n"
-    toc_block = core.TextBlock("toc", "TOC text", 3, 6)
-    stripped = core.strip_toc_block(markdown, toc_block)
-    assert "目录" not in stripped
-    assert "A ... 1" not in stripped
-    assert "第一章 A" in stripped
-
-
-def test_demote_non_toc_headings():
-    toc_headings = {"第七章 相交线与平行线", "7.1 相交线", "观察与猜想 看图时的错觉"}
-    markdown = (
-        "# 第七章 相交线与平行线\n"
-        "## 7.1 相交线\n"
-        "# 练习\n"
-        "### 观察与猜想 看图时的错觉\n"
-        "# 思考\n"
-    )
-    demoted = core.demote_non_toc_headings(markdown, toc_headings)
-    expected = (
-        "# 第七章 相交线与平行线\n"
-        "## 7.1 相交线\n"
-        "#### 练习\n"
-        "### 观察与猜想 看图时的错觉\n"
-        "#### 思考\n"
-    )
-    assert demoted == expected
 
 
 
@@ -1264,8 +1229,14 @@ class FakeFormattingProvider:
                 {
                     "rules": [
                         {
+                            "id": "delete_toc",
+                            "pattern": r"(?s)^# 目录.*?(?=\n# 第一章)",
+                            "replacement": "",
+                            "flags": ["MULTILINE"],
+                        },
+                        {
                             "id": "toc_chapter",
-                            "pattern": r"^# (第一章 .+?)(?: …… \d+)?$",
+                            "pattern": r"^#? *(第一章 .+?)(?: *[…]+ *\d+)?$",
                             "replacement": r"# \1",
                             "flags": ["MULTILINE"],
                         },
@@ -1273,6 +1244,12 @@ class FakeFormattingProvider:
                             "id": "section_heading",
                             "pattern": r"^1\\.1 (.+)$",
                             "replacement": r"## 1.1 \1",
+                            "flags": ["MULTILINE"],
+                        },
+                        {
+                            "id": "demote_non_toc_headings",
+                            "pattern": r"^# (?!目录|第一章)(.+)$",
+                            "replacement": r"#### \1",
                             "flags": ["MULTILINE"],
                         },
                     ]
@@ -1318,6 +1295,17 @@ def test_run_learning_from_provider_writes_artifacts_and_keeps_original(tmp_path
     assert (result.work_dir / "run-state.json").exists()
     candidate_text = result.candidate_path.read_text(encoding="utf-8")
     assert "![figure](images/a.png)" in candidate_text
+    
+    # Verify TOC is deleted
+    assert "# 目录" not in candidate_text
+    assert "集合与常用逻辑用语 …… 1" not in candidate_text
+    
+    # Verify non-TOC heading is demoted
+    assert "#### 数学" in candidate_text
+    
+    # Verify first real chapter heading is intact
+    assert "# 第一章 集合与常用逻辑用语" in candidate_text
+    
     assert len(provider_client.calls) == 2
 
 

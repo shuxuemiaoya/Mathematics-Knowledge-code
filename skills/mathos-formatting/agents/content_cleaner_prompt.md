@@ -8,8 +8,9 @@ Return one Python file only. It must expose:
 PLUGIN_ID = "descriptive_id"
 PLUGIN_VERSION = "1.0.0"
 
+# Note: Both "warnings" and "summary" in the return dict MUST be flat lists of strings.
 def analyze(markdown: str) -> dict:
-    return {"warnings": [], "summary": []}
+    return {"warnings": ["warning string"], "summary": ["summary string"]}
 
 def clean(markdown: str) -> str:
     return markdown

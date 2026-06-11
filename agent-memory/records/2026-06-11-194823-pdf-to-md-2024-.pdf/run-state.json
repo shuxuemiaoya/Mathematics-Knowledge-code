@@ -1,0 +1,45 @@
+{
+  "stage": "pdf-to-md",
+  "skill": "skills/mathos-pdf-to-md",
+  "status": "completed",
+  "settings": {
+    "api_key": "***",
+    "base_url": "https://mineru.net",
+    "max_parallel_tasks": 10,
+    "poll_interval": 5,
+    "max_retries": 180
+  },
+  "source_path": "C:\\code\\BaiduSyncdisk\\数学妙呀资料\\【2024版】【人教版】七年级下册数学.pdf",
+  "source_base": "C:\\code\\BaiduSyncdisk\\数学妙呀资料",
+  "output_root": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map",
+  "record_dir": "agent-memory\\records\\2026-06-11-194823-pdf-to-md-2024-.pdf",
+  "counts": {
+    "source_pdfs": 1,
+    "attempted": 1,
+    "converted": 1,
+    "failed": 0,
+    "skipped": 0,
+    "retryable_failures": 0,
+    "permanent_failures": 0
+  },
+  "outputs": [
+    {
+      "source_pdf": "C:\\code\\BaiduSyncdisk\\数学妙呀资料\\【2024版】【人教版】七年级下册数学.pdf",
+      "target_md": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\【2024版】【人教版】七年级下册数学.md",
+      "parts": 1,
+      "assets": 708
+    }
+  ],
+  "skipped_files": [],
+  "retryable_failures": [],
+  "permanent_failures": [],
+  "records": {
+    "manifest": "agent-memory\\records\\2026-06-11-194823-pdf-to-md-2024-.pdf\\manifest.json",
+    "failure_ledger": "agent-memory\\records\\2026-06-11-194823-pdf-to-md-2024-.pdf\\failure-ledger.json",
+    "skipped_files": "agent-memory\\records\\2026-06-11-194823-pdf-to-md-2024-.pdf\\skipped-files.json",
+    "artifact_index": "agent-memory\\records\\2026-06-11-194823-pdf-to-md-2024-.pdf\\artifact-index.md",
+    "run_summary": "agent-memory\\records\\2026-06-11-194823-pdf-to-md-2024-.pdf\\run-summary.md",
+    "run_state": "agent-memory\\records\\2026-06-11-194823-pdf-to-md-2024-.pdf\\run-state.json"
+  },
+  "next_command": ""
+}
