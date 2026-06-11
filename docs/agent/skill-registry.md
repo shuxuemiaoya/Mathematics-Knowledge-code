@@ -21,6 +21,26 @@ First-version behavior:
 
 The skill does not judge whether generated Markdown content is correct.
 
+### `skills/mathos-formatting`
+
+Status: active.
+
+Purpose: MathOS adaptive Markdown formatting workflow.
+
+Behavior:
+
+- Use candidate backup learning for unknown Markdown types, require user approval before saving reusable programs, and store approved manual-only programs under `plugins/approved/`.
+- Calling mathos-formatting for learning:
+  - Call the `learn-from-provider` CLI command with `--env`, `--work-dir`, and `--h1-index`.
+  - It executes the two-stage learning flow:
+    1. TOC sample extraction -> call DeepSeek for heading rules (including prompt-driven TOC deletion and non-TOC heading demotion) -> apply rules to create a stage 1 text and stage 1 report.
+    2. H1 sample extraction from stage 1 text -> call DeepSeek for image/text content cleaner -> run content cleaner protecting heading lines.
+  - It fails closed, restoring the stage 1 text if heading protection fails.
+
+Approved manual-only programs:
+
+- `rj6_heading_levels`: approved after successful user review for `Secondary-School-Mathematics-Knowledge-Map/小学/人教版数学/六年级上册` heading hierarchy normalization. Reuse with `apply-approved` only on matching 人教版数学六年级上册 / 一遍过 RJ6 Markdown family unless the user asks for a new candidate review.
+
 ## Reserved Future Skill Slots
 
 ### `skills/mathos-word-to-md`
@@ -30,22 +50,3 @@ Status: reserved, inactive.
 Purpose: future Word/DOCX to Markdown workflow.
 
 This slot must not contain a `SKILL.md` until its detailed behavior is designed and approved.
-
-### `skills/mathos-formatting`
-
-Status: operational.
-
-Purpose: MathOS adaptive Markdown formatting workflow.
-
-Use candidate backup learning for unknown Markdown types, require user approval before saving reusable programs, and store approved manual-only programs under `plugins/approved/`.
-
-Calling mathos-formatting for learning:
-- Call the `learn-from-provider` CLI command with `--env`, `--work-dir`, and `--h1-index`.
-- It executes the two-stage learning flow:
-  1. TOC sample extraction -> call DeepSeek for heading rules -> apply rules to create a stage 1 text and stage 1 report.
-  2. H1 sample extraction from stage 1 text -> call DeepSeek for image/text content cleaner -> run content cleaner protecting heading lines.
-- It fails closed, restoring the stage 1 text if heading protection fails.
-
-Approved manual-only programs:
-
-- `rj6_heading_levels`: approved after successful user review for `Secondary-School-Mathematics-Knowledge-Map/小学/人教版数学/六年级上册` heading hierarchy normalization. Reuse with `apply-approved` only on matching 人教版数学六年级上册 / 一遍过 RJ6 Markdown family unless the user asks for a new candidate review.
