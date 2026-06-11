@@ -44,7 +44,7 @@ def load_provider_settings(env_path: Path) -> ProviderSettings:
     return ProviderSettings(
         api_key=api_key,
         base_url=values.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com").rstrip("/"),
-        model=values.get("DEEPSEEK_MODEL", "deepseek-chat"),
+        model=values.get("DEEPSEEK_MODEL", "deepseek-v4-pro"),
     )
 
 
@@ -88,9 +88,15 @@ def call_deepseek_chat(
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_payload},
         ],
-        "temperature": 0.0,
-        "max_tokens": 4096,
+        "max_tokens": 16384,
+        "stream": False,
     }
+    if "v4" in settings.model or "reason" in settings.model:
+        data_dict["reasoning_effort"] = "high"
+        data_dict["extra_body"] = {"thinking": {"type": "enabled"}}
+    else:
+        data_dict["temperature"] = 0.0
+
     if response_format:
         data_dict["response_format"] = response_format
     payload = json.dumps(data_dict).encode("utf-8")
@@ -107,7 +113,14 @@ def call_deepseek_chat(
         with request.urlopen(req, timeout=timeout_seconds) as response:
             body = response.read().decode("utf-8")
         data = json.loads(body)
-        return data["choices"][0]["message"]["content"]
+        choice = data["choices"][0]
+        message = choice["message"]
+        reasoning = message.get("reasoning_content", "")
+        if reasoning:
+            print("=== 思维链 ===")
+            print(reasoning)
+            print("==============")
+        return message["content"]
     except (KeyError, IndexError, TypeError) as exc:
         raise ProviderError("provider response missing choices[0].message.content") from exc
     except json.JSONDecodeError as exc:
