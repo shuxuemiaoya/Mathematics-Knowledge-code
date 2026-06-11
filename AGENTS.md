@@ -75,6 +75,10 @@ For `mathos-formatting`, examples include:
 - Missing candidate backup or report.
 - Attempting to modify originals during unknown-type learning.
 - Approval requested without an explicit successful user review.
+- Failure to find a table of contents (TOC) in the source Markdown during provider-learning.
+- Modification of structural heading lines by a content cleaner plugin during stage 2 provider-learning.
+- Missing DeepSeek API key or provider configuration in `.env`.
+
 
 ## Required Output Summary
 

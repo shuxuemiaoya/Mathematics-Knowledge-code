@@ -24,4 +24,4 @@ The agent should monitor operational health for each active stage and stop if re
 
 The agent must summarize outputs for every completed or stopped stage.
 
-Formatting runs must preserve original Markdown during unknown-type learning, write candidate backups and reports, and save reusable programs only after explicit user approval.
+Formatting runs must preserve original Markdown during unknown-type learning, write candidate backups and reports, and save reusable programs only after explicit user approval. When learning formatting rules for new document types, the agent should run the two-stage `learn-from-provider` CLI command to generate heading rules from the TOC and content cleaners from H1 sections, ensuring heading protection rules are strictly enforced.
