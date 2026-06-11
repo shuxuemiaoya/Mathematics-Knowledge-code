@@ -4,10 +4,12 @@ Status: operational.
 
 This repo-local skill manages adaptive Markdown formatting for MathOS.
 
-The workflow uses the LLM as a senior engineer that creates reusable formatting artifacts from samples:
+The workflow uses the LLM to dynamically generate reusable formatting artifacts from samples:
 
-1. `inspect` reads a Markdown file and reports headings, table-of-contents signals, h1 sections, and protected blocks.
-2. `learn-from-provider` performs the two-stage DeepSeek learning workflow: TOC sample to heading rules, then complete H1 sample to image/text cleaner. This stops when a TOC is not found and protects structural heading lines, failing closed if heading protection is violated.
+1. `inspect` reads a Markdown file and reports headings, table-of-contents signals, H1 sections, and protected blocks.
+2. `learn-from-provider` performs the two-stage DeepSeek learning workflow (using temperature `0.0` and `json_object` format where appropriate):
+   - **Stage 1 (Heading Rules)**: Extracts the TOC sample and queries the LLM to identify the TOC block, generate a regex rule to delete it entirely from the document, standardize TOC headings (Chapter to H1, Section to H2, etc.), and demote any non-TOC headings to levels not used by the TOC (H4+).
+   - **Stage 2 (Content Cleaner)**: Extracts the first real H1 section sample (since the TOC is already deleted) and queries the LLM to generate a Python content cleaner plugin for image/text formatting.
 3. Alternatively, manually generate or provide regex heading rules and a Python content cleaner, then run `candidate-from-artifacts` to create the candidate backup.
 4. Ask the user to review the backup result and choose approve, revise, or discard.
 5. Run `approve` only after explicit user approval.
@@ -25,7 +27,7 @@ python skills/mathos-formatting/scripts/mathos_formatting.py inspect <markdown_p
 
 ### 2. learn-from-provider
 Run the automated two-stage learning flow:
-- Stage 1: Extracts TOC sample -> deepseek-chat rules generation -> candidate modification.
+- Stage 1: Extracts TOC sample -> deepseek-chat rules generation (TOC deletion & non-TOC heading demotion) -> candidate modification.
 - Stage 2: Extracts H1 section sample -> deepseek-chat python plugin generation -> candidate modification with heading line protection.
 ```bash
 python skills/mathos-formatting/scripts/mathos_formatting.py learn-from-provider <markdown_path> --env <env_path> [--work-dir <work_dir>] [--h1-index <h1_index>] [--timeout-seconds <timeout>]
