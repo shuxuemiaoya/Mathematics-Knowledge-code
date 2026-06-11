@@ -12,9 +12,11 @@ Use this adaptive Markdown formatting operator after PDF or Word conversion when
 Unknown file types must use candidate backup learning:
 
 1. Run `inspect` to extract headings, table-of-contents signals, H1 sections, and protected blocks.
-2. Run `learn-from-provider` to execute the two-stage DeepSeek learning workflow:
-   - **Stage 1 (Heading Rules)**: Query the LLM to identify the TOC block, generate a regex rule to delete the TOC block entirely, standardize TOC headings (Chapter to H1, Section to H2, etc.), and demote non-TOC headings to H4+ levels using negative lookaheads.
-   - **Stage 2 (Content Cleaner)**: Extract the first H1 section sample (since the TOC is already deleted) and query the LLM to generate a Python content cleaner for image/text formatting.
+2. Run `learn-from-provider` to execute the four-stage DeepSeek learning workflow:
+   - **Stage 1 (Heading Rules)**: Query the LLM to standardize TOC headings (Chapter to H1, Section to H2, etc.) and demote non-TOC headings to H4+ levels using negative lookaheads.
+   - **Stage 2 (TOC Detection & Stripping)**: Extract the first 20 pages of the document, send them to the LLM to detect the line where the main text begins, and strip all content before that line.
+   - **Stage 3 (H1 Extraction)**: Extract the first complete H1 section from the stripped candidate.
+   - **Stage 4 (Content Cleaner)**: Query the LLM to generate a Python content cleaner for image/text formatting.
 3. Alternatively, manually generate or provide regex heading rules and a Python content cleaner, then run `candidate-from-artifacts` to create the candidate backup.
 4. Ask the user to review the backup result and choose approve, revise, or discard.
 5. Run `approve` only after explicit user approval.

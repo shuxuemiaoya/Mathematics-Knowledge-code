@@ -794,6 +794,63 @@ def parse_json_artifact_from_text(text: str) -> str:
     return stripped
 
 
+def find_total_pages_from_metadata(markdown_path: Path) -> int | None:
+    search_roots = [
+        Path(r"C:\Mathematics-Knowledge\agent-memory\records"),
+        Path(r"C:\Mathematics-Knowledge\Mathematics-Knowledge-code\agent-memory\records"),
+    ]
+    target_name = markdown_path.name.lower()
+    
+    for root in search_roots:
+        if not root.exists():
+            continue
+        try:
+            for record_dir in root.iterdir():
+                if not record_dir.is_dir():
+                    continue
+                run_state_file = record_dir / "run-state.json"
+                if run_state_file.exists():
+                    try:
+                        state_data = json.loads(run_state_file.read_text(encoding="utf-8"))
+                        outputs = state_data.get("outputs", [])
+                        matches = False
+                        for out in outputs:
+                            target_md = out.get("target_md", "")
+                            if Path(target_md).name.lower() == target_name:
+                                matches = True
+                                break
+                        if matches:
+                            extracted_dir = record_dir / "extracted"
+                            if extracted_dir.exists():
+                                for part_dir in extracted_dir.iterdir():
+                                    layout_file = part_dir / "layout.json"
+                                    if layout_file.exists():
+                                        try:
+                                            layout_data = json.loads(layout_file.read_text(encoding="utf-8"))
+                                            if "pdf_info" in layout_data and isinstance(layout_data["pdf_info"], list):
+                                                return len(layout_data["pdf_info"])
+                                        except Exception:
+                                            pass
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+    return None
+
+
+def extract_first_20_pages(markdown: str, markdown_path: Path) -> str:
+    total_pages = find_total_pages_from_metadata(markdown_path) or 200
+    lines = markdown.splitlines()
+    total_lines = len(lines)
+    
+    lines_per_page = total_lines / total_pages if total_pages > 0 else 40
+    num_lines = min(total_lines, max(800, int(20 * lines_per_page)))
+    
+    prepended_lines = [f"{i}: {line}" for i, line in enumerate(lines[:num_lines], start=1)]
+    return "\n".join(prepended_lines) + ("\n" if prepended_lines else "")
+
+
+
 
 
 
@@ -868,9 +925,35 @@ def run_learning_from_provider(
             warnings=[],
         )
 
+        current_stage = "toc-detection-provider"
+        toc_prompt_path = Path(__file__).resolve().parent.parent / "agents" / "toc_detection_prompt.md"
+        toc_prompt = toc_prompt_path.read_text(encoding="utf-8")
+        artifacts["toc_detection_prompt"] = _write_text_artifact(work_dir / "toc_detection_prompt.md", toc_prompt)
+        
+        toc_sample_20_pages = extract_first_20_pages(stage1_text, markdown_path)
+        artifacts["toc_detection_sample"] = _write_text_artifact(work_dir / "toc_detection_sample.md", toc_sample_20_pages)
+        
+        toc_detection_response = provider_client.chat(
+            toc_prompt,
+            toc_sample_20_pages,
+            timeout_seconds=timeout_seconds,
+            response_format={"type": "json_object"}
+        )
+        artifacts["toc_detection_response"] = _write_text_artifact(work_dir / "toc_detection_response.json", toc_detection_response)
+        
+        toc_detection_payload = json.loads(parse_json_artifact_from_text(toc_detection_response))
+        main_text_start_line = int(toc_detection_payload.get("main_text_start_line"))
+        
+        stage1_lines = stage1_text.splitlines(keepends=True)
+        if main_text_start_line < 1 or main_text_start_line > len(stage1_lines):
+            raise FormattingError(f"LLM returned invalid line number: {main_text_start_line}")
+        
+        stripped_text = "".join(stage1_lines[main_text_start_line - 1:])
+        candidate_path.write_text(stripped_text, encoding="utf-8")
+
         current_stage = "h1-sample"
-        updated_structure = extract_structure(stage1_text, str(candidate_path))
-        h1_sample = extract_h1_sample(stage1_text, updated_structure, h1_index=h1_index)
+        updated_structure = extract_structure(stripped_text, str(candidate_path))
+        h1_sample = extract_h1_sample(stripped_text, updated_structure, h1_index=h1_index)
         artifacts["h1_sample"] = _write_text_artifact(work_dir / "h1_sample.md", h1_sample)
 
         current_stage = "content-provider"
@@ -881,11 +964,11 @@ def run_learning_from_provider(
         artifacts["content_cleaner"] = _write_text_artifact(work_dir / "content_cleaner.py", plugin_source)
         plugin = load_safe_plugin(artifacts["content_cleaner"])
 
-        current_stage = "stage2-apply"
+        current_stage = "stage4-apply"
         try:
-            plugin_result = run_content_plugin_protecting_headings(plugin, stage1_text)
+            plugin_result = run_content_plugin_protecting_headings(plugin, stripped_text)
         except FormattingError:
-            candidate_path.write_text(stage1_text, encoding="utf-8")
+            candidate_path.write_text(stripped_text, encoding="utf-8")
             raise
 
         candidate_path.write_text(plugin_result.cleaned_markdown, encoding="utf-8")

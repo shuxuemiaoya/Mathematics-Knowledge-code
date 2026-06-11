@@ -1229,12 +1229,6 @@ class FakeFormattingProvider:
                 {
                     "rules": [
                         {
-                            "id": "delete_toc",
-                            "pattern": r"(?s)^# 目录.*?(?=\n# 第一章)",
-                            "replacement": "",
-                            "flags": ["MULTILINE"],
-                        },
-                        {
                             "id": "toc_chapter",
                             "pattern": r"^#? *(第一章 .+?)(?: *[…]+ *\d+)?$",
                             "replacement": r"# \1",
@@ -1253,6 +1247,14 @@ class FakeFormattingProvider:
                             "flags": ["MULTILINE"],
                         },
                     ]
+                },
+                ensure_ascii=False,
+            )
+        elif "TOC Detection Prompt" in system_prompt:
+            return json.dumps(
+                {
+                    "main_text_start_line": 9,
+                    "reason": "The main text begins at line 9 with chapter heading '# 第一章 集合与常用逻辑用语'."
                 },
                 ensure_ascii=False,
             )
@@ -1289,6 +1291,7 @@ def test_run_learning_from_provider_writes_artifacts_and_keeps_original(tmp_path
     assert (result.work_dir / "toc_sample.md").exists()
     assert (result.work_dir / "heading_rules_response.json").exists()
     assert (result.work_dir / "heading_rules.json").exists()
+    assert (result.work_dir / "toc_detection_response.json").exists()
     assert (result.work_dir / "h1_sample.md").exists()
     assert (result.work_dir / "content_cleaner_response.py").exists()
     assert (result.work_dir / "content_cleaner.py").exists()
@@ -1296,17 +1299,16 @@ def test_run_learning_from_provider_writes_artifacts_and_keeps_original(tmp_path
     candidate_text = result.candidate_path.read_text(encoding="utf-8")
     assert "![figure](images/a.png)" in candidate_text
     
-    # Verify TOC is deleted
+    # Verify TOC and preamble are stripped (lines before main_text_start_line=9)
     assert "# 目录" not in candidate_text
     assert "集合与常用逻辑用语 …… 1" not in candidate_text
-    
-    # Verify non-TOC heading is demoted
-    assert "#### 数学" in candidate_text
+    assert "#### 数学" not in candidate_text
     
     # Verify first real chapter heading is intact
     assert "# 第一章 集合与常用逻辑用语" in candidate_text
     
-    assert len(provider_client.calls) == 2
+    # 3 calls: heading rules, TOC detection, content cleaner
+    assert len(provider_client.calls) == 3
 
 
 class CountingProvider:
@@ -1346,7 +1348,7 @@ def test_learning_without_toc_stops_before_provider_and_candidate(tmp_path):
 
 class HeadingMutatingProvider(FakeFormattingProvider):
     def chat(self, system_prompt: str, user_payload: str, timeout_seconds: int = 120, response_format: dict | None = None) -> str:
-        if "Heading Rules Prompt" in system_prompt:
+        if "Heading Rules Prompt" in system_prompt or "TOC Detection Prompt" in system_prompt:
             return super().chat(system_prompt, user_payload, timeout_seconds, response_format)
         return """```python
 PLUGIN_ID = "bad_heading_cleaner"
@@ -1378,7 +1380,7 @@ def test_learning_restores_stage1_candidate_when_content_changes_heading(tmp_pat
     assert "# Changed" not in candidate_text
     state = json.loads((work_dir / "run-state.json").read_text(encoding="utf-8"))
     assert state["status"] == "failed"
-    assert state["stage"] == "stage2-apply"
+    assert state["stage"] == "stage4-apply"
 
 
 def test_provider_client_exposes_redacted_identity(monkeypatch):

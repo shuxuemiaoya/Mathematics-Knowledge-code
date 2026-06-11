@@ -32,10 +32,12 @@ Behavior:
 - Use candidate backup learning for unknown Markdown types, require user approval before saving reusable programs, and store approved manual-only programs under `plugins/approved/`.
 - Calling mathos-formatting for learning:
   - Call the `learn-from-provider` CLI command with `--env`, `--work-dir`, and `--h1-index`.
-  - It executes the two-stage learning flow:
-    1. TOC sample extraction -> call DeepSeek for heading rules (including prompt-driven TOC deletion and non-TOC heading demotion) -> apply rules to create a stage 1 text and stage 1 report.
-    2. H1 sample extraction from stage 1 text -> call DeepSeek for image/text content cleaner -> run content cleaner protecting heading lines.
-  - It fails closed, restoring the stage 1 text if heading protection fails.
+  - It executes the four-stage learning flow:
+    1. TOC sample extraction -> call DeepSeek for heading rules (heading standardization and non-TOC heading demotion) -> apply rules to create a stage 1 text and stage 1 report.
+    2. Extract first 20 pages of the stage 1 text -> call DeepSeek for TOC end line detection -> strip all content before the detected main text start line.
+    3. H1 sample extraction from stripped text.
+    4. Call DeepSeek for image/text content cleaner -> run content cleaner protecting heading lines.
+  - It fails closed, restoring the stripped text if heading protection fails in stage 4.
 
 Approved manual-only programs:
 
