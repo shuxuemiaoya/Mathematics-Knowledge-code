@@ -240,5 +240,5 @@ def build_segmentation_plan(source_path: Path, vault_root: Path, target_depth: i
 def render_master_directory(plan: SegmentationPlan) -> str:
     lines = ["# 目录", ""]
     for segment in plan.segments:
-        lines.append(f"- [[{segment.link_title}]]")
+        lines.append(f"- [[{Path(segment.filename).stem}]]")
     return "\n".join(lines).rstrip() + "\n"

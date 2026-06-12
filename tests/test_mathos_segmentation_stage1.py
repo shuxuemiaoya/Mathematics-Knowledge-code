@@ -339,6 +339,30 @@ def test_render_master_directory_contains_only_directory_links(tmp_path):
         assert line == "" or line == "# 目录" or line.startswith("- [[")
 
 
+def test_render_master_directory_links_disambiguated_note_stems(tmp_path):
+    vault_root = tmp_path / "vault"
+    source = vault_root / "book.md"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """# 第一章
+
+## 1.1 重复
+
+正文 A
+
+## 1.1 重复
+
+正文 B
+""",
+        encoding="utf-8",
+    )
+    plan = seg.build_segmentation_plan(source, vault_root=vault_root)
+
+    master = seg.render_master_directory(plan)
+
+    assert master == "# 目录\n\n- [[1.1 重复]]\n- [[1.1 重复 - 02]]\n"
+
+
 def test_build_segment_command_uses_resolved_paths_and_yes(tmp_path):
     vault_root = tmp_path / "vault"
     source = vault_root / "book.md"
