@@ -1008,23 +1008,26 @@ def run_learning_from_provider(
         
         stage1_lines = stage1_text.splitlines(keepends=True)
         
+        # 1. Parse and validate main_text_start_line (REQUIRED)
         try:
             main_text_start_line = int(main_text_start_line)
-            if main_text_start_line < 1 or main_text_start_line > len(stage1_lines):
-                raise FormattingError(f"LLM returned invalid line number: {main_text_start_line}")
-            
-            if toc_start_line is not None:
+        except (ValueError, TypeError) as exc:
+            raise FormattingError(f"LLM returned invalid type/value for main_text_start_line: {main_text_start_line}") from exc
+
+        if main_text_start_line < 1 or main_text_start_line > len(stage1_lines):
+            raise FormattingError(f"LLM returned invalid line number: {main_text_start_line}")
+
+        # 2. Parse and validate toc_start_line (OPTIONAL/FALLBACK)
+        stripped_text = stage1_text
+        if toc_start_line is not None:
+            try:
                 toc_start_line = int(toc_start_line)
-                if 1 <= toc_start_line <= main_text_start_line <= len(stage1_lines):
+                if 1 <= toc_start_line <= main_text_start_line:
                     before_toc = stage1_lines[:toc_start_line - 1]
                     after_toc = stage1_lines[main_text_start_line - 1:]
                     stripped_text = "".join(before_toc + after_toc)
-                else:
-                    stripped_text = stage1_text
-            else:
-                stripped_text = stage1_text
-        except (ValueError, TypeError):
-            stripped_text = stage1_text
+            except (ValueError, TypeError):
+                pass
         candidate_path.write_text(stripped_text, encoding="utf-8")
 
         current_stage = "h1-sample"

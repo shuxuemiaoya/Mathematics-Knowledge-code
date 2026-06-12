@@ -281,3 +281,17 @@ def test_learning_fallback_when_boundaries_invalid(tmp_path):
     # Fallback: keep entire document intact
     assert "# 数学" in candidate_text
     assert "# 目录" in candidate_text
+
+
+def test_learning_fails_when_main_text_start_line_invalid(tmp_path):
+    markdown = tmp_path / "book.md"
+    markdown.write_text(SAMPLE_MARKDOWN, encoding="utf-8")
+    work_dir = tmp_path / "mathos-formatting" / "book"
+    with pytest.raises(core.FormattingError, match="main_text_start_line"):
+        core.run_learning_from_provider(
+            markdown_path=markdown,
+            provider_client=SuccessfulMockProvider(toc_start_line=3, main_text_start_line="invalid"),
+            heading_prompt="# Heading Rules Prompt",
+            content_prompt="# Content Cleaner Prompt",
+            work_dir=work_dir,
+        )
