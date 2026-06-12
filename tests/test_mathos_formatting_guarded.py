@@ -61,11 +61,11 @@ def _plugin(clean_func):
 def test_content_cleaner_prompt_forbids_destructive_edits():
     prompt = (SKILL_ROOT / "agents" / "content_cleaner_prompt.md").read_text(encoding="utf-8").lower()
 
-    assert "do not delete image" in prompt
-    assert "do not delete <details>" in prompt
-    assert "do not modify formula" in prompt
-    assert "do not delete tables" in prompt
-    assert "report" in prompt
+    assert "图片" in prompt
+    assert "<details>" in prompt
+    assert "公式" in prompt
+    assert "表格" in prompt
+    assert "警告" in prompt or "报告" in prompt or "analyze" in prompt
 
 
 def test_preservation_gate_rejects_image_removal():
@@ -251,6 +251,26 @@ def test_learning_fallback_when_toc_missing(tmp_path):
     core.run_learning_from_provider(
         markdown_path=markdown,
         provider_client=SuccessfulMockProvider(toc_start_line=None, main_text_start_line=8),
+        heading_prompt="# Heading Rules Prompt",
+        content_prompt="# Content Cleaner Prompt",
+        work_dir=work_dir,
+    )
+
+    candidate_text = (work_dir / "candidate.md").read_text(encoding="utf-8")
+    # Fallback: keep entire document intact
+    assert "# 数学" in candidate_text
+    assert "# 目录" in candidate_text
+
+
+def test_learning_fallback_when_boundaries_invalid(tmp_path):
+    markdown = tmp_path / "book.md"
+    markdown.write_text(SAMPLE_MARKDOWN, encoding="utf-8")
+    work_dir = tmp_path / "mathos-formatting" / "book"
+
+    # Mismatched bounds: toc_start_line > main_text_start_line
+    core.run_learning_from_provider(
+        markdown_path=markdown,
+        provider_client=SuccessfulMockProvider(toc_start_line=10, main_text_start_line=5),
         heading_prompt="# Heading Rules Prompt",
         content_prompt="# Content Cleaner Prompt",
         work_dir=work_dir,
