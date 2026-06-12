@@ -81,3 +81,150 @@ def select_target_depth(headings: list[Heading], requested_depth: int | None) ->
         raise SegmentationError(f"Target depth {requested_depth} produced zero segments")
 
     return requested_depth
+
+
+@dataclass(frozen=True)
+class SegmentPlan:
+    heading: Heading
+    link_title: str
+    filename: str
+    output_path: Path
+    char_start: int
+    char_end: int
+    byte_count: int
+    warning: str = ""
+
+
+@dataclass(frozen=True)
+class SegmentationPlan:
+    source_path: Path
+    vault_root: Path
+    sandbox_dir: Path
+    master_path: Path
+    target_depth: int
+    detected_number_depths: list[int]
+    headings: list[Heading]
+    segments: list[SegmentPlan]
+    disambiguations: list[dict[str, str]]
+    warnings: list[str]
+    source_sha256: str
+    next_command: str
+
+
+def is_relative_to(child: Path, parent: Path) -> bool:
+    try:
+        child.resolve().relative_to(parent.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def sha256_text(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def quote_command(value: Path | str) -> str:
+    return '"' + str(value).replace('"', '\\"') + '"'
+
+
+def safe_filename(stem: str) -> str:
+    cleaned = INVALID_FILENAME_CHARS_RE.sub("_", stem).strip().rstrip(" .")
+    return cleaned or "segment"
+
+
+def disambiguate_filenames(link_titles: list[str]) -> tuple[list[str], list[dict[str, str]]]:
+    seen: dict[str, int] = {}
+    filenames: list[str] = []
+    disambiguations: list[dict[str, str]] = []
+
+    for link_title in link_titles:
+        base = safe_filename(link_title)
+        count = seen.get(base, 0) + 1
+        seen[base] = count
+        final_stem = base if count == 1 else f"{base} - {count:02d}"
+        if final_stem != base:
+            disambiguations.append({"original": f"{base}.md", "final": f"{final_stem}.md"})
+        filenames.append(f"{final_stem}.md")
+
+    return filenames, disambiguations
+
+
+def build_segment_command(source_path: Path, vault_root: Path, target_depth: int | None) -> str:
+    command = (
+        f"python {SCRIPT_COMMAND} segment {quote_command(source_path.resolve())} "
+        f"--vault-root {quote_command(vault_root.resolve())}"
+    )
+    if target_depth is not None:
+        command += f" --target-depth {target_depth}"
+    return command + " --yes"
+
+
+def build_segmentation_plan(source_path: Path, vault_root: Path, target_depth: int | None = None) -> SegmentationPlan:
+    source_path = source_path.expanduser().resolve()
+    vault_root = vault_root.expanduser().resolve()
+
+    if not source_path.exists() or not source_path.is_file():
+        raise SegmentationError(f"Source file missing: {source_path}")
+    if source_path.suffix.lower() != ".md":
+        raise SegmentationError(f"Source file is not Markdown: {source_path}")
+    if not vault_root.exists() or not vault_root.is_dir():
+        raise SegmentationError(f"Invalid vault root: {vault_root}")
+    if not is_relative_to(source_path, vault_root):
+        raise SegmentationError(f"Source path {source_path} is not under vault root {vault_root}")
+
+    markdown = source_path.read_text(encoding="utf-8")
+    if not markdown.strip():
+        raise SegmentationError(f"Source file is empty: {source_path}")
+
+    headings = extract_numbered_headings(markdown)
+    selected_depth = select_target_depth(headings, target_depth)
+    detected_depths = sorted({heading.number_depth for heading in headings})
+    target_headings = [heading for heading in headings if heading.number_depth == selected_depth]
+    if not target_headings:
+        raise SegmentationError(f"Target depth {selected_depth} produced zero segments")
+
+    sandbox_dir = source_path.with_suffix("")
+    master_path = sandbox_dir / f"000_{source_path.stem}目录.md"
+    link_titles = [heading.full_title for heading in target_headings]
+    filenames, disambiguations = disambiguate_filenames(link_titles)
+
+    segments: list[SegmentPlan] = []
+    warnings: list[str] = []
+    for index, heading in enumerate(target_headings):
+        next_start = target_headings[index + 1].char_start if index + 1 < len(target_headings) else len(markdown)
+        raw_slice = markdown[heading.char_start:next_start]
+        if not raw_slice.strip():
+            raise SegmentationError(f"Planned segment is empty: {heading.full_title}")
+
+        warning = ""
+        if len(raw_slice) > 200_000:
+            warning = f"Large segment: {heading.full_title} ({len(raw_slice)} characters)"
+            warnings.append(warning)
+
+        segments.append(
+            SegmentPlan(
+                heading=heading,
+                link_title=link_titles[index],
+                filename=filenames[index],
+                output_path=sandbox_dir / filenames[index],
+                char_start=heading.char_start,
+                char_end=next_start,
+                byte_count=len(raw_slice.encode("utf-8")),
+                warning=warning,
+            )
+        )
+
+    return SegmentationPlan(
+        source_path=source_path,
+        vault_root=vault_root,
+        sandbox_dir=sandbox_dir,
+        master_path=master_path,
+        target_depth=selected_depth,
+        detected_number_depths=detected_depths,
+        headings=headings,
+        segments=segments,
+        disambiguations=disambiguations,
+        warnings=warnings,
+        source_sha256=sha256_text(markdown),
+        next_command=build_segment_command(source_path, vault_root, target_depth),
+    )

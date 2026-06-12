@@ -57,3 +57,35 @@ def test_select_target_depth_defaults_to_deepest_numbering():
 
     assert seg.select_target_depth(headings, None) == 3
     assert seg.select_target_depth(headings, 2) == 2
+
+
+def test_build_plan_uses_sandbox_folder_and_short_links(tmp_path):
+    vault_root = tmp_path / "vault"
+    source = vault_root / "高中" / "课本" / "book.md"
+    source.parent.mkdir(parents=True)
+    source.write_text(SAMPLE_MARKDOWN, encoding="utf-8")
+
+    plan = seg.build_segmentation_plan(source, vault_root=vault_root, target_depth=None)
+
+    assert plan.sandbox_dir == source.parent / "book"
+    assert plan.master_path == source.parent / "book" / "000_book目录.md"
+    assert [item.link_title for item in plan.segments] == [
+        "1.1.1 集合的概念",
+        "1.1.2 集合的基本关系",
+        "1.2.1 函数的概念",
+    ]
+    assert plan.next_command.endswith('--vault-root "' + str(vault_root.resolve()) + '" --yes')
+
+
+def test_build_plan_rejects_source_outside_vault(tmp_path):
+    source = tmp_path / "outside.md"
+    source.write_text(SAMPLE_MARKDOWN, encoding="utf-8")
+    vault_root = tmp_path / "vault"
+    vault_root.mkdir()
+
+    try:
+        seg.build_segmentation_plan(source, vault_root=vault_root, target_depth=None)
+    except seg.SegmentationError as exc:
+        assert "not under vault root" in str(exc)
+    else:
+        raise AssertionError("expected SegmentationError")
