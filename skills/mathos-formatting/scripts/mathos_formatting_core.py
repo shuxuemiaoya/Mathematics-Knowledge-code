@@ -66,6 +66,14 @@ class PluginResult:
 
 
 @dataclass(frozen=True)
+class PreservationCounts:
+    image_references: int
+    details_blocks: int
+    math_delimiters: int
+    table_like_lines: int
+
+
+@dataclass(frozen=True)
 class ApprovedApplyResult:
     candidate_path: Path
     report_path: Path
@@ -204,11 +212,11 @@ def run_plugin(plugin: ModuleType, markdown: str) -> PluginResult:
 
 
 def candidate_path_for(original_path: Path) -> Path:
-    return original_path.parent / ".mathos-formatting" / f"{original_path.stem}.candidate{original_path.suffix}"
+    return original_path.parent / "mathos-formatting" / f"{original_path.stem}.candidate{original_path.suffix}"
 
 
 def learning_work_dir_for(markdown_path: Path) -> Path:
-    return markdown_path.parent / ".mathos-formatting" / markdown_path.stem
+    return markdown_path.parent / "mathos-formatting" / markdown_path.stem
 
 
 def learning_candidate_path_for(markdown_path: Path, work_dir: Path | None = None) -> Path:
@@ -754,13 +762,66 @@ def _heading_lines(markdown: str) -> list[str]:
     ]
 
 
+IMAGE_REFERENCE_RE = re.compile(r"^ {0,3}!\[[^\]]*\]\([^)]+\)")
+DETAILS_OPEN_RE = re.compile(r"^ {0,3}<details(?:\s|>)", re.IGNORECASE)
+
+
+def content_preservation_counts(markdown: str) -> PreservationCounts:
+    lines = markdown.splitlines()
+    return PreservationCounts(
+        image_references=sum(1 for line in lines if IMAGE_REFERENCE_RE.match(line.strip())),
+        details_blocks=sum(1 for line in lines if DETAILS_OPEN_RE.match(line.strip())),
+        math_delimiters=markdown.count("$$"),
+        table_like_lines=sum(1 for line in lines if "|" in line),
+    )
+
+
+def preservation_summary(before: PreservationCounts, after: PreservationCounts) -> list[str]:
+    return [
+        f"Preservation images: {before.image_references} -> {after.image_references}",
+        f"Preservation details blocks: {before.details_blocks} -> {after.details_blocks}",
+        f"Preservation math delimiters: {before.math_delimiters} -> {after.math_delimiters}",
+        f"Preservation table-like lines: {before.table_like_lines} -> {after.table_like_lines}",
+    ]
+
+
+def validate_content_preservation(before: PreservationCounts, after: PreservationCounts) -> None:
+    if after.image_references < before.image_references:
+        raise FormattingError(
+            "content cleaner removed image references "
+            f"({before.image_references} before, {after.image_references} after)"
+        )
+    if after.details_blocks < before.details_blocks:
+        raise FormattingError(
+            "content cleaner removed details blocks "
+            f"({before.details_blocks} before, {after.details_blocks} after)"
+        )
+    if after.math_delimiters != before.math_delimiters:
+        raise FormattingError(
+            "content cleaner changed math delimiter count "
+            f"({before.math_delimiters} before, {after.math_delimiters} after)"
+        )
+    if after.table_like_lines < before.table_like_lines:
+        raise FormattingError(
+            "content cleaner removed table-like lines "
+            f"({before.table_like_lines} before, {after.table_like_lines} after)"
+        )
+
+
 def run_content_plugin_protecting_headings(plugin: ModuleType, markdown: str) -> PluginResult:
     before_headings = _heading_lines(markdown)
+    before_counts = content_preservation_counts(markdown)
     result = run_plugin(plugin, markdown)
     after_headings = _heading_lines(result.cleaned_markdown)
     if before_headings != after_headings:
         raise FormattingError("content cleaner modified heading lines")
-    return result
+    after_counts = content_preservation_counts(result.cleaned_markdown)
+    validate_content_preservation(before_counts, after_counts)
+    return PluginResult(
+        cleaned_markdown=result.cleaned_markdown,
+        summary=result.summary + preservation_summary(before_counts, after_counts),
+        warnings=result.warnings,
+    )
 
 
 def _write_text_artifact(path: Path, text: str) -> Path:
