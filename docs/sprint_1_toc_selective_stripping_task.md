@@ -8,7 +8,7 @@
   - `[x]` Step 2: Add a new unit test for fallback behavior and normal parsing
   - `[x]` Step 3: Run the tests to verify failure
   - `[x]` Step 4: Commit changes
-- `[ ]` Task 3: Core Implementation Update
-  - `[ ]` Step 1: Modify `mathos_formatting_core.py`
-  - `[ ]` Step 2: Run all tests to verify success
-  - `[ ]` Step 3: Commit implementation changes
+- `[x]` Task 3: Core Implementation Update
+  - `[x]` Step 1: Modify `mathos_formatting_core.py`
+  - `[x]` Step 2: Run all tests to verify success
+  - `[x]` Step 3: Commit implementation changes
