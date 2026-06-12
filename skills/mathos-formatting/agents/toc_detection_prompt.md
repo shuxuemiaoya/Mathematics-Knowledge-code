@@ -20,6 +20,7 @@ Return JSON only with this shape:
 ```
 
 Important:
-- Return ONLY a valid JSON object. Do not include markdown code block markers (like \`\`\`json) or any explanation outside the JSON.
+- Return ONLY a valid JSON object. Do not include markdown code block markers (like "```json") or any explanation outside the JSON.
 - The line numbers MUST match the prefix line numbers exactly.
-- Ensure the line numbers are integers or null.
+- Ensure that main_text_start_line is always an integer, and toc_start_line is either an integer or null.
+
