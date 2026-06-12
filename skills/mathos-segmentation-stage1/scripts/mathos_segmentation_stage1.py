@@ -407,3 +407,98 @@ Next operational step: {next_step}
     )
     (record_dir / "run-summary.md").write_text(summary, encoding="utf-8")
     return record_dir
+
+
+def print_json(payload: dict[str, Any]) -> None:
+    print(json.dumps(payload, ensure_ascii=False, indent=2, default=str))
+
+
+def plan_json(plan: SegmentationPlan) -> dict[str, Any]:
+    return {
+        "stage": STAGE_NAME,
+        "skill": SKILL_NAME,
+        "source_path": str(plan.source_path),
+        "vault_root": str(plan.vault_root),
+        "sandbox_dir": str(plan.sandbox_dir),
+        "master_path": str(plan.master_path),
+        "detected_number_depths": plan.detected_number_depths,
+        "target_depth": plan.target_depth,
+        "counts": {
+            "headings": len(plan.headings),
+            "segments": len(plan.segments),
+            "warnings": len(plan.warnings),
+            "disambiguations": len(plan.disambiguations),
+        },
+        "segments": [
+            {
+                "link_title": segment.link_title,
+                "filename": segment.filename,
+                "output_path": str(segment.output_path),
+                "byte_count": segment.byte_count,
+            }
+            for segment in plan.segments
+        ],
+        "warnings": plan.warnings,
+        "disambiguations": plan.disambiguations,
+        "next_command": plan.next_command,
+    }
+
+
+def command_plan(args: argparse.Namespace) -> int:
+    plan = build_segmentation_plan(Path(args.source), Path(args.vault_root), target_depth=args.target_depth)
+    print_json(plan_json(plan))
+    return 0
+
+
+def command_segment(args: argparse.Namespace) -> int:
+    if not args.yes:
+        raise SegmentationError("Refusing to write without --yes")
+    plan = build_segmentation_plan(Path(args.source), Path(args.vault_root), target_depth=args.target_depth)
+    write_segmentation_package(plan, overwrite=args.overwrite)
+    record_dir = write_run_records(plan, repo_root=Path("."), status="completed", stop_reason="")
+    print_json(
+        {
+            "stage": STAGE_NAME,
+            "status": "completed",
+            "sandbox_dir": str(plan.sandbox_dir),
+            "master_path": str(plan.master_path),
+            "segments": len(plan.segments),
+            "record_dir": str(record_dir),
+        }
+    )
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Segment formatted MathOS Markdown into an Obsidian sandbox package.")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    plan_parser = subparsers.add_parser("plan", help="Inspect planned segmentation without writing content files.")
+    plan_parser.add_argument("source")
+    plan_parser.add_argument("--vault-root", required=True)
+    plan_parser.add_argument("--target-depth", type=int)
+    plan_parser.add_argument("--yes", action="store_true")
+    plan_parser.set_defaults(func=command_plan)
+
+    segment_parser = subparsers.add_parser("segment", help="Write segmentation sandbox package and run records.")
+    segment_parser.add_argument("source")
+    segment_parser.add_argument("--vault-root", required=True)
+    segment_parser.add_argument("--target-depth", type=int)
+    segment_parser.add_argument("--overwrite", action="store_true")
+    segment_parser.add_argument("--yes", action="store_true")
+    segment_parser.set_defaults(func=command_segment)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    try:
+        return args.func(args)
+    except SegmentationError as exc:
+        print_json({"stage": STAGE_NAME, "status": "failed", "error": str(exc)})
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

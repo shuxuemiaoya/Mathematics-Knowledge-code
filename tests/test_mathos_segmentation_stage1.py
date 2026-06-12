@@ -483,3 +483,51 @@ def test_verify_package_rejects_missing_disambiguated_link(tmp_path):
         seg.verify_package,
         plan,
     )
+
+
+def test_main_plan_prints_json_without_writing_package(tmp_path, capsys):
+    vault_root = tmp_path / "vault"
+    source = vault_root / "book.md"
+    source.parent.mkdir(parents=True)
+    source.write_text(SAMPLE_MARKDOWN, encoding="utf-8")
+
+    exit_code = seg.main(["plan", str(source), "--vault-root", str(vault_root), "--yes"])
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert payload["stage"] == "segmentation-stage1"
+    assert payload["counts"]["segments"] == 3
+    assert not (source.parent / "book").exists()
+
+
+def test_main_segment_writes_package_and_records(tmp_path, monkeypatch):
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    vault_root = tmp_path / "vault"
+    source = vault_root / "book.md"
+    source.parent.mkdir(parents=True)
+    source.write_text(SAMPLE_MARKDOWN, encoding="utf-8")
+    monkeypatch.chdir(repo_root)
+
+    exit_code = seg.main(["segment", str(source), "--vault-root", str(vault_root), "--yes"])
+
+    assert exit_code == 0
+    assert (source.parent / "book" / "000_book目录.md").exists()
+    assert list((repo_root / "agent-memory" / "records").glob("*-segmentation-stage1-book"))
+
+
+def test_main_segment_requires_yes(tmp_path, capsys):
+    vault_root = tmp_path / "vault"
+    source = vault_root / "book.md"
+    source.parent.mkdir(parents=True)
+    source.write_text(SAMPLE_MARKDOWN, encoding="utf-8")
+
+    exit_code = seg.main(["segment", str(source), "--vault-root", str(vault_root)])
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 1
+    assert payload["status"] == "failed"
+    assert "without --yes" in payload["error"]
+    assert not (source.parent / "book").exists()
