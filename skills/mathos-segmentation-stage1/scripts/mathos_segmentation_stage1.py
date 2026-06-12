@@ -124,7 +124,7 @@ def sha256_text(text: str) -> str:
 
 
 def quote_command(value: Path | str) -> str:
-    return '"' + str(value).replace('"', '\\"') + '"'
+    return "'" + str(value).replace("'", "''") + "'"
 
 
 def safe_filename(stem: str) -> str:
@@ -139,8 +139,9 @@ def disambiguate_filenames(link_titles: list[str]) -> tuple[list[str], list[dict
 
     for link_title in link_titles:
         base = safe_filename(link_title)
-        count = seen.get(base, 0) + 1
-        seen[base] = count
+        key = base.casefold()
+        count = seen.get(key, 0) + 1
+        seen[key] = count
         final_stem = base if count == 1 else f"{base} - {count:02d}"
         if final_stem != base:
             disambiguations.append({"original": f"{base}.md", "final": f"{final_stem}.md"})
@@ -191,7 +192,13 @@ def build_segmentation_plan(source_path: Path, vault_root: Path, target_depth: i
     segments: list[SegmentPlan] = []
     warnings: list[str] = []
     for index, heading in enumerate(target_headings):
-        next_start = target_headings[index + 1].char_start if index + 1 < len(target_headings) else len(markdown)
+        next_start = len(markdown)
+        for later_heading in headings:
+            if later_heading.char_start <= heading.char_start:
+                continue
+            if later_heading.number_depth <= selected_depth:
+                next_start = later_heading.char_start
+                break
         raw_slice = markdown[heading.char_start:next_start]
         if not raw_slice.strip():
             raise SegmentationError(f"Planned segment is empty: {heading.full_title}")

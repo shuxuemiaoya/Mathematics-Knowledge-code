@@ -86,8 +86,8 @@ def test_build_plan_uses_sandbox_folder_and_short_links(tmp_path):
     assert plan.next_command.startswith(
         r"python .\skills\mathos-segmentation-stage1\scripts\mathos_segmentation_stage1.py segment"
     )
-    assert '"' + str(source.resolve()) + '"' in plan.next_command
-    assert '--vault-root "' + str(vault_root.resolve()) + '"' in plan.next_command
+    assert "'" + str(source.resolve()) + "'" in plan.next_command
+    assert "--vault-root '" + str(vault_root.resolve()) + "'" in plan.next_command
     assert plan.next_command.endswith("--yes")
 
 
@@ -227,7 +227,7 @@ def test_build_plan_uses_exact_segment_char_ranges(tmp_path):
 
     expected_ranges = [
         (SAMPLE_MARKDOWN.index("### 1.1.1 集合的概念"), SAMPLE_MARKDOWN.index("### 1.1.2 集合的基本关系")),
-        (SAMPLE_MARKDOWN.index("### 1.1.2 集合的基本关系"), SAMPLE_MARKDOWN.index("### 1.2.1 函数的概念")),
+        (SAMPLE_MARKDOWN.index("### 1.1.2 集合的基本关系"), SAMPLE_MARKDOWN.index("## 1.2 函数")),
         (SAMPLE_MARKDOWN.index("### 1.2.1 函数的概念"), len(SAMPLE_MARKDOWN)),
     ]
     assert [(item.char_start, item.char_end) for item in plan.segments] == expected_ranges
@@ -283,6 +283,30 @@ def test_build_plan_disambiguates_duplicate_filenames(tmp_path):
     assert plan.disambiguations == [{"original": "1.1 重复.md", "final": "1.1 重复 - 02.md"}]
 
 
+def test_build_plan_disambiguates_case_only_duplicate_filenames(tmp_path):
+    vault_root = tmp_path / "vault"
+    source = vault_root / "book.md"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """# 第一章
+
+## 1.1 Foo
+
+正文 A
+
+## 1.1 foo
+
+正文 B
+""",
+        encoding="utf-8",
+    )
+
+    plan = seg.build_segmentation_plan(source, vault_root=vault_root)
+
+    assert [item.filename for item in plan.segments] == ["1.1 Foo.md", "1.1 foo - 02.md"]
+    assert plan.disambiguations == [{"original": "1.1 foo.md", "final": "1.1 foo - 02.md"}]
+
+
 def test_build_plan_does_not_write_content_files(tmp_path):
     vault_root = tmp_path / "vault"
     source = vault_root / "book.md"
@@ -306,5 +330,12 @@ def test_build_segment_command_uses_resolved_paths_and_yes(tmp_path):
 
     assert command == (
         r"python .\skills\mathos-segmentation-stage1\scripts\mathos_segmentation_stage1.py segment "
-        f'"{source.resolve()}" --vault-root "{vault_root.resolve()}" --target-depth 2 --yes'
+        f"'{source.resolve()}' --vault-root '{vault_root.resolve()}' --target-depth 2 --yes"
     )
+
+
+def test_quote_command_is_powershell_safe_and_preserves_dollar_literals():
+    quoted = seg.quote_command(r"C:\vault\$book's.md")
+
+    assert quoted == r"'C:\vault\$book''s.md'"
+    assert "$book" in quoted
