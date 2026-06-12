@@ -9,7 +9,7 @@ The Codex agent is a Knowledge-Graph Implementation Operator.
 It coordinates repo-local skills and workflows for the knowledge-graph build process:
 
 ```text
-PDF / Word -> Markdown -> Formatting -> Future graph stages
+PDF / Word -> Markdown -> Formatting -> Segmentation Stage One -> Future graph stages
 ```
 
 The agent is responsible for implementation coordination, execution monitoring, output summaries, and operational memory.
@@ -36,6 +36,7 @@ Active skills:
 
 - `skills/mathos-pdf-to-md`
 - `skills/mathos-formatting`
+- `skills/mathos-segmentation-stage1`
 
 Reserved future skill slots:
 
@@ -78,6 +79,17 @@ For `mathos-formatting`, examples include:
 - Failure to find a table of contents (TOC) in the source Markdown during provider-learning.
 - Modification of structural heading lines by a content cleaner plugin during stage 4 provider-learning.
 - Missing DeepSeek API key or provider configuration in `.env`.
+
+For `mathos-segmentation-stage1`, examples include:
+
+- Missing, empty, or non-Markdown source file.
+- Source path outside the provided vault root.
+- No numbered headings detected.
+- Selected target depth produces zero segments.
+- Existing sandbox folder without explicit overwrite.
+- Empty planned segment.
+- Source hash changes during execution.
+- Package verification failure.
 
 
 ## Required Output Summary

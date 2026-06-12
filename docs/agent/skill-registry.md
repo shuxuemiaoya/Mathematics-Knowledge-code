@@ -43,6 +43,21 @@ Approved manual-only programs:
 
 - `rj6_heading_levels`: approved after successful user review for `Secondary-School-Mathematics-Knowledge-Map/小学/人教版数学/六年级上册` heading hierarchy normalization. Reuse with `apply-approved` only on matching 人教版数学六年级上册 / 一遍过 RJ6 Markdown family unless the user asks for a new candidate review.
 
+### `skills/mathos-segmentation-stage1`
+
+Status: active.
+
+Purpose: deterministic post-formatting segmentation into Obsidian sandbox packages.
+
+Behavior:
+
+- Consumes one formatted Markdown file after `mathos-formatting`.
+- Splits on numbered headings, defaulting to the deepest numbered heading depth.
+- Creates a source-stem sandbox folder beside the source file.
+- Writes `000_<source-stem>目录.md` and raw segment notes with numbered filenames.
+- Leaves the original source Markdown untouched.
+- Writes run records under `agent-memory/records/<date>-segmentation-stage1-<slug>/`.
+
 ## Reserved Future Skill Slots
 
 ### `skills/mathos-word-to-md`
