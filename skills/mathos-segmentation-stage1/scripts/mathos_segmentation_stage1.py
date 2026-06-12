@@ -235,3 +235,10 @@ def build_segmentation_plan(source_path: Path, vault_root: Path, target_depth: i
         source_sha256=sha256_text(markdown),
         next_command=build_segment_command(source_path, vault_root, target_depth),
     )
+
+
+def render_master_directory(plan: SegmentationPlan) -> str:
+    lines = ["# 目录", ""]
+    for segment in plan.segments:
+        lines.append(f"- [[{segment.link_title}]]")
+    return "\n".join(lines).rstrip() + "\n"

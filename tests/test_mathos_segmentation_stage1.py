@@ -320,6 +320,25 @@ def test_build_plan_does_not_write_content_files(tmp_path):
     assert not any(item.output_path.exists() for item in plan.segments)
 
 
+def test_render_master_directory_contains_only_directory_links(tmp_path):
+    vault_root = tmp_path / "vault"
+    source = vault_root / "book.md"
+    source.parent.mkdir(parents=True)
+    source.write_text(SAMPLE_MARKDOWN, encoding="utf-8")
+    plan = seg.build_segmentation_plan(source, vault_root=vault_root)
+
+    master = seg.render_master_directory(plan)
+
+    assert master.startswith("# 目录\n\n")
+    assert "- [[1.1 集合的概念]]" not in master
+    assert "- [[1.1.1 集合的概念]]" in master
+    assert "- [[1.1.2 集合的基本关系]]" in master
+    assert "- [[1.2.1 函数的概念]]" in master
+    assert "集合正文" not in master
+    for line in master.splitlines():
+        assert line == "" or line == "# 目录" or line.startswith("- [[")
+
+
 def test_build_segment_command_uses_resolved_paths_and_yes(tmp_path):
     vault_root = tmp_path / "vault"
     source = vault_root / "book.md"
