@@ -276,3 +276,134 @@ def write_segmentation_package(plan: SegmentationPlan, overwrite: bool = False) 
     if after_file_hash != before_file_hash:
         raise SegmentationError("Original source hash changed during writing")
     return {"status": "written", "sandbox_dir": str(plan.sandbox_dir), "master_path": str(plan.master_path)}
+
+
+def run_record_dir(source_path: Path, repo_root: Path = Path(".")) -> Path:
+    slug = safe_filename(source_path.stem)
+    stamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
+    return repo_root / "agent-memory" / "records" / f"{stamp}-segmentation-stage1-{slug}"
+
+
+def heading_to_dict(heading: Heading) -> dict[str, Any]:
+    return dataclasses.asdict(heading)
+
+
+def segment_to_dict(segment: SegmentPlan) -> dict[str, Any]:
+    data = dataclasses.asdict(segment)
+    data["output_path"] = str(segment.output_path)
+    return data
+
+
+def plan_to_manifest(plan: SegmentationPlan) -> dict[str, Any]:
+    return {
+        "stage": STAGE_NAME,
+        "skill": SKILL_NAME,
+        "source_path": str(plan.source_path),
+        "vault_root": str(plan.vault_root),
+        "sandbox_dir": str(plan.sandbox_dir),
+        "master_path": str(plan.master_path),
+        "target_depth": plan.target_depth,
+        "detected_number_depths": plan.detected_number_depths,
+        "source_sha256": plan.source_sha256,
+        "heading_tree": [heading_to_dict(heading) for heading in plan.headings],
+        "segments": [segment_to_dict(segment) for segment in plan.segments],
+        "disambiguations": plan.disambiguations,
+        "warnings": plan.warnings,
+        "next_command": plan.next_command,
+    }
+
+
+def verify_master_text(master_text: str) -> None:
+    for line in master_text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped == "# 目录":
+            continue
+        if not stripped.startswith("- "):
+            raise SegmentationError(f"Invalid master directory line: {line}")
+        if "[[" not in stripped or not re.fullmatch(r"- \[\[[^\]]+\]\]", stripped):
+            raise SegmentationError(f"Invalid Obsidian link line: {line}")
+
+
+def verify_package(plan: SegmentationPlan) -> dict[str, Any]:
+    if not plan.sandbox_dir.is_dir():
+        raise SegmentationError(f"Missing sandbox folder: {plan.sandbox_dir}")
+    if not plan.master_path.is_file():
+        raise SegmentationError(f"Missing master directory: {plan.master_path}")
+    master_text = plan.master_path.read_text(encoding="utf-8")
+    verify_master_text(master_text)
+    for segment in plan.segments:
+        if not segment.output_path.is_file():
+            raise SegmentationError(f"Missing segment file: {segment.output_path}")
+        note_stem = Path(segment.filename).stem
+        if master_text.count(f"[[{note_stem}]]") != 1:
+            raise SegmentationError(f"Master link missing or duplicated: {note_stem}")
+    segment_files = sorted(path for path in plan.sandbox_dir.glob("*.md") if path != plan.master_path)
+    if len(segment_files) != len(plan.segments):
+        raise SegmentationError("Segment file count does not match manifest count")
+    if sha256_text(plan.source_path.read_text(encoding="utf-8")) != plan.source_sha256:
+        raise SegmentationError("Original source hash changed")
+    return {"status": "passed", "segment_count": len(plan.segments)}
+
+
+def write_run_records(
+    plan: SegmentationPlan,
+    repo_root: Path = Path("."),
+    status: str = "completed",
+    stop_reason: str = "",
+) -> Path:
+    record_dir = run_record_dir(plan.source_path, repo_root=repo_root)
+    record_dir.mkdir(parents=True, exist_ok=False)
+    verification = verify_package(plan) if status == "completed" else {"status": "not-run"}
+    manifest = plan_to_manifest(plan)
+    manifest["verification"] = verification
+    next_step = "review sandbox package in Obsidian" if status == "completed" else "inspect failure and rerun plan"
+    state = {
+        "stage": STAGE_NAME,
+        "skill": SKILL_NAME,
+        "status": status,
+        "stop_reason": stop_reason,
+        "source_path": str(plan.source_path),
+        "vault_root": str(plan.vault_root),
+        "sandbox_dir": str(plan.sandbox_dir),
+        "master_path": str(plan.master_path),
+        "record_dir": str(record_dir),
+        "counts": {
+            "headings": len(plan.headings),
+            "segments": len(plan.segments),
+            "warnings": len(plan.warnings),
+            "disambiguations": len(plan.disambiguations),
+        },
+        "warnings": plan.warnings[:20],
+        "records": {
+            "manifest": str(record_dir / "manifest.json"),
+            "run_summary": str(record_dir / "run-summary.md"),
+            "run_state": str(record_dir / "run-state.json"),
+        },
+        "next_step": next_step,
+    }
+    summary = f"""# Run Summary
+
+Stage name: {STAGE_NAME}
+Skill: {SKILL_NAME}
+Source Markdown: `{plan.source_path}`
+Vault root: `{plan.vault_root}`
+Completion status: {status}
+Stop reason: {stop_reason or "none"}
+Sandbox folder: `{plan.sandbox_dir}`
+Master directory: `{plan.master_path}`
+Segment count: {len(plan.segments)}
+Warning count: {len(plan.warnings)}
+Duplicate disambiguation count: {len(plan.disambiguations)}
+Run record folder: `{record_dir}`
+Next operational step: {next_step}
+"""
+    (record_dir / "manifest.json").write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2, default=str) + "\n",
+        encoding="utf-8",
+    )
+    (record_dir / "run-state.json").write_text(
+        json.dumps(state, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    (record_dir / "run-summary.md").write_text(summary, encoding="utf-8")
+    return record_dir

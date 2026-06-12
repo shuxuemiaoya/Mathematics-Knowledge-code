@@ -1,5 +1,6 @@
 from pathlib import Path
 import importlib.util
+import json
 import sys
 
 
@@ -417,4 +418,68 @@ def test_write_refuses_existing_sandbox_without_overwrite(tmp_path):
         seg.write_segmentation_package,
         plan,
         overwrite=False,
+    )
+
+
+def test_write_run_records_creates_state_manifest_and_summary(tmp_path):
+    repo_root = tmp_path / "repo"
+    vault_root = tmp_path / "vault"
+    source = vault_root / "book.md"
+    source.parent.mkdir(parents=True)
+    source.write_text(SAMPLE_MARKDOWN, encoding="utf-8")
+    plan = seg.build_segmentation_plan(source, vault_root=vault_root)
+    seg.write_segmentation_package(plan)
+
+    record_dir = seg.write_run_records(plan, repo_root=repo_root, status="completed", stop_reason="")
+
+    state = json.loads((record_dir / "run-state.json").read_text(encoding="utf-8"))
+    manifest = json.loads((record_dir / "manifest.json").read_text(encoding="utf-8"))
+    summary = (record_dir / "run-summary.md").read_text(encoding="utf-8")
+    assert state["stage"] == "segmentation-stage1"
+    assert state["status"] == "completed"
+    assert state["counts"]["segments"] == 3
+    assert manifest["master_path"] == str(plan.master_path)
+    assert manifest["verification"]["status"] == "passed"
+    assert "Stage name: segmentation-stage1" in summary
+
+
+def test_verify_package_checks_links_and_source_hash(tmp_path):
+    vault_root = tmp_path / "vault"
+    source = vault_root / "book.md"
+    source.parent.mkdir(parents=True)
+    source.write_text(SAMPLE_MARKDOWN, encoding="utf-8")
+    plan = seg.build_segmentation_plan(source, vault_root=vault_root)
+    seg.write_segmentation_package(plan)
+
+    verification = seg.verify_package(plan)
+
+    assert verification["status"] == "passed"
+    assert verification["segment_count"] == 3
+
+
+def test_verify_package_rejects_missing_disambiguated_link(tmp_path):
+    vault_root = tmp_path / "vault"
+    source = vault_root / "book.md"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """# 第一章
+
+## 1.1 重复
+
+正文 A
+
+## 1.1 重复
+
+正文 B
+""",
+        encoding="utf-8",
+    )
+    plan = seg.build_segmentation_plan(source, vault_root=vault_root)
+    seg.write_segmentation_package(plan)
+    plan.master_path.write_text("# 目录\n\n- [[1.1 重复]]\n- [[1.1 重复]]\n", encoding="utf-8")
+
+    assert_segmentation_error_contains(
+        "Master link missing or duplicated",
+        seg.verify_package,
+        plan,
     )
