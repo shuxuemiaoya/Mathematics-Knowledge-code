@@ -117,10 +117,11 @@ def call_deepseek_chat(
         message = choice["message"]
         reasoning = message.get("reasoning_content", "")
         if reasoning:
-            print("=== 思维链 ===")
-            print(reasoning)
-            print("==============")
-        return message["content"]
+            print("Provider returned reasoning content; omitted from logs.")
+        content = message["content"]
+        if not isinstance(content, str) or not content.strip():
+            raise ProviderError("provider response has empty content")
+        return content
     except (KeyError, IndexError, TypeError) as exc:
         raise ProviderError("provider response missing choices[0].message.content") from exc
     except json.JSONDecodeError as exc:
