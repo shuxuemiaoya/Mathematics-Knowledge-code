@@ -239,6 +239,7 @@ def test_learning_strips_only_toc(tmp_path):
     assert "# 数学" in candidate_text
     # TOC must be stripped (lines 3 to 7)
     assert "# 目录" not in candidate_text
+    assert "1.1 数列的概念 …… 2" not in candidate_text
     # Main text must be kept
     assert "# 第一章 数列" in candidate_text
 
