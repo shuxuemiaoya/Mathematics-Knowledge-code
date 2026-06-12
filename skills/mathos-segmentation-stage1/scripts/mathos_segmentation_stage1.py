@@ -242,3 +242,37 @@ def render_master_directory(plan: SegmentationPlan) -> str:
     for segment in plan.segments:
         lines.append(f"- [[{Path(segment.filename).stem}]]")
     return "\n".join(lines).rstrip() + "\n"
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def write_segmentation_package(plan: SegmentationPlan, overwrite: bool = False) -> dict[str, Any]:
+    markdown = plan.source_path.read_text(encoding="utf-8")
+    before_file_hash = file_sha256(plan.source_path)
+    if sha256_text(markdown) != plan.source_sha256:
+        raise SegmentationError("Original source hash changed before writing")
+    if plan.sandbox_dir.exists():
+        if not overwrite:
+            raise SegmentationError(f"Output sandbox folder already exists: {plan.sandbox_dir}")
+        if not plan.sandbox_dir.is_dir():
+            raise SegmentationError(f"Output sandbox path exists and is not a directory: {plan.sandbox_dir}")
+        shutil.rmtree(plan.sandbox_dir)
+
+    plan.sandbox_dir.mkdir(parents=True, exist_ok=False)
+    plan.master_path.write_text(render_master_directory(plan), encoding="utf-8")
+    for segment in plan.segments:
+        raw_slice = markdown[segment.char_start:segment.char_end]
+        if not raw_slice.strip():
+            raise SegmentationError(f"Refusing to write empty segment: {segment.link_title}")
+        segment.output_path.write_text(raw_slice, encoding="utf-8")
+
+    after_file_hash = file_sha256(plan.source_path)
+    if after_file_hash != before_file_hash:
+        raise SegmentationError("Original source hash changed during writing")
+    return {"status": "written", "sandbox_dir": str(plan.sandbox_dir), "master_path": str(plan.master_path)}

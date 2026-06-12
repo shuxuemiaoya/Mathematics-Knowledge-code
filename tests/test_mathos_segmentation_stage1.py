@@ -382,3 +382,39 @@ def test_quote_command_is_powershell_safe_and_preserves_dollar_literals():
 
     assert quoted == r"'C:\vault\$book''s.md'"
     assert "$book" in quoted
+
+
+def test_write_segmentation_package_creates_master_and_raw_slices(tmp_path):
+    vault_root = tmp_path / "vault"
+    source = vault_root / "book.md"
+    source.parent.mkdir(parents=True)
+    source.write_text(SAMPLE_MARKDOWN, encoding="utf-8")
+    original_hash = seg.file_sha256(source)
+    plan = seg.build_segmentation_plan(source, vault_root=vault_root)
+
+    result = seg.write_segmentation_package(plan, overwrite=False)
+
+    assert result["status"] == "written"
+    assert plan.master_path.exists()
+    first_segment = (plan.sandbox_dir / "1.1.1 集合的概念.md").read_text(encoding="utf-8")
+    assert first_segment.startswith("### 1.1.1 集合的概念")
+    assert "# 1.1.1 集合的概念" not in first_segment.splitlines()
+    assert plan.master_path.read_text(encoding="utf-8") == seg.render_master_directory(plan)
+    assert source.read_text(encoding="utf-8") == SAMPLE_MARKDOWN
+    assert seg.file_sha256(source) == original_hash
+
+
+def test_write_refuses_existing_sandbox_without_overwrite(tmp_path):
+    vault_root = tmp_path / "vault"
+    source = vault_root / "book.md"
+    source.parent.mkdir(parents=True)
+    source.write_text(SAMPLE_MARKDOWN, encoding="utf-8")
+    plan = seg.build_segmentation_plan(source, vault_root=vault_root)
+    plan.sandbox_dir.mkdir()
+
+    assert_segmentation_error_contains(
+        "already exists",
+        seg.write_segmentation_package,
+        plan,
+        overwrite=False,
+    )
