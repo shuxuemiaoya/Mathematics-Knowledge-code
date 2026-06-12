@@ -138,7 +138,7 @@ class DestructiveProvider:
                 ensure_ascii=False,
             )
         if "TOC Detection Prompt" in system_prompt:
-            return json.dumps({"main_text_start_line": 6}, ensure_ascii=False)
+            return json.dumps({"toc_start_line": 3, "main_text_start_line": 8}, ensure_ascii=False)
         return """```python
 PLUGIN_ID = "destructive"
 PLUGIN_VERSION = "1.0.0"
@@ -186,3 +186,77 @@ def test_learning_fails_closed_when_generated_cleaner_is_destructive(tmp_path):
     assert state["status"] == "failed"
     assert state["stage"] == "stage4-apply"
     assert "image" in state["errors"][0]
+
+
+class SuccessfulMockProvider:
+    base_url = "https://fake.deepseek.local"
+    model = "deepseek-test"
+
+    def __init__(self, toc_start_line, main_text_start_line):
+        self.toc_start = toc_start_line
+        self.main_text_start = main_text_start_line
+
+    def chat(self, system_prompt: str, user_payload: str, timeout_seconds: int = 120, response_format: dict | None = None) -> str:
+        if "Heading Rules Prompt" in system_prompt:
+            return json.dumps(
+                {
+                    "rules": [
+                        {
+                            "id": "chapter",
+                            "pattern": r"^# 第一章 数列(?: …… \d+)?$",
+                            "replacement": "# 第一章 数列",
+                            "flags": ["MULTILINE"],
+                        }
+                    ]
+                },
+                ensure_ascii=False,
+            )
+        if "TOC Detection Prompt" in system_prompt:
+            return json.dumps({"toc_start_line": self.toc_start, "main_text_start_line": self.main_text_start}, ensure_ascii=False)
+        return """```python
+PLUGIN_ID = "mock_cleaner"
+PLUGIN_VERSION = "1.0.0"
+def analyze(markdown: str) -> dict: return {"summary": [], "warnings": []}
+def clean(markdown: str) -> str: return markdown
+```"""
+
+
+def test_learning_strips_only_toc(tmp_path):
+    markdown = tmp_path / "book.md"
+    markdown.write_text(SAMPLE_MARKDOWN, encoding="utf-8")
+    work_dir = tmp_path / "mathos-formatting" / "book"
+
+    core.run_learning_from_provider(
+        markdown_path=markdown,
+        provider_client=SuccessfulMockProvider(toc_start_line=3, main_text_start_line=8),
+        heading_prompt="# Heading Rules Prompt",
+        content_prompt="# Content Cleaner Prompt",
+        work_dir=work_dir,
+    )
+
+    candidate_text = (work_dir / "candidate.md").read_text(encoding="utf-8")
+    # Title heading before TOC must be kept
+    assert "# 数学" in candidate_text
+    # TOC must be stripped (lines 3 to 7)
+    assert "# 目录" not in candidate_text
+    # Main text must be kept
+    assert "# 第一章 数列" in candidate_text
+
+
+def test_learning_fallback_when_toc_missing(tmp_path):
+    markdown = tmp_path / "book.md"
+    markdown.write_text(SAMPLE_MARKDOWN, encoding="utf-8")
+    work_dir = tmp_path / "mathos-formatting" / "book"
+
+    core.run_learning_from_provider(
+        markdown_path=markdown,
+        provider_client=SuccessfulMockProvider(toc_start_line=None, main_text_start_line=8),
+        heading_prompt="# Heading Rules Prompt",
+        content_prompt="# Content Cleaner Prompt",
+        work_dir=work_dir,
+    )
+
+    candidate_text = (work_dir / "candidate.md").read_text(encoding="utf-8")
+    # Fallback: keep entire document intact
+    assert "# 数学" in candidate_text
+    assert "# 目录" in candidate_text
