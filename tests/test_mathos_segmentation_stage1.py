@@ -531,3 +531,76 @@ def test_main_segment_requires_yes(tmp_path, capsys):
     assert payload["status"] == "failed"
     assert "without --yes" in payload["error"]
     assert not (source.parent / "book").exists()
+
+
+LAYERED_MARKDOWN = """# 第六章 平面向量及其应用
+
+章导语原文
+
+## 6.1 平面向量的概念
+
+节导语原文
+
+### 6.1.1 向量的实际背景与概念
+
+6.1.1 正文
+
+### 6.1.2 向量的几何表示
+
+6.1.2 正文
+
+## 阅读与思考
+
+### 向量及向量符号的由来
+
+阅读正文
+
+## 6.2 平面向量的运算
+
+### 6.2.1 向量的加法运算
+
+6.2.1 正文
+
+# 第七章 复数
+
+第七章导语
+
+## 7.1 复数的概念
+
+### 7.1.1 数系的扩充和复数的概念
+
+7.1.1 正文
+"""
+
+
+def _write_layered_source(tmp_path):
+    vault_root = tmp_path / "vault"
+    source = vault_root / "book.md"
+    source.parent.mkdir(parents=True)
+    source.write_text(LAYERED_MARKDOWN, encoding="utf-8")
+    return vault_root, source
+
+
+def test_build_plan_creates_layered_nodes_and_counts(tmp_path):
+    vault_root, source = _write_layered_source(tmp_path)
+
+    plan = seg.build_segmentation_plan(source, vault_root=vault_root)
+
+    assert plan.master_path == source.parent / "book" / "000_book目录.md"
+    assert [node.note_stem for node in plan.top_level_nodes] == ["第六章 平面向量及其应用", "第七章 复数"]
+    assert plan.counts["nodes"] == 10
+    assert plan.counts["directory_nodes"] == 5
+    assert plan.counts["leaf_nodes"] == 5
+    assert plan.counts["special_merges"] == 1
+
+
+def test_layered_plan_keeps_full_numeric_prefixes_for_leaf_nodes(tmp_path):
+    vault_root, source = _write_layered_source(tmp_path)
+
+    plan = seg.build_segmentation_plan(source, vault_root=vault_root)
+
+    leaf_filenames = [node.filename for node in plan.leaf_nodes]
+    assert "6.1.1 向量的实际背景与概念.md" in leaf_filenames
+    assert "6.1.2 向量的几何表示.md" in leaf_filenames
+    assert "6.2.1 向量的加法运算.md" in leaf_filenames
+

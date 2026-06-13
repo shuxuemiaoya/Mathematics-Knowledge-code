@@ -19,6 +19,10 @@ STAGE_NAME = "segmentation-stage1"
 SKILL_NAME = "skills/mathos-segmentation-stage1"
 SCRIPT_COMMAND = r".\skills\mathos-segmentation-stage1\scripts\mathos_segmentation_stage1.py"
 HEADING_RE = re.compile(r"^(#{1,6})\s+((\d+(?:\.\d+)*)\s+(.+?))\s*$")
+ALL_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
+NUMBERED_TITLE_RE = re.compile(r"^(\d+(?:\.\d+)*)\s+(.+)$")
+CHAPTER_RE = re.compile(r"^第[一二三四五六七八九十百]+章\s+(.+)$")
+SPECIAL_PAIR_LABELS = {"阅读与思考", "数学探究"}
 INVALID_FILENAME_CHARS_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
 
@@ -43,56 +47,37 @@ class Heading:
         return self.markdown_depth
 
 
-def extract_numbered_headings(markdown: str) -> list[Heading]:
-    headings: list[Heading] = []
-    char_offset = 0
-
-    for line_index, line in enumerate(markdown.splitlines(keepends=True)):
-        line_text = line.rstrip("\r\n")
-        match = HEADING_RE.match(line_text)
-        if match:
-            marker, full_title, number, title = match.groups()
-            headings.append(
-                Heading(
-                    marker=marker,
-                    markdown_depth=len(marker),
-                    number=number,
-                    number_depth=number.count(".") + 1,
-                    title=title,
-                    full_title=full_title,
-                    line_index=line_index,
-                    char_start=char_offset,
-                    char_end=char_offset + len(line),
-                )
-            )
-        char_offset += len(line)
-
-    return headings
-
-
-def select_target_depth(headings: list[Heading], requested_depth: int | None) -> int:
-    if not headings:
-        raise SegmentationError("No numbered headings detected")
-
-    if requested_depth is None:
-        return max(heading.number_depth for heading in headings)
-
-    if not any(heading.number_depth == requested_depth for heading in headings):
-        raise SegmentationError(f"Target depth {requested_depth} produced zero segments")
-
-    return requested_depth
-
-
-@dataclass(frozen=True)
-class SegmentPlan:
-    heading: Heading
-    link_title: str
-    filename: str
-    output_path: Path
-    char_start: int
-    char_end: int
-    byte_count: int
+@dataclass
+class DirectoryNode:
+    source_heading: Heading
+    note_stem: str
+    filename: str = ""
+    output_path: Path | None = None
+    parent: DirectoryNode | None = None
+    children: list[DirectoryNode] = field(default_factory=list)
+    raw_start: int = 0
+    raw_end: int = 0
+    is_leaf: bool = True
+    is_special_merge: bool = False
+    merged_heading: Heading | None = None
     warning: str = ""
+    byte_count: int = 0
+
+    @property
+    def heading(self) -> Heading:
+        return self.source_heading
+
+    @property
+    def link_title(self) -> str:
+        return self.note_stem
+
+    @property
+    def char_start(self) -> int:
+        return self.raw_start
+
+    @property
+    def char_end(self) -> int:
+        return self.raw_end
 
 
 @dataclass(frozen=True)
@@ -104,12 +89,31 @@ class SegmentationPlan:
     target_depth: int
     detected_number_depths: list[int]
     headings: list[Heading]
-    segments: list[SegmentPlan]
+    top_level_nodes: list[DirectoryNode]
+    nodes: list[DirectoryNode]
+    leaf_nodes: list[DirectoryNode]
+    directory_nodes: list[DirectoryNode]
     disambiguations: list[dict[str, str]]
+    special_merges: list[dict[str, str]]
     warnings: list[str]
     source_sha256: str
     next_command: str
 
+    @property
+    def segments(self) -> list[DirectoryNode]:
+        return self.leaf_nodes
+
+    @property
+    def counts(self) -> dict[str, int]:
+        return {
+            "headings": len(self.headings),
+            "nodes": len(self.nodes),
+            "directory_nodes": len(self.directory_nodes),
+            "leaf_nodes": len(self.leaf_nodes),
+            "special_merges": len(self.special_merges),
+            "warnings": len(self.warnings),
+            "disambiguations": len(self.disambiguations),
+        }
 
 def is_relative_to(child: Path, parent: Path) -> bool:
     try:
@@ -160,6 +164,154 @@ def build_segment_command(source_path: Path, vault_root: Path, target_depth: int
     return command + " --yes"
 
 
+def extract_numbered_headings(markdown: str) -> list[Heading]:
+    headings: list[Heading] = []
+    char_offset = 0
+
+    for line_index, line in enumerate(markdown.splitlines(keepends=True)):
+        line_text = line.rstrip("\r\n")
+        match = HEADING_RE.match(line_text)
+        if match:
+            marker, full_title, number, title = match.groups()
+            headings.append(
+                Heading(
+                    marker=marker,
+                    markdown_depth=len(marker),
+                    number=number,
+                    number_depth=number.count(".") + 1,
+                    title=title,
+                    full_title=full_title,
+                    line_index=line_index,
+                    char_start=char_offset,
+                    char_end=char_offset + len(line),
+                )
+            )
+        char_offset += len(line)
+
+    return headings
+
+
+def extract_all_headings(markdown: str) -> list[Heading]:
+    headings: list[Heading] = []
+    char_offset = 0
+    for line_index, line in enumerate(markdown.splitlines(keepends=True)):
+        line_text = line.rstrip("\r\n")
+        match = ALL_HEADING_RE.match(line_text)
+        if match:
+            marker = match.group(1)
+            full_title = match.group(2).strip()
+            number_match = NUMBERED_TITLE_RE.match(full_title)
+            number = number_match.group(1) if number_match else ""
+            title = number_match.group(2).strip() if number_match else full_title
+            headings.append(
+                Heading(
+                    marker=marker,
+                    markdown_depth=len(marker),
+                    number=number,
+                    number_depth=number.count(".") + 1 if number else 0,
+                    title=title,
+                    full_title=full_title,
+                    line_index=line_index,
+                    char_start=char_offset,
+                    char_end=char_offset + len(line),
+                )
+            )
+        char_offset += len(line)
+    return headings
+
+
+def select_target_depth(headings: list[Heading], requested_depth: int | None) -> int:
+    if not headings:
+        raise SegmentationError("No numbered headings detected")
+
+    if requested_depth is None:
+        return max(heading.number_depth for heading in headings)
+
+    if not any(heading.number_depth == requested_depth for heading in headings):
+        raise SegmentationError(f"Target depth {requested_depth} produced zero segments")
+
+    return requested_depth
+
+
+def node_level(heading: Heading) -> int:
+    return heading.markdown_depth
+
+
+def is_chapter_heading(heading: Heading) -> bool:
+    return heading.markdown_depth == 1 and CHAPTER_RE.match(heading.full_title) is not None
+
+
+def build_directory_tree(
+    headings: list[Heading], markdown: str, sandbox_dir: Path
+) -> tuple[list[DirectoryNode], list[DirectoryNode], list[dict[str, str]], list[str]]:
+    nodes: list[DirectoryNode] = []
+    special_merges: list[dict[str, str]] = []
+    warnings: list[str] = []
+    stack: list[tuple[int, DirectoryNode]] = []
+    index = 0
+    while index < len(headings):
+        heading = headings[index]
+        note_stem = heading.full_title
+        is_special_merge = False
+        merged_heading: Heading | None = None
+        if heading.full_title in SPECIAL_PAIR_LABELS and index + 1 < len(headings):
+            candidate = headings[index + 1]
+            if candidate.markdown_depth == heading.markdown_depth + 1:
+                note_stem = f"{heading.full_title} {candidate.full_title}"
+                is_special_merge = True
+                merged_heading = candidate
+                special_merges.append(
+                    {"generic": heading.full_title, "specific": candidate.full_title, "merged": note_stem}
+                )
+                index += 1
+        level = node_level(heading)
+        while stack and stack[-1][0] >= level:
+            stack.pop()
+        parent = stack[-1][1] if stack else None
+        node = DirectoryNode(
+            source_heading=heading,
+            note_stem=note_stem,
+            parent=parent,
+            raw_start=heading.char_start,
+            raw_end=len(markdown),
+            is_special_merge=is_special_merge,
+            merged_heading=merged_heading,
+        )
+        if parent is not None:
+            parent.children.append(node)
+        nodes.append(node)
+        stack.append((level, node))
+        index += 1
+
+    for node in nodes:
+        node.is_leaf = not node.children
+    for node_index, node in enumerate(nodes):
+        end = len(markdown)
+        for later in nodes[node_index + 1:]:
+            ancestor = later.parent
+            inside_subtree = False
+            while ancestor is not None:
+                if ancestor is node:
+                    inside_subtree = True
+                    break
+                ancestor = ancestor.parent
+            if not inside_subtree:
+                end = later.source_heading.char_start
+                break
+        node.raw_end = end
+        raw_slice = markdown[node.raw_start:node.raw_end]
+        node.byte_count = len(raw_slice.encode("utf-8"))
+    return [node for node in nodes if node.parent is None], nodes, special_merges, warnings
+
+
+def assign_node_paths(nodes: list[DirectoryNode], sandbox_dir: Path) -> list[dict[str, str]]:
+    filenames, disambiguations = disambiguate_filenames([node.note_stem for node in nodes])
+    for node, filename in zip(nodes, filenames):
+        node.filename = filename
+        node.output_path = sandbox_dir / filename
+    return disambiguations
+
+
 def build_segmentation_plan(source_path: Path, vault_root: Path, target_depth: int | None = None) -> SegmentationPlan:
     source_path = source_path.expanduser().resolve()
     vault_root = vault_root.expanduser().resolve()
@@ -177,49 +329,37 @@ def build_segmentation_plan(source_path: Path, vault_root: Path, target_depth: i
     if not markdown.strip():
         raise SegmentationError(f"Source file is empty: {source_path}")
 
-    headings = extract_numbered_headings(markdown)
-    selected_depth = select_target_depth(headings, target_depth)
-    detected_depths = sorted({heading.number_depth for heading in headings})
-    target_headings = [heading for heading in headings if heading.number_depth == selected_depth]
-    if not target_headings:
-        raise SegmentationError(f"Target depth {selected_depth} produced zero segments")
+    headings = extract_all_headings(markdown)
+    if not headings:
+        raise SegmentationError("No Markdown headings detected")
+
+    numbered_headings = extract_numbered_headings(markdown)
+    if not numbered_headings:
+        raise SegmentationError("No numbered headings detected")
+
+    selected_depth = select_target_depth(numbered_headings, target_depth)
+    detected_depths = sorted({heading.number_depth for heading in numbered_headings})
 
     sandbox_dir = source_path.with_suffix("")
     master_path = sandbox_dir / f"000_{source_path.stem}目录.md"
-    link_titles = [heading.full_title for heading in target_headings]
-    filenames, disambiguations = disambiguate_filenames(link_titles)
 
-    segments: list[SegmentPlan] = []
-    warnings: list[str] = []
-    for index, heading in enumerate(target_headings):
-        next_start = len(markdown)
-        for later_heading in headings:
-            if later_heading.char_start <= heading.char_start:
-                continue
-            if later_heading.number_depth <= selected_depth:
-                next_start = later_heading.char_start
-                break
-        raw_slice = markdown[heading.char_start:next_start]
-        if not raw_slice.strip():
-            raise SegmentationError(f"Planned segment is empty: {heading.full_title}")
+    top_level_nodes, nodes, special_merges, warnings = build_directory_tree(headings, markdown, sandbox_dir)
+    if not top_level_nodes:
+        raise SegmentationError("No top-level directory nodes detected")
 
-        warning = ""
+    disambiguations = assign_node_paths(nodes, sandbox_dir)
+    leaf_nodes = [node for node in nodes if node.is_leaf]
+    directory_nodes = [node for node in nodes if not node.is_leaf]
+    if not leaf_nodes:
+        raise SegmentationError("No leaf nodes detected")
+
+    # Add warning for large leaf nodes
+    for node in leaf_nodes:
+        raw_slice = markdown[node.raw_start:node.raw_end]
         if len(raw_slice) > 200_000:
-            warning = f"Large segment: {heading.full_title} ({len(raw_slice)} characters)"
+            warning = f"Large segment: {node.note_stem} ({len(raw_slice)} characters)"
+            node.warning = warning
             warnings.append(warning)
-
-        segments.append(
-            SegmentPlan(
-                heading=heading,
-                link_title=link_titles[index],
-                filename=filenames[index],
-                output_path=sandbox_dir / filenames[index],
-                char_start=heading.char_start,
-                char_end=next_start,
-                byte_count=len(raw_slice.encode("utf-8")),
-                warning=warning,
-            )
-        )
 
     return SegmentationPlan(
         source_path=source_path,
@@ -229,8 +369,12 @@ def build_segmentation_plan(source_path: Path, vault_root: Path, target_depth: i
         target_depth=selected_depth,
         detected_number_depths=detected_depths,
         headings=headings,
-        segments=segments,
+        top_level_nodes=top_level_nodes,
+        nodes=nodes,
+        leaf_nodes=leaf_nodes,
+        directory_nodes=directory_nodes,
         disambiguations=disambiguations,
+        special_merges=special_merges,
         warnings=warnings,
         source_sha256=sha256_text(markdown),
         next_command=build_segment_command(source_path, vault_root, target_depth),
@@ -288,10 +432,17 @@ def heading_to_dict(heading: Heading) -> dict[str, Any]:
     return dataclasses.asdict(heading)
 
 
-def segment_to_dict(segment: SegmentPlan) -> dict[str, Any]:
-    data = dataclasses.asdict(segment)
-    data["output_path"] = str(segment.output_path)
-    return data
+def segment_to_dict(segment: DirectoryNode) -> dict[str, Any]:
+    return {
+        "heading": dataclasses.asdict(segment.source_heading),
+        "link_title": segment.note_stem,
+        "filename": segment.filename,
+        "output_path": str(segment.output_path),
+        "char_start": segment.raw_start,
+        "char_end": segment.raw_end,
+        "byte_count": segment.byte_count,
+        "warning": segment.warning,
+    }
 
 
 def plan_to_manifest(plan: SegmentationPlan) -> dict[str, Any]:
