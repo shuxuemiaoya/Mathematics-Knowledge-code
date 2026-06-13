@@ -325,7 +325,7 @@ def build_segmentation_plan(source_path: Path, vault_root: Path, target_depth: i
     if not is_relative_to(source_path, vault_root):
         raise SegmentationError(f"Source path {source_path} is not under vault root {vault_root}")
 
-    markdown = source_path.read_text(encoding="utf-8")
+    markdown = source_path.read_text(encoding="utf-8-sig")
     if not markdown.strip():
         raise SegmentationError(f"Source file is empty: {source_path}")
 
@@ -411,7 +411,7 @@ def file_sha256(path: Path) -> str:
 
 
 def write_segmentation_package(plan: SegmentationPlan, overwrite: bool = False) -> dict[str, Any]:
-    markdown = plan.source_path.read_text(encoding="utf-8")
+    markdown = plan.source_path.read_text(encoding="utf-8-sig")
     before_file_hash = file_sha256(plan.source_path)
     if sha256_text(markdown) != plan.source_sha256:
         raise SegmentationError("Original source hash changed before writing")
@@ -578,7 +578,7 @@ def verify_package(plan: SegmentationPlan) -> dict[str, Any]:
         )
 
     # 5. Source hash check
-    if sha256_text(plan.source_path.read_text(encoding="utf-8")) != plan.source_sha256:
+    if sha256_text(plan.source_path.read_text(encoding="utf-8-sig")) != plan.source_sha256:
         raise SegmentationError("Original source hash changed")
 
     return {"status": "passed", "node_count": len(plan.nodes), "leaf_count": len(plan.leaf_nodes), "segment_count": len(plan.leaf_nodes)}
