@@ -42,13 +42,19 @@ For `高中\课本\book.md`, output is written to:
 ```text
 高中\课本\book\
 ├── 000_book目录.md
-├── 1.1.1 first segment.md
-└── 1.1.2 second segment.md
+├── 第六章 平面向量及其应用.md
+├── 6.1 平面向量的概念.md
+├── 6.1.1 向量的实际背景与概念.md
+└── 阅读与思考 向量及向量符号的由来.md
 ```
 
-The master directory uses short Obsidian links because it lives beside the segment files.
+The master directory links only to top-level chapter files.
 
-Segment files contain raw source slices. The operator does not prepend headings, front matter, comments, or metadata.
+Every non-leaf note contains only `# 目录` plus immediate-child file links.
+
+Leaf notes contain raw source slices. The operator does not prepend headings, front matter, comments, or metadata.
+
+Special pairs such as `## 阅读与思考` followed by `### 向量及向量符号的由来` are merged into one leaf note.
 
 The original source Markdown is never modified or deleted.
 

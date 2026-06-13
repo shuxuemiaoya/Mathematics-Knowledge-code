@@ -52,9 +52,11 @@ Purpose: deterministic post-formatting segmentation into Obsidian sandbox packag
 Behavior:
 
 - Consumes one formatted Markdown file after `mathos-formatting`.
-- Splits on numbered headings, defaulting to the deepest numbered heading depth.
-- Creates a source-stem sandbox folder beside the source file.
-- Writes `000_<source-stem>目录.md` and raw segment notes with numbered filenames.
+- Builds a layered Obsidian package from formatted Markdown body headings.
+- Writes a master directory that links only to top-level chapter notes.
+- Writes non-leaf notes as pure directory notes with immediate-child links only.
+- Writes raw source slices only to leaf notes.
+- Merges conservative special heading pairs such as `阅读与思考` plus its following specific subheading.
 - Leaves the original source Markdown untouched.
 - Writes run records under `agent-memory/records/<date>-segmentation-stage1-<slug>/`.
 

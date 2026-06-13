@@ -89,7 +89,7 @@ For `mathos-segmentation-stage1`, examples include:
 - Existing sandbox folder without explicit overwrite.
 - Empty planned segment.
 - Source hash changes during execution.
-- Package verification failure.
+- Layered package verification failure, including directory notes linking to grandchildren or missing generated files.
 
 
 ## Required Output Summary
