@@ -330,14 +330,7 @@ def test_render_master_directory_contains_only_directory_links(tmp_path):
 
     master = seg.render_master_directory(plan)
 
-    assert master.startswith("# 目录\n\n")
-    assert "- [[1.1 集合的概念]]" not in master
-    assert "- [[1.1.1 集合的概念]]" in master
-    assert "- [[1.1.2 集合的基本关系]]" in master
-    assert "- [[1.2.1 函数的概念]]" in master
-    assert "集合正文" not in master
-    for line in master.splitlines():
-        assert line == "" or line == "# 目录" or line.startswith("- [[")
+    assert master == "# 目录\n\n- [[第一章 集合与常用逻辑用语]]\n"
 
 
 def test_render_master_directory_links_disambiguated_note_stems(tmp_path):
@@ -358,10 +351,11 @@ def test_render_master_directory_links_disambiguated_note_stems(tmp_path):
         encoding="utf-8",
     )
     plan = seg.build_segmentation_plan(source, vault_root=vault_root)
+    ch1 = next(node for node in plan.nodes if node.note_stem == "第一章")
 
-    master = seg.render_master_directory(plan)
+    text = seg.render_directory_note(ch1)
 
-    assert master == "# 目录\n\n- [[1.1 重复]]\n- [[1.1 重复 - 02]]\n"
+    assert text == "# 目录\n\n- [[1.1 重复]]\n- [[1.1 重复 - 02]]\n"
 
 
 def test_build_segment_command_uses_resolved_paths_and_yes(tmp_path):
@@ -603,4 +597,34 @@ def test_layered_plan_keeps_full_numeric_prefixes_for_leaf_nodes(tmp_path):
     assert "6.1.1 向量的实际背景与概念.md" in leaf_filenames
     assert "6.1.2 向量的几何表示.md" in leaf_filenames
     assert "6.2.1 向量的加法运算.md" in leaf_filenames
+
+
+def test_render_master_directory_links_only_top_level_chapters(tmp_path):
+    vault_root, source = _write_layered_source(tmp_path)
+    plan = seg.build_segmentation_plan(source, vault_root=vault_root)
+
+    master = seg.render_master_directory(plan)
+
+    assert master == "# 目录\n\n- [[第六章 平面向量及其应用]]\n- [[第七章 复数]]\n"
+    assert "[[# " not in master
+    assert "[[## " not in master
+    assert "6.1 平面向量的概念" not in master
+
+
+def test_render_directory_note_links_only_immediate_children(tmp_path):
+    vault_root, source = _write_layered_source(tmp_path)
+    plan = seg.build_segmentation_plan(source, vault_root=vault_root)
+    chapter = next(node for node in plan.nodes if node.note_stem == "第六章 平面向量及其应用")
+
+    text = seg.render_directory_note(chapter)
+
+    assert text == (
+        "# 目录\n\n"
+        "- [[6.1 平面向量的概念]]\n"
+        "- [[阅读与思考 向量及向量符号的由来]]\n"
+        "- [[6.2 平面向量的运算]]\n"
+    )
+    assert "6.1.1 向量的实际背景与概念" not in text
+    assert "章导语原文" not in text
+
 

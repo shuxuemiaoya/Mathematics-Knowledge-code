@@ -381,11 +381,25 @@ def build_segmentation_plan(source_path: Path, vault_root: Path, target_depth: i
     )
 
 
-def render_master_directory(plan: SegmentationPlan) -> str:
+def link_for_node(node: DirectoryNode) -> str:
+    return Path(node.filename).stem
+
+
+def render_link_list(nodes: list[DirectoryNode]) -> str:
     lines = ["# 目录", ""]
-    for segment in plan.segments:
-        lines.append(f"- [[{Path(segment.filename).stem}]]")
+    for node in nodes:
+        lines.append(f"- [[{link_for_node(node)}]]")
     return "\n".join(lines).rstrip() + "\n"
+
+
+def render_master_directory(plan: SegmentationPlan) -> str:
+    return render_link_list(plan.top_level_nodes)
+
+
+def render_directory_note(node: DirectoryNode) -> str:
+    if node.is_leaf:
+        raise SegmentationError(f"Cannot render leaf as directory note: {node.note_stem}")
+    return render_link_list(node.children)
 
 
 def file_sha256(path: Path) -> str:
