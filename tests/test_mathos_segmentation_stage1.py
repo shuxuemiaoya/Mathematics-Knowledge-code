@@ -628,3 +628,35 @@ def test_render_directory_note_links_only_immediate_children(tmp_path):
     assert "章导语原文" not in text
 
 
+def test_write_layered_package_creates_directory_and_leaf_notes(tmp_path):
+    vault_root, source = _write_layered_source(tmp_path)
+    original_hash = seg.file_sha256(source)
+    plan = seg.build_segmentation_plan(source, vault_root=vault_root)
+
+    seg.write_segmentation_package(plan, overwrite=False)
+
+    assert (plan.sandbox_dir / "000_book目录.md").read_text(encoding="utf-8") == seg.render_master_directory(plan)
+    assert (plan.sandbox_dir / "第六章 平面向量及其应用.md").read_text(encoding="utf-8").startswith("# 目录\n\n")
+    assert "章导语原文" not in (plan.sandbox_dir / "第六章 平面向量及其应用.md").read_text(encoding="utf-8")
+    leaf_text = (plan.sandbox_dir / "6.1.1 向量的实际背景与概念.md").read_text(encoding="utf-8")
+    assert leaf_text.startswith("### 6.1.1 向量的实际背景与概念")
+    assert "6.1.1 正文" in leaf_text
+    assert seg.file_sha256(source) == original_hash
+
+
+def test_write_special_pair_leaf_swallows_specific_heading(tmp_path):
+    vault_root, source = _write_layered_source(tmp_path)
+    plan = seg.build_segmentation_plan(source, vault_root=vault_root)
+
+    seg.write_segmentation_package(plan)
+
+    special = plan.sandbox_dir / "阅读与思考 向量及向量符号的由来.md"
+    assert special.exists()
+    text = special.read_text(encoding="utf-8")
+    assert text.startswith("## 阅读与思考")
+    assert "### 向量及向量符号的由来" in text
+    assert "阅读正文" in text
+    assert not (plan.sandbox_dir / "阅读与思考.md").exists()
+
+
+

@@ -424,11 +424,15 @@ def write_segmentation_package(plan: SegmentationPlan, overwrite: bool = False) 
 
     plan.sandbox_dir.mkdir(parents=True, exist_ok=False)
     plan.master_path.write_text(render_master_directory(plan), encoding="utf-8")
-    for segment in plan.segments:
-        raw_slice = markdown[segment.char_start:segment.char_end]
-        if not raw_slice.strip():
-            raise SegmentationError(f"Refusing to write empty segment: {segment.link_title}")
-        segment.output_path.write_text(raw_slice, encoding="utf-8")
+    for node in plan.nodes:
+        assert node.output_path is not None
+        if node.is_leaf:
+            raw_slice = markdown[node.raw_start:node.raw_end]
+            if not raw_slice.strip():
+                raise SegmentationError(f"Refusing to write empty leaf: {node.note_stem}")
+            node.output_path.write_text(raw_slice, encoding="utf-8")
+        else:
+            node.output_path.write_text(render_directory_note(node), encoding="utf-8")
 
     after_file_hash = file_sha256(plan.source_path)
     if after_file_hash != before_file_hash:
