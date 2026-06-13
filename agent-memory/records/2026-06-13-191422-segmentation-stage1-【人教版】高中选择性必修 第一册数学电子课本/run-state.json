@@ -1,0 +1,28 @@
+{
+  "stage": "segmentation-stage1",
+  "skill": "skills/mathos-segmentation-stage1",
+  "status": "completed",
+  "stop_reason": "",
+  "source_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第一册数学电子课本.md",
+  "vault_root": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map",
+  "sandbox_dir": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第一册数学电子课本",
+  "master_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第一册数学电子课本\\000_【人教版】高中选择性必修 第一册数学电子课本目录.md",
+  "record_dir": "agent-memory\\records\\2026-06-13-191422-segmentation-stage1-【人教版】高中选择性必修 第一册数学电子课本",
+  "counts": {
+    "headings": 193,
+    "nodes": 189,
+    "directory_nodes": 65,
+    "leaf_nodes": 124,
+    "special_merges": 4,
+    "warnings": 0,
+    "disambiguations": 92,
+    "segments": 124
+  },
+  "warnings": [],
+  "records": {
+    "manifest": "agent-memory\\records\\2026-06-13-191422-segmentation-stage1-【人教版】高中选择性必修 第一册数学电子课本\\manifest.json",
+    "run_summary": "agent-memory\\records\\2026-06-13-191422-segmentation-stage1-【人教版】高中选择性必修 第一册数学电子课本\\run-summary.md",
+    "run_state": "agent-memory\\records\\2026-06-13-191422-segmentation-stage1-【人教版】高中选择性必修 第一册数学电子课本\\run-state.json"
+  },
+  "next_step": "review sandbox package in Obsidian"
+}

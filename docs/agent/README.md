@@ -19,6 +19,7 @@ The active stages are:
 
 - PDF to Markdown conversion through `skills/mathos-pdf-to-md`.
 - Markdown formatting through `skills/mathos-formatting`.
+- Layered directory segmentation through `skills/mathos-segmentation-stage1`.
 
 The agent should monitor operational health for each active stage and stop if repeated failures make the run unsafe or unproductive.
 

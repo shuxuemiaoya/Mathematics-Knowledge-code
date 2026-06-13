@@ -1,0 +1,6745 @@
+{
+  "stage": "segmentation-stage1",
+  "skill": "skills/mathos-segmentation-stage1",
+  "source_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本.md",
+  "vault_root": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map",
+  "sandbox_dir": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本",
+  "master_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\000_【人教版】高中选择性必修 第三册数学电子课本目录.md",
+  "target_depth": 3,
+  "detected_number_depths": [
+    2,
+    3
+  ],
+  "source_sha256": "a5c41a4391afe4807a3aaf54fa111f963682cfc4d768e5b1f13fc45d32b45443",
+  "heading_tree": [
+    {
+      "marker": "#",
+      "markdown_depth": 1,
+      "number": "",
+      "number_depth": 0,
+      "title": "数学",
+      "full_title": "数学",
+      "line_index": 0,
+      "char_start": 0,
+      "char_end": 5
+    },
+    {
+      "marker": "#",
+      "markdown_depth": 1,
+      "number": "",
+      "number_depth": 0,
+      "title": "数学",
+      "full_title": "数学",
+      "line_index": 10,
+      "char_start": 109,
+      "char_end": 114
+    },
+    {
+      "marker": "#",
+      "markdown_depth": 1,
+      "number": "",
+      "number_depth": 0,
+      "title": "本册导引",
+      "full_title": "本册导引",
+      "line_index": 56,
+      "char_start": 414,
+      "char_end": 421
+    },
+    {
+      "marker": "#",
+      "markdown_depth": 1,
+      "number": "",
+      "number_depth": 0,
+      "title": "目录",
+      "full_title": "目录",
+      "line_index": 68,
+      "char_start": 1255,
+      "char_end": 1260
+    },
+    {
+      "marker": "#",
+      "markdown_depth": 1,
+      "number": "",
+      "number_depth": 0,
+      "title": "第六章 计数原理 …… 1",
+      "full_title": "第六章 计数原理 …… 1",
+      "line_index": 72,
+      "char_start": 1343,
+      "char_end": 1359
+    },
+    {
+      "marker": "#",
+      "markdown_depth": 1,
+      "number": "",
+      "number_depth": 0,
+      "title": "数学探究 杨辉三角的性质与应用 39",
+      "full_title": "数学探究 杨辉三角的性质与应用 39",
+      "line_index": 90,
+      "char_start": 1560,
+      "char_end": 1581
+    },
+    {
+      "marker": "#",
+      "markdown_depth": 1,
+      "number": "",
+      "number_depth": 0,
+      "title": "第七章 随机变量及其分布 43",
+      "full_title": "第七章 随机变量及其分布 43",
+      "line_index": 92,
+      "char_start": 1582,
+      "char_end": 1600
+    },
+    {
+      "marker": "#",
+      "markdown_depth": 1,
+      "number": "",
+      "number_depth": 0,
+      "title": "第八章 成对数据的统计分析 92",
+      "full_title": "第八章 成对数据的统计分析 92",
+      "line_index": 116,
+      "char_start": 1875,
+      "char_end": 1894
+    },
+    {
+      "marker": "#",
+      "markdown_depth": 1,
+      "number": "",
+      "number_depth": 0,
+      "title": "数学建模 建立统计模型进行预测 …… 141",
+      "full_title": "数学建模 建立统计模型进行预测 …… 141",
+      "line_index": 130,
+      "char_start": 1998,
+      "char_end": 2023
+    },
+    {
+      "marker": "#",
+      "markdown_depth": 1,
+      "number": "",
+      "number_depth": 0,
+      "title": "部分中英文词汇索引…… 147",
+      "full_title": "部分中英文词汇索引…… 147",
+      "line_index": 132,
+      "char_start": 2024,
+      "char_end": 2042
+    },
+    {
+      "marker": "#",
+      "markdown_depth": 1,
+      "number": "",
+      "number_depth": 0,
+      "title": "第六章 计数原理",
+      "full_title": "第六章 计数原理",
+      "line_index": 134,
+      "char_start": 2043,
+      "char_end": 2054
+    },
+    {
+      "marker": "##",
+      "markdown_depth": 2,
+      "number": "6.1",
+      "number_depth": 2,
+      "title": "分类加法计数原理与分步乘法计数原理",
+      "full_title": "6.1 分类加法计数原理与分步乘法计数原理",
+      "line_index": 144,
+      "char_start": 2688,
+      "char_end": 2713
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "练习",
+      "full_title": "练习",
+      "line_index": 237,
+      "char_start": 5795,
+      "char_end": 5803
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "练习",
+      "full_title": "练习",
+      "line_index": 294,
+      "char_start": 8011,
+      "char_end": 8019
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "练习",
+      "full_title": "练习",
+      "line_index": 373,
+      "char_start": 11307,
+      "char_end": 11315
+    },
+    {
+      "marker": "##",
+      "markdown_depth": 2,
+      "number": "",
+      "number_depth": 0,
+      "title": "习题6.1",
+      "full_title": "习题6.1",
+      "line_index": 382,
+      "char_start": 11623,
+      "char_end": 11632
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "复习巩固",
+      "full_title": "复习巩固",
+      "line_index": 384,
+      "char_start": 11633,
+      "char_end": 11642
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "综合运用",
+      "full_title": "综合运用",
+      "line_index": 403,
+      "char_start": 12326,
+      "char_end": 12335
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "拓广探索",
+      "full_title": "拓广探索",
+      "line_index": 419,
+      "char_start": 12789,
+      "char_end": 12798
+    },
+    {
+      "marker": "##",
+      "markdown_depth": 2,
+      "number": "",
+      "number_depth": 0,
+      "title": "探究与发现",
+      "full_title": "探究与发现",
+      "line_index": 427,
+      "char_start": 12968,
+      "char_end": 12977
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "子集的个数有多少",
+      "full_title": "子集的个数有多少",
+      "line_index": 429,
+      "char_start": 12978,
+      "char_end": 12991
+    },
+    {
+      "marker": "##",
+      "markdown_depth": 2,
+      "number": "6.2",
+      "number_depth": 2,
+      "title": "排列与组合",
+      "full_title": "6.2 排列与组合",
+      "line_index": 480,
+      "char_start": 14807,
+      "char_end": 14820
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "6.2.1",
+      "number_depth": 3,
+      "title": "排列",
+      "full_title": "6.2.1 排列",
+      "line_index": 484,
+      "char_start": 14903,
+      "char_end": 14916
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "练习",
+      "full_title": "练习",
+      "line_index": 566,
+      "char_start": 17678,
+      "char_end": 17686
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "6.2.2",
+      "number_depth": 3,
+      "title": "排列数",
+      "full_title": "6.2.2 排列数",
+      "line_index": 577,
+      "char_start": 17972,
+      "char_end": 17986
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "练习",
+      "full_title": "练习",
+      "line_index": 683,
+      "char_start": 22908,
+      "char_end": 22916
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "6.2.3",
+      "number_depth": 3,
+      "title": "组合",
+      "full_title": "6.2.3 组合",
+      "line_index": 697,
+      "char_start": 23285,
+      "char_end": 23298
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "练习",
+      "full_title": "练习",
+      "line_index": 744,
+      "char_start": 25113,
+      "char_end": 25121
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "6.2.4",
+      "number_depth": 3,
+      "title": "组合数",
+      "full_title": "6.2.4 组合数",
+      "line_index": 756,
+      "char_start": 25346,
+      "char_end": 25360
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "练习",
+      "full_title": "练习",
+      "line_index": 831,
+      "char_start": 28946,
+      "char_end": 28954
+    },
+    {
+      "marker": "##",
+      "markdown_depth": 2,
+      "number": "",
+      "number_depth": 0,
+      "title": "习题6.2",
+      "full_title": "习题6.2",
+      "line_index": 846,
+      "char_start": 29271,
+      "char_end": 29280
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "复习巩固",
+      "full_title": "复习巩固",
+      "line_index": 848,
+      "char_start": 29281,
+      "char_end": 29290
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "综合运用",
+      "full_title": "综合运用",
+      "line_index": 877,
+      "char_start": 30145,
+      "char_end": 30154
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "拓广探索",
+      "full_title": "拓广探索",
+      "line_index": 911,
+      "char_start": 31267,
+      "char_end": 31276
+    },
+    {
+      "marker": "##",
+      "markdown_depth": 2,
+      "number": "",
+      "number_depth": 0,
+      "title": "探究与发现",
+      "full_title": "探究与发现",
+      "line_index": 931,
+      "char_start": 32039,
+      "char_end": 32048
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "组合数的两个性质",
+      "full_title": "组合数的两个性质",
+      "line_index": 933,
+      "char_start": 32049,
+      "char_end": 32062
+    },
+    {
+      "marker": "##",
+      "markdown_depth": 2,
+      "number": "6.3",
+      "number_depth": 2,
+      "title": "二项式定理",
+      "full_title": "6.3 二项式定理",
+      "line_index": 959,
+      "char_start": 33227,
+      "char_end": 33240
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "6.3.1",
+      "number_depth": 3,
+      "title": "二项式定理",
+      "full_title": "6.3.1 二项式定理",
+      "line_index": 963,
+      "char_start": 33302,
+      "char_end": 33318
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "练习",
+      "full_title": "练习",
+      "line_index": 1022,
+      "char_start": 37263,
+      "char_end": 37271
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "6.3.2",
+      "number_depth": 3,
+      "title": "二项式系数的性质",
+      "full_title": "6.3.2 二项式系数的性质",
+      "line_index": 1039,
+      "char_start": 37593,
+      "char_end": 37612
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "1. 对称性",
+      "full_title": "1. 对称性",
+      "line_index": 1081,
+      "char_start": 39302,
+      "char_end": 39314
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "2. 增减性与最大值",
+      "full_title": "2. 增减性与最大值",
+      "line_index": 1089,
+      "char_start": 39465,
+      "char_end": 39481
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "3. 各二项式系数的和",
+      "full_title": "3. 各二项式系数的和",
+      "line_index": 1096,
+      "char_start": 39999,
+      "char_end": 40016
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "练习",
+      "full_title": "练习",
+      "line_index": 1128,
+      "char_start": 41716,
+      "char_end": 41724
+    },
+    {
+      "marker": "##",
+      "markdown_depth": 2,
+      "number": "",
+      "number_depth": 0,
+      "title": "习题6.3",
+      "full_title": "习题6.3",
+      "line_index": 1140,
+      "char_start": 42081,
+      "char_end": 42090
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "复习巩固",
+      "full_title": "复习巩固",
+      "line_index": 1142,
+      "char_start": 42091,
+      "char_end": 42100
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "综合运用",
+      "full_title": "综合运用",
+      "line_index": 1183,
+      "char_start": 42956,
+      "char_end": 42965
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "拓广探索",
+      "full_title": "拓广探索",
+      "line_index": 1195,
+      "char_start": 43312,
+      "char_end": 43321
+    },
+    {
+      "marker": "##",
+      "markdown_depth": 2,
+      "number": "",
+      "number_depth": 0,
+      "title": "小结",
+      "full_title": "小结",
+      "line_index": 1206,
+      "char_start": 43770,
+      "char_end": 43776
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "一、本章知识结构",
+      "full_title": "一、本章知识结构",
+      "line_index": 1208,
+      "char_start": 43777,
+      "char_end": 43790
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "二、回顾与思考",
+      "full_title": "二、回顾与思考",
+      "line_index": 1212,
+      "char_start": 43873,
+      "char_end": 43885
+    },
+    {
+      "marker": "##",
+      "markdown_depth": 2,
+      "number": "",
+      "number_depth": 0,
+      "title": "复习参考题6",
+      "full_title": "复习参考题6",
+      "line_index": 1232,
+      "char_start": 45331,
+      "char_end": 45341
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "复习巩固",
+      "full_title": "复习巩固",
+      "line_index": 1234,
+      "char_start": 45342,
+      "char_end": 45351
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "1. 填空题",
+      "full_title": "1. 填空题",
+      "line_index": 1236,
+      "char_start": 45352,
+      "char_end": 45364
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "综合运用",
+      "full_title": "综合运用",
+      "line_index": 1259,
+      "char_start": 46247,
+      "char_end": 46256
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "拓广探索",
+      "full_title": "拓广探索",
+      "line_index": 1278,
+      "char_start": 46924,
+      "char_end": 46933
+    },
+    {
+      "marker": "#",
+      "markdown_depth": 1,
+      "number": "",
+      "number_depth": 0,
+      "title": "杨辉三角的性质与应用",
+      "full_title": "杨辉三角的性质与应用",
+      "line_index": 1283,
+      "char_start": 47093,
+      "char_end": 47106
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "一、探究的内容：杨辉三角的性质与应用",
+      "full_title": "一、探究的内容：杨辉三角的性质与应用",
+      "line_index": 1301,
+      "char_start": 47830,
+      "char_end": 47853
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "（一）杨辉三角的性质",
+      "full_title": "（一）杨辉三角的性质",
+      "line_index": 1303,
+      "char_start": 47854,
+      "char_end": 47869
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "（二）杨辉三角的应用",
+      "full_title": "（二）杨辉三角的应用",
+      "line_index": 1336,
+      "char_start": 49083,
+      "char_end": 49098
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "二、对探究活动的要求",
+      "full_title": "二、对探究活动的要求",
+      "line_index": 1366,
+      "char_start": 49786,
+      "char_end": 49801
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "三、研究报告的参考形式",
+      "full_title": "三、研究报告的参考形式",
+      "line_index": 1376,
+      "char_start": 49947,
+      "char_end": 49963
+    },
+    {
+      "marker": "#",
+      "markdown_depth": 1,
+      "number": "",
+      "number_depth": 0,
+      "title": "第七章 随机变量及其分布",
+      "full_title": "第七章 随机变量及其分布",
+      "line_index": 1384,
+      "char_start": 50227,
+      "char_end": 50242
+    },
+    {
+      "marker": "##",
+      "markdown_depth": 2,
+      "number": "7.1",
+      "number_depth": 2,
+      "title": "条件概率与全概率公式",
+      "full_title": "7.1 条件概率与全概率公式",
+      "line_index": 1392,
+      "char_start": 50637,
+      "char_end": 50655
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "7.1.1",
+      "number_depth": 3,
+      "title": "条件概率",
+      "full_title": "7.1.1 条件概率",
+      "line_index": 1398,
+      "char_start": 50812,
+      "char_end": 50827
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "练习",
+      "full_title": "练习",
+      "line_index": 1510,
+      "char_start": 56609,
+      "char_end": 56617
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "7.1.2",
+      "number_depth": 3,
+      "title": "全概率公式",
+      "full_title": "7.1.2 全概率公式",
+      "line_index": 1518,
+      "char_start": 56917,
+      "char_end": 56933
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "练习",
+      "full_title": "练习",
+      "line_index": 1591,
+      "char_start": 62206,
+      "char_end": 62214
+    },
+    {
+      "marker": "##",
+      "markdown_depth": 2,
+      "number": "",
+      "number_depth": 0,
+      "title": "习题7.1",
+      "full_title": "习题7.1",
+      "line_index": 1599,
+      "char_start": 62473,
+      "char_end": 62482
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "复习巩固",
+      "full_title": "复习巩固",
+      "line_index": 1601,
+      "char_start": 62483,
+      "char_end": 62492
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "综合运用",
+      "full_title": "综合运用",
+      "line_index": 1622,
+      "char_start": 63346,
+      "char_end": 63355
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "拓广探索",
+      "full_title": "拓广探索",
+      "line_index": 1630,
+      "char_start": 63650,
+      "char_end": 63659
+    },
+    {
+      "marker": "##",
+      "markdown_depth": 2,
+      "number": "",
+      "number_depth": 0,
+      "title": "阅读与思考",
+      "full_title": "阅读与思考",
+      "line_index": 1636,
+      "char_start": 63834,
+      "char_end": 63843
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "贝叶斯公式与人工智能",
+      "full_title": "贝叶斯公式与人工智能",
+      "line_index": 1638,
+      "char_start": 63844,
+      "char_end": 63859
+    },
+    {
+      "marker": "##",
+      "markdown_depth": 2,
+      "number": "7.2",
+      "number_depth": 2,
+      "title": "离散型随机变量及其分布列",
+      "full_title": "7.2 离散型随机变量及其分布列",
+      "line_index": 1674,
+      "char_start": 66953,
+      "char_end": 66973
+    },
+    {
+      "marker": "#",
+      "markdown_depth": 1,
+      "number": "",
+      "number_depth": 0,
+      "title": "人民教育出版社",
+      "full_title": "人民教育出版社",
+      "line_index": 1764,
+      "char_start": 70815,
+      "char_end": 70825
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "练习",
+      "full_title": "练习",
+      "line_index": 1807,
+      "char_start": 73181,
+      "char_end": 73189
+    },
+    {
+      "marker": "##",
+      "markdown_depth": 2,
+      "number": "",
+      "number_depth": 0,
+      "title": "习题7.2",
+      "full_title": "习题7.2",
+      "line_index": 1819,
+      "char_start": 73462,
+      "char_end": 73471
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "复习巩固",
+      "full_title": "复习巩固",
+      "line_index": 1821,
+      "char_start": 73472,
+      "char_end": 73481
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "综合运用",
+      "full_title": "综合运用",
+      "line_index": 1839,
+      "char_start": 74146,
+      "char_end": 74155
+    },
+    {
+      "marker": "##",
+      "markdown_depth": 2,
+      "number": "7.3",
+      "number_depth": 2,
+      "title": "离散型随机变量的数字特征",
+      "full_title": "7.3 离散型随机变量的数字特征",
+      "line_index": 1850,
+      "char_start": 74444,
+      "char_end": 74464
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "7.3.1",
+      "number_depth": 3,
+      "title": "离散型随机变量的均值",
+      "full_title": "7.3.1 离散型随机变量的均值",
+      "line_index": 1854,
+      "char_start": 74646,
+      "char_end": 74667
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "练习",
+      "full_title": "练习",
+      "line_index": 1989,
+      "char_start": 80476,
+      "char_end": 80484
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "7.3.2",
+      "number_depth": 3,
+      "title": "离散型随机变量的方差",
+      "full_title": "7.3.2 离散型随机变量的方差",
+      "line_index": 2010,
+      "char_start": 81159,
+      "char_end": 81180
+    },
+    {
+      "marker": "#",
+      "markdown_depth": 1,
+      "number": "",
+      "number_depth": 0,
+      "title": "人民教育出版社",
+      "full_title": "人民教育出版社",
+      "line_index": 2065,
+      "char_start": 83662,
+      "char_end": 83672
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "练习",
+      "full_title": "练习",
+      "line_index": 2114,
+      "char_start": 85885,
+      "char_end": 85893
+    },
+    {
+      "marker": "##",
+      "markdown_depth": 2,
+      "number": "",
+      "number_depth": 0,
+      "title": "习题7.3",
+      "full_title": "习题7.3",
+      "line_index": 2135,
+      "char_start": 86601,
+      "char_end": 86610
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "复习巩固",
+      "full_title": "复习巩固",
+      "line_index": 2137,
+      "char_start": 86611,
+      "char_end": 86620
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "综合运用",
+      "full_title": "综合运用",
+      "line_index": 2145,
+      "char_start": 87103,
+      "char_end": 87112
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "拓广探索",
+      "full_title": "拓广探索",
+      "line_index": 2161,
+      "char_start": 87624,
+      "char_end": 87633
+    },
+    {
+      "marker": "##",
+      "markdown_depth": 2,
+      "number": "7.4",
+      "number_depth": 2,
+      "title": "二项分布与超几何分布",
+      "full_title": "7.4 二项分布与超几何分布",
+      "line_index": 2165,
+      "char_start": 87731,
+      "char_end": 87749
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "7.4.1",
+      "number_depth": 3,
+      "title": "二项分布",
+      "full_title": "7.4.1 二项分布",
+      "line_index": 2169,
+      "char_start": 87805,
+      "char_end": 87820
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "练习",
+      "full_title": "练习",
+      "line_index": 2292,
+      "char_start": 94544,
+      "char_end": 94552
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "7.4.2",
+      "number_depth": 3,
+      "title": "超几何分布",
+      "full_title": "7.4.2 超几何分布",
+      "line_index": 2308,
+      "char_start": 94876,
+      "char_end": 94892
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "练习",
+      "full_title": "练习",
+      "line_index": 2393,
+      "char_start": 100636,
+      "char_end": 100644
+    },
+    {
+      "marker": "##",
+      "markdown_depth": 2,
+      "number": "",
+      "number_depth": 0,
+      "title": "习题7.4",
+      "full_title": "习题7.4",
+      "line_index": 2399,
+      "char_start": 100806,
+      "char_end": 100815
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "复习巩固",
+      "full_title": "复习巩固",
+      "line_index": 2401,
+      "char_start": 100816,
+      "char_end": 100825
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "综合运用",
+      "full_title": "综合运用",
+      "line_index": 2418,
+      "char_start": 101207,
+      "char_end": 101216
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "拓广探索",
+      "full_title": "拓广探索",
+      "line_index": 2429,
+      "char_start": 101579,
+      "char_end": 101588
+    },
+    {
+      "marker": "##",
+      "markdown_depth": 2,
+      "number": "",
+      "number_depth": 0,
+      "title": "探究与发现",
+      "full_title": "探究与发现",
+      "line_index": 2435,
+      "char_start": 101752,
+      "char_end": 101761
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "二项分布的性质",
+      "full_title": "二项分布的性质",
+      "line_index": 2437,
+      "char_start": 101762,
+      "char_end": 101774
+    },
+    {
+      "marker": "##",
+      "markdown_depth": 2,
+      "number": "7.5",
+      "number_depth": 2,
+      "title": "正态分布",
+      "full_title": "7.5 正态分布",
+      "line_index": 2475,
+      "char_start": 103168,
+      "char_end": 103180
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "练习",
+      "full_title": "练习",
+      "line_index": 2580,
+      "char_start": 109295,
+      "char_end": 109303
+    },
+    {
+      "marker": "##",
+      "markdown_depth": 2,
+      "number": "",
+      "number_depth": 0,
+      "title": "习题7.5",
+      "full_title": "习题7.5",
+      "line_index": 2588,
+      "char_start": 109681,
+      "char_end": 109690
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "复习巩固",
+      "full_title": "复习巩固",
+      "line_index": 2590,
+      "char_start": 109691,
+      "char_end": 109700
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "综合运用",
+      "full_title": "综合运用",
+      "line_index": 2600,
+      "char_start": 110036,
+      "char_end": 110045
+    },
+    {
+      "marker": "##",
+      "markdown_depth": 2,
+      "number": "",
+      "number_depth": 0,
+      "title": "信息技术应用",
+      "full_title": "信息技术应用",
+      "line_index": 2606,
+      "char_start": 110254,
+      "char_end": 110264
+    },
+    {
+      "marker": "#",
+      "markdown_depth": 1,
+      "number": "",
+      "number_depth": 0,
+      "title": "概率分布图及概率计算",
+      "full_title": "概率分布图及概率计算",
+      "line_index": 2608,
+      "char_start": 110265,
+      "char_end": 110278
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "1. 二项分布",
+      "full_title": "1. 二项分布",
+      "line_index": 2614,
+      "char_start": 110393,
+      "char_end": 110406
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "2. 超几何分布",
+      "full_title": "2. 超几何分布",
+      "line_index": 2627,
+      "char_start": 110741,
+      "char_end": 110755
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "3. 正态分布",
+      "full_title": "3. 正态分布",
+      "line_index": 2632,
+      "char_start": 110914,
+      "char_end": 110927
+    },
+    {
+      "marker": "##",
+      "markdown_depth": 2,
+      "number": "",
+      "number_depth": 0,
+      "title": "小结",
+      "full_title": "小结",
+      "line_index": 2648,
+      "char_start": 111551,
+      "char_end": 111557
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "一、本章知识结构",
+      "full_title": "一、本章知识结构",
+      "line_index": 2650,
+      "char_start": 111558,
+      "char_end": 111571
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "二、回顾与思考",
+      "full_title": "二、回顾与思考",
+      "line_index": 2654,
+      "char_start": 111654,
+      "char_end": 111666
+    },
+    {
+      "marker": "##",
+      "markdown_depth": 2,
+      "number": "",
+      "number_depth": 0,
+      "title": "复习参考题7",
+      "full_title": "复习参考题7",
+      "line_index": 2673,
+      "char_start": 112830,
+      "char_end": 112840
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "复习巩固",
+      "full_title": "复习巩固",
+      "line_index": 2675,
+      "char_start": 112841,
+      "char_end": 112850
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "综合运用",
+      "full_title": "综合运用",
+      "line_index": 2697,
+      "char_start": 113466,
+      "char_end": 113475
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "拓广探索",
+      "full_title": "拓广探索",
+      "line_index": 2705,
+      "char_start": 113955,
+      "char_end": 113964
+    },
+    {
+      "marker": "#",
+      "markdown_depth": 1,
+      "number": "",
+      "number_depth": 0,
+      "title": "第八章 成对数据的统计分析",
+      "full_title": "第八章 成对数据的统计分析",
+      "line_index": 2714,
+      "char_start": 114441,
+      "char_end": 114457
+    },
+    {
+      "marker": "##",
+      "markdown_depth": 2,
+      "number": "8.1",
+      "number_depth": 2,
+      "title": "成对数据的统计相关性",
+      "full_title": "8.1 成对数据的统计相关性",
+      "line_index": 2722,
+      "char_start": 115061,
+      "char_end": 115079
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "8.1.1",
+      "number_depth": 3,
+      "title": "变量的相关关系",
+      "full_title": "8.1.1 变量的相关关系",
+      "line_index": 2726,
+      "char_start": 115241,
+      "char_end": 115259
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "练习",
+      "full_title": "练习",
+      "line_index": 2783,
+      "char_start": 118230,
+      "char_end": 118238
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "8.1.2",
+      "number_depth": 3,
+      "title": "样本相关系数",
+      "full_title": "8.1.2 样本相关系数",
+      "line_index": 2809,
+      "char_start": 119186,
+      "char_end": 119203
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "练习",
+      "full_title": "练习",
+      "line_index": 2971,
+      "char_start": 129231,
+      "char_end": 129239
+    },
+    {
+      "marker": "##",
+      "markdown_depth": 2,
+      "number": "",
+      "number_depth": 0,
+      "title": "习题8.1",
+      "full_title": "习题8.1",
+      "line_index": 2987,
+      "char_start": 130102,
+      "char_end": 130111
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "复习巩固",
+      "full_title": "复习巩固",
+      "line_index": 2989,
+      "char_start": 130112,
+      "char_end": 130121
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "综合运用",
+      "full_title": "综合运用",
+      "line_index": 3010,
+      "char_start": 130582,
+      "char_end": 130591
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "拓广探索",
+      "full_title": "拓广探索",
+      "line_index": 3024,
+      "char_start": 131664,
+      "char_end": 131673
+    },
+    {
+      "marker": "##",
+      "markdown_depth": 2,
+      "number": "8.2",
+      "number_depth": 2,
+      "title": "一元线性回归模型及其应用",
+      "full_title": "8.2 一元线性回归模型及其应用",
+      "line_index": 3028,
+      "char_start": 131819,
+      "char_end": 131839
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "8.2.1",
+      "number_depth": 3,
+      "title": "一元线性回归模型",
+      "full_title": "8.2.1 一元线性回归模型",
+      "line_index": 3034,
+      "char_start": 132060,
+      "char_end": 132079
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "练习",
+      "full_title": "练习",
+      "line_index": 3072,
+      "char_start": 134405,
+      "char_end": 134413
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "8.2.2",
+      "number_depth": 3,
+      "title": "一元线性回归模型参数的最小二乘估计",
+      "full_title": "8.2.2 一元线性回归模型参数的最小二乘估计",
+      "line_index": 3078,
+      "char_start": 134561,
+      "char_end": 134589
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "练习",
+      "full_title": "练习",
+      "line_index": 3231,
+      "char_start": 142811,
+      "char_end": 142819
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "练习",
+      "full_title": "练习",
+      "line_index": 3400,
+      "char_start": 152395,
+      "char_end": 152403
+    },
+    {
+      "marker": "##",
+      "markdown_depth": 2,
+      "number": "",
+      "number_depth": 0,
+      "title": "习题8.2",
+      "full_title": "习题8.2",
+      "line_index": 3416,
+      "char_start": 153656,
+      "char_end": 153665
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "复习巩固",
+      "full_title": "复习巩固",
+      "line_index": 3418,
+      "char_start": 153666,
+      "char_end": 153675
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "综合运用",
+      "full_title": "综合运用",
+      "line_index": 3435,
+      "char_start": 154277,
+      "char_end": 154286
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "拓广探索",
+      "full_title": "拓广探索",
+      "line_index": 3450,
+      "char_start": 157148,
+      "char_end": 157157
+    },
+    {
+      "marker": "##",
+      "markdown_depth": 2,
+      "number": "",
+      "number_depth": 0,
+      "title": "阅读与思考",
+      "full_title": "阅读与思考",
+      "line_index": 3456,
+      "char_start": 157383,
+      "char_end": 157392
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "回归与相关",
+      "full_title": "回归与相关",
+      "line_index": 3458,
+      "char_start": 157393,
+      "char_end": 157403
+    },
+    {
+      "marker": "##",
+      "markdown_depth": 2,
+      "number": "8.3",
+      "number_depth": 2,
+      "title": "列联表与独立性检验",
+      "full_title": "8.3 列联表与独立性检验",
+      "line_index": 3477,
+      "char_start": 158946,
+      "char_end": 158963
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "8.3.1",
+      "number_depth": 3,
+      "title": "分类变量与列联表",
+      "full_title": "8.3.1 分类变量与列联表",
+      "line_index": 3485,
+      "char_start": 159363,
+      "char_end": 159382
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "练习",
+      "full_title": "练习",
+      "line_index": 3561,
+      "char_start": 164124,
+      "char_end": 164132
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "8.3.2",
+      "number_depth": 3,
+      "title": "独立性检验",
+      "full_title": "8.3.2 独立性检验",
+      "line_index": 3578,
+      "char_start": 164759,
+      "char_end": 164775
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "练习",
+      "full_title": "练习",
+      "line_index": 3739,
+      "char_start": 173370,
+      "char_end": 173378
+    },
+    {
+      "marker": "##",
+      "markdown_depth": 2,
+      "number": "",
+      "number_depth": 0,
+      "title": "习题8.3",
+      "full_title": "习题8.3",
+      "line_index": 3759,
+      "char_start": 174310,
+      "char_end": 174319
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "复习巩固",
+      "full_title": "复习巩固",
+      "line_index": 3761,
+      "char_start": 174320,
+      "char_end": 174329
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "综合运用",
+      "full_title": "综合运用",
+      "line_index": 3768,
+      "char_start": 174511,
+      "char_end": 174520
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "拓广探索",
+      "full_title": "拓广探索",
+      "line_index": 3795,
+      "char_start": 175835,
+      "char_end": 175844
+    },
+    {
+      "marker": "##",
+      "markdown_depth": 2,
+      "number": "",
+      "number_depth": 0,
+      "title": "小结",
+      "full_title": "小结",
+      "line_index": 3799,
+      "char_start": 175998,
+      "char_end": 176004
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "一、本章知识结构",
+      "full_title": "一、本章知识结构",
+      "line_index": 3801,
+      "char_start": 176005,
+      "char_end": 176018
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "二、回顾与思考",
+      "full_title": "二、回顾与思考",
+      "line_index": 3805,
+      "char_start": 176101,
+      "char_end": 176113
+    },
+    {
+      "marker": "##",
+      "markdown_depth": 2,
+      "number": "",
+      "number_depth": 0,
+      "title": "复习参考题8",
+      "full_title": "复习参考题8",
+      "line_index": 3828,
+      "char_start": 177250,
+      "char_end": 177260
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "复习巩固",
+      "full_title": "复习巩固",
+      "line_index": 3830,
+      "char_start": 177261,
+      "char_end": 177270
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "综合运用",
+      "full_title": "综合运用",
+      "line_index": 3855,
+      "char_start": 178270,
+      "char_end": 178279
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "拓广探索",
+      "full_title": "拓广探索",
+      "line_index": 3874,
+      "char_start": 180214,
+      "char_end": 180223
+    },
+    {
+      "marker": "#",
+      "markdown_depth": 1,
+      "number": "",
+      "number_depth": 0,
+      "title": "建立统计模型进行预测",
+      "full_title": "建立统计模型进行预测",
+      "line_index": 3882,
+      "char_start": 181704,
+      "char_end": 181717
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "一、问题背景分析",
+      "full_title": "一、问题背景分析",
+      "line_index": 3902,
+      "char_start": 184493,
+      "char_end": 184506
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "二、建立统计模型",
+      "full_title": "二、建立统计模型",
+      "line_index": 3914,
+      "char_start": 185147,
+      "char_end": 185160
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "1. 绘制散点图",
+      "full_title": "1. 绘制散点图",
+      "line_index": 3916,
+      "char_start": 185161,
+      "char_end": 185175
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "2. 建立线性回归方程",
+      "full_title": "2. 建立线性回归方程",
+      "line_index": 3931,
+      "char_start": 188206,
+      "char_end": 188223
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "3. 回归结果分析",
+      "full_title": "3. 回归结果分析",
+      "line_index": 3946,
+      "char_start": 188791,
+      "char_end": 188806
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "三、模型的应用",
+      "full_title": "三、模型的应用",
+      "line_index": 3970,
+      "char_start": 190391,
+      "char_end": 190403
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "四、数学建模活动的选题",
+      "full_title": "四、数学建模活动的选题",
+      "line_index": 3976,
+      "char_start": 190966,
+      "char_end": 190982
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "五、数学建模活动的要求",
+      "full_title": "五、数学建模活动的要求",
+      "line_index": 3986,
+      "char_start": 191352,
+      "char_end": 191368
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "1. 组建合作团队",
+      "full_title": "1. 组建合作团队",
+      "line_index": 3988,
+      "char_start": 191369,
+      "char_end": 191384
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "2. 开展研究活动",
+      "full_title": "2. 开展研究活动",
+      "line_index": 3992,
+      "char_start": 191513,
+      "char_end": 191528
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "3. 撰写研究报告",
+      "full_title": "3. 撰写研究报告",
+      "line_index": 3996,
+      "char_start": 191603,
+      "char_end": 191618
+    },
+    {
+      "marker": "####",
+      "markdown_depth": 4,
+      "number": "",
+      "number_depth": 0,
+      "title": "4. 交流展示",
+      "full_title": "4. 交流展示",
+      "line_index": 4000,
+      "char_start": 191637,
+      "char_end": 191650
+    },
+    {
+      "marker": "###",
+      "markdown_depth": 3,
+      "number": "",
+      "number_depth": 0,
+      "title": "六、数学建模活动研究报告的参考形式",
+      "full_title": "六、数学建模活动研究报告的参考形式",
+      "line_index": 4006,
+      "char_start": 191903,
+      "char_end": 191925
+    },
+    {
+      "marker": "#",
+      "markdown_depth": 1,
+      "number": "",
+      "number_depth": 0,
+      "title": "部分中英文词汇索引",
+      "full_title": "部分中英文词汇索引",
+      "line_index": 4014,
+      "char_start": 192262,
+      "char_end": 192274
+    },
+    {
+      "marker": "#",
+      "markdown_depth": 1,
+      "number": "",
+      "number_depth": 0,
+      "title": "后记",
+      "full_title": "后记",
+      "line_index": 4018,
+      "char_start": 194041,
+      "char_end": 194046
+    },
+    {
+      "marker": "#",
+      "markdown_depth": 1,
+      "number": "",
+      "number_depth": 0,
+      "title": "PUTONG GAOZHONG JIAOKESHU SHUXUE",
+      "full_title": "PUTONG GAOZHONG JIAOKESHU SHUXUE",
+      "line_index": 4042,
+      "char_start": 194616,
+      "char_end": 194650
+    }
+  ],
+  "nodes": [
+    {
+      "note_stem": "数学",
+      "filename": "数学.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\数学.md",
+      "parent": "",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 0,
+      "raw_end": 109,
+      "warning": ""
+    },
+    {
+      "note_stem": "数学",
+      "filename": "数学 - 02.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\数学 - 02.md",
+      "parent": "",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 109,
+      "raw_end": 414,
+      "warning": ""
+    },
+    {
+      "note_stem": "本册导引",
+      "filename": "本册导引.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\本册导引.md",
+      "parent": "",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 414,
+      "raw_end": 1255,
+      "warning": ""
+    },
+    {
+      "note_stem": "目录",
+      "filename": "目录.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\目录.md",
+      "parent": "",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 1255,
+      "raw_end": 1343,
+      "warning": ""
+    },
+    {
+      "note_stem": "第六章 计数原理 …… 1",
+      "filename": "第六章 计数原理 …… 1.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\第六章 计数原理 …… 1.md",
+      "parent": "",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 1343,
+      "raw_end": 1560,
+      "warning": ""
+    },
+    {
+      "note_stem": "数学探究 杨辉三角的性质与应用 39",
+      "filename": "数学探究 杨辉三角的性质与应用 39.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\数学探究 杨辉三角的性质与应用 39.md",
+      "parent": "",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 1560,
+      "raw_end": 1582,
+      "warning": ""
+    },
+    {
+      "note_stem": "第七章 随机变量及其分布 43",
+      "filename": "第七章 随机变量及其分布 43.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\第七章 随机变量及其分布 43.md",
+      "parent": "",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 1582,
+      "raw_end": 1875,
+      "warning": ""
+    },
+    {
+      "note_stem": "第八章 成对数据的统计分析 92",
+      "filename": "第八章 成对数据的统计分析 92.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\第八章 成对数据的统计分析 92.md",
+      "parent": "",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 1875,
+      "raw_end": 1998,
+      "warning": ""
+    },
+    {
+      "note_stem": "数学建模 建立统计模型进行预测 …… 141",
+      "filename": "数学建模 建立统计模型进行预测 …… 141.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\数学建模 建立统计模型进行预测 …… 141.md",
+      "parent": "",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 1998,
+      "raw_end": 2024,
+      "warning": ""
+    },
+    {
+      "note_stem": "部分中英文词汇索引…… 147",
+      "filename": "部分中英文词汇索引…… 147.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\部分中英文词汇索引…… 147.md",
+      "parent": "",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 2024,
+      "raw_end": 2043,
+      "warning": ""
+    },
+    {
+      "note_stem": "第六章 计数原理",
+      "filename": "第六章 计数原理.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\第六章 计数原理.md",
+      "parent": "",
+      "children": [
+        "6.1 分类加法计数原理与分步乘法计数原理",
+        "习题6.1",
+        "探究与发现",
+        "6.2 排列与组合",
+        "习题6.2",
+        "探究与发现",
+        "6.3 二项式定理",
+        "习题6.3",
+        "小结",
+        "复习参考题6"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 2043,
+      "raw_end": 47093,
+      "warning": ""
+    },
+    {
+      "note_stem": "6.1 分类加法计数原理与分步乘法计数原理",
+      "filename": "6.1 分类加法计数原理与分步乘法计数原理.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\6.1 分类加法计数原理与分步乘法计数原理.md",
+      "parent": "第六章 计数原理",
+      "children": [
+        "练习",
+        "练习",
+        "练习"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 2688,
+      "raw_end": 11623,
+      "warning": ""
+    },
+    {
+      "note_stem": "练习",
+      "filename": "练习.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习.md",
+      "parent": "6.1 分类加法计数原理与分步乘法计数原理",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 5795,
+      "raw_end": 8011,
+      "warning": ""
+    },
+    {
+      "note_stem": "练习",
+      "filename": "练习 - 02.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 02.md",
+      "parent": "6.1 分类加法计数原理与分步乘法计数原理",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 8011,
+      "raw_end": 11307,
+      "warning": ""
+    },
+    {
+      "note_stem": "练习",
+      "filename": "练习 - 03.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 03.md",
+      "parent": "6.1 分类加法计数原理与分步乘法计数原理",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 11307,
+      "raw_end": 11623,
+      "warning": ""
+    },
+    {
+      "note_stem": "习题6.1",
+      "filename": "习题6.1.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\习题6.1.md",
+      "parent": "第六章 计数原理",
+      "children": [
+        "复习巩固",
+        "综合运用",
+        "拓广探索"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 11623,
+      "raw_end": 12968,
+      "warning": ""
+    },
+    {
+      "note_stem": "复习巩固",
+      "filename": "复习巩固.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\复习巩固.md",
+      "parent": "习题6.1",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 11633,
+      "raw_end": 12326,
+      "warning": ""
+    },
+    {
+      "note_stem": "综合运用",
+      "filename": "综合运用.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\综合运用.md",
+      "parent": "习题6.1",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 12326,
+      "raw_end": 12789,
+      "warning": ""
+    },
+    {
+      "note_stem": "拓广探索",
+      "filename": "拓广探索.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\拓广探索.md",
+      "parent": "习题6.1",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 12789,
+      "raw_end": 12968,
+      "warning": ""
+    },
+    {
+      "note_stem": "探究与发现",
+      "filename": "探究与发现.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\探究与发现.md",
+      "parent": "第六章 计数原理",
+      "children": [
+        "子集的个数有多少"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 12968,
+      "raw_end": 14807,
+      "warning": ""
+    },
+    {
+      "note_stem": "子集的个数有多少",
+      "filename": "子集的个数有多少.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\子集的个数有多少.md",
+      "parent": "探究与发现",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 12978,
+      "raw_end": 14807,
+      "warning": ""
+    },
+    {
+      "note_stem": "6.2 排列与组合",
+      "filename": "6.2 排列与组合.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\6.2 排列与组合.md",
+      "parent": "第六章 计数原理",
+      "children": [
+        "6.2.1 排列",
+        "6.2.2 排列数",
+        "6.2.3 组合",
+        "6.2.4 组合数"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 14807,
+      "raw_end": 29271,
+      "warning": ""
+    },
+    {
+      "note_stem": "6.2.1 排列",
+      "filename": "6.2.1 排列.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\6.2.1 排列.md",
+      "parent": "6.2 排列与组合",
+      "children": [
+        "练习"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 14903,
+      "raw_end": 17972,
+      "warning": ""
+    },
+    {
+      "note_stem": "练习",
+      "filename": "练习 - 04.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 04.md",
+      "parent": "6.2.1 排列",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 17678,
+      "raw_end": 17972,
+      "warning": ""
+    },
+    {
+      "note_stem": "6.2.2 排列数",
+      "filename": "6.2.2 排列数.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\6.2.2 排列数.md",
+      "parent": "6.2 排列与组合",
+      "children": [
+        "练习"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 17972,
+      "raw_end": 23285,
+      "warning": ""
+    },
+    {
+      "note_stem": "练习",
+      "filename": "练习 - 05.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 05.md",
+      "parent": "6.2.2 排列数",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 22908,
+      "raw_end": 23285,
+      "warning": ""
+    },
+    {
+      "note_stem": "6.2.3 组合",
+      "filename": "6.2.3 组合.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\6.2.3 组合.md",
+      "parent": "6.2 排列与组合",
+      "children": [
+        "练习"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 23285,
+      "raw_end": 25346,
+      "warning": ""
+    },
+    {
+      "note_stem": "练习",
+      "filename": "练习 - 06.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 06.md",
+      "parent": "6.2.3 组合",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 25113,
+      "raw_end": 25346,
+      "warning": ""
+    },
+    {
+      "note_stem": "6.2.4 组合数",
+      "filename": "6.2.4 组合数.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\6.2.4 组合数.md",
+      "parent": "6.2 排列与组合",
+      "children": [
+        "练习"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 25346,
+      "raw_end": 29271,
+      "warning": ""
+    },
+    {
+      "note_stem": "练习",
+      "filename": "练习 - 07.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 07.md",
+      "parent": "6.2.4 组合数",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 28946,
+      "raw_end": 29271,
+      "warning": ""
+    },
+    {
+      "note_stem": "习题6.2",
+      "filename": "习题6.2.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\习题6.2.md",
+      "parent": "第六章 计数原理",
+      "children": [
+        "复习巩固",
+        "综合运用",
+        "拓广探索"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 29271,
+      "raw_end": 32039,
+      "warning": ""
+    },
+    {
+      "note_stem": "复习巩固",
+      "filename": "复习巩固 - 02.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\复习巩固 - 02.md",
+      "parent": "习题6.2",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 29281,
+      "raw_end": 30145,
+      "warning": ""
+    },
+    {
+      "note_stem": "综合运用",
+      "filename": "综合运用 - 02.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\综合运用 - 02.md",
+      "parent": "习题6.2",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 30145,
+      "raw_end": 31267,
+      "warning": ""
+    },
+    {
+      "note_stem": "拓广探索",
+      "filename": "拓广探索 - 02.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\拓广探索 - 02.md",
+      "parent": "习题6.2",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 31267,
+      "raw_end": 32039,
+      "warning": ""
+    },
+    {
+      "note_stem": "探究与发现",
+      "filename": "探究与发现 - 02.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\探究与发现 - 02.md",
+      "parent": "第六章 计数原理",
+      "children": [
+        "组合数的两个性质"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 32039,
+      "raw_end": 33227,
+      "warning": ""
+    },
+    {
+      "note_stem": "组合数的两个性质",
+      "filename": "组合数的两个性质.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\组合数的两个性质.md",
+      "parent": "探究与发现",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 32049,
+      "raw_end": 33227,
+      "warning": ""
+    },
+    {
+      "note_stem": "6.3 二项式定理",
+      "filename": "6.3 二项式定理.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\6.3 二项式定理.md",
+      "parent": "第六章 计数原理",
+      "children": [
+        "6.3.1 二项式定理",
+        "6.3.2 二项式系数的性质"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 33227,
+      "raw_end": 42081,
+      "warning": ""
+    },
+    {
+      "note_stem": "6.3.1 二项式定理",
+      "filename": "6.3.1 二项式定理.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\6.3.1 二项式定理.md",
+      "parent": "6.3 二项式定理",
+      "children": [
+        "练习"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 33302,
+      "raw_end": 37593,
+      "warning": ""
+    },
+    {
+      "note_stem": "练习",
+      "filename": "练习 - 08.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 08.md",
+      "parent": "6.3.1 二项式定理",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 37263,
+      "raw_end": 37593,
+      "warning": ""
+    },
+    {
+      "note_stem": "6.3.2 二项式系数的性质",
+      "filename": "6.3.2 二项式系数的性质.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\6.3.2 二项式系数的性质.md",
+      "parent": "6.3 二项式定理",
+      "children": [
+        "1. 对称性",
+        "2. 增减性与最大值",
+        "3. 各二项式系数的和",
+        "练习"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 37593,
+      "raw_end": 42081,
+      "warning": ""
+    },
+    {
+      "note_stem": "1. 对称性",
+      "filename": "1. 对称性.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\1. 对称性.md",
+      "parent": "6.3.2 二项式系数的性质",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 39302,
+      "raw_end": 39465,
+      "warning": ""
+    },
+    {
+      "note_stem": "2. 增减性与最大值",
+      "filename": "2. 增减性与最大值.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\2. 增减性与最大值.md",
+      "parent": "6.3.2 二项式系数的性质",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 39465,
+      "raw_end": 39999,
+      "warning": ""
+    },
+    {
+      "note_stem": "3. 各二项式系数的和",
+      "filename": "3. 各二项式系数的和.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\3. 各二项式系数的和.md",
+      "parent": "6.3.2 二项式系数的性质",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 39999,
+      "raw_end": 41716,
+      "warning": ""
+    },
+    {
+      "note_stem": "练习",
+      "filename": "练习 - 09.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 09.md",
+      "parent": "6.3.2 二项式系数的性质",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 41716,
+      "raw_end": 42081,
+      "warning": ""
+    },
+    {
+      "note_stem": "习题6.3",
+      "filename": "习题6.3.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\习题6.3.md",
+      "parent": "第六章 计数原理",
+      "children": [
+        "复习巩固",
+        "综合运用",
+        "拓广探索"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 42081,
+      "raw_end": 43770,
+      "warning": ""
+    },
+    {
+      "note_stem": "复习巩固",
+      "filename": "复习巩固 - 03.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\复习巩固 - 03.md",
+      "parent": "习题6.3",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 42091,
+      "raw_end": 42956,
+      "warning": ""
+    },
+    {
+      "note_stem": "综合运用",
+      "filename": "综合运用 - 03.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\综合运用 - 03.md",
+      "parent": "习题6.3",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 42956,
+      "raw_end": 43312,
+      "warning": ""
+    },
+    {
+      "note_stem": "拓广探索",
+      "filename": "拓广探索 - 03.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\拓广探索 - 03.md",
+      "parent": "习题6.3",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 43312,
+      "raw_end": 43770,
+      "warning": ""
+    },
+    {
+      "note_stem": "小结",
+      "filename": "小结.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\小结.md",
+      "parent": "第六章 计数原理",
+      "children": [
+        "一、本章知识结构",
+        "二、回顾与思考"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 43770,
+      "raw_end": 45331,
+      "warning": ""
+    },
+    {
+      "note_stem": "一、本章知识结构",
+      "filename": "一、本章知识结构.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\一、本章知识结构.md",
+      "parent": "小结",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 43777,
+      "raw_end": 43873,
+      "warning": ""
+    },
+    {
+      "note_stem": "二、回顾与思考",
+      "filename": "二、回顾与思考.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\二、回顾与思考.md",
+      "parent": "小结",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 43873,
+      "raw_end": 45331,
+      "warning": ""
+    },
+    {
+      "note_stem": "复习参考题6",
+      "filename": "复习参考题6.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\复习参考题6.md",
+      "parent": "第六章 计数原理",
+      "children": [
+        "复习巩固",
+        "综合运用",
+        "拓广探索"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 45331,
+      "raw_end": 47093,
+      "warning": ""
+    },
+    {
+      "note_stem": "复习巩固",
+      "filename": "复习巩固 - 04.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\复习巩固 - 04.md",
+      "parent": "复习参考题6",
+      "children": [
+        "1. 填空题"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 45342,
+      "raw_end": 46247,
+      "warning": ""
+    },
+    {
+      "note_stem": "1. 填空题",
+      "filename": "1. 填空题.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\1. 填空题.md",
+      "parent": "复习巩固",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 45352,
+      "raw_end": 46247,
+      "warning": ""
+    },
+    {
+      "note_stem": "综合运用",
+      "filename": "综合运用 - 04.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\综合运用 - 04.md",
+      "parent": "复习参考题6",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 46247,
+      "raw_end": 46924,
+      "warning": ""
+    },
+    {
+      "note_stem": "拓广探索",
+      "filename": "拓广探索 - 04.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\拓广探索 - 04.md",
+      "parent": "复习参考题6",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 46924,
+      "raw_end": 47093,
+      "warning": ""
+    },
+    {
+      "note_stem": "杨辉三角的性质与应用",
+      "filename": "杨辉三角的性质与应用.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\杨辉三角的性质与应用.md",
+      "parent": "",
+      "children": [
+        "一、探究的内容：杨辉三角的性质与应用",
+        "（一）杨辉三角的性质",
+        "（二）杨辉三角的应用",
+        "二、对探究活动的要求",
+        "三、研究报告的参考形式"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 47093,
+      "raw_end": 50227,
+      "warning": ""
+    },
+    {
+      "note_stem": "一、探究的内容：杨辉三角的性质与应用",
+      "filename": "一、探究的内容：杨辉三角的性质与应用.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\一、探究的内容：杨辉三角的性质与应用.md",
+      "parent": "杨辉三角的性质与应用",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 47830,
+      "raw_end": 47854,
+      "warning": ""
+    },
+    {
+      "note_stem": "（一）杨辉三角的性质",
+      "filename": "（一）杨辉三角的性质.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\（一）杨辉三角的性质.md",
+      "parent": "杨辉三角的性质与应用",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 47854,
+      "raw_end": 49083,
+      "warning": ""
+    },
+    {
+      "note_stem": "（二）杨辉三角的应用",
+      "filename": "（二）杨辉三角的应用.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\（二）杨辉三角的应用.md",
+      "parent": "杨辉三角的性质与应用",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 49083,
+      "raw_end": 49786,
+      "warning": ""
+    },
+    {
+      "note_stem": "二、对探究活动的要求",
+      "filename": "二、对探究活动的要求.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\二、对探究活动的要求.md",
+      "parent": "杨辉三角的性质与应用",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 49786,
+      "raw_end": 49947,
+      "warning": ""
+    },
+    {
+      "note_stem": "三、研究报告的参考形式",
+      "filename": "三、研究报告的参考形式.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\三、研究报告的参考形式.md",
+      "parent": "杨辉三角的性质与应用",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 49947,
+      "raw_end": 50227,
+      "warning": ""
+    },
+    {
+      "note_stem": "第七章 随机变量及其分布",
+      "filename": "第七章 随机变量及其分布.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\第七章 随机变量及其分布.md",
+      "parent": "",
+      "children": [
+        "7.1 条件概率与全概率公式",
+        "习题7.1",
+        "阅读与思考 贝叶斯公式与人工智能",
+        "7.2 离散型随机变量及其分布列"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 50227,
+      "raw_end": 70815,
+      "warning": ""
+    },
+    {
+      "note_stem": "7.1 条件概率与全概率公式",
+      "filename": "7.1 条件概率与全概率公式.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\7.1 条件概率与全概率公式.md",
+      "parent": "第七章 随机变量及其分布",
+      "children": [
+        "7.1.1 条件概率",
+        "7.1.2 全概率公式"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 50637,
+      "raw_end": 62473,
+      "warning": ""
+    },
+    {
+      "note_stem": "7.1.1 条件概率",
+      "filename": "7.1.1 条件概率.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\7.1.1 条件概率.md",
+      "parent": "7.1 条件概率与全概率公式",
+      "children": [
+        "练习"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 50812,
+      "raw_end": 56917,
+      "warning": ""
+    },
+    {
+      "note_stem": "练习",
+      "filename": "练习 - 10.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 10.md",
+      "parent": "7.1.1 条件概率",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 56609,
+      "raw_end": 56917,
+      "warning": ""
+    },
+    {
+      "note_stem": "7.1.2 全概率公式",
+      "filename": "7.1.2 全概率公式.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\7.1.2 全概率公式.md",
+      "parent": "7.1 条件概率与全概率公式",
+      "children": [
+        "练习"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 56917,
+      "raw_end": 62473,
+      "warning": ""
+    },
+    {
+      "note_stem": "练习",
+      "filename": "练习 - 11.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 11.md",
+      "parent": "7.1.2 全概率公式",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 62206,
+      "raw_end": 62473,
+      "warning": ""
+    },
+    {
+      "note_stem": "习题7.1",
+      "filename": "习题7.1.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\习题7.1.md",
+      "parent": "第七章 随机变量及其分布",
+      "children": [
+        "复习巩固",
+        "综合运用",
+        "拓广探索"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 62473,
+      "raw_end": 63834,
+      "warning": ""
+    },
+    {
+      "note_stem": "复习巩固",
+      "filename": "复习巩固 - 05.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\复习巩固 - 05.md",
+      "parent": "习题7.1",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 62483,
+      "raw_end": 63346,
+      "warning": ""
+    },
+    {
+      "note_stem": "综合运用",
+      "filename": "综合运用 - 05.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\综合运用 - 05.md",
+      "parent": "习题7.1",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 63346,
+      "raw_end": 63650,
+      "warning": ""
+    },
+    {
+      "note_stem": "拓广探索",
+      "filename": "拓广探索 - 05.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\拓广探索 - 05.md",
+      "parent": "习题7.1",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 63650,
+      "raw_end": 63834,
+      "warning": ""
+    },
+    {
+      "note_stem": "阅读与思考 贝叶斯公式与人工智能",
+      "filename": "阅读与思考 贝叶斯公式与人工智能.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\阅读与思考 贝叶斯公式与人工智能.md",
+      "parent": "第七章 随机变量及其分布",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": true,
+      "raw_start": 63834,
+      "raw_end": 66953,
+      "warning": ""
+    },
+    {
+      "note_stem": "7.2 离散型随机变量及其分布列",
+      "filename": "7.2 离散型随机变量及其分布列.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\7.2 离散型随机变量及其分布列.md",
+      "parent": "第七章 随机变量及其分布",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 66953,
+      "raw_end": 70815,
+      "warning": ""
+    },
+    {
+      "note_stem": "人民教育出版社",
+      "filename": "人民教育出版社.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\人民教育出版社.md",
+      "parent": "",
+      "children": [
+        "练习",
+        "习题7.2",
+        "7.3 离散型随机变量的数字特征"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 70815,
+      "raw_end": 83662,
+      "warning": ""
+    },
+    {
+      "note_stem": "练习",
+      "filename": "练习 - 12.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 12.md",
+      "parent": "人民教育出版社",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 73181,
+      "raw_end": 73462,
+      "warning": ""
+    },
+    {
+      "note_stem": "习题7.2",
+      "filename": "习题7.2.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\习题7.2.md",
+      "parent": "人民教育出版社",
+      "children": [
+        "复习巩固",
+        "综合运用"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 73462,
+      "raw_end": 74444,
+      "warning": ""
+    },
+    {
+      "note_stem": "复习巩固",
+      "filename": "复习巩固 - 06.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\复习巩固 - 06.md",
+      "parent": "习题7.2",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 73472,
+      "raw_end": 74146,
+      "warning": ""
+    },
+    {
+      "note_stem": "综合运用",
+      "filename": "综合运用 - 06.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\综合运用 - 06.md",
+      "parent": "习题7.2",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 74146,
+      "raw_end": 74444,
+      "warning": ""
+    },
+    {
+      "note_stem": "7.3 离散型随机变量的数字特征",
+      "filename": "7.3 离散型随机变量的数字特征.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\7.3 离散型随机变量的数字特征.md",
+      "parent": "人民教育出版社",
+      "children": [
+        "7.3.1 离散型随机变量的均值",
+        "7.3.2 离散型随机变量的方差"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 74444,
+      "raw_end": 83662,
+      "warning": ""
+    },
+    {
+      "note_stem": "7.3.1 离散型随机变量的均值",
+      "filename": "7.3.1 离散型随机变量的均值.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\7.3.1 离散型随机变量的均值.md",
+      "parent": "7.3 离散型随机变量的数字特征",
+      "children": [
+        "练习"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 74646,
+      "raw_end": 81159,
+      "warning": ""
+    },
+    {
+      "note_stem": "练习",
+      "filename": "练习 - 13.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 13.md",
+      "parent": "7.3.1 离散型随机变量的均值",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 80476,
+      "raw_end": 81159,
+      "warning": ""
+    },
+    {
+      "note_stem": "7.3.2 离散型随机变量的方差",
+      "filename": "7.3.2 离散型随机变量的方差.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\7.3.2 离散型随机变量的方差.md",
+      "parent": "7.3 离散型随机变量的数字特征",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 81159,
+      "raw_end": 83662,
+      "warning": ""
+    },
+    {
+      "note_stem": "人民教育出版社",
+      "filename": "人民教育出版社 - 02.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\人民教育出版社 - 02.md",
+      "parent": "",
+      "children": [
+        "练习",
+        "习题7.3",
+        "7.4 二项分布与超几何分布",
+        "习题7.4",
+        "探究与发现",
+        "7.5 正态分布",
+        "习题7.5",
+        "信息技术应用"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 83662,
+      "raw_end": 110265,
+      "warning": ""
+    },
+    {
+      "note_stem": "练习",
+      "filename": "练习 - 14.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 14.md",
+      "parent": "人民教育出版社",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 85885,
+      "raw_end": 86601,
+      "warning": ""
+    },
+    {
+      "note_stem": "习题7.3",
+      "filename": "习题7.3.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\习题7.3.md",
+      "parent": "人民教育出版社",
+      "children": [
+        "复习巩固",
+        "综合运用",
+        "拓广探索"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 86601,
+      "raw_end": 87731,
+      "warning": ""
+    },
+    {
+      "note_stem": "复习巩固",
+      "filename": "复习巩固 - 07.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\复习巩固 - 07.md",
+      "parent": "习题7.3",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 86611,
+      "raw_end": 87103,
+      "warning": ""
+    },
+    {
+      "note_stem": "综合运用",
+      "filename": "综合运用 - 07.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\综合运用 - 07.md",
+      "parent": "习题7.3",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 87103,
+      "raw_end": 87624,
+      "warning": ""
+    },
+    {
+      "note_stem": "拓广探索",
+      "filename": "拓广探索 - 06.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\拓广探索 - 06.md",
+      "parent": "习题7.3",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 87624,
+      "raw_end": 87731,
+      "warning": ""
+    },
+    {
+      "note_stem": "7.4 二项分布与超几何分布",
+      "filename": "7.4 二项分布与超几何分布.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\7.4 二项分布与超几何分布.md",
+      "parent": "人民教育出版社",
+      "children": [
+        "7.4.1 二项分布",
+        "7.4.2 超几何分布"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 87731,
+      "raw_end": 100806,
+      "warning": ""
+    },
+    {
+      "note_stem": "7.4.1 二项分布",
+      "filename": "7.4.1 二项分布.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\7.4.1 二项分布.md",
+      "parent": "7.4 二项分布与超几何分布",
+      "children": [
+        "练习"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 87805,
+      "raw_end": 94876,
+      "warning": ""
+    },
+    {
+      "note_stem": "练习",
+      "filename": "练习 - 15.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 15.md",
+      "parent": "7.4.1 二项分布",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 94544,
+      "raw_end": 94876,
+      "warning": ""
+    },
+    {
+      "note_stem": "7.4.2 超几何分布",
+      "filename": "7.4.2 超几何分布.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\7.4.2 超几何分布.md",
+      "parent": "7.4 二项分布与超几何分布",
+      "children": [
+        "练习"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 94876,
+      "raw_end": 100806,
+      "warning": ""
+    },
+    {
+      "note_stem": "练习",
+      "filename": "练习 - 16.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 16.md",
+      "parent": "7.4.2 超几何分布",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 100636,
+      "raw_end": 100806,
+      "warning": ""
+    },
+    {
+      "note_stem": "习题7.4",
+      "filename": "习题7.4.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\习题7.4.md",
+      "parent": "人民教育出版社",
+      "children": [
+        "复习巩固",
+        "综合运用",
+        "拓广探索"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 100806,
+      "raw_end": 101752,
+      "warning": ""
+    },
+    {
+      "note_stem": "复习巩固",
+      "filename": "复习巩固 - 08.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\复习巩固 - 08.md",
+      "parent": "习题7.4",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 100816,
+      "raw_end": 101207,
+      "warning": ""
+    },
+    {
+      "note_stem": "综合运用",
+      "filename": "综合运用 - 08.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\综合运用 - 08.md",
+      "parent": "习题7.4",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 101207,
+      "raw_end": 101579,
+      "warning": ""
+    },
+    {
+      "note_stem": "拓广探索",
+      "filename": "拓广探索 - 07.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\拓广探索 - 07.md",
+      "parent": "习题7.4",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 101579,
+      "raw_end": 101752,
+      "warning": ""
+    },
+    {
+      "note_stem": "探究与发现",
+      "filename": "探究与发现 - 03.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\探究与发现 - 03.md",
+      "parent": "人民教育出版社",
+      "children": [
+        "二项分布的性质"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 101752,
+      "raw_end": 103168,
+      "warning": ""
+    },
+    {
+      "note_stem": "二项分布的性质",
+      "filename": "二项分布的性质.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\二项分布的性质.md",
+      "parent": "探究与发现",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 101762,
+      "raw_end": 103168,
+      "warning": ""
+    },
+    {
+      "note_stem": "7.5 正态分布",
+      "filename": "7.5 正态分布.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\7.5 正态分布.md",
+      "parent": "人民教育出版社",
+      "children": [
+        "练习"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 103168,
+      "raw_end": 109681,
+      "warning": ""
+    },
+    {
+      "note_stem": "练习",
+      "filename": "练习 - 17.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 17.md",
+      "parent": "7.5 正态分布",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 109295,
+      "raw_end": 109681,
+      "warning": ""
+    },
+    {
+      "note_stem": "习题7.5",
+      "filename": "习题7.5.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\习题7.5.md",
+      "parent": "人民教育出版社",
+      "children": [
+        "复习巩固",
+        "综合运用"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 109681,
+      "raw_end": 110254,
+      "warning": ""
+    },
+    {
+      "note_stem": "复习巩固",
+      "filename": "复习巩固 - 09.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\复习巩固 - 09.md",
+      "parent": "习题7.5",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 109691,
+      "raw_end": 110036,
+      "warning": ""
+    },
+    {
+      "note_stem": "综合运用",
+      "filename": "综合运用 - 09.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\综合运用 - 09.md",
+      "parent": "习题7.5",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 110036,
+      "raw_end": 110254,
+      "warning": ""
+    },
+    {
+      "note_stem": "信息技术应用",
+      "filename": "信息技术应用.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\信息技术应用.md",
+      "parent": "人民教育出版社",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 110254,
+      "raw_end": 110265,
+      "warning": ""
+    },
+    {
+      "note_stem": "概率分布图及概率计算",
+      "filename": "概率分布图及概率计算.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\概率分布图及概率计算.md",
+      "parent": "",
+      "children": [
+        "1. 二项分布",
+        "2. 超几何分布",
+        "3. 正态分布",
+        "小结",
+        "复习参考题7"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 110265,
+      "raw_end": 114441,
+      "warning": ""
+    },
+    {
+      "note_stem": "1. 二项分布",
+      "filename": "1. 二项分布.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\1. 二项分布.md",
+      "parent": "概率分布图及概率计算",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 110393,
+      "raw_end": 110741,
+      "warning": ""
+    },
+    {
+      "note_stem": "2. 超几何分布",
+      "filename": "2. 超几何分布.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\2. 超几何分布.md",
+      "parent": "概率分布图及概率计算",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 110741,
+      "raw_end": 110914,
+      "warning": ""
+    },
+    {
+      "note_stem": "3. 正态分布",
+      "filename": "3. 正态分布.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\3. 正态分布.md",
+      "parent": "概率分布图及概率计算",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 110914,
+      "raw_end": 111551,
+      "warning": ""
+    },
+    {
+      "note_stem": "小结",
+      "filename": "小结 - 02.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\小结 - 02.md",
+      "parent": "概率分布图及概率计算",
+      "children": [
+        "一、本章知识结构",
+        "二、回顾与思考"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 111551,
+      "raw_end": 112830,
+      "warning": ""
+    },
+    {
+      "note_stem": "一、本章知识结构",
+      "filename": "一、本章知识结构 - 02.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\一、本章知识结构 - 02.md",
+      "parent": "小结",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 111558,
+      "raw_end": 111654,
+      "warning": ""
+    },
+    {
+      "note_stem": "二、回顾与思考",
+      "filename": "二、回顾与思考 - 02.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\二、回顾与思考 - 02.md",
+      "parent": "小结",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 111654,
+      "raw_end": 112830,
+      "warning": ""
+    },
+    {
+      "note_stem": "复习参考题7",
+      "filename": "复习参考题7.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\复习参考题7.md",
+      "parent": "概率分布图及概率计算",
+      "children": [
+        "复习巩固",
+        "综合运用",
+        "拓广探索"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 112830,
+      "raw_end": 114441,
+      "warning": ""
+    },
+    {
+      "note_stem": "复习巩固",
+      "filename": "复习巩固 - 10.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\复习巩固 - 10.md",
+      "parent": "复习参考题7",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 112841,
+      "raw_end": 113466,
+      "warning": ""
+    },
+    {
+      "note_stem": "综合运用",
+      "filename": "综合运用 - 10.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\综合运用 - 10.md",
+      "parent": "复习参考题7",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 113466,
+      "raw_end": 113955,
+      "warning": ""
+    },
+    {
+      "note_stem": "拓广探索",
+      "filename": "拓广探索 - 08.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\拓广探索 - 08.md",
+      "parent": "复习参考题7",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 113955,
+      "raw_end": 114441,
+      "warning": ""
+    },
+    {
+      "note_stem": "第八章 成对数据的统计分析",
+      "filename": "第八章 成对数据的统计分析.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\第八章 成对数据的统计分析.md",
+      "parent": "",
+      "children": [
+        "8.1 成对数据的统计相关性",
+        "习题8.1",
+        "8.2 一元线性回归模型及其应用",
+        "习题8.2",
+        "阅读与思考 回归与相关",
+        "8.3 列联表与独立性检验",
+        "习题8.3",
+        "小结",
+        "复习参考题8"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 114441,
+      "raw_end": 181704,
+      "warning": ""
+    },
+    {
+      "note_stem": "8.1 成对数据的统计相关性",
+      "filename": "8.1 成对数据的统计相关性.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\8.1 成对数据的统计相关性.md",
+      "parent": "第八章 成对数据的统计分析",
+      "children": [
+        "8.1.1 变量的相关关系",
+        "8.1.2 样本相关系数"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 115061,
+      "raw_end": 130102,
+      "warning": ""
+    },
+    {
+      "note_stem": "8.1.1 变量的相关关系",
+      "filename": "8.1.1 变量的相关关系.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\8.1.1 变量的相关关系.md",
+      "parent": "8.1 成对数据的统计相关性",
+      "children": [
+        "练习"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 115241,
+      "raw_end": 119186,
+      "warning": ""
+    },
+    {
+      "note_stem": "练习",
+      "filename": "练习 - 18.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 18.md",
+      "parent": "8.1.1 变量的相关关系",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 118230,
+      "raw_end": 119186,
+      "warning": ""
+    },
+    {
+      "note_stem": "8.1.2 样本相关系数",
+      "filename": "8.1.2 样本相关系数.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\8.1.2 样本相关系数.md",
+      "parent": "8.1 成对数据的统计相关性",
+      "children": [
+        "练习"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 119186,
+      "raw_end": 130102,
+      "warning": ""
+    },
+    {
+      "note_stem": "练习",
+      "filename": "练习 - 19.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 19.md",
+      "parent": "8.1.2 样本相关系数",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 129231,
+      "raw_end": 130102,
+      "warning": ""
+    },
+    {
+      "note_stem": "习题8.1",
+      "filename": "习题8.1.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\习题8.1.md",
+      "parent": "第八章 成对数据的统计分析",
+      "children": [
+        "复习巩固",
+        "综合运用",
+        "拓广探索"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 130102,
+      "raw_end": 131819,
+      "warning": ""
+    },
+    {
+      "note_stem": "复习巩固",
+      "filename": "复习巩固 - 11.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\复习巩固 - 11.md",
+      "parent": "习题8.1",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 130112,
+      "raw_end": 130582,
+      "warning": ""
+    },
+    {
+      "note_stem": "综合运用",
+      "filename": "综合运用 - 11.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\综合运用 - 11.md",
+      "parent": "习题8.1",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 130582,
+      "raw_end": 131664,
+      "warning": ""
+    },
+    {
+      "note_stem": "拓广探索",
+      "filename": "拓广探索 - 09.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\拓广探索 - 09.md",
+      "parent": "习题8.1",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 131664,
+      "raw_end": 131819,
+      "warning": ""
+    },
+    {
+      "note_stem": "8.2 一元线性回归模型及其应用",
+      "filename": "8.2 一元线性回归模型及其应用.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\8.2 一元线性回归模型及其应用.md",
+      "parent": "第八章 成对数据的统计分析",
+      "children": [
+        "8.2.1 一元线性回归模型",
+        "8.2.2 一元线性回归模型参数的最小二乘估计"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 131819,
+      "raw_end": 153656,
+      "warning": ""
+    },
+    {
+      "note_stem": "8.2.1 一元线性回归模型",
+      "filename": "8.2.1 一元线性回归模型.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\8.2.1 一元线性回归模型.md",
+      "parent": "8.2 一元线性回归模型及其应用",
+      "children": [
+        "练习"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 132060,
+      "raw_end": 134561,
+      "warning": ""
+    },
+    {
+      "note_stem": "练习",
+      "filename": "练习 - 20.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 20.md",
+      "parent": "8.2.1 一元线性回归模型",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 134405,
+      "raw_end": 134561,
+      "warning": ""
+    },
+    {
+      "note_stem": "8.2.2 一元线性回归模型参数的最小二乘估计",
+      "filename": "8.2.2 一元线性回归模型参数的最小二乘估计.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\8.2.2 一元线性回归模型参数的最小二乘估计.md",
+      "parent": "8.2 一元线性回归模型及其应用",
+      "children": [
+        "练习",
+        "练习"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 134561,
+      "raw_end": 153656,
+      "warning": ""
+    },
+    {
+      "note_stem": "练习",
+      "filename": "练习 - 21.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 21.md",
+      "parent": "8.2.2 一元线性回归模型参数的最小二乘估计",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 142811,
+      "raw_end": 152395,
+      "warning": ""
+    },
+    {
+      "note_stem": "练习",
+      "filename": "练习 - 22.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 22.md",
+      "parent": "8.2.2 一元线性回归模型参数的最小二乘估计",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 152395,
+      "raw_end": 153656,
+      "warning": ""
+    },
+    {
+      "note_stem": "习题8.2",
+      "filename": "习题8.2.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\习题8.2.md",
+      "parent": "第八章 成对数据的统计分析",
+      "children": [
+        "复习巩固",
+        "综合运用",
+        "拓广探索"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 153656,
+      "raw_end": 157383,
+      "warning": ""
+    },
+    {
+      "note_stem": "复习巩固",
+      "filename": "复习巩固 - 12.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\复习巩固 - 12.md",
+      "parent": "习题8.2",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 153666,
+      "raw_end": 154277,
+      "warning": ""
+    },
+    {
+      "note_stem": "综合运用",
+      "filename": "综合运用 - 12.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\综合运用 - 12.md",
+      "parent": "习题8.2",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 154277,
+      "raw_end": 157148,
+      "warning": ""
+    },
+    {
+      "note_stem": "拓广探索",
+      "filename": "拓广探索 - 10.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\拓广探索 - 10.md",
+      "parent": "习题8.2",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 157148,
+      "raw_end": 157383,
+      "warning": ""
+    },
+    {
+      "note_stem": "阅读与思考 回归与相关",
+      "filename": "阅读与思考 回归与相关.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\阅读与思考 回归与相关.md",
+      "parent": "第八章 成对数据的统计分析",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": true,
+      "raw_start": 157383,
+      "raw_end": 158946,
+      "warning": ""
+    },
+    {
+      "note_stem": "8.3 列联表与独立性检验",
+      "filename": "8.3 列联表与独立性检验.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\8.3 列联表与独立性检验.md",
+      "parent": "第八章 成对数据的统计分析",
+      "children": [
+        "8.3.1 分类变量与列联表",
+        "8.3.2 独立性检验"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 158946,
+      "raw_end": 174310,
+      "warning": ""
+    },
+    {
+      "note_stem": "8.3.1 分类变量与列联表",
+      "filename": "8.3.1 分类变量与列联表.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\8.3.1 分类变量与列联表.md",
+      "parent": "8.3 列联表与独立性检验",
+      "children": [
+        "练习"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 159363,
+      "raw_end": 164759,
+      "warning": ""
+    },
+    {
+      "note_stem": "练习",
+      "filename": "练习 - 23.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 23.md",
+      "parent": "8.3.1 分类变量与列联表",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 164124,
+      "raw_end": 164759,
+      "warning": ""
+    },
+    {
+      "note_stem": "8.3.2 独立性检验",
+      "filename": "8.3.2 独立性检验.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\8.3.2 独立性检验.md",
+      "parent": "8.3 列联表与独立性检验",
+      "children": [
+        "练习"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 164759,
+      "raw_end": 174310,
+      "warning": ""
+    },
+    {
+      "note_stem": "练习",
+      "filename": "练习 - 24.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 24.md",
+      "parent": "8.3.2 独立性检验",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 173370,
+      "raw_end": 174310,
+      "warning": ""
+    },
+    {
+      "note_stem": "习题8.3",
+      "filename": "习题8.3.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\习题8.3.md",
+      "parent": "第八章 成对数据的统计分析",
+      "children": [
+        "复习巩固",
+        "综合运用",
+        "拓广探索"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 174310,
+      "raw_end": 175998,
+      "warning": ""
+    },
+    {
+      "note_stem": "复习巩固",
+      "filename": "复习巩固 - 13.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\复习巩固 - 13.md",
+      "parent": "习题8.3",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 174320,
+      "raw_end": 174511,
+      "warning": ""
+    },
+    {
+      "note_stem": "综合运用",
+      "filename": "综合运用 - 13.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\综合运用 - 13.md",
+      "parent": "习题8.3",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 174511,
+      "raw_end": 175835,
+      "warning": ""
+    },
+    {
+      "note_stem": "拓广探索",
+      "filename": "拓广探索 - 11.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\拓广探索 - 11.md",
+      "parent": "习题8.3",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 175835,
+      "raw_end": 175998,
+      "warning": ""
+    },
+    {
+      "note_stem": "小结",
+      "filename": "小结 - 03.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\小结 - 03.md",
+      "parent": "第八章 成对数据的统计分析",
+      "children": [
+        "一、本章知识结构",
+        "二、回顾与思考"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 175998,
+      "raw_end": 177250,
+      "warning": ""
+    },
+    {
+      "note_stem": "一、本章知识结构",
+      "filename": "一、本章知识结构 - 03.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\一、本章知识结构 - 03.md",
+      "parent": "小结",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 176005,
+      "raw_end": 176101,
+      "warning": ""
+    },
+    {
+      "note_stem": "二、回顾与思考",
+      "filename": "二、回顾与思考 - 03.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\二、回顾与思考 - 03.md",
+      "parent": "小结",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 176101,
+      "raw_end": 177250,
+      "warning": ""
+    },
+    {
+      "note_stem": "复习参考题8",
+      "filename": "复习参考题8.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\复习参考题8.md",
+      "parent": "第八章 成对数据的统计分析",
+      "children": [
+        "复习巩固",
+        "综合运用",
+        "拓广探索"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 177250,
+      "raw_end": 181704,
+      "warning": ""
+    },
+    {
+      "note_stem": "复习巩固",
+      "filename": "复习巩固 - 14.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\复习巩固 - 14.md",
+      "parent": "复习参考题8",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 177261,
+      "raw_end": 178270,
+      "warning": ""
+    },
+    {
+      "note_stem": "综合运用",
+      "filename": "综合运用 - 14.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\综合运用 - 14.md",
+      "parent": "复习参考题8",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 178270,
+      "raw_end": 180214,
+      "warning": ""
+    },
+    {
+      "note_stem": "拓广探索",
+      "filename": "拓广探索 - 12.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\拓广探索 - 12.md",
+      "parent": "复习参考题8",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 180214,
+      "raw_end": 181704,
+      "warning": ""
+    },
+    {
+      "note_stem": "建立统计模型进行预测",
+      "filename": "建立统计模型进行预测.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\建立统计模型进行预测.md",
+      "parent": "",
+      "children": [
+        "一、问题背景分析",
+        "二、建立统计模型",
+        "三、模型的应用",
+        "四、数学建模活动的选题",
+        "五、数学建模活动的要求",
+        "六、数学建模活动研究报告的参考形式"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 181704,
+      "raw_end": 192262,
+      "warning": ""
+    },
+    {
+      "note_stem": "一、问题背景分析",
+      "filename": "一、问题背景分析.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\一、问题背景分析.md",
+      "parent": "建立统计模型进行预测",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 184493,
+      "raw_end": 185147,
+      "warning": ""
+    },
+    {
+      "note_stem": "二、建立统计模型",
+      "filename": "二、建立统计模型.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\二、建立统计模型.md",
+      "parent": "建立统计模型进行预测",
+      "children": [
+        "1. 绘制散点图",
+        "2. 建立线性回归方程",
+        "3. 回归结果分析"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 185147,
+      "raw_end": 190391,
+      "warning": ""
+    },
+    {
+      "note_stem": "1. 绘制散点图",
+      "filename": "1. 绘制散点图.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\1. 绘制散点图.md",
+      "parent": "二、建立统计模型",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 185161,
+      "raw_end": 188206,
+      "warning": ""
+    },
+    {
+      "note_stem": "2. 建立线性回归方程",
+      "filename": "2. 建立线性回归方程.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\2. 建立线性回归方程.md",
+      "parent": "二、建立统计模型",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 188206,
+      "raw_end": 188791,
+      "warning": ""
+    },
+    {
+      "note_stem": "3. 回归结果分析",
+      "filename": "3. 回归结果分析.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\3. 回归结果分析.md",
+      "parent": "二、建立统计模型",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 188791,
+      "raw_end": 190391,
+      "warning": ""
+    },
+    {
+      "note_stem": "三、模型的应用",
+      "filename": "三、模型的应用.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\三、模型的应用.md",
+      "parent": "建立统计模型进行预测",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 190391,
+      "raw_end": 190966,
+      "warning": ""
+    },
+    {
+      "note_stem": "四、数学建模活动的选题",
+      "filename": "四、数学建模活动的选题.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\四、数学建模活动的选题.md",
+      "parent": "建立统计模型进行预测",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 190966,
+      "raw_end": 191352,
+      "warning": ""
+    },
+    {
+      "note_stem": "五、数学建模活动的要求",
+      "filename": "五、数学建模活动的要求.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\五、数学建模活动的要求.md",
+      "parent": "建立统计模型进行预测",
+      "children": [
+        "1. 组建合作团队",
+        "2. 开展研究活动",
+        "3. 撰写研究报告",
+        "4. 交流展示"
+      ],
+      "is_leaf": false,
+      "is_special_merge": false,
+      "raw_start": 191352,
+      "raw_end": 191903,
+      "warning": ""
+    },
+    {
+      "note_stem": "1. 组建合作团队",
+      "filename": "1. 组建合作团队.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\1. 组建合作团队.md",
+      "parent": "五、数学建模活动的要求",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 191369,
+      "raw_end": 191513,
+      "warning": ""
+    },
+    {
+      "note_stem": "2. 开展研究活动",
+      "filename": "2. 开展研究活动.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\2. 开展研究活动.md",
+      "parent": "五、数学建模活动的要求",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 191513,
+      "raw_end": 191603,
+      "warning": ""
+    },
+    {
+      "note_stem": "3. 撰写研究报告",
+      "filename": "3. 撰写研究报告.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\3. 撰写研究报告.md",
+      "parent": "五、数学建模活动的要求",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 191603,
+      "raw_end": 191637,
+      "warning": ""
+    },
+    {
+      "note_stem": "4. 交流展示",
+      "filename": "4. 交流展示.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\4. 交流展示.md",
+      "parent": "五、数学建模活动的要求",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 191637,
+      "raw_end": 191903,
+      "warning": ""
+    },
+    {
+      "note_stem": "六、数学建模活动研究报告的参考形式",
+      "filename": "六、数学建模活动研究报告的参考形式.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\六、数学建模活动研究报告的参考形式.md",
+      "parent": "建立统计模型进行预测",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 191903,
+      "raw_end": 192262,
+      "warning": ""
+    },
+    {
+      "note_stem": "部分中英文词汇索引",
+      "filename": "部分中英文词汇索引.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\部分中英文词汇索引.md",
+      "parent": "",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 192262,
+      "raw_end": 194041,
+      "warning": ""
+    },
+    {
+      "note_stem": "后记",
+      "filename": "后记.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\后记.md",
+      "parent": "",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 194041,
+      "raw_end": 194616,
+      "warning": ""
+    },
+    {
+      "note_stem": "PUTONG GAOZHONG JIAOKESHU SHUXUE",
+      "filename": "PUTONG GAOZHONG JIAOKESHU SHUXUE.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\PUTONG GAOZHONG JIAOKESHU SHUXUE.md",
+      "parent": "",
+      "children": [],
+      "is_leaf": true,
+      "is_special_merge": false,
+      "raw_start": 194616,
+      "raw_end": 194650,
+      "warning": ""
+    }
+  ],
+  "segments": [
+    {
+      "heading": {
+        "marker": "#",
+        "markdown_depth": 1,
+        "number": "",
+        "number_depth": 0,
+        "title": "数学",
+        "full_title": "数学",
+        "line_index": 0,
+        "char_start": 0,
+        "char_end": 5
+      },
+      "link_title": "数学",
+      "filename": "数学.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\数学.md",
+      "char_start": 0,
+      "char_end": 109,
+      "byte_count": 143,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "#",
+        "markdown_depth": 1,
+        "number": "",
+        "number_depth": 0,
+        "title": "数学",
+        "full_title": "数学",
+        "line_index": 10,
+        "char_start": 109,
+        "char_end": 114
+      },
+      "link_title": "数学",
+      "filename": "数学 - 02.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\数学 - 02.md",
+      "char_start": 109,
+      "char_end": 414,
+      "byte_count": 713,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "#",
+        "markdown_depth": 1,
+        "number": "",
+        "number_depth": 0,
+        "title": "本册导引",
+        "full_title": "本册导引",
+        "line_index": 56,
+        "char_start": 414,
+        "char_end": 421
+      },
+      "link_title": "本册导引",
+      "filename": "本册导引.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\本册导引.md",
+      "char_start": 414,
+      "char_end": 1255,
+      "byte_count": 2455,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "#",
+        "markdown_depth": 1,
+        "number": "",
+        "number_depth": 0,
+        "title": "目录",
+        "full_title": "目录",
+        "line_index": 68,
+        "char_start": 1255,
+        "char_end": 1260
+      },
+      "link_title": "目录",
+      "filename": "目录.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\目录.md",
+      "char_start": 1255,
+      "char_end": 1343,
+      "byte_count": 92,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "#",
+        "markdown_depth": 1,
+        "number": "",
+        "number_depth": 0,
+        "title": "第六章 计数原理 …… 1",
+        "full_title": "第六章 计数原理 …… 1",
+        "line_index": 72,
+        "char_start": 1343,
+        "char_end": 1359
+      },
+      "link_title": "第六章 计数原理 …… 1",
+      "filename": "第六章 计数原理 …… 1.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\第六章 计数原理 …… 1.md",
+      "char_start": 1343,
+      "char_end": 1560,
+      "byte_count": 371,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "#",
+        "markdown_depth": 1,
+        "number": "",
+        "number_depth": 0,
+        "title": "数学探究 杨辉三角的性质与应用 39",
+        "full_title": "数学探究 杨辉三角的性质与应用 39",
+        "line_index": 90,
+        "char_start": 1560,
+        "char_end": 1581
+      },
+      "link_title": "数学探究 杨辉三角的性质与应用 39",
+      "filename": "数学探究 杨辉三角的性质与应用 39.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\数学探究 杨辉三角的性质与应用 39.md",
+      "char_start": 1560,
+      "char_end": 1582,
+      "byte_count": 50,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "#",
+        "markdown_depth": 1,
+        "number": "",
+        "number_depth": 0,
+        "title": "第七章 随机变量及其分布 43",
+        "full_title": "第七章 随机变量及其分布 43",
+        "line_index": 92,
+        "char_start": 1582,
+        "char_end": 1600
+      },
+      "link_title": "第七章 随机变量及其分布 43",
+      "filename": "第七章 随机变量及其分布 43.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\第七章 随机变量及其分布 43.md",
+      "char_start": 1582,
+      "char_end": 1875,
+      "byte_count": 539,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "#",
+        "markdown_depth": 1,
+        "number": "",
+        "number_depth": 0,
+        "title": "第八章 成对数据的统计分析 92",
+        "full_title": "第八章 成对数据的统计分析 92",
+        "line_index": 116,
+        "char_start": 1875,
+        "char_end": 1894
+      },
+      "link_title": "第八章 成对数据的统计分析 92",
+      "filename": "第八章 成对数据的统计分析 92.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\第八章 成对数据的统计分析 92.md",
+      "char_start": 1875,
+      "char_end": 1998,
+      "byte_count": 255,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "#",
+        "markdown_depth": 1,
+        "number": "",
+        "number_depth": 0,
+        "title": "数学建模 建立统计模型进行预测 …… 141",
+        "full_title": "数学建模 建立统计模型进行预测 …… 141",
+        "line_index": 130,
+        "char_start": 1998,
+        "char_end": 2023
+      },
+      "link_title": "数学建模 建立统计模型进行预测 …… 141",
+      "filename": "数学建模 建立统计模型进行预测 …… 141.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\数学建模 建立统计模型进行预测 …… 141.md",
+      "char_start": 1998,
+      "char_end": 2024,
+      "byte_count": 58,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "#",
+        "markdown_depth": 1,
+        "number": "",
+        "number_depth": 0,
+        "title": "部分中英文词汇索引…… 147",
+        "full_title": "部分中英文词汇索引…… 147",
+        "line_index": 132,
+        "char_start": 2024,
+        "char_end": 2042
+      },
+      "link_title": "部分中英文词汇索引…… 147",
+      "filename": "部分中英文词汇索引…… 147.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\部分中英文词汇索引…… 147.md",
+      "char_start": 2024,
+      "char_end": 2043,
+      "byte_count": 41,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "练习",
+        "full_title": "练习",
+        "line_index": 237,
+        "char_start": 5795,
+        "char_end": 5803
+      },
+      "link_title": "练习",
+      "filename": "练习.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习.md",
+      "char_start": 5795,
+      "char_end": 8011,
+      "byte_count": 5112,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "练习",
+        "full_title": "练习",
+        "line_index": 294,
+        "char_start": 8011,
+        "char_end": 8019
+      },
+      "link_title": "练习",
+      "filename": "练习 - 02.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 02.md",
+      "char_start": 8011,
+      "char_end": 11307,
+      "byte_count": 7300,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "练习",
+        "full_title": "练习",
+        "line_index": 373,
+        "char_start": 11307,
+        "char_end": 11315
+      },
+      "link_title": "练习",
+      "filename": "练习 - 03.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 03.md",
+      "char_start": 11307,
+      "char_end": 11623,
+      "byte_count": 656,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "复习巩固",
+        "full_title": "复习巩固",
+        "line_index": 384,
+        "char_start": 11633,
+        "char_end": 11642
+      },
+      "link_title": "复习巩固",
+      "filename": "复习巩固.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\复习巩固.md",
+      "char_start": 11633,
+      "char_end": 12326,
+      "byte_count": 1361,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "综合运用",
+        "full_title": "综合运用",
+        "line_index": 403,
+        "char_start": 12326,
+        "char_end": 12335
+      },
+      "link_title": "综合运用",
+      "filename": "综合运用.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\综合运用.md",
+      "char_start": 12326,
+      "char_end": 12789,
+      "byte_count": 1099,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "拓广探索",
+        "full_title": "拓广探索",
+        "line_index": 419,
+        "char_start": 12789,
+        "char_end": 12798
+      },
+      "link_title": "拓广探索",
+      "filename": "拓广探索.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\拓广探索.md",
+      "char_start": 12789,
+      "char_end": 12968,
+      "byte_count": 319,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "子集的个数有多少",
+        "full_title": "子集的个数有多少",
+        "line_index": 429,
+        "char_start": 12978,
+        "char_end": 12991
+      },
+      "link_title": "子集的个数有多少",
+      "filename": "子集的个数有多少.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\子集的个数有多少.md",
+      "char_start": 12978,
+      "char_end": 14807,
+      "byte_count": 3315,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "练习",
+        "full_title": "练习",
+        "line_index": 566,
+        "char_start": 17678,
+        "char_end": 17686
+      },
+      "link_title": "练习",
+      "filename": "练习 - 04.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 04.md",
+      "char_start": 17678,
+      "char_end": 17972,
+      "byte_count": 682,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "练习",
+        "full_title": "练习",
+        "line_index": 683,
+        "char_start": 22908,
+        "char_end": 22916
+      },
+      "link_title": "练习",
+      "filename": "练习 - 05.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 05.md",
+      "char_start": 22908,
+      "char_end": 23285,
+      "byte_count": 533,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "练习",
+        "full_title": "练习",
+        "line_index": 744,
+        "char_start": 25113,
+        "char_end": 25121
+      },
+      "link_title": "练习",
+      "filename": "练习 - 06.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 06.md",
+      "char_start": 25113,
+      "char_end": 25346,
+      "byte_count": 523,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "练习",
+        "full_title": "练习",
+        "line_index": 831,
+        "char_start": 28946,
+        "char_end": 28954
+      },
+      "link_title": "练习",
+      "filename": "练习 - 07.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 07.md",
+      "char_start": 28946,
+      "char_end": 29271,
+      "byte_count": 601,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "复习巩固",
+        "full_title": "复习巩固",
+        "line_index": 848,
+        "char_start": 29281,
+        "char_end": 29290
+      },
+      "link_title": "复习巩固",
+      "filename": "复习巩固 - 02.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\复习巩固 - 02.md",
+      "char_start": 29281,
+      "char_end": 30145,
+      "byte_count": 1766,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "综合运用",
+        "full_title": "综合运用",
+        "line_index": 877,
+        "char_start": 30145,
+        "char_end": 30154
+      },
+      "link_title": "综合运用",
+      "filename": "综合运用 - 02.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\综合运用 - 02.md",
+      "char_start": 30145,
+      "char_end": 31267,
+      "byte_count": 2476,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "拓广探索",
+        "full_title": "拓广探索",
+        "line_index": 911,
+        "char_start": 31267,
+        "char_end": 31276
+      },
+      "link_title": "拓广探索",
+      "filename": "拓广探索 - 02.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\拓广探索 - 02.md",
+      "char_start": 31267,
+      "char_end": 32039,
+      "byte_count": 1728,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "组合数的两个性质",
+        "full_title": "组合数的两个性质",
+        "line_index": 933,
+        "char_start": 32049,
+        "char_end": 32062
+      },
+      "link_title": "组合数的两个性质",
+      "filename": "组合数的两个性质.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\组合数的两个性质.md",
+      "char_start": 32049,
+      "char_end": 33227,
+      "byte_count": 2134,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "练习",
+        "full_title": "练习",
+        "line_index": 1022,
+        "char_start": 37263,
+        "char_end": 37271
+      },
+      "link_title": "练习",
+      "filename": "练习 - 08.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 08.md",
+      "char_start": 37263,
+      "char_end": 37593,
+      "byte_count": 434,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "1. 对称性",
+        "full_title": "1. 对称性",
+        "line_index": 1081,
+        "char_start": 39302,
+        "char_end": 39314
+      },
+      "link_title": "1. 对称性",
+      "filename": "1. 对称性.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\1. 对称性.md",
+      "char_start": 39302,
+      "char_end": 39465,
+      "byte_count": 333,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "2. 增减性与最大值",
+        "full_title": "2. 增减性与最大值",
+        "line_index": 1089,
+        "char_start": 39465,
+        "char_end": 39481
+      },
+      "link_title": "2. 增减性与最大值",
+      "filename": "2. 增减性与最大值.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\2. 增减性与最大值.md",
+      "char_start": 39465,
+      "char_end": 39999,
+      "byte_count": 718,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "3. 各二项式系数的和",
+        "full_title": "3. 各二项式系数的和",
+        "line_index": 1096,
+        "char_start": 39999,
+        "char_end": 40016
+      },
+      "link_title": "3. 各二项式系数的和",
+      "filename": "3. 各二项式系数的和.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\3. 各二项式系数的和.md",
+      "char_start": 39999,
+      "char_end": 41716,
+      "byte_count": 2181,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "练习",
+        "full_title": "练习",
+        "line_index": 1128,
+        "char_start": 41716,
+        "char_end": 41724
+      },
+      "link_title": "练习",
+      "filename": "练习 - 09.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 09.md",
+      "char_start": 41716,
+      "char_end": 42081,
+      "byte_count": 471,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "复习巩固",
+        "full_title": "复习巩固",
+        "line_index": 1142,
+        "char_start": 42091,
+        "char_end": 42100
+      },
+      "link_title": "复习巩固",
+      "filename": "复习巩固 - 03.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\复习巩固 - 03.md",
+      "char_start": 42091,
+      "char_end": 42956,
+      "byte_count": 1157,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "综合运用",
+        "full_title": "综合运用",
+        "line_index": 1183,
+        "char_start": 42956,
+        "char_end": 42965
+      },
+      "link_title": "综合运用",
+      "filename": "综合运用 - 03.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\综合运用 - 03.md",
+      "char_start": 42956,
+      "char_end": 43312,
+      "byte_count": 522,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "拓广探索",
+        "full_title": "拓广探索",
+        "line_index": 1195,
+        "char_start": 43312,
+        "char_end": 43321
+      },
+      "link_title": "拓广探索",
+      "filename": "拓广探索 - 03.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\拓广探索 - 03.md",
+      "char_start": 43312,
+      "char_end": 43770,
+      "byte_count": 774,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "一、本章知识结构",
+        "full_title": "一、本章知识结构",
+        "line_index": 1208,
+        "char_start": 43777,
+        "char_end": 43790
+      },
+      "link_title": "一、本章知识结构",
+      "filename": "一、本章知识结构.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\一、本章知识结构.md",
+      "char_start": 43777,
+      "char_end": 43873,
+      "byte_count": 112,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "二、回顾与思考",
+        "full_title": "二、回顾与思考",
+        "line_index": 1212,
+        "char_start": 43873,
+        "char_end": 43885
+      },
+      "link_title": "二、回顾与思考",
+      "filename": "二、回顾与思考.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\二、回顾与思考.md",
+      "char_start": 43873,
+      "char_end": 45331,
+      "byte_count": 3660,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "1. 填空题",
+        "full_title": "1. 填空题",
+        "line_index": 1236,
+        "char_start": 45352,
+        "char_end": 45364
+      },
+      "link_title": "1. 填空题",
+      "filename": "1. 填空题.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\1. 填空题.md",
+      "char_start": 45352,
+      "char_end": 46247,
+      "byte_count": 1905,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "综合运用",
+        "full_title": "综合运用",
+        "line_index": 1259,
+        "char_start": 46247,
+        "char_end": 46256
+      },
+      "link_title": "综合运用",
+      "filename": "综合运用 - 04.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\综合运用 - 04.md",
+      "char_start": 46247,
+      "char_end": 46924,
+      "byte_count": 1345,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "拓广探索",
+        "full_title": "拓广探索",
+        "line_index": 1278,
+        "char_start": 46924,
+        "char_end": 46933
+      },
+      "link_title": "拓广探索",
+      "filename": "拓广探索 - 04.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\拓广探索 - 04.md",
+      "char_start": 46924,
+      "char_end": 47093,
+      "byte_count": 255,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "一、探究的内容：杨辉三角的性质与应用",
+        "full_title": "一、探究的内容：杨辉三角的性质与应用",
+        "line_index": 1301,
+        "char_start": 47830,
+        "char_end": 47853
+      },
+      "link_title": "一、探究的内容：杨辉三角的性质与应用",
+      "filename": "一、探究的内容：杨辉三角的性质与应用.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\一、探究的内容：杨辉三角的性质与应用.md",
+      "char_start": 47830,
+      "char_end": 47854,
+      "byte_count": 60,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "（一）杨辉三角的性质",
+        "full_title": "（一）杨辉三角的性质",
+        "line_index": 1303,
+        "char_start": 47854,
+        "char_end": 47869
+      },
+      "link_title": "（一）杨辉三角的性质",
+      "filename": "（一）杨辉三角的性质.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\（一）杨辉三角的性质.md",
+      "char_start": 47854,
+      "char_end": 49083,
+      "byte_count": 2083,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "（二）杨辉三角的应用",
+        "full_title": "（二）杨辉三角的应用",
+        "line_index": 1336,
+        "char_start": 49083,
+        "char_end": 49098
+      },
+      "link_title": "（二）杨辉三角的应用",
+      "filename": "（二）杨辉三角的应用.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\（二）杨辉三角的应用.md",
+      "char_start": 49083,
+      "char_end": 49786,
+      "byte_count": 1799,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "二、对探究活动的要求",
+        "full_title": "二、对探究活动的要求",
+        "line_index": 1366,
+        "char_start": 49786,
+        "char_end": 49801
+      },
+      "link_title": "二、对探究活动的要求",
+      "filename": "二、对探究活动的要求.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\二、对探究活动的要求.md",
+      "char_start": 49786,
+      "char_end": 49947,
+      "byte_count": 415,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "三、研究报告的参考形式",
+        "full_title": "三、研究报告的参考形式",
+        "line_index": 1376,
+        "char_start": 49947,
+        "char_end": 49963
+      },
+      "link_title": "三、研究报告的参考形式",
+      "filename": "三、研究报告的参考形式.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\三、研究报告的参考形式.md",
+      "char_start": 49947,
+      "char_end": 50227,
+      "byte_count": 448,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "练习",
+        "full_title": "练习",
+        "line_index": 1510,
+        "char_start": 56609,
+        "char_end": 56617
+      },
+      "link_title": "练习",
+      "filename": "练习 - 10.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 10.md",
+      "char_start": 56609,
+      "char_end": 56917,
+      "byte_count": 684,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "练习",
+        "full_title": "练习",
+        "line_index": 1591,
+        "char_start": 62206,
+        "char_end": 62214
+      },
+      "link_title": "练习",
+      "filename": "练习 - 11.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 11.md",
+      "char_start": 62206,
+      "char_end": 62473,
+      "byte_count": 629,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "复习巩固",
+        "full_title": "复习巩固",
+        "line_index": 1601,
+        "char_start": 62483,
+        "char_end": 62492
+      },
+      "link_title": "复习巩固",
+      "filename": "复习巩固 - 05.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\复习巩固 - 05.md",
+      "char_start": 62483,
+      "char_end": 63346,
+      "byte_count": 1703,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "综合运用",
+        "full_title": "综合运用",
+        "line_index": 1622,
+        "char_start": 63346,
+        "char_end": 63355
+      },
+      "link_title": "综合运用",
+      "filename": "综合运用 - 05.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\综合运用 - 05.md",
+      "char_start": 63346,
+      "char_end": 63650,
+      "byte_count": 774,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "拓广探索",
+        "full_title": "拓广探索",
+        "line_index": 1630,
+        "char_start": 63650,
+        "char_end": 63659
+      },
+      "link_title": "拓广探索",
+      "filename": "拓广探索 - 05.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\拓广探索 - 05.md",
+      "char_start": 63650,
+      "char_end": 63834,
+      "byte_count": 232,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "##",
+        "markdown_depth": 2,
+        "number": "",
+        "number_depth": 0,
+        "title": "阅读与思考",
+        "full_title": "阅读与思考",
+        "line_index": 1636,
+        "char_start": 63834,
+        "char_end": 63843
+      },
+      "link_title": "阅读与思考 贝叶斯公式与人工智能",
+      "filename": "阅读与思考 贝叶斯公式与人工智能.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\阅读与思考 贝叶斯公式与人工智能.md",
+      "char_start": 63834,
+      "char_end": 66953,
+      "byte_count": 7425,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "##",
+        "markdown_depth": 2,
+        "number": "7.2",
+        "number_depth": 2,
+        "title": "离散型随机变量及其分布列",
+        "full_title": "7.2 离散型随机变量及其分布列",
+        "line_index": 1674,
+        "char_start": 66953,
+        "char_end": 66973
+      },
+      "link_title": "7.2 离散型随机变量及其分布列",
+      "filename": "7.2 离散型随机变量及其分布列.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\7.2 离散型随机变量及其分布列.md",
+      "char_start": 66953,
+      "char_end": 70815,
+      "byte_count": 7578,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "练习",
+        "full_title": "练习",
+        "line_index": 1807,
+        "char_start": 73181,
+        "char_end": 73189
+      },
+      "link_title": "练习",
+      "filename": "练习 - 12.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 12.md",
+      "char_start": 73181,
+      "char_end": 73462,
+      "byte_count": 685,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "复习巩固",
+        "full_title": "复习巩固",
+        "line_index": 1821,
+        "char_start": 73472,
+        "char_end": 73481
+      },
+      "link_title": "复习巩固",
+      "filename": "复习巩固 - 06.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\复习巩固 - 06.md",
+      "char_start": 73472,
+      "char_end": 74146,
+      "byte_count": 1156,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "综合运用",
+        "full_title": "综合运用",
+        "line_index": 1839,
+        "char_start": 74146,
+        "char_end": 74155
+      },
+      "link_title": "综合运用",
+      "filename": "综合运用 - 06.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\综合运用 - 06.md",
+      "char_start": 74146,
+      "char_end": 74444,
+      "byte_count": 768,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "练习",
+        "full_title": "练习",
+        "line_index": 1989,
+        "char_start": 80476,
+        "char_end": 80484
+      },
+      "link_title": "练习",
+      "filename": "练习 - 13.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 13.md",
+      "char_start": 80476,
+      "char_end": 81159,
+      "byte_count": 951,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "7.3.2",
+        "number_depth": 3,
+        "title": "离散型随机变量的方差",
+        "full_title": "7.3.2 离散型随机变量的方差",
+        "line_index": 2010,
+        "char_start": 81159,
+        "char_end": 81180
+      },
+      "link_title": "7.3.2 离散型随机变量的方差",
+      "filename": "7.3.2 离散型随机变量的方差.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\7.3.2 离散型随机变量的方差.md",
+      "char_start": 81159,
+      "char_end": 83662,
+      "byte_count": 4057,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "练习",
+        "full_title": "练习",
+        "line_index": 2114,
+        "char_start": 85885,
+        "char_end": 85893
+      },
+      "link_title": "练习",
+      "filename": "练习 - 14.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 14.md",
+      "char_start": 85885,
+      "char_end": 86601,
+      "byte_count": 958,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "复习巩固",
+        "full_title": "复习巩固",
+        "line_index": 2137,
+        "char_start": 86611,
+        "char_end": 86620
+      },
+      "link_title": "复习巩固",
+      "filename": "复习巩固 - 07.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\复习巩固 - 07.md",
+      "char_start": 86611,
+      "char_end": 87103,
+      "byte_count": 1034,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "综合运用",
+        "full_title": "综合运用",
+        "line_index": 2145,
+        "char_start": 87103,
+        "char_end": 87112
+      },
+      "link_title": "综合运用",
+      "filename": "综合运用 - 07.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\综合运用 - 07.md",
+      "char_start": 87103,
+      "char_end": 87624,
+      "byte_count": 857,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "拓广探索",
+        "full_title": "拓广探索",
+        "line_index": 2161,
+        "char_start": 87624,
+        "char_end": 87633
+      },
+      "link_title": "拓广探索",
+      "filename": "拓广探索 - 06.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\拓广探索 - 06.md",
+      "char_start": 87624,
+      "char_end": 87731,
+      "byte_count": 201,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "练习",
+        "full_title": "练习",
+        "line_index": 2292,
+        "char_start": 94544,
+        "char_end": 94552
+      },
+      "link_title": "练习",
+      "filename": "练习 - 15.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 15.md",
+      "char_start": 94544,
+      "char_end": 94876,
+      "byte_count": 706,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "练习",
+        "full_title": "练习",
+        "line_index": 2393,
+        "char_start": 100636,
+        "char_end": 100644
+      },
+      "link_title": "练习",
+      "filename": "练习 - 16.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 16.md",
+      "char_start": 100636,
+      "char_end": 100806,
+      "byte_count": 422,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "复习巩固",
+        "full_title": "复习巩固",
+        "line_index": 2401,
+        "char_start": 100816,
+        "char_end": 100825
+      },
+      "link_title": "复习巩固",
+      "filename": "复习巩固 - 08.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\复习巩固 - 08.md",
+      "char_start": 100816,
+      "char_end": 101207,
+      "byte_count": 805,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "综合运用",
+        "full_title": "综合运用",
+        "line_index": 2418,
+        "char_start": 101207,
+        "char_end": 101216
+      },
+      "link_title": "综合运用",
+      "filename": "综合运用 - 08.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\综合运用 - 08.md",
+      "char_start": 101207,
+      "char_end": 101579,
+      "byte_count": 846,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "拓广探索",
+        "full_title": "拓广探索",
+        "line_index": 2429,
+        "char_start": 101579,
+        "char_end": 101588
+      },
+      "link_title": "拓广探索",
+      "filename": "拓广探索 - 07.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\拓广探索 - 07.md",
+      "char_start": 101579,
+      "char_end": 101752,
+      "byte_count": 311,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "二项分布的性质",
+        "full_title": "二项分布的性质",
+        "line_index": 2437,
+        "char_start": 101762,
+        "char_end": 101774
+      },
+      "link_title": "二项分布的性质",
+      "filename": "二项分布的性质.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\二项分布的性质.md",
+      "char_start": 101762,
+      "char_end": 103168,
+      "byte_count": 1944,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "练习",
+        "full_title": "练习",
+        "line_index": 2580,
+        "char_start": 109295,
+        "char_end": 109303
+      },
+      "link_title": "练习",
+      "filename": "练习 - 17.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 17.md",
+      "char_start": 109295,
+      "char_end": 109681,
+      "byte_count": 554,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "复习巩固",
+        "full_title": "复习巩固",
+        "line_index": 2590,
+        "char_start": 109691,
+        "char_end": 109700
+      },
+      "link_title": "复习巩固",
+      "filename": "复习巩固 - 09.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\复习巩固 - 09.md",
+      "char_start": 109691,
+      "char_end": 110036,
+      "byte_count": 605,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "综合运用",
+        "full_title": "综合运用",
+        "line_index": 2600,
+        "char_start": 110036,
+        "char_end": 110045
+      },
+      "link_title": "综合运用",
+      "filename": "综合运用 - 09.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\综合运用 - 09.md",
+      "char_start": 110036,
+      "char_end": 110254,
+      "byte_count": 378,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "##",
+        "markdown_depth": 2,
+        "number": "",
+        "number_depth": 0,
+        "title": "信息技术应用",
+        "full_title": "信息技术应用",
+        "line_index": 2606,
+        "char_start": 110254,
+        "char_end": 110264
+      },
+      "link_title": "信息技术应用",
+      "filename": "信息技术应用.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\信息技术应用.md",
+      "char_start": 110254,
+      "char_end": 110265,
+      "byte_count": 23,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "1. 二项分布",
+        "full_title": "1. 二项分布",
+        "line_index": 2614,
+        "char_start": 110393,
+        "char_end": 110406
+      },
+      "link_title": "1. 二项分布",
+      "filename": "1. 二项分布.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\1. 二项分布.md",
+      "char_start": 110393,
+      "char_end": 110741,
+      "byte_count": 514,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "2. 超几何分布",
+        "full_title": "2. 超几何分布",
+        "line_index": 2627,
+        "char_start": 110741,
+        "char_end": 110755
+      },
+      "link_title": "2. 超几何分布",
+      "filename": "2. 超几何分布.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\2. 超几何分布.md",
+      "char_start": 110741,
+      "char_end": 110914,
+      "byte_count": 337,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "3. 正态分布",
+        "full_title": "3. 正态分布",
+        "line_index": 2632,
+        "char_start": 110914,
+        "char_end": 110927
+      },
+      "link_title": "3. 正态分布",
+      "filename": "3. 正态分布.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\3. 正态分布.md",
+      "char_start": 110914,
+      "char_end": 111551,
+      "byte_count": 901,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "一、本章知识结构",
+        "full_title": "一、本章知识结构",
+        "line_index": 2650,
+        "char_start": 111558,
+        "char_end": 111571
+      },
+      "link_title": "一、本章知识结构",
+      "filename": "一、本章知识结构 - 02.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\一、本章知识结构 - 02.md",
+      "char_start": 111558,
+      "char_end": 111654,
+      "byte_count": 112,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "二、回顾与思考",
+        "full_title": "二、回顾与思考",
+        "line_index": 2654,
+        "char_start": 111654,
+        "char_end": 111666
+      },
+      "link_title": "二、回顾与思考",
+      "filename": "二、回顾与思考 - 02.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\二、回顾与思考 - 02.md",
+      "char_start": 111654,
+      "char_end": 112830,
+      "byte_count": 3402,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "复习巩固",
+        "full_title": "复习巩固",
+        "line_index": 2675,
+        "char_start": 112841,
+        "char_end": 112850
+      },
+      "link_title": "复习巩固",
+      "filename": "复习巩固 - 10.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\复习巩固 - 10.md",
+      "char_start": 112841,
+      "char_end": 113466,
+      "byte_count": 1265,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "综合运用",
+        "full_title": "综合运用",
+        "line_index": 2697,
+        "char_start": 113466,
+        "char_end": 113475
+      },
+      "link_title": "综合运用",
+      "filename": "综合运用 - 10.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\综合运用 - 10.md",
+      "char_start": 113466,
+      "char_end": 113955,
+      "byte_count": 1189,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "拓广探索",
+        "full_title": "拓广探索",
+        "line_index": 2705,
+        "char_start": 113955,
+        "char_end": 113964
+      },
+      "link_title": "拓广探索",
+      "filename": "拓广探索 - 08.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\拓广探索 - 08.md",
+      "char_start": 113955,
+      "char_end": 114441,
+      "byte_count": 1180,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "练习",
+        "full_title": "练习",
+        "line_index": 2783,
+        "char_start": 118230,
+        "char_end": 118238
+      },
+      "link_title": "练习",
+      "filename": "练习 - 18.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 18.md",
+      "char_start": 118230,
+      "char_end": 119186,
+      "byte_count": 1238,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "练习",
+        "full_title": "练习",
+        "line_index": 2971,
+        "char_start": 129231,
+        "char_end": 129239
+      },
+      "link_title": "练习",
+      "filename": "练习 - 19.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 19.md",
+      "char_start": 129231,
+      "char_end": 130102,
+      "byte_count": 1367,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "复习巩固",
+        "full_title": "复习巩固",
+        "line_index": 2989,
+        "char_start": 130112,
+        "char_end": 130121
+      },
+      "link_title": "复习巩固",
+      "filename": "复习巩固 - 11.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\复习巩固 - 11.md",
+      "char_start": 130112,
+      "char_end": 130582,
+      "byte_count": 672,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "综合运用",
+        "full_title": "综合运用",
+        "line_index": 3010,
+        "char_start": 130582,
+        "char_end": 130591
+      },
+      "link_title": "综合运用",
+      "filename": "综合运用 - 11.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\综合运用 - 11.md",
+      "char_start": 130582,
+      "char_end": 131664,
+      "byte_count": 1484,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "拓广探索",
+        "full_title": "拓广探索",
+        "line_index": 3024,
+        "char_start": 131664,
+        "char_end": 131673
+      },
+      "link_title": "拓广探索",
+      "filename": "拓广探索 - 09.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\拓广探索 - 09.md",
+      "char_start": 131664,
+      "char_end": 131819,
+      "byte_count": 437,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "练习",
+        "full_title": "练习",
+        "line_index": 3072,
+        "char_start": 134405,
+        "char_end": 134413
+      },
+      "link_title": "练习",
+      "filename": "练习 - 20.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 20.md",
+      "char_start": 134405,
+      "char_end": 134561,
+      "byte_count": 396,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "练习",
+        "full_title": "练习",
+        "line_index": 3231,
+        "char_start": 142811,
+        "char_end": 142819
+      },
+      "link_title": "练习",
+      "filename": "练习 - 21.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 21.md",
+      "char_start": 142811,
+      "char_end": 152395,
+      "byte_count": 15538,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "练习",
+        "full_title": "练习",
+        "line_index": 3400,
+        "char_start": 152395,
+        "char_end": 152403
+      },
+      "link_title": "练习",
+      "filename": "练习 - 22.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 22.md",
+      "char_start": 152395,
+      "char_end": 153656,
+      "byte_count": 1839,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "复习巩固",
+        "full_title": "复习巩固",
+        "line_index": 3418,
+        "char_start": 153666,
+        "char_end": 153675
+      },
+      "link_title": "复习巩固",
+      "filename": "复习巩固 - 12.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\复习巩固 - 12.md",
+      "char_start": 153666,
+      "char_end": 154277,
+      "byte_count": 1105,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "综合运用",
+        "full_title": "综合运用",
+        "line_index": 3435,
+        "char_start": 154277,
+        "char_end": 154286
+      },
+      "link_title": "综合运用",
+      "filename": "综合运用 - 12.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\综合运用 - 12.md",
+      "char_start": 154277,
+      "char_end": 157148,
+      "byte_count": 3277,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "拓广探索",
+        "full_title": "拓广探索",
+        "line_index": 3450,
+        "char_start": 157148,
+        "char_end": 157157
+      },
+      "link_title": "拓广探索",
+      "filename": "拓广探索 - 10.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\拓广探索 - 10.md",
+      "char_start": 157148,
+      "char_end": 157383,
+      "byte_count": 519,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "##",
+        "markdown_depth": 2,
+        "number": "",
+        "number_depth": 0,
+        "title": "阅读与思考",
+        "full_title": "阅读与思考",
+        "line_index": 3456,
+        "char_start": 157383,
+        "char_end": 157392
+      },
+      "link_title": "阅读与思考 回归与相关",
+      "filename": "阅读与思考 回归与相关.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\阅读与思考 回归与相关.md",
+      "char_start": 157383,
+      "char_end": 158946,
+      "byte_count": 4085,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "练习",
+        "full_title": "练习",
+        "line_index": 3561,
+        "char_start": 164124,
+        "char_end": 164132
+      },
+      "link_title": "练习",
+      "filename": "练习 - 23.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 23.md",
+      "char_start": 164124,
+      "char_end": 164759,
+      "byte_count": 1249,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "练习",
+        "full_title": "练习",
+        "line_index": 3739,
+        "char_start": 173370,
+        "char_end": 173378
+      },
+      "link_title": "练习",
+      "filename": "练习 - 24.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\练习 - 24.md",
+      "char_start": 173370,
+      "char_end": 174310,
+      "byte_count": 1504,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "复习巩固",
+        "full_title": "复习巩固",
+        "line_index": 3761,
+        "char_start": 174320,
+        "char_end": 174329
+      },
+      "link_title": "复习巩固",
+      "filename": "复习巩固 - 13.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\复习巩固 - 13.md",
+      "char_start": 174320,
+      "char_end": 174511,
+      "byte_count": 485,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "综合运用",
+        "full_title": "综合运用",
+        "line_index": 3768,
+        "char_start": 174511,
+        "char_end": 174520
+      },
+      "link_title": "综合运用",
+      "filename": "综合运用 - 13.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\综合运用 - 13.md",
+      "char_start": 174511,
+      "char_end": 175835,
+      "byte_count": 2092,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "拓广探索",
+        "full_title": "拓广探索",
+        "line_index": 3795,
+        "char_start": 175835,
+        "char_end": 175844
+      },
+      "link_title": "拓广探索",
+      "filename": "拓广探索 - 11.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\拓广探索 - 11.md",
+      "char_start": 175835,
+      "char_end": 175998,
+      "byte_count": 393,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "一、本章知识结构",
+        "full_title": "一、本章知识结构",
+        "line_index": 3801,
+        "char_start": 176005,
+        "char_end": 176018
+      },
+      "link_title": "一、本章知识结构",
+      "filename": "一、本章知识结构 - 03.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\一、本章知识结构 - 03.md",
+      "char_start": 176005,
+      "char_end": 176101,
+      "byte_count": 112,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "二、回顾与思考",
+        "full_title": "二、回顾与思考",
+        "line_index": 3805,
+        "char_start": 176101,
+        "char_end": 176113
+      },
+      "link_title": "二、回顾与思考",
+      "filename": "二、回顾与思考 - 03.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\二、回顾与思考 - 03.md",
+      "char_start": 176101,
+      "char_end": 177250,
+      "byte_count": 3189,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "复习巩固",
+        "full_title": "复习巩固",
+        "line_index": 3830,
+        "char_start": 177261,
+        "char_end": 177270
+      },
+      "link_title": "复习巩固",
+      "filename": "复习巩固 - 14.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\复习巩固 - 14.md",
+      "char_start": 177261,
+      "char_end": 178270,
+      "byte_count": 1629,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "综合运用",
+        "full_title": "综合运用",
+        "line_index": 3855,
+        "char_start": 178270,
+        "char_end": 178279
+      },
+      "link_title": "综合运用",
+      "filename": "综合运用 - 14.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\综合运用 - 14.md",
+      "char_start": 178270,
+      "char_end": 180214,
+      "byte_count": 2526,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "拓广探索",
+        "full_title": "拓广探索",
+        "line_index": 3874,
+        "char_start": 180214,
+        "char_end": 180223
+      },
+      "link_title": "拓广探索",
+      "filename": "拓广探索 - 12.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\拓广探索 - 12.md",
+      "char_start": 180214,
+      "char_end": 181704,
+      "byte_count": 1960,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "一、问题背景分析",
+        "full_title": "一、问题背景分析",
+        "line_index": 3902,
+        "char_start": 184493,
+        "char_end": 184506
+      },
+      "link_title": "一、问题背景分析",
+      "filename": "一、问题背景分析.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\一、问题背景分析.md",
+      "char_start": 184493,
+      "char_end": 185147,
+      "byte_count": 1392,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "1. 绘制散点图",
+        "full_title": "1. 绘制散点图",
+        "line_index": 3916,
+        "char_start": 185161,
+        "char_end": 185175
+      },
+      "link_title": "1. 绘制散点图",
+      "filename": "1. 绘制散点图.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\1. 绘制散点图.md",
+      "char_start": 185161,
+      "char_end": 188206,
+      "byte_count": 3651,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "2. 建立线性回归方程",
+        "full_title": "2. 建立线性回归方程",
+        "line_index": 3931,
+        "char_start": 188206,
+        "char_end": 188223
+      },
+      "link_title": "2. 建立线性回归方程",
+      "filename": "2. 建立线性回归方程.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\2. 建立线性回归方程.md",
+      "char_start": 188206,
+      "char_end": 188791,
+      "byte_count": 885,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "3. 回归结果分析",
+        "full_title": "3. 回归结果分析",
+        "line_index": 3946,
+        "char_start": 188791,
+        "char_end": 188806
+      },
+      "link_title": "3. 回归结果分析",
+      "filename": "3. 回归结果分析.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\3. 回归结果分析.md",
+      "char_start": 188791,
+      "char_end": 190391,
+      "byte_count": 2612,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "三、模型的应用",
+        "full_title": "三、模型的应用",
+        "line_index": 3970,
+        "char_start": 190391,
+        "char_end": 190403
+      },
+      "link_title": "三、模型的应用",
+      "filename": "三、模型的应用.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\三、模型的应用.md",
+      "char_start": 190391,
+      "char_end": 190966,
+      "byte_count": 989,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "四、数学建模活动的选题",
+        "full_title": "四、数学建模活动的选题",
+        "line_index": 3976,
+        "char_start": 190966,
+        "char_end": 190982
+      },
+      "link_title": "四、数学建模活动的选题",
+      "filename": "四、数学建模活动的选题.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\四、数学建模活动的选题.md",
+      "char_start": 190966,
+      "char_end": 191352,
+      "byte_count": 898,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "1. 组建合作团队",
+        "full_title": "1. 组建合作团队",
+        "line_index": 3988,
+        "char_start": 191369,
+        "char_end": 191384
+      },
+      "link_title": "1. 组建合作团队",
+      "filename": "1. 组建合作团队.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\1. 组建合作团队.md",
+      "char_start": 191369,
+      "char_end": 191513,
+      "byte_count": 384,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "2. 开展研究活动",
+        "full_title": "2. 开展研究活动",
+        "line_index": 3992,
+        "char_start": 191513,
+        "char_end": 191528
+      },
+      "link_title": "2. 开展研究活动",
+      "filename": "2. 开展研究活动.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\2. 开展研究活动.md",
+      "char_start": 191513,
+      "char_end": 191603,
+      "byte_count": 246,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "3. 撰写研究报告",
+        "full_title": "3. 撰写研究报告",
+        "line_index": 3996,
+        "char_start": 191603,
+        "char_end": 191618
+      },
+      "link_title": "3. 撰写研究报告",
+      "filename": "3. 撰写研究报告.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\3. 撰写研究报告.md",
+      "char_start": 191603,
+      "char_end": 191637,
+      "byte_count": 76,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "####",
+        "markdown_depth": 4,
+        "number": "",
+        "number_depth": 0,
+        "title": "4. 交流展示",
+        "full_title": "4. 交流展示",
+        "line_index": 4000,
+        "char_start": 191637,
+        "char_end": 191650
+      },
+      "link_title": "4. 交流展示",
+      "filename": "4. 交流展示.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\4. 交流展示.md",
+      "char_start": 191637,
+      "char_end": 191903,
+      "byte_count": 752,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "###",
+        "markdown_depth": 3,
+        "number": "",
+        "number_depth": 0,
+        "title": "六、数学建模活动研究报告的参考形式",
+        "full_title": "六、数学建模活动研究报告的参考形式",
+        "line_index": 4006,
+        "char_start": 191903,
+        "char_end": 191925
+      },
+      "link_title": "六、数学建模活动研究报告的参考形式",
+      "filename": "六、数学建模活动研究报告的参考形式.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\六、数学建模活动研究报告的参考形式.md",
+      "char_start": 191903,
+      "char_end": 192262,
+      "byte_count": 625,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "#",
+        "markdown_depth": 1,
+        "number": "",
+        "number_depth": 0,
+        "title": "部分中英文词汇索引",
+        "full_title": "部分中英文词汇索引",
+        "line_index": 4014,
+        "char_start": 192262,
+        "char_end": 192274
+      },
+      "link_title": "部分中英文词汇索引",
+      "filename": "部分中英文词汇索引.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\部分中英文词汇索引.md",
+      "char_start": 192262,
+      "char_end": 194041,
+      "byte_count": 2045,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "#",
+        "markdown_depth": 1,
+        "number": "",
+        "number_depth": 0,
+        "title": "后记",
+        "full_title": "后记",
+        "line_index": 4018,
+        "char_start": 194041,
+        "char_end": 194046
+      },
+      "link_title": "后记",
+      "filename": "后记.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\后记.md",
+      "char_start": 194041,
+      "char_end": 194616,
+      "byte_count": 1567,
+      "warning": ""
+    },
+    {
+      "heading": {
+        "marker": "#",
+        "markdown_depth": 1,
+        "number": "",
+        "number_depth": 0,
+        "title": "PUTONG GAOZHONG JIAOKESHU SHUXUE",
+        "full_title": "PUTONG GAOZHONG JIAOKESHU SHUXUE",
+        "line_index": 4042,
+        "char_start": 194616,
+        "char_end": 194650
+      },
+      "link_title": "PUTONG GAOZHONG JIAOKESHU SHUXUE",
+      "filename": "PUTONG GAOZHONG JIAOKESHU SHUXUE.md",
+      "output_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本\\PUTONG GAOZHONG JIAOKESHU SHUXUE.md",
+      "char_start": 194616,
+      "char_end": 194650,
+      "byte_count": 34,
+      "warning": ""
+    }
+  ],
+  "disambiguations": [
+    {
+      "original": "数学.md",
+      "final": "数学 - 02.md"
+    },
+    {
+      "original": "练习.md",
+      "final": "练习 - 02.md"
+    },
+    {
+      "original": "练习.md",
+      "final": "练习 - 03.md"
+    },
+    {
+      "original": "练习.md",
+      "final": "练习 - 04.md"
+    },
+    {
+      "original": "练习.md",
+      "final": "练习 - 05.md"
+    },
+    {
+      "original": "练习.md",
+      "final": "练习 - 06.md"
+    },
+    {
+      "original": "练习.md",
+      "final": "练习 - 07.md"
+    },
+    {
+      "original": "复习巩固.md",
+      "final": "复习巩固 - 02.md"
+    },
+    {
+      "original": "综合运用.md",
+      "final": "综合运用 - 02.md"
+    },
+    {
+      "original": "拓广探索.md",
+      "final": "拓广探索 - 02.md"
+    },
+    {
+      "original": "探究与发现.md",
+      "final": "探究与发现 - 02.md"
+    },
+    {
+      "original": "练习.md",
+      "final": "练习 - 08.md"
+    },
+    {
+      "original": "练习.md",
+      "final": "练习 - 09.md"
+    },
+    {
+      "original": "复习巩固.md",
+      "final": "复习巩固 - 03.md"
+    },
+    {
+      "original": "综合运用.md",
+      "final": "综合运用 - 03.md"
+    },
+    {
+      "original": "拓广探索.md",
+      "final": "拓广探索 - 03.md"
+    },
+    {
+      "original": "复习巩固.md",
+      "final": "复习巩固 - 04.md"
+    },
+    {
+      "original": "综合运用.md",
+      "final": "综合运用 - 04.md"
+    },
+    {
+      "original": "拓广探索.md",
+      "final": "拓广探索 - 04.md"
+    },
+    {
+      "original": "练习.md",
+      "final": "练习 - 10.md"
+    },
+    {
+      "original": "练习.md",
+      "final": "练习 - 11.md"
+    },
+    {
+      "original": "复习巩固.md",
+      "final": "复习巩固 - 05.md"
+    },
+    {
+      "original": "综合运用.md",
+      "final": "综合运用 - 05.md"
+    },
+    {
+      "original": "拓广探索.md",
+      "final": "拓广探索 - 05.md"
+    },
+    {
+      "original": "练习.md",
+      "final": "练习 - 12.md"
+    },
+    {
+      "original": "复习巩固.md",
+      "final": "复习巩固 - 06.md"
+    },
+    {
+      "original": "综合运用.md",
+      "final": "综合运用 - 06.md"
+    },
+    {
+      "original": "练习.md",
+      "final": "练习 - 13.md"
+    },
+    {
+      "original": "人民教育出版社.md",
+      "final": "人民教育出版社 - 02.md"
+    },
+    {
+      "original": "练习.md",
+      "final": "练习 - 14.md"
+    },
+    {
+      "original": "复习巩固.md",
+      "final": "复习巩固 - 07.md"
+    },
+    {
+      "original": "综合运用.md",
+      "final": "综合运用 - 07.md"
+    },
+    {
+      "original": "拓广探索.md",
+      "final": "拓广探索 - 06.md"
+    },
+    {
+      "original": "练习.md",
+      "final": "练习 - 15.md"
+    },
+    {
+      "original": "练习.md",
+      "final": "练习 - 16.md"
+    },
+    {
+      "original": "复习巩固.md",
+      "final": "复习巩固 - 08.md"
+    },
+    {
+      "original": "综合运用.md",
+      "final": "综合运用 - 08.md"
+    },
+    {
+      "original": "拓广探索.md",
+      "final": "拓广探索 - 07.md"
+    },
+    {
+      "original": "探究与发现.md",
+      "final": "探究与发现 - 03.md"
+    },
+    {
+      "original": "练习.md",
+      "final": "练习 - 17.md"
+    },
+    {
+      "original": "复习巩固.md",
+      "final": "复习巩固 - 09.md"
+    },
+    {
+      "original": "综合运用.md",
+      "final": "综合运用 - 09.md"
+    },
+    {
+      "original": "小结.md",
+      "final": "小结 - 02.md"
+    },
+    {
+      "original": "一、本章知识结构.md",
+      "final": "一、本章知识结构 - 02.md"
+    },
+    {
+      "original": "二、回顾与思考.md",
+      "final": "二、回顾与思考 - 02.md"
+    },
+    {
+      "original": "复习巩固.md",
+      "final": "复习巩固 - 10.md"
+    },
+    {
+      "original": "综合运用.md",
+      "final": "综合运用 - 10.md"
+    },
+    {
+      "original": "拓广探索.md",
+      "final": "拓广探索 - 08.md"
+    },
+    {
+      "original": "练习.md",
+      "final": "练习 - 18.md"
+    },
+    {
+      "original": "练习.md",
+      "final": "练习 - 19.md"
+    },
+    {
+      "original": "复习巩固.md",
+      "final": "复习巩固 - 11.md"
+    },
+    {
+      "original": "综合运用.md",
+      "final": "综合运用 - 11.md"
+    },
+    {
+      "original": "拓广探索.md",
+      "final": "拓广探索 - 09.md"
+    },
+    {
+      "original": "练习.md",
+      "final": "练习 - 20.md"
+    },
+    {
+      "original": "练习.md",
+      "final": "练习 - 21.md"
+    },
+    {
+      "original": "练习.md",
+      "final": "练习 - 22.md"
+    },
+    {
+      "original": "复习巩固.md",
+      "final": "复习巩固 - 12.md"
+    },
+    {
+      "original": "综合运用.md",
+      "final": "综合运用 - 12.md"
+    },
+    {
+      "original": "拓广探索.md",
+      "final": "拓广探索 - 10.md"
+    },
+    {
+      "original": "练习.md",
+      "final": "练习 - 23.md"
+    },
+    {
+      "original": "练习.md",
+      "final": "练习 - 24.md"
+    },
+    {
+      "original": "复习巩固.md",
+      "final": "复习巩固 - 13.md"
+    },
+    {
+      "original": "综合运用.md",
+      "final": "综合运用 - 13.md"
+    },
+    {
+      "original": "拓广探索.md",
+      "final": "拓广探索 - 11.md"
+    },
+    {
+      "original": "小结.md",
+      "final": "小结 - 03.md"
+    },
+    {
+      "original": "一、本章知识结构.md",
+      "final": "一、本章知识结构 - 03.md"
+    },
+    {
+      "original": "二、回顾与思考.md",
+      "final": "二、回顾与思考 - 03.md"
+    },
+    {
+      "original": "复习巩固.md",
+      "final": "复习巩固 - 14.md"
+    },
+    {
+      "original": "综合运用.md",
+      "final": "综合运用 - 14.md"
+    },
+    {
+      "original": "拓广探索.md",
+      "final": "拓广探索 - 12.md"
+    }
+  ],
+  "special_merges": [
+    {
+      "generic": "阅读与思考",
+      "specific": "贝叶斯公式与人工智能",
+      "merged": "阅读与思考 贝叶斯公式与人工智能"
+    },
+    {
+      "generic": "阅读与思考",
+      "specific": "回归与相关",
+      "merged": "阅读与思考 回归与相关"
+    }
+  ],
+  "warnings": [],
+  "next_command": "python .\\skills\\mathos-segmentation-stage1\\scripts\\mathos_segmentation_stage1.py segment 'C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本.md' --vault-root 'C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map' --yes",
+  "verification": {
+    "status": "passed",
+    "node_count": 171,
+    "leaf_count": 113,
+    "segment_count": 113
+  }
+}

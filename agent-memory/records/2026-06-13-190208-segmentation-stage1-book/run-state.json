@@ -1,0 +1,28 @@
+{
+  "stage": "segmentation-stage1",
+  "skill": "skills/mathos-segmentation-stage1",
+  "status": "completed",
+  "stop_reason": "",
+  "source_path": "C:\\Users\\Oven\\AppData\\Local\\Temp\\mathos-layered-segmentation-4945832f-7e0c-41e4-8e4d-7527603d195b\\vault\\book.md",
+  "vault_root": "C:\\Users\\Oven\\AppData\\Local\\Temp\\mathos-layered-segmentation-4945832f-7e0c-41e4-8e4d-7527603d195b\\vault",
+  "sandbox_dir": "C:\\Users\\Oven\\AppData\\Local\\Temp\\mathos-layered-segmentation-4945832f-7e0c-41e4-8e4d-7527603d195b\\vault\\book",
+  "master_path": "C:\\Users\\Oven\\AppData\\Local\\Temp\\mathos-layered-segmentation-4945832f-7e0c-41e4-8e4d-7527603d195b\\vault\\book\\000_book目录.md",
+  "record_dir": "agent-memory\\records\\2026-06-13-190208-segmentation-stage1-book",
+  "counts": {
+    "headings": 7,
+    "nodes": 6,
+    "directory_nodes": 3,
+    "leaf_nodes": 3,
+    "special_merges": 1,
+    "warnings": 0,
+    "disambiguations": 0,
+    "segments": 3
+  },
+  "warnings": [],
+  "records": {
+    "manifest": "agent-memory\\records\\2026-06-13-190208-segmentation-stage1-book\\manifest.json",
+    "run_summary": "agent-memory\\records\\2026-06-13-190208-segmentation-stage1-book\\run-summary.md",
+    "run_state": "agent-memory\\records\\2026-06-13-190208-segmentation-stage1-book\\run-state.json"
+  },
+  "next_step": "review sandbox package in Obsidian"
+}
