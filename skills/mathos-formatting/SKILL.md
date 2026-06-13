@@ -21,9 +21,12 @@ Unknown file types must use candidate backup learning:
 4. Ask the user to review the backup result and choose approve, revise, or discard.
 5. Run `approve` only after explicit user approval.
 6. Reuse approved programs with `apply-approved`; this still writes a fresh candidate backup.
-7. The final step is to confirm with the user whether they are satisfied with the formatting changes. After the user confirms they are satisfied, replace the original file with the modified (candidate) file.
+7. The final step is to ask the user to confirm whether they are satisfied with the formatting changes. After the user confirms satisfaction:
+   - Replace the original file with the modified (candidate) file.
+   - Delete the temporary `mathos-formatting` directory.
 
 Do not modify original Markdown files during unknown-type learning until the user explicitly confirms satisfaction. Delete and recreate the candidate backup for each revision cycle.
+
 
 Approved reusable programs live under `plugins/approved/` and start as `manual-only`.
 
