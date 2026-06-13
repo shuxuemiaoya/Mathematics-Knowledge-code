@@ -295,3 +295,19 @@ def test_learning_fails_when_main_text_start_line_invalid(tmp_path):
             content_prompt="# Content Cleaner Prompt",
             work_dir=work_dir,
         )
+
+
+def test_content_cleaner_prompt_imports_match_safe_plugin_imports():
+    prompt_path = SKILL_ROOT / "agents" / "content_cleaner_prompt.md"
+    prompt = prompt_path.read_text(encoding="utf-8")
+
+    assert "pathlib" not in prompt
+    assert "os" not in prompt
+    assert "sys" not in prompt
+    assert "replace_in_file" not in prompt
+    assert "def main" not in prompt
+    assert "批量处理入口" not in prompt
+    assert "summary: list[str]" in prompt
+    assert "warnings: list[str]" in prompt
+    assert "`re`" in prompt
+    assert "`typing`" in prompt

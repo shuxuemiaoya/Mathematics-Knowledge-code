@@ -443,7 +443,14 @@ def validate_heading_rules(payload: dict) -> list[HeadingRule]:
             raise FormattingError(f"heading rule {rule_id} flags must be a string list")
         flags = _compile_flags(raw_flags)
         try:
-            re.compile(pattern, flags)
+            rx = re.compile(pattern, flags)
+            if rx.groups < 1 and any(tag in replacement for tag in ("$1", "\\1", "\\g<1>")):
+                if pattern.endswith(".+$"):
+                    pattern = pattern[:-3] + "(.+)$"
+                elif pattern.endswith(".+"):
+                    pattern = pattern[:-2] + "(.+)"
+                # Recompile to validate the corrected pattern
+                rx = re.compile(pattern, flags)
         except re.error as exc:
             raise FormattingError(f"invalid regex in heading rule {rule_id}: {exc}") from exc
         validated.append(HeadingRule(rule_id, pattern, replacement, flags))
@@ -762,14 +769,14 @@ def _heading_lines(markdown: str) -> list[str]:
     ]
 
 
-IMAGE_REFERENCE_RE = re.compile(r"^ {0,3}!\[[^\]]*\]\([^)]+\)")
+IMAGE_REFERENCE_RE = re.compile(r"!\[[^\]]*\]\([^)]+\)|<img\s+[^>]*src=", re.IGNORECASE)
 DETAILS_OPEN_RE = re.compile(r"^ {0,3}<details(?:\s|>)", re.IGNORECASE)
 
 
 def content_preservation_counts(markdown: str) -> PreservationCounts:
     lines = markdown.splitlines()
     return PreservationCounts(
-        image_references=sum(1 for line in lines if IMAGE_REFERENCE_RE.match(line.strip())),
+        image_references=sum(1 for line in lines if IMAGE_REFERENCE_RE.search(line)),
         details_blocks=sum(1 for line in lines if DETAILS_OPEN_RE.match(line.strip())),
         math_delimiters=markdown.count("$$"),
         table_like_lines=sum(1 for line in lines if "|" in line),

@@ -20,9 +20,10 @@ Unknown file types must use candidate backup learning:
 3. Alternatively, manually generate or provide regex heading rules and a Python content cleaner, then run `candidate-from-artifacts` to create the candidate backup.
 4. Ask the user to review the backup result and choose approve, revise, or discard.
 5. Run `approve` only after explicit user approval.
-6. Reuse approved programs with `apply-approved`; this still writes a fresh candidate backup and does not modify the original Markdown file.
+6. Reuse approved programs with `apply-approved`; this still writes a fresh candidate backup.
+7. The final step is to confirm with the user whether they are satisfied with the formatting changes. After the user confirms they are satisfied, replace the original file with the modified (candidate) file.
 
-Do not modify original Markdown files during unknown-type learning. Delete and recreate the candidate backup for each revision cycle.
+Do not modify original Markdown files during unknown-type learning until the user explicitly confirms satisfaction. Delete and recreate the candidate backup for each revision cycle.
 
 Approved reusable programs live under `plugins/approved/` and start as `manual-only`.
 
