@@ -470,10 +470,11 @@ def test_verify_package_rejects_missing_disambiguated_link(tmp_path):
     )
     plan = seg.build_segmentation_plan(source, vault_root=vault_root)
     seg.write_segmentation_package(plan)
-    plan.master_path.write_text("# 目录\n\n- [[1.1 重复]]\n- [[1.1 重复]]\n", encoding="utf-8")
+    ch1 = next(node for node in plan.nodes if node.note_stem == "第一章")
+    ch1.output_path.write_text("# 目录\n\n- [[1.1 重复]]\n- [[1.1 重复]]\n", encoding="utf-8")
 
     assert_segmentation_error_contains(
-        "Master link missing or duplicated",
+        "Directory links do not match immediate children for 第一章",
         seg.verify_package,
         plan,
     )
@@ -657,6 +658,35 @@ def test_write_special_pair_leaf_swallows_specific_heading(tmp_path):
     assert "### 向量及向量符号的由来" in text
     assert "阅读正文" in text
     assert not (plan.sandbox_dir / "阅读与思考.md").exists()
+
+
+def test_plan_json_reports_layered_counts(tmp_path, capsys):
+    vault_root, source = _write_layered_source(tmp_path)
+
+    exit_code = seg.main(["plan", str(source), "--vault-root", str(vault_root), "--yes"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert payload["counts"]["nodes"] == 10
+    assert payload["counts"]["directory_nodes"] == 5
+    assert payload["counts"]["leaf_nodes"] == 5
+    assert payload["counts"]["special_merges"] == 1
+    assert not (source.parent / "book").exists()
+
+
+def test_verify_layered_package_rejects_grandchild_link_in_chapter(tmp_path):
+    vault_root, source = _write_layered_source(tmp_path)
+    plan = seg.build_segmentation_plan(source, vault_root=vault_root)
+    seg.write_segmentation_package(plan)
+    chapter = next(node for node in plan.nodes if node.note_stem == "第六章 平面向量及其应用")
+    chapter.output_path.write_text("# 目录\n\n- [[6.1.1 向量的实际背景与概念]]\n", encoding="utf-8")
+
+    assert_segmentation_error_contains(
+        "Directory links do not match immediate children",
+        seg.verify_package,
+        plan,
+    )
+
 
 
 

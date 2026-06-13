@@ -463,6 +463,21 @@ def segment_to_dict(segment: DirectoryNode) -> dict[str, Any]:
     }
 
 
+def node_to_dict(node: DirectoryNode) -> dict[str, Any]:
+    return {
+        "note_stem": node.note_stem,
+        "filename": node.filename,
+        "output_path": str(node.output_path),
+        "parent": node.parent.note_stem if node.parent else "",
+        "children": [child.note_stem for child in node.children],
+        "is_leaf": node.is_leaf,
+        "is_special_merge": node.is_special_merge,
+        "raw_start": node.raw_start,
+        "raw_end": node.raw_end,
+        "warning": node.warning,
+    }
+
+
 def plan_to_manifest(plan: SegmentationPlan) -> dict[str, Any]:
     return {
         "stage": STAGE_NAME,
@@ -475,22 +490,32 @@ def plan_to_manifest(plan: SegmentationPlan) -> dict[str, Any]:
         "detected_number_depths": plan.detected_number_depths,
         "source_sha256": plan.source_sha256,
         "heading_tree": [heading_to_dict(heading) for heading in plan.headings],
+        "nodes": [node_to_dict(node) for node in plan.nodes],
         "segments": [segment_to_dict(segment) for segment in plan.segments],
         "disambiguations": plan.disambiguations,
+        "special_merges": plan.special_merges,
         "warnings": plan.warnings,
         "next_command": plan.next_command,
     }
 
 
-def verify_master_text(master_text: str) -> None:
-    for line in master_text.splitlines():
+LINK_RE = re.compile(r"^- \[\[([^\]]+)\]\]$")
+
+
+def extract_directory_links(text: str) -> list[str]:
+    links: list[str] = []
+    for line in text.splitlines():
         stripped = line.strip()
         if not stripped or stripped == "# 目录":
             continue
-        if not stripped.startswith("- "):
-            raise SegmentationError(f"Invalid master directory line: {line}")
-        if "[[" not in stripped or not re.fullmatch(r"- \[\[[^\]]+\]\]", stripped):
+        match = LINK_RE.fullmatch(stripped)
+        if not match:
             raise SegmentationError(f"Invalid Obsidian link line: {line}")
+        target = match.group(1)
+        if target.startswith("#") or target.startswith("##"):
+            raise SegmentationError(f"Heading marker found inside wikilink target: {target}")
+        links.append(target)
+    return links
 
 
 def verify_package(plan: SegmentationPlan) -> dict[str, Any]:
@@ -498,20 +523,65 @@ def verify_package(plan: SegmentationPlan) -> dict[str, Any]:
         raise SegmentationError(f"Missing sandbox folder: {plan.sandbox_dir}")
     if not plan.master_path.is_file():
         raise SegmentationError(f"Missing master directory: {plan.master_path}")
+
+    # 1. Master links verification
     master_text = plan.master_path.read_text(encoding="utf-8")
-    verify_master_text(master_text)
-    for segment in plan.segments:
-        if not segment.output_path.is_file():
-            raise SegmentationError(f"Missing segment file: {segment.output_path}")
-        note_stem = Path(segment.filename).stem
-        if master_text.count(f"[[{note_stem}]]") != 1:
-            raise SegmentationError(f"Master link missing or duplicated: {note_stem}")
-    segment_files = sorted(path for path in plan.sandbox_dir.glob("*.md") if path != plan.master_path)
-    if len(segment_files) != len(plan.segments):
-        raise SegmentationError("Segment file count does not match manifest count")
+    master_links = extract_directory_links(master_text)
+    expected_master_links = [link_for_node(node) for node in plan.top_level_nodes]
+    if master_links != expected_master_links:
+        raise SegmentationError("Master directory links do not match top-level chapters")
+
+    # 2. Files and intermediate children links verification
+    for node in plan.nodes:
+        if not node.output_path.is_file():
+            raise SegmentationError(f"Missing node file: {node.output_path}")
+
+        file_text = node.output_path.read_text(encoding="utf-8")
+        if not file_text.strip():
+            raise SegmentationError(f"Empty node file: {node.output_path}")
+
+        if node.is_leaf:
+            # Leaf files must contain the heading
+            if node.is_special_merge:
+                if node.source_heading.full_title not in file_text:
+                    raise SegmentationError(
+                        f"Merged heading missing in leaf text: {node.source_heading.full_title}"
+                    )
+                if node.merged_heading and node.merged_heading.full_title not in file_text:
+                    raise SegmentationError(
+                        f"Merged specific heading missing in leaf text: {node.merged_heading.full_title}"
+                    )
+            else:
+                if node.source_heading.full_title not in file_text:
+                    raise SegmentationError(f"Heading missing in leaf text: {node.source_heading.full_title}")
+        else:
+            # Directory notes verification
+            dir_links = extract_directory_links(file_text)
+            expected_links = [link_for_node(child) for child in node.children]
+            if dir_links != expected_links:
+                raise SegmentationError(f"Directory links do not match immediate children for {node.note_stem}")
+
+    # 3. Ensure no unmerged reading/thinking files exist
+    for merge in plan.special_merges:
+        generic_file = plan.sandbox_dir / (safe_filename(merge["generic"]) + ".md")
+        if generic_file.exists():
+            raise SegmentationError(f"Unmerged generic file should not exist: {generic_file}")
+
+    # 4. Check total file count
+    expected_files = {plan.master_path.resolve()} | {node.output_path.resolve() for node in plan.nodes}
+    actual_files = {p.resolve() for p in plan.sandbox_dir.glob("*.md")}
+    if actual_files != expected_files:
+        extra_files = actual_files - expected_files
+        missing_files = expected_files - actual_files
+        raise SegmentationError(
+            f"File count mismatch in sandbox. Extra: {extra_files}, Missing: {missing_files}"
+        )
+
+    # 5. Source hash check
     if sha256_text(plan.source_path.read_text(encoding="utf-8")) != plan.source_sha256:
         raise SegmentationError("Original source hash changed")
-    return {"status": "passed", "segment_count": len(plan.segments)}
+
+    return {"status": "passed", "node_count": len(plan.nodes), "leaf_count": len(plan.leaf_nodes), "segment_count": len(plan.leaf_nodes)}
 
 
 def write_run_records(
@@ -538,9 +608,13 @@ def write_run_records(
         "record_dir": str(record_dir),
         "counts": {
             "headings": len(plan.headings),
-            "segments": len(plan.segments),
+            "nodes": len(plan.nodes),
+            "directory_nodes": len(plan.directory_nodes),
+            "leaf_nodes": len(plan.leaf_nodes),
+            "special_merges": len(plan.special_merges),
             "warnings": len(plan.warnings),
             "disambiguations": len(plan.disambiguations),
+            "segments": len(plan.leaf_nodes),  # for backward compatibility
         },
         "warnings": plan.warnings[:20],
         "records": {
@@ -560,7 +634,11 @@ Completion status: {status}
 Stop reason: {stop_reason or "none"}
 Sandbox folder: `{plan.sandbox_dir}`
 Master directory: `{plan.master_path}`
-Segment count: {len(plan.segments)}
+Node count: {len(plan.nodes)}
+Directory node count: {len(plan.directory_nodes)}
+Leaf node count: {len(plan.leaf_nodes)}
+Special merge count: {len(plan.special_merges)}
+Segment count: {len(plan.leaf_nodes)}
 Warning count: {len(plan.warnings)}
 Duplicate disambiguation count: {len(plan.disambiguations)}
 Run record folder: `{record_dir}`
@@ -594,10 +672,16 @@ def plan_json(plan: SegmentationPlan) -> dict[str, Any]:
         "target_depth": plan.target_depth,
         "counts": {
             "headings": len(plan.headings),
-            "segments": len(plan.segments),
+            "nodes": len(plan.nodes),
+            "directory_nodes": len(plan.directory_nodes),
+            "leaf_nodes": len(plan.leaf_nodes),
+            "special_merges": len(plan.special_merges),
             "warnings": len(plan.warnings),
             "disambiguations": len(plan.disambiguations),
+            "segments": len(plan.leaf_nodes),  # for backward compatibility
         },
+        "nodes": [node_to_dict(node) for node in plan.nodes],
+        "special_merges": plan.special_merges,
         "segments": [
             {
                 "link_title": segment.link_title,
@@ -631,7 +715,10 @@ def command_segment(args: argparse.Namespace) -> int:
             "status": "completed",
             "sandbox_dir": str(plan.sandbox_dir),
             "master_path": str(plan.master_path),
-            "segments": len(plan.segments),
+            "nodes": len(plan.nodes),
+            "leaf_nodes": len(plan.leaf_nodes),
+            "directory_nodes": len(plan.directory_nodes),
+            "segments": len(plan.leaf_nodes),
             "record_dir": str(record_dir),
         }
     )
