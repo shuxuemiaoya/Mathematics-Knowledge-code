@@ -1,0 +1,51 @@
+{
+  "stage": "pdf-to-md",
+  "skill": "skills/mathos-pdf-to-md",
+  "status": "stopped_or_partially_failed",
+  "settings": {
+    "api_key": "***",
+    "base_url": "https://mineru.net",
+    "max_parallel_tasks": 10,
+    "poll_interval": 5,
+    "max_retries": 180
+  },
+  "source_path": "C:\\code\\BaiduSyncdisk\\数学妙呀资料\\test",
+  "source_base": "C:\\code\\BaiduSyncdisk\\数学妙呀资料",
+  "output_root": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map",
+  "record_dir": "agent-memory\\records\\2026-06-14-182019-pdf-to-md-test",
+  "counts": {
+    "source_pdfs": 2,
+    "attempted": 2,
+    "converted": 1,
+    "failed": 1,
+    "skipped": 0,
+    "retryable_failures": 1,
+    "permanent_failures": 0
+  },
+  "outputs": [
+    {
+      "source_pdf": "C:\\code\\BaiduSyncdisk\\数学妙呀资料\\test\\【2024版】【人教版】七年级下册数学.pdf",
+      "target_md": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\test\\【2024版】【人教版】七年级下册数学.md",
+      "parts": 1,
+      "assets": 708
+    }
+  ],
+  "skipped_files": [],
+  "retryable_failures": [
+    {
+      "source_pdf": "C:\\code\\BaiduSyncdisk\\数学妙呀资料\\test\\【人教版】高中选择性必修 第二册数学电子课本.pdf",
+      "category": "conversion_failure",
+      "message": "HTTPSConnectionPool(host='mineru.net', port=443): Max retries exceeded with url: /api/v4/file-urls/batch (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))"
+    }
+  ],
+  "permanent_failures": [],
+  "records": {
+    "manifest": "agent-memory\\records\\2026-06-14-182019-pdf-to-md-test\\manifest.json",
+    "failure_ledger": "agent-memory\\records\\2026-06-14-182019-pdf-to-md-test\\failure-ledger.json",
+    "skipped_files": "agent-memory\\records\\2026-06-14-182019-pdf-to-md-test\\skipped-files.json",
+    "artifact_index": "agent-memory\\records\\2026-06-14-182019-pdf-to-md-test\\artifact-index.md",
+    "run_summary": "agent-memory\\records\\2026-06-14-182019-pdf-to-md-test\\run-summary.md",
+    "run_state": "agent-memory\\records\\2026-06-14-182019-pdf-to-md-test\\run-state.json"
+  },
+  "next_command": "python .\\skills\\mathos-pdf-to-md\\scripts\\mathos_pdf_to_md.py convert \"C:\\code\\BaiduSyncdisk\\数学妙呀资料\\test\" --source-base \"C:\\code\\BaiduSyncdisk\\数学妙呀资料\" --output-root \"C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\" --yes"
+}

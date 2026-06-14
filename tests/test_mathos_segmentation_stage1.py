@@ -688,5 +688,53 @@ def test_verify_layered_package_rejects_grandchild_link_in_chapter(tmp_path):
     )
 
 
+def test_select_target_depth_defaults_to_3_when_available_even_if_deeper_exist():
+    text = """## 1.1 集合
+### 1.1.1 概念
+#### 1.1.1.1 符号
+"""
+    headings = seg.extract_numbered_headings(text)
+    assert seg.select_target_depth(headings, None) == 3
 
 
+def test_build_plan_filters_headings_deeper_than_selected_depth(tmp_path):
+    vault_root = tmp_path / "vault"
+    source = vault_root / "book.md"
+    source.parent.mkdir(parents=True)
+    source.write_text("""# 第一章 集合
+## 1.1 集合的概念
+### 1.1.1 集合与元素
+正文 A
+#### 1.1.1.1 集合的表示
+正文 B
+""", encoding="utf-8")
+
+    plan = seg.build_segmentation_plan(source, vault_root=vault_root, target_depth=None)
+    assert plan.target_depth == 3
+    node_titles = {node.note_stem for node in plan.nodes}
+    assert "第一章 集合" in node_titles
+    assert "1.1 集合的概念" in node_titles
+    assert "1.1.1 集合与元素" in node_titles
+    assert "1.1.1.1 集合的表示" not in node_titles
+
+    # Verify that the parent H3 leaf node range contains the H4 heading and content
+    h3_node = next(n for n in plan.leaf_nodes if n.note_stem == "1.1.1 集合与元素")
+    raw_slice = source.read_text(encoding="utf-8")[h3_node.raw_start:h3_node.raw_end]
+    assert "#### 1.1.1.1 集合的表示" in raw_slice
+    assert "正文 B" in raw_slice
+
+    # Verify after writing the package that the file contains the H4 heading and content
+    seg.write_segmentation_package(plan)
+    leaf_file = plan.sandbox_dir / "1.1.1 集合与元素.md"
+    assert leaf_file.exists()
+    leaf_text = leaf_file.read_text(encoding="utf-8")
+    assert "#### 1.1.1.1 集合的表示" in leaf_text
+    assert "正文 B" in leaf_text
+
+
+def test_select_target_depth_falls_back_when_no_depth_3():
+    # A markdown with only H2 headings
+    markdown_with_h2 = "# 第一章\n## 1.1 集合\n"
+    headings = seg.extract_numbered_headings(markdown_with_h2)
+    # Target depth should fall back to max (2) since 3 doesn't exist
+    assert seg.select_target_depth(headings, None) == 2

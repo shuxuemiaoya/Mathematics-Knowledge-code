@@ -1,0 +1,28 @@
+{
+  "stage": "segmentation-stage1",
+  "skill": "skills/mathos-segmentation-stage1",
+  "status": "completed",
+  "stop_reason": "",
+  "source_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\test\\【2024版】【人教版】七年级下册数学.md",
+  "vault_root": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map",
+  "sandbox_dir": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\test\\【2024版】【人教版】七年级下册数学",
+  "master_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\test\\【2024版】【人教版】七年级下册数学\\000_【2024版】【人教版】七年级下册数学目录.md",
+  "record_dir": "agent-memory\\records\\2026-06-14-100849-segmentation-stage1-【2024版】【人教版】七年级下册数学",
+  "counts": {
+    "headings": 352,
+    "nodes": 352,
+    "directory_nodes": 29,
+    "leaf_nodes": 323,
+    "special_merges": 0,
+    "warnings": 0,
+    "disambiguations": 193,
+    "segments": 323
+  },
+  "warnings": [],
+  "records": {
+    "manifest": "agent-memory\\records\\2026-06-14-100849-segmentation-stage1-【2024版】【人教版】七年级下册数学\\manifest.json",
+    "run_summary": "agent-memory\\records\\2026-06-14-100849-segmentation-stage1-【2024版】【人教版】七年级下册数学\\run-summary.md",
+    "run_state": "agent-memory\\records\\2026-06-14-100849-segmentation-stage1-【2024版】【人教版】七年级下册数学\\run-state.json"
+  },
+  "next_step": "review sandbox package in Obsidian"
+}

@@ -20,6 +20,25 @@ def _print_json(payload: dict) -> None:
     print(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
+def _review_actions(candidate_path: Path, report_path: Path, approve_command: str | None = None) -> list[str]:
+    actions = [
+        f"Review the candidate Markdown: {candidate_path}",
+        f"Review the formatting report: {report_path}",
+        "If the format needs improvement, revise the JSON content rules or rerun learn-from-provider with a better prompt/sample.",
+    ]
+    if approve_command:
+        actions.append(f"If satisfied, save the format modification template: {approve_command}")
+    else:
+        actions.append("If satisfied, run approve with the heading rules and content_rules.json to save the format modification template.")
+    actions.append("If not useful, discard the candidate and mathos-formatting work directory.")
+    return actions
+
+
+def _artifact_path(args: argparse.Namespace, name: str) -> Path | None:
+    value = getattr(args, name)
+    return Path(value) if value else None
+
+
 def command_inspect(args: argparse.Namespace) -> int:
     source = Path(args.markdown)
     markdown = source.read_text(encoding="utf-8")
@@ -47,16 +66,28 @@ def command_apply_approved(args: argparse.Namespace) -> int:
             "report_path": str(result.report_path),
             "summary": result.summary,
             "warnings": result.warnings,
+            "review_required": True,
+            "next_actions": _review_actions(result.candidate_path, result.report_path),
         }
     )
     return 0
 
 
 def command_candidate_from_artifacts(args: argparse.Namespace) -> int:
+    plugin_path = _artifact_path(args, "plugin")
+    content_rules_path = _artifact_path(args, "content_rules")
     result = core.run_candidate_from_artifacts(
         markdown_path=Path(args.markdown),
         heading_rules_path=Path(args.heading_rules),
-        plugin_path=Path(args.plugin),
+        plugin_path=plugin_path,
+        content_rules_path=content_rules_path,
+    )
+    approve_template = (
+        "python skills/mathos-formatting/scripts/mathos_formatting.py approve "
+        "--approved-root <approved_root> --plugin-id <plugin_id> "
+        f"--heading-rules {Path(args.heading_rules)} "
+        f"{'--content-rules ' + str(content_rules_path) if content_rules_path else '--plugin ' + str(plugin_path)} "
+        f"--original {Path(args.markdown)} --candidate {result.candidate_path}"
     )
     _print_json(
         {
@@ -65,6 +96,8 @@ def command_candidate_from_artifacts(args: argparse.Namespace) -> int:
             "report_path": str(result.report_path),
             "summary": result.summary,
             "warnings": result.warnings,
+            "review_required": True,
+            "next_actions": _review_actions(result.candidate_path, result.report_path, approve_template),
         }
     )
     return 0
@@ -73,17 +106,30 @@ def command_candidate_from_artifacts(args: argparse.Namespace) -> int:
 def command_approve(args: argparse.Namespace) -> int:
     heading_rules_path = Path(args.heading_rules)
     heading_rules = json.loads(heading_rules_path.read_text(encoding="utf-8"))
+    plugin_path = _artifact_path(args, "plugin")
+    content_rules_path = _artifact_path(args, "content_rules")
     program_dir = core.save_approved_program(
         approved_root=Path(args.approved_root),
         plugin_id=args.plugin_id,
         heading_rules=heading_rules,
-        plugin_path=Path(args.plugin),
+        plugin_path=plugin_path,
+        content_rules_path=content_rules_path,
         original_path=Path(args.original),
         candidate_path=Path(args.candidate),
         approving_source_path=Path(args.original),
         operations_summary=args.summary,
     )
-    _print_json({"status": "approved", "program_dir": str(program_dir)})
+    _print_json(
+        {
+            "status": "approved",
+            "program_dir": str(program_dir),
+            "review_required": False,
+            "next_actions": [
+                f"Reuse this approved template with apply-approved: {program_dir}",
+                "Keep the approved template manual-only until enough reviewed runs justify broader automation.",
+            ],
+        }
+    )
     return 0
 
 
@@ -110,6 +156,18 @@ def command_learn_from_provider(args: argparse.Namespace) -> int:
             "summary": result.summary,
             "warnings": result.warnings,
             "errors": result.errors,
+            "review_required": True,
+            "next_actions": _review_actions(
+                result.candidate_path,
+                result.report_path,
+                (
+                    "python skills/mathos-formatting/scripts/mathos_formatting.py approve "
+                    "--approved-root <approved_root> --plugin-id <plugin_id> "
+                    f"--heading-rules {result.artifacts.get('heading_rules')} "
+                    f"--content-rules {result.artifacts.get('content_rules')} "
+                    f"--original {Path(args.markdown)} --candidate {result.candidate_path}"
+                ),
+            ),
         }
     )
     return 0
@@ -130,18 +188,20 @@ def build_parser() -> argparse.ArgumentParser:
 
     candidate_parser = subparsers.add_parser(
         "candidate-from-artifacts",
-        help="Create a fresh candidate backup from generated heading rules and a plugin",
+        help="Create a fresh candidate backup from heading rules and JSON content rules or a legacy plugin",
     )
     candidate_parser.add_argument("markdown")
     candidate_parser.add_argument("--heading-rules", required=True)
-    candidate_parser.add_argument("--plugin", required=True)
+    candidate_parser.add_argument("--content-rules")
+    candidate_parser.add_argument("--plugin")
     candidate_parser.set_defaults(func=command_candidate_from_artifacts)
 
     approve_parser = subparsers.add_parser("approve", help="Save an approved candidate result as a reusable program")
     approve_parser.add_argument("--approved-root", required=True)
     approve_parser.add_argument("--plugin-id", required=True)
     approve_parser.add_argument("--heading-rules", required=True)
-    approve_parser.add_argument("--plugin", required=True)
+    approve_parser.add_argument("--content-rules")
+    approve_parser.add_argument("--plugin")
     approve_parser.add_argument("--original", required=True)
     approve_parser.add_argument("--candidate", required=True)
     approve_parser.add_argument("--summary", action="append", default=["user approved candidate result"])

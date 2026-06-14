@@ -59,6 +59,21 @@ class HeadingRule:
 
 
 @dataclass(frozen=True)
+class ContentRule:
+    rule_id: str
+    rule_type: str
+    scope: str
+    phase: str
+    risk_level: str
+    pattern: str
+    replacement: str
+    flags: int
+    replacement_mode: str
+    search: str
+    enabled: bool
+
+
+@dataclass(frozen=True)
 class PluginResult:
     cleaned_markdown: str
     summary: list[str]
@@ -272,6 +287,16 @@ def _strip_single_line_ending(text: str) -> tuple[str, bool]:
     return text, False
 
 
+def _split_single_line_ending(text: str) -> tuple[str, str]:
+    if text.endswith("\r\n"):
+        return text[:-2], "\r\n"
+    if text.endswith("\n"):
+        return text[:-1], "\n"
+    if text.endswith("\r"):
+        return text[:-1], "\r"
+    return text, ""
+
+
 def _is_diff_content_line(line: str, original_name: str, candidate_name: str) -> bool:
     if line in {f"--- {original_name}", f"+++ {candidate_name}"}:
         return False
@@ -378,6 +403,37 @@ FLAG_MAP = {
     "MULTILINE": re.MULTILINE,
     "IGNORECASE": re.IGNORECASE,
 }
+CHINESE_CHAPTER_RE = re.compile(r"第\s*([一二三四五六七八九十百千万零〇两0-9]+)\s*章")
+ENGLISH_CHAPTER_RE = re.compile(r"\bChapter\s+([0-9]+)\b", re.IGNORECASE)
+GENERIC_CHINESE_HEADING_RE = re.compile(
+    r"^(小节|复习题|章末复习)(?:\s*[\(（]?\s*([一二三四五六七八九十百千万零〇两0-9]+)\s*[\)）]?)?$"
+)
+GENERIC_ENGLISH_HEADING_RE = re.compile(r"^(Review Questions)(?:\s+([0-9]+))?$", re.IGNORECASE)
+CONTEXTUAL_GENERIC_CHINESE_RE = re.compile(
+    r"^第[一二三四五六七八九十百千万零〇两0-9]+章\s+(?:小节|复习题|章末复习)(?:\s+[一二三四五六七八九十百千万零〇两0-9]+)?$"
+)
+CONTEXTUAL_GENERIC_ENGLISH_RE = re.compile(r"^Chapter\s+[0-9]+\s+Review Questions(?:\s+[0-9]+)?$", re.IGNORECASE)
+CHINESE_DIGIT_VALUES = {
+    "零": 0,
+    "〇": 0,
+    "一": 1,
+    "二": 2,
+    "两": 2,
+    "三": 3,
+    "四": 4,
+    "五": 5,
+    "六": 6,
+    "七": 7,
+    "八": 8,
+    "九": 9,
+}
+CHINESE_UNIT_VALUES = {
+    "十": 10,
+    "百": 100,
+    "千": 1000,
+    "万": 10000,
+}
+CHINESE_DIGITS = "零一二三四五六七八九"
 
 
 def _is_code_fence_close(line: str, fence_character: str, fence_length: int) -> bool:
@@ -409,6 +465,209 @@ def _normalize_atx_heading_text(text: str) -> str:
 
 def _line_offsets(markdown: str) -> list[str]:
     return markdown.splitlines()
+
+
+def _chinese_number_to_int(text: str) -> int | None:
+    if text.isdecimal():
+        return int(text)
+    total = 0
+    section = 0
+    number = 0
+    saw_number = False
+    for character in text:
+        if character in CHINESE_DIGIT_VALUES:
+            number = CHINESE_DIGIT_VALUES[character]
+            saw_number = True
+            continue
+        unit = CHINESE_UNIT_VALUES.get(character)
+        if unit is None:
+            return None
+        if unit == 10000:
+            section = (section + number) * unit
+            total += section
+            section = 0
+            number = 0
+            continue
+        section += (number or 1) * unit
+        number = 0
+    total += section + number
+    return total if saw_number or total else None
+
+
+def _int_to_chinese_number(value: int) -> str:
+    if value < 0 or value > 9999:
+        return str(value)
+    if value < 10:
+        return CHINESE_DIGITS[value]
+    if value < 100:
+        tens, ones = divmod(value, 10)
+        prefix = "" if tens == 1 else CHINESE_DIGITS[tens]
+        return f"{prefix}十{CHINESE_DIGITS[ones] if ones else ''}"
+    if value < 1000:
+        hundreds, remainder = divmod(value, 100)
+        if remainder == 0:
+            return f"{CHINESE_DIGITS[hundreds]}百"
+        zero = "零" if remainder < 10 else ""
+        return f"{CHINESE_DIGITS[hundreds]}百{zero}{_int_to_chinese_number(remainder)}"
+    thousands, remainder = divmod(value, 1000)
+    if remainder == 0:
+        return f"{CHINESE_DIGITS[thousands]}千"
+    zero = "零" if remainder < 100 else ""
+    return f"{CHINESE_DIGITS[thousands]}千{zero}{_int_to_chinese_number(remainder)}"
+
+
+def _normalize_chinese_chapter_number(raw_number: str) -> str:
+    parsed = _chinese_number_to_int(raw_number)
+    return _int_to_chinese_number(parsed) if parsed is not None else raw_number
+
+
+def _chapter_context_from_heading_text(text: str) -> tuple[str, str, str] | None:
+    chinese_match = CHINESE_CHAPTER_RE.search(text)
+    if chinese_match:
+        chapter_number = _normalize_chinese_chapter_number(chinese_match.group(1))
+        return ("zh", f"第{chapter_number}章", str(_chinese_number_to_int(chinese_match.group(1)) or chapter_number))
+    english_match = ENGLISH_CHAPTER_RE.search(text)
+    if english_match:
+        chapter_number = english_match.group(1)
+        return ("en", f"Chapter {chapter_number}", chapter_number)
+    return None
+
+
+def _generic_heading_parts(text: str) -> tuple[str, str, str | None] | None:
+    chinese_match = GENERIC_CHINESE_HEADING_RE.match(text)
+    if chinese_match:
+        return ("zh", chinese_match.group(1), chinese_match.group(2))
+    english_match = GENERIC_ENGLISH_HEADING_RE.match(text)
+    if english_match:
+        return ("en", "Review Questions", english_match.group(2))
+    return None
+
+
+def _has_generic_chapter_context(text: str) -> bool:
+    return bool(CONTEXTUAL_GENERIC_CHINESE_RE.match(text) or CONTEXTUAL_GENERIC_ENGLISH_RE.match(text))
+
+
+def _generic_heading_replacement(text: str, current_context: tuple[str, str, str] | None) -> str | None:
+    if _has_generic_chapter_context(text):
+        return text
+    parts = _generic_heading_parts(text)
+    if parts is None:
+        return None
+    language, label, explicit_number = parts
+    context = current_context
+    if explicit_number is not None:
+        if language == "zh":
+            chapter_number = _normalize_chinese_chapter_number(explicit_number)
+            context = ("zh", f"第{chapter_number}章", str(_chinese_number_to_int(explicit_number) or explicit_number))
+        else:
+            context = ("en", f"Chapter {explicit_number}", explicit_number)
+    if context is None or context[0] != language:
+        return None
+    suffix = ""
+    if explicit_number is not None:
+        explicit_suffix = str(_chinese_number_to_int(explicit_number) or explicit_number)
+        suffix = f" {explicit_suffix}"
+    return f"{context[1]} {label}{suffix}"
+
+
+def enrich_generic_headings_with_chapter_context(markdown: str) -> str:
+    protected_blocks = [
+        block
+        for block in _extract_protected_blocks(_line_offsets(markdown))
+        if block.kind in {"code_fence", "math_block"}
+    ]
+    current_context: tuple[str, str, str] | None = None
+    enriched_lines: list[str] = []
+    for line_number, line in enumerate(markdown.splitlines(keepends=True), start=1):
+        if _line_in_blocks(line_number, protected_blocks, {"code_fence", "math_block"}):
+            enriched_lines.append(line)
+            continue
+        line_without_ending, line_ending = _split_single_line_ending(line)
+        heading_match = HEADING_RE.match(line_without_ending)
+        if not heading_match:
+            enriched_lines.append(line)
+            continue
+        level = len(heading_match.group(1))
+        text = _normalize_atx_heading_text(heading_match.group(2)).strip()
+        if _has_generic_chapter_context(text):
+            if level != 4:
+                enriched_lines.append(f"#### {text}{line_ending}")
+            else:
+                enriched_lines.append(line)
+            continue
+        replacement = _generic_heading_replacement(text, current_context)
+        if replacement is not None:
+            enriched_lines.append(f"#### {replacement}{line_ending}")
+            continue
+        chapter_context = _chapter_context_from_heading_text(text)
+        if level == 1 and chapter_context is not None:
+            current_context = chapter_context
+            enriched_lines.append(line)
+            continue
+        enriched_lines.append(line)
+    return "".join(enriched_lines)
+
+
+def _toc_body_boundary(original_text: str) -> int:
+    structure = extract_structure(original_text, "stage1-audit-original")
+    if structure.toc_block is None:
+        raise FormattingError("Stage 1 audit requires a TOC reference")
+    return structure.toc_block.end_line
+
+
+def _toc_chapter_contexts(original_text: str) -> dict[str, str]:
+    structure = extract_structure(original_text, "stage1-audit-original")
+    if structure.toc_block is None:
+        raise FormattingError("Stage 1 audit requires a TOC reference")
+    lines = original_text.splitlines()
+    contexts: dict[str, str] = {}
+    for line in lines[structure.toc_block.start_line - 1:structure.toc_block.end_line]:
+        stripped = line.strip()
+        heading_match = HEADING_RE.match(stripped)
+        if heading_match:
+            stripped = _normalize_atx_heading_text(heading_match.group(2)).strip()
+        stripped = _normalize_toc_page_heading(stripped)
+        context = _chapter_context_from_heading_text(stripped)
+        if context is not None:
+            contexts[context[1].casefold()] = context[1]
+    return contexts
+
+
+def audit_stage1_headings(original_text: str, stage1_text: str) -> list[str]:
+    toc_end_line = _toc_body_boundary(original_text)
+    toc_chapters = _toc_chapter_contexts(original_text)
+    stage1_structure = extract_structure(stage1_text, "stage1-audit-candidate")
+
+    for heading in stage1_structure.headings:
+        if heading.line_number <= toc_end_line:
+            continue
+        if _has_generic_chapter_context(heading.text):
+            continue
+        context = _chapter_context_from_heading_text(heading.text)
+        if context is not None and context[1].casefold() in toc_chapters and heading.level != 1:
+            raise FormattingError(
+                "Stage 1 audit failed: chapter heading matching TOC must remain H1 "
+                f"at line {heading.line_number}: {heading.text}"
+            )
+
+    for heading in stage1_structure.headings:
+        if heading.line_number <= toc_end_line:
+            continue
+        if _has_generic_chapter_context(heading.text) and heading.level != 4:
+            raise FormattingError(
+                "Stage 1 audit failed: contextual generic heading must be H4 "
+                f"at line {heading.line_number}: {heading.text}"
+            )
+        if _generic_heading_parts(heading.text) is not None and not _has_generic_chapter_context(heading.text):
+            raise FormattingError(
+                "Stage 1 audit failed: generic heading lacks chapter context "
+                f"at line {heading.line_number}: {heading.text}"
+            )
+
+    return [
+        "Stage 1 audit: chapter headings preserved as H1",
+        "Stage 1 audit: generic headings include chapter context",
+    ]
 
 
 def _compile_flags(raw_flags: list[str]) -> int:
@@ -454,6 +713,151 @@ def validate_heading_rules(payload: dict) -> list[HeadingRule]:
         except re.error as exc:
             raise FormattingError(f"invalid regex in heading rule {rule_id}: {exc}") from exc
         validated.append(HeadingRule(rule_id, pattern, replacement, flags))
+    return validated
+
+
+CONTENT_REQUIRED_KEYS = {
+    "plugin_id",
+    "plugin_version",
+    "schema_version",
+    "stage",
+    "description",
+    "safety",
+    "execution_contract",
+    "protected_blocks",
+    "analyze",
+    "rules",
+    "warnings",
+    "summary",
+}
+CONTENT_ALLOWED_RULE_TYPES = {
+    "literal_replace",
+    "regex_replace",
+    "line_regex_replace",
+    "blank_line_normalize",
+    "choice_option_split",
+    "callout_spacing_fix",
+    "formula_whitelist_fix",
+    "image_caption_fix",
+    "report_only",
+}
+CONTENT_ALLOWED_SCOPES = {
+    "non_heading_lines",
+    "all_unprotected_text",
+    "all_unprotected_non_heading_text",
+    "math_text_only",
+    "image_caption_region",
+    "callout_region",
+    "report_only",
+}
+CONTENT_ALLOWED_PHASES = {
+    "pre_clean",
+    "formula_fix",
+    "choice_fix",
+    "callout_fix",
+    "image_caption_fix",
+    "blank_line_fix",
+    "post_clean",
+    "analyze_only",
+}
+CONTENT_ALLOWED_RISKS = {"low", "medium", "high"}
+CONTENT_ALLOWED_REPLACEMENT_MODES = {"regex_template", "literal"}
+CONTENT_MUTATING_TYPES = CONTENT_ALLOWED_RULE_TYPES - {"report_only"}
+
+
+def validate_content_rules(payload: dict) -> list[ContentRule]:
+    if not isinstance(payload, dict):
+        raise FormattingError("content rules must be a JSON object")
+    missing = sorted(CONTENT_REQUIRED_KEYS - set(payload))
+    if missing:
+        raise FormattingError(f"content rules missing required keys: {', '.join(missing)}")
+    if payload.get("plugin_id") != "chapter_inner_markdown_formatter":
+        raise FormattingError("content rules plugin_id must be chapter_inner_markdown_formatter")
+    if payload.get("schema_version") != "1.0.0":
+        raise FormattingError("content rules schema_version must be 1.0.0")
+    if payload.get("stage") != "chapter_inner_formatting":
+        raise FormattingError("content rules stage must be chapter_inner_formatting")
+    if not isinstance(payload.get("safety"), dict):
+        raise FormattingError("content rules safety must be an object")
+    if not payload["safety"].get("never_modify_heading_lines"):
+        raise FormattingError("content rules must declare never_modify_heading_lines")
+    if not isinstance(payload.get("execution_contract"), dict):
+        raise FormattingError("content rules execution_contract must be an object")
+    if not isinstance(payload.get("protected_blocks"), list):
+        raise FormattingError("content rules protected_blocks must be a list")
+    analyze = payload.get("analyze")
+    if not isinstance(analyze, dict) or not isinstance(analyze.get("checks"), list):
+        raise FormattingError("content rules analyze.checks must be a list")
+    if not isinstance(payload.get("summary"), list) or not all(isinstance(item, str) for item in payload["summary"]):
+        raise FormattingError("content rules summary must be a string list")
+    if not isinstance(payload.get("warnings"), list) or not all(isinstance(item, str) for item in payload["warnings"]):
+        raise FormattingError("content rules warnings must be a string list")
+
+    raw_rules = payload.get("rules")
+    if not isinstance(raw_rules, list):
+        raise FormattingError("content rules rules must be a list")
+
+    validated: list[ContentRule] = []
+    for raw_rule in raw_rules:
+        if not isinstance(raw_rule, dict):
+            raise FormattingError("content rule must be an object")
+        rule_id = raw_rule.get("id")
+        rule_type = raw_rule.get("type")
+        scope = raw_rule.get("scope", "non_heading_lines")
+        phase = raw_rule.get("phase", "pre_clean")
+        risk_level = raw_rule.get("risk_level", "low")
+        pattern = raw_rule.get("pattern", "")
+        search = raw_rule.get("search", "")
+        replacement = raw_rule.get("replacement", "")
+        raw_flags = raw_rule.get("flags", [])
+        replacement_mode = raw_rule.get("replacement_mode", "regex_template")
+        enabled = raw_rule.get("enabled", True)
+
+        if not isinstance(rule_id, str) or not rule_id:
+            raise FormattingError("content rule id must be a non-empty string")
+        if rule_type not in CONTENT_ALLOWED_RULE_TYPES:
+            raise FormattingError(f"unsupported content rule type: {rule_type}")
+        if scope not in CONTENT_ALLOWED_SCOPES:
+            raise FormattingError(f"unsupported content rule scope: {scope}")
+        if phase not in CONTENT_ALLOWED_PHASES:
+            raise FormattingError(f"unsupported content rule phase: {phase}")
+        if risk_level not in CONTENT_ALLOWED_RISKS:
+            raise FormattingError(f"unsupported content rule risk_level: {risk_level}")
+        if replacement_mode not in CONTENT_ALLOWED_REPLACEMENT_MODES:
+            raise FormattingError(f"unsupported content rule replacement_mode: {replacement_mode}")
+        if not isinstance(enabled, bool):
+            raise FormattingError(f"content rule {rule_id} enabled must be boolean")
+        if not isinstance(pattern, str) or not isinstance(search, str) or not isinstance(replacement, str):
+            raise FormattingError(f"content rule {rule_id} pattern/search/replacement must be strings")
+        if not isinstance(raw_flags, list) or not all(isinstance(flag, str) for flag in raw_flags):
+            raise FormattingError(f"content rule {rule_id} flags must be a string list")
+        if enabled and rule_type == "image_caption_fix" and raw_rule.get("mode") != "report_only":
+            raise FormattingError("enabled image_caption_fix rules are not supported in v1; use report_only or enabled=false")
+        flags = _compile_flags(raw_flags)
+        if enabled and rule_type not in {"literal_replace", "report_only"}:
+            if not pattern:
+                raise FormattingError(f"content rule {rule_id} pattern must be a non-empty string")
+            try:
+                re.compile(pattern, flags)
+            except re.error as exc:
+                raise FormattingError(f"invalid regex in content rule {rule_id}: {exc}") from exc
+        if enabled and rule_type == "literal_replace" and not (search or pattern):
+            raise FormattingError(f"content rule {rule_id} search or pattern must be non-empty")
+        validated.append(
+            ContentRule(
+                rule_id=rule_id,
+                rule_type=rule_type,
+                scope=scope,
+                phase=phase,
+                risk_level=risk_level,
+                pattern=pattern,
+                replacement=replacement,
+                flags=flags,
+                replacement_mode=replacement_mode,
+                search=search,
+                enabled=enabled,
+            )
+        )
     return validated
 
 
@@ -543,6 +947,132 @@ def apply_heading_rules(markdown: str, rules: list[HeadingRule]) -> str:
     return "".join(result_parts)
 
 
+def _regex_replacement(rule: ContentRule) -> str | object:
+    if rule.replacement_mode == "literal":
+        return lambda _match: rule.replacement
+    return re.sub(
+        r'\$\$|\$(\d+)',
+        lambda m: '$' if m.group(0) == '$$' else f'\\g<{m.group(1)}>',
+        rule.replacement,
+    )
+
+
+def _apply_content_rule_to_text(text: str, rule: ContentRule) -> str:
+    if not rule.enabled or rule.rule_type in {"report_only", "image_caption_fix"}:
+        return text
+    if rule.rule_type == "literal_replace":
+        return text.replace(rule.search or rule.pattern, rule.replacement)
+    if rule.rule_type in {
+        "regex_replace",
+        "blank_line_normalize",
+        "choice_option_split",
+        "callout_spacing_fix",
+        "formula_whitelist_fix",
+    }:
+        return re.sub(rule.pattern, _regex_replacement(rule), text, flags=rule.flags)
+    if rule.rule_type == "line_regex_replace":
+        parts = text.splitlines(keepends=True)
+        return "".join(re.sub(rule.pattern, _regex_replacement(rule), part, flags=rule.flags) for part in parts)
+    raise FormattingError(f"unsupported executable content rule type: {rule.rule_type}")
+
+
+def _is_table_line(line: str) -> bool:
+    stripped = line.strip()
+    return "|" in stripped and bool(stripped)
+
+
+def _content_protected_line_mask(lines: list[str]) -> list[bool]:
+    protected = [False] * len(lines)
+    in_yaml = len(lines) > 0 and lines[0].strip() == "---"
+    in_code = False
+    code_marker = ""
+    in_math = False
+    in_bracket_math = False
+    in_details = False
+
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if in_yaml:
+            protected[index] = True
+            if index > 0 and stripped == "---":
+                in_yaml = False
+            continue
+        if in_code:
+            protected[index] = True
+            if stripped.startswith(code_marker):
+                in_code = False
+            continue
+        if in_math:
+            protected[index] = True
+            if stripped == "$$":
+                in_math = False
+            continue
+        if in_bracket_math:
+            protected[index] = True
+            if stripped == r"\]":
+                in_bracket_math = False
+            continue
+        if in_details:
+            protected[index] = True
+            if stripped.lower().startswith("</details>"):
+                in_details = False
+            continue
+
+        if HEADING_RE.match(line):
+            protected[index] = True
+        elif stripped.startswith("```") or stripped.startswith("~~~"):
+            protected[index] = True
+            in_code = True
+            code_marker = stripped[:3]
+        elif stripped == "$$":
+            protected[index] = True
+            in_math = True
+        elif stripped == r"\[":
+            protected[index] = True
+            in_bracket_math = True
+        elif stripped.lower().startswith("<details"):
+            protected[index] = True
+            in_details = True
+        elif _is_table_line(line):
+            protected[index] = True
+    return protected
+
+
+def _apply_content_rules_to_unprotected_text(markdown: str, rules: list[ContentRule]) -> str:
+    lines = markdown.splitlines(keepends=True)
+    protected = _content_protected_line_mask(lines)
+    result_parts: list[str] = []
+    current_span: list[str] = []
+
+    def flush_span() -> None:
+        if not current_span:
+            return
+        span = "".join(current_span)
+        for rule in rules:
+            if rule.scope in {"math_text_only", "image_caption_region", "callout_region", "report_only"}:
+                continue
+            span = _apply_content_rule_to_text(span, rule)
+        result_parts.append(span)
+        current_span.clear()
+
+    for line, is_protected in zip(lines, protected):
+        if is_protected:
+            flush_span()
+            result_parts.append(line)
+        else:
+            current_span.append(line)
+    flush_span()
+    return "".join(result_parts)
+
+
+def run_content_rules(payload: dict, markdown: str) -> PluginResult:
+    rules = validate_content_rules(payload)
+    cleaned = _apply_content_rules_to_unprotected_text(markdown, rules)
+    summary = list(payload.get("summary", []))
+    warnings = list(payload.get("warnings", []))
+    return PluginResult(cleaned_markdown=cleaned, summary=summary, warnings=warnings)
+
+
 def _sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
@@ -551,7 +1081,8 @@ def save_approved_program(
     approved_root: Path,
     plugin_id: str,
     heading_rules: dict,
-    plugin_path: Path,
+    plugin_path: Path | None,
+    content_rules_path: Path | None,
     original_path: Path,
     candidate_path: Path,
     approving_source_path: Path,
@@ -561,7 +1092,14 @@ def save_approved_program(
         raise FormattingError("plugin id may contain only letters, numbers, underscores, and hyphens")
 
     validate_heading_rules(heading_rules)
-    load_safe_plugin(plugin_path)
+    if (plugin_path is None) == (content_rules_path is None):
+        raise FormattingError("provide exactly one of plugin_path or content_rules_path")
+    content_rules_payload: dict | None = None
+    if content_rules_path is not None:
+        content_rules_payload = json.loads(content_rules_path.read_text(encoding="utf-8"))
+        validate_content_rules(content_rules_payload)
+    if plugin_path is not None:
+        load_safe_plugin(plugin_path)
 
     program_dir = approved_root / plugin_id
     if program_dir.exists():
@@ -578,7 +1116,13 @@ def save_approved_program(
         json.dumps(heading_rules, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    shutil.copy2(plugin_path, program_dir / "content_cleaner.py")
+    if content_rules_payload is not None:
+        (program_dir / "content_rules.json").write_text(
+            json.dumps(content_rules_payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    elif plugin_path is not None:
+        shutil.copy2(plugin_path, program_dir / "content_cleaner.py")
     (program_dir / "sample_before.md").write_text(original_text, encoding="utf-8")
     (program_dir / "sample_after.md").write_text(candidate_text, encoding="utf-8")
 
@@ -615,12 +1159,26 @@ def save_approved_program(
 def apply_approved_program(program_dir: Path, target_path: Path) -> ApprovedApplyResult:
     heading_rules_payload = json.loads((program_dir / "heading_rules.json").read_text(encoding="utf-8"))
     rules = validate_heading_rules(heading_rules_payload)
-    plugin = load_safe_plugin(program_dir / "content_cleaner.py")
+    content_rules_path = program_dir / "content_rules.json"
+    plugin_path = program_dir / "content_cleaner.py"
+    if content_rules_path.exists():
+        content_rules_payload = json.loads(content_rules_path.read_text(encoding="utf-8"))
+        validate_content_rules(content_rules_payload)
+        plugin = None
+    elif plugin_path.exists():
+        content_rules_payload = None
+        plugin = load_safe_plugin(plugin_path)
+    else:
+        raise FormattingError("approved program must contain content_rules.json or content_cleaner.py")
 
     candidate_path = create_fresh_candidate(target_path)
     markdown = candidate_path.read_text(encoding="utf-8")
     markdown = apply_heading_rules(markdown, rules)
-    plugin_result = run_plugin(plugin, markdown)
+    if content_rules_payload is not None:
+        plugin_result = run_content_rules_protecting_headings(content_rules_payload, markdown)
+    else:
+        assert plugin is not None
+        plugin_result = run_content_plugin_protecting_headings(plugin, markdown)
     candidate_path.write_text(plugin_result.cleaned_markdown, encoding="utf-8")
 
     report_path = candidate_path.parent / f"{target_path.stem}.approved-report.md"
@@ -640,15 +1198,32 @@ def apply_approved_program(program_dir: Path, target_path: Path) -> ApprovedAppl
     )
 
 
-def run_candidate_from_artifacts(markdown_path: Path, heading_rules_path: Path, plugin_path: Path) -> CandidateRunResult:
+def run_candidate_from_artifacts(
+    markdown_path: Path,
+    heading_rules_path: Path,
+    plugin_path: Path | None = None,
+    content_rules_path: Path | None = None,
+) -> CandidateRunResult:
     heading_payload = json.loads(heading_rules_path.read_text(encoding="utf-8"))
     rules = validate_heading_rules(heading_payload)
-    plugin = load_safe_plugin(plugin_path)
+    if (plugin_path is None) == (content_rules_path is None):
+        raise FormattingError("provide exactly one of plugin_path or content_rules_path")
+    content_rules_payload: dict | None = None
+    plugin: ModuleType | None = None
+    if content_rules_path is not None:
+        content_rules_payload = json.loads(content_rules_path.read_text(encoding="utf-8"))
+        validate_content_rules(content_rules_payload)
+    if plugin_path is not None:
+        plugin = load_safe_plugin(plugin_path)
     candidate_path = create_fresh_candidate(markdown_path)
 
     markdown = candidate_path.read_text(encoding="utf-8")
     markdown = apply_heading_rules(markdown, rules)
-    plugin_result = run_plugin(plugin, markdown)
+    if content_rules_payload is not None:
+        plugin_result = run_content_rules_protecting_headings(content_rules_payload, markdown)
+    else:
+        assert plugin is not None
+        plugin_result = run_content_plugin_protecting_headings(plugin, markdown)
     candidate_path.write_text(plugin_result.cleaned_markdown, encoding="utf-8")
 
     report_path = candidate_path.parent / f"{markdown_path.stem}.candidate-report.md"
@@ -831,6 +1406,22 @@ def run_content_plugin_protecting_headings(plugin: ModuleType, markdown: str) ->
     )
 
 
+def run_content_rules_protecting_headings(payload: dict, markdown: str) -> PluginResult:
+    before_headings = _heading_lines(markdown)
+    before_counts = content_preservation_counts(markdown)
+    result = run_content_rules(payload, markdown)
+    after_headings = _heading_lines(result.cleaned_markdown)
+    if before_headings != after_headings:
+        raise FormattingError("content rules modified heading lines")
+    after_counts = content_preservation_counts(result.cleaned_markdown)
+    validate_content_preservation(before_counts, after_counts)
+    return PluginResult(
+        cleaned_markdown=result.cleaned_markdown,
+        summary=result.summary + preservation_summary(before_counts, after_counts),
+        warnings=result.warnings,
+    )
+
+
 def _write_text_artifact(path: Path, text: str) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
@@ -983,12 +1574,23 @@ def run_learning_from_provider(
         shutil.copy2(markdown_path, candidate_path)
         candidate_text = candidate_path.read_text(encoding="utf-8")
         stage1_text = apply_heading_rules(candidate_text, rules)
+        stage1_text = enrich_generic_headings_with_chapter_context(stage1_text)
         candidate_path.write_text(stage1_text, encoding="utf-8")
         artifacts["stage1_report"] = write_review_report(
             original_path=markdown_path,
             candidate_path=candidate_path,
             report_path=work_dir / "stage1_heading_report.md",
             heading_summary=[rule.rule_id for rule in rules],
+            plugin_summary=[],
+            warnings=[],
+        )
+        current_stage = "stage1-audit"
+        stage1_audit_summary = audit_stage1_headings(original_text, stage1_text)
+        artifacts["stage1_report"] = write_review_report(
+            original_path=markdown_path,
+            candidate_path=candidate_path,
+            report_path=work_dir / "stage1_heading_report.md",
+            heading_summary=[rule.rule_id for rule in rules] + stage1_audit_summary,
             plugin_summary=[],
             warnings=[],
         )
@@ -1044,15 +1646,23 @@ def run_learning_from_provider(
 
         current_stage = "content-provider"
         artifacts["content_prompt"] = _write_text_artifact(work_dir / "content_cleaner_prompt.md", content_prompt)
-        content_response = provider_client.chat(content_prompt, h1_sample, timeout_seconds=timeout_seconds)
-        artifacts["content_response"] = _write_text_artifact(work_dir / "content_cleaner_response.py", content_response)
-        plugin_source = parse_python_artifact_from_text(content_response)
-        artifacts["content_cleaner"] = _write_text_artifact(work_dir / "content_cleaner.py", plugin_source)
-        plugin = load_safe_plugin(artifacts["content_cleaner"])
+        content_response = provider_client.chat(
+            content_prompt,
+            h1_sample,
+            timeout_seconds=timeout_seconds,
+            response_format={"type": "json_object"},
+        )
+        artifacts["content_response"] = _write_text_artifact(work_dir / "content_rules_response.json", content_response)
+        content_rules_payload = json.loads(parse_json_artifact_from_text(content_response))
+        validate_content_rules(content_rules_payload)
+        artifacts["content_rules"] = _write_text_artifact(
+            work_dir / "content_rules.json",
+            json.dumps(content_rules_payload, ensure_ascii=False, indent=2),
+        )
 
         current_stage = "stage4-apply"
         try:
-            plugin_result = run_content_plugin_protecting_headings(plugin, stripped_text)
+            plugin_result = run_content_rules_protecting_headings(content_rules_payload, stripped_text)
         except FormattingError:
             candidate_path.write_text(stripped_text, encoding="utf-8")
             raise

@@ -225,6 +225,8 @@ def select_target_depth(headings: list[Heading], requested_depth: int | None) ->
         raise SegmentationError("No numbered headings detected")
 
     if requested_depth is None:
+        if any(heading.number_depth == 3 for heading in headings):
+            return 3
         return max(heading.number_depth for heading in headings)
 
     if not any(heading.number_depth == requested_depth for heading in headings):
@@ -343,7 +345,8 @@ def build_segmentation_plan(source_path: Path, vault_root: Path, target_depth: i
     sandbox_dir = source_path.with_suffix("")
     master_path = sandbox_dir / f"000_{source_path.stem}目录.md"
 
-    top_level_nodes, nodes, special_merges, warnings = build_directory_tree(headings, markdown, sandbox_dir)
+    filtered_headings = [h for h in headings if h.markdown_depth <= selected_depth]
+    top_level_nodes, nodes, special_merges, warnings = build_directory_tree(filtered_headings, markdown, sandbox_dir)
     if not top_level_nodes:
         raise SegmentationError("No top-level directory nodes detected")
 
