@@ -1179,7 +1179,18 @@ def apply_approved_program(program_dir: Path, target_path: Path) -> ApprovedAppl
     else:
         assert plugin is not None
         plugin_result = run_content_plugin_protecting_headings(plugin, markdown)
-    candidate_path.write_text(plugin_result.cleaned_markdown, encoding="utf-8")
+    cleaned = plugin_result.cleaned_markdown
+    # Apply heading optimizations if present
+    opt_path = program_dir / "heading_optimizations.json"
+    if opt_path.exists():
+        opt_mapping = json.loads(opt_path.read_text(encoding="utf-8"))
+        opt_lines = cleaned.splitlines()
+        for idx, l in enumerate(opt_lines):
+            stripped = l.strip()
+            if stripped in opt_mapping:
+                opt_lines[idx] = l.replace(stripped, opt_mapping[stripped])
+        cleaned = "\n".join(opt_lines) + "\n"
+    candidate_path.write_text(cleaned, encoding="utf-8")
 
     report_path = candidate_path.parent / f"{target_path.stem}.approved-report.md"
     write_review_report(
@@ -1509,6 +1520,40 @@ def extract_first_20_pages(markdown: str, markdown_path: Path) -> str:
     return "\n".join(prepended_lines) + ("\n" if prepended_lines else "")
 
 
+def run_heading_optimization(
+    markdown: str,
+    provider_client: object,
+    prompt: str,
+    timeout_seconds: int = 120,
+) -> dict[str, str]:
+    heading_lines = [line.strip() for line in markdown.splitlines() if line.strip().startswith("#")]
+    if not heading_lines:
+        return {}
+
+    input_payload = "\n".join(heading_lines)
+    try:
+        response = provider_client.chat(
+            prompt,
+            input_payload,
+            timeout_seconds=timeout_seconds,
+            response_format={"type": "json_object"}
+        )
+        payload = json.loads(parse_json_artifact_from_text(response))
+        validated = {}
+        for k, v in payload.items():
+            k_strip = k.strip()
+            v_strip = v.strip()
+            if not k_strip.startswith("#") or not v_strip.startswith("#"):
+                continue
+            k_level = len(k_strip) - len(k_strip.lstrip("#"))
+            v_level = len(v_strip) - len(v_strip.lstrip("#"))
+            if k_level == v_level:
+                validated[k_strip] = v_strip
+        return validated
+    except Exception:
+        return {}
+
+
 
 
 
@@ -1667,7 +1712,33 @@ def run_learning_from_provider(
             candidate_path.write_text(stripped_text, encoding="utf-8")
             raise
 
-        candidate_path.write_text(plugin_result.cleaned_markdown, encoding="utf-8")
+        # Stage 5: Heading Optimization
+        current_stage = "heading-optimization-provider"
+        heading_opt_prompt_path = Path(__file__).resolve().parent.parent / "agents" / "heading_optimization_prompt.md"
+        heading_opt_prompt = heading_opt_prompt_path.read_text(encoding="utf-8")
+        artifacts["heading_opt_prompt"] = _write_text_artifact(work_dir / "heading_optimization_prompt.md", heading_opt_prompt)
+
+        opt_mapping = run_heading_optimization(
+            plugin_result.cleaned_markdown,
+            provider_client,
+            heading_opt_prompt,
+            timeout_seconds=timeout_seconds
+        )
+
+        final_markdown = plugin_result.cleaned_markdown
+        if opt_mapping:
+            artifacts["heading_optimizations"] = _write_text_artifact(
+                work_dir / "heading_optimizations.json",
+                json.dumps(opt_mapping, ensure_ascii=False, indent=2)
+            )
+            opt_lines = final_markdown.splitlines()
+            for idx, l in enumerate(opt_lines):
+                stripped = l.strip()
+                if stripped in opt_mapping:
+                    opt_lines[idx] = l.replace(stripped, opt_mapping[stripped])
+            final_markdown = "\n".join(opt_lines) + "\n"
+
+        candidate_path.write_text(final_markdown, encoding="utf-8")
         artifacts["candidate"] = candidate_path
         artifacts["report"] = write_review_report(
             original_path=markdown_path,
