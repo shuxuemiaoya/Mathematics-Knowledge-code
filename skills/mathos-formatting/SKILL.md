@@ -40,6 +40,7 @@ Run commands from `C:\Mathematics-Knowledge\Mathematics-Knowledge-code`.
 | Learn provider artifacts | `python skills\mathos-formatting\scripts\mathos_formatting.py learn-from-provider "<source.md>" --env ..\.env` |
 | Learn into an explicit work dir | `python skills\mathos-formatting\scripts\mathos_formatting.py learn-from-provider "<source.md>" --env ..\.env --work-dir "<source-dir>\mathos-formatting\<source-stem>" --timeout-seconds 120 --h1-index 0` |
 | Build candidate from JSON rules | `python skills\mathos-formatting\scripts\mathos_formatting.py candidate-from-artifacts "<source.md>" --heading-rules "<work-dir>\heading_rules.json" --content-rules "<work-dir>\content_rules.json"` |
+| Build candidate with heading optimizations | `python skills\mathos-formatting\scripts\mathos_formatting.py candidate-from-artifacts "<source.md>" --heading-rules "<work-dir>\heading_rules.json" --content-rules "<work-dir>\content_rules.json" --heading-optimizations "<work-dir>\heading_optimizations.json"` |
 | Build candidate from legacy cleaner | `python skills\mathos-formatting\scripts\mathos_formatting.py candidate-from-artifacts "<source.md>" --heading-rules "<work-dir>\heading_rules.json" --plugin "<work-dir>\content_cleaner.py"` |
 | Approve reviewed JSON program | `python skills\mathos-formatting\scripts\mathos_formatting.py approve --approved-root skills\mathos-formatting\plugins\approved --plugin-id "<program-id>" --heading-rules "<work-dir>\heading_rules.json" --content-rules "<work-dir>\content_rules.json" --original "<source.md>" --candidate "<candidate.md>" --summary "user approved candidate result"` |
 | Apply approved program to a fresh candidate | `python skills\mathos-formatting\scripts\mathos_formatting.py apply-approved "skills\mathos-formatting\plugins\approved\<program-id>" "<source.md>"` |
@@ -57,6 +58,18 @@ Run commands from `C:\Mathematics-Knowledge\Mathematics-Knowledge-code`.
 5. If the user explicitly approves the candidate as a reusable formatting program, run `approve`.
 6. If the user explicitly approves replacing the original Markdown for downstream stages, make a source-preserving backup such as `original-before-formatting.md`, then replace the source with the candidate.
 7. Only clean the temporary `mathos-formatting` work directory after the user confirms the formatting result and no audit artifacts are still needed.
+
+### The 5-Stage Provider Learning Workflow
+
+When running `learn-from-provider`, the formatter executes the following five stages sequentially:
+
+1. **Stage 1: Heading Refinement**: Learns pattern rules via DeepSeek to normalize chapter headers, and applies deterministic enrichment (e.g. converting generic headers into contextual H4 subheadings). A structural audit runs immediately to validate heading structures before proceeding.
+2. **Stage 2: TOC Detection & Stripping**: Identifies start and end boundaries of the Table of Contents via DeepSeek to strip the TOC section while preserving prefaces and standard text.
+3. **Stage 3: Sample Section Extraction**: Extracts a representative sample H1 chapter section to serve as a baseline for formatting analysis.
+4. **Stage 4: Chapter-Inner Formatting**: Learns and applies Markdown normalization rules (whitespace, spacing, formula cleanup) protecting mathematical formulas, code fences, and other structural blocks.
+5. **Stage 5: Heading Optimization**: Extracts all heading lines and calls DeepSeek to correct OCR errors (e.g., `ϰο4` -> `复习参考题 4`) and refine heading wording.
+   - **Level Consistency Enforcement**: It enforces that the level (`#` count) of each optimized heading matches the original heading exactly to prevent structural audits from failing.
+   - **Mapping Storage**: The optimized heading dictionary is written to `heading_optimizations.json`.
 
 ## Input And Output Contract
 
@@ -101,6 +114,7 @@ Approved program directories contain:
 
 - `heading_rules.json`
 - `content_rules.json` for new programs, or `content_cleaner.py` only for legacy programs.
+- `heading_optimizations.json` (optional, contains mapping template for Stage 5 heading optimizations).
 - `metadata.json`
 - `approval.md`
 - `sample_before.md`
@@ -126,6 +140,17 @@ New approved programs start with `allowed_scope: manual-only`.
 ```
 
 Rules must be a non-empty list. Each rule must have non-empty string `id` and `pattern`, string `replacement`, and string-list `flags`.
+
+`heading_optimizations.json`:
+
+```json
+{
+  "## ϰο4": "## Review Exercise 4",
+  "### 第3节": "### 第三节"
+}
+```
+
+Must be a flat key-value object where both keys and values are non-empty strings starting with `#`. The heading levels (count of `#`) of a key and its mapped value must match exactly.
 
 `content_rules.json`:
 
@@ -206,6 +231,7 @@ Heading-rule application and generic-heading enrichment also skip code fences an
 - TOC stripping must remove only the detected TOC block; preserve prefaces and any content before the TOC.
 - Generic headings such as exercises, review questions, or sections without full chapter context must become contextual H4 headings, not H1 chapter headings.
 - Stage 4 content rules must not modify heading lines.
+- Heading optimizations (Stage 5) must preserve heading levels (`#` counts) exactly. Level-modifying changes are rejected to prevent downstream structural audit failures.
 - Use literal replacement for literal LaTeX command strings; avoid regex replacement when replacing text such as `\mathbb`.
 - Never approve a program until the candidate and report have been reviewed.
 - Never replace the original file unless the user explicitly approves that exact replacement.
@@ -283,6 +309,7 @@ Reuse behavior:
 - Reads `heading_rules.json`.
 - Prefers `content_rules.json`.
 - Falls back to legacy `content_cleaner.py` if JSON rules are absent.
+- Replays local heading optimizations from `heading_optimizations.json` if present, completely bypassing external LLM calls.
 - Creates a fresh candidate backup and report.
 - Preserves the original source until explicit replacement approval.
 - Keeps approved programs `manual-only` until multiple reviewed successful runs justify broader automation.
@@ -301,19 +328,19 @@ Learn from provider:
 python skills\mathos-formatting\scripts\mathos_formatting.py learn-from-provider "C:\path\book.md" --env "C:\Mathematics-Knowledge\.env" --work-dir "C:\path\mathos-formatting\book" --timeout-seconds 120 --h1-index 0
 ```
 
-Rebuild candidate after editing JSON:
+Rebuild candidate after editing JSON (with optional heading optimizations):
 
 ```powershell
-python skills\mathos-formatting\scripts\mathos_formatting.py candidate-from-artifacts "C:\path\book.md" --heading-rules "C:\path\mathos-formatting\book\heading_rules.json" --content-rules "C:\path\mathos-formatting\book\content_rules.json"
+python skills\mathos-formatting\scripts\mathos_formatting.py candidate-from-artifacts "C:\path\book.md" --heading-rules "C:\path\mathos-formatting\book\heading_rules.json" --content-rules "C:\path\mathos-formatting\book\content_rules.json" --heading-optimizations "C:\path\mathos-formatting\book\heading_optimizations.json"
 ```
 
-Approve reviewed reusable program:
+Approve reviewed reusable program (automatically copies `heading_optimizations.json` to the approved program directory if present):
 
 ```powershell
 python skills\mathos-formatting\scripts\mathos_formatting.py approve --approved-root skills\mathos-formatting\plugins\approved --plugin-id "textbook-family-v1" --heading-rules "C:\path\mathos-formatting\book\heading_rules.json" --content-rules "C:\path\mathos-formatting\book\content_rules.json" --original "C:\path\book.md" --candidate "C:\path\mathos-formatting\book\candidate.md" --summary "user approved candidate result"
 ```
 
-Reuse reviewed program:
+Reuse reviewed program (which automatically replays optimizations if `heading_optimizations.json` is present):
 
 ```powershell
 python skills\mathos-formatting\scripts\mathos_formatting.py apply-approved "skills\mathos-formatting\plugins\approved\textbook-family-v1" "C:\path\next-book.md"
