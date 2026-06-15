@@ -82,6 +82,18 @@ def command_candidate_from_artifacts(args: argparse.Namespace) -> int:
         plugin_path=plugin_path,
         content_rules_path=content_rules_path,
     )
+    if hasattr(args, "heading_optimizations") and args.heading_optimizations:
+        opt_path = Path(args.heading_optimizations)
+        if opt_path.exists():
+            candidate_path = result.candidate_path
+            cleaned = candidate_path.read_text(encoding="utf-8")
+            opt_mapping = json.loads(opt_path.read_text(encoding="utf-8"))
+            opt_lines = cleaned.splitlines()
+            for idx, l in enumerate(opt_lines):
+                stripped = l.strip()
+                if stripped in opt_mapping:
+                    opt_lines[idx] = l.replace(stripped, opt_mapping[stripped])
+            candidate_path.write_text("\n".join(opt_lines) + "\n", encoding="utf-8")
     approve_template = (
         "python skills/mathos-formatting/scripts/mathos_formatting.py approve "
         "--approved-root <approved_root> --plugin-id <plugin_id> "
@@ -108,6 +120,11 @@ def command_approve(args: argparse.Namespace) -> int:
     heading_rules = json.loads(heading_rules_path.read_text(encoding="utf-8"))
     plugin_path = _artifact_path(args, "plugin")
     content_rules_path = _artifact_path(args, "content_rules")
+    
+    candidate = Path(args.candidate)
+    work_dir = candidate.parent
+    opt_src = work_dir / "heading_optimizations.json"
+    
     program_dir = core.save_approved_program(
         approved_root=Path(args.approved_root),
         plugin_id=args.plugin_id,
@@ -115,10 +132,13 @@ def command_approve(args: argparse.Namespace) -> int:
         plugin_path=plugin_path,
         content_rules_path=content_rules_path,
         original_path=Path(args.original),
-        candidate_path=Path(args.candidate),
+        candidate_path=candidate,
         approving_source_path=Path(args.original),
         operations_summary=args.summary,
     )
+    if opt_src.exists():
+        import shutil
+        shutil.copy2(opt_src, program_dir / "heading_optimizations.json")
     _print_json(
         {
             "status": "approved",
@@ -194,6 +214,7 @@ def build_parser() -> argparse.ArgumentParser:
     candidate_parser.add_argument("--heading-rules", required=True)
     candidate_parser.add_argument("--content-rules")
     candidate_parser.add_argument("--plugin")
+    candidate_parser.add_argument("--heading-optimizations")
     candidate_parser.set_defaults(func=command_candidate_from_artifacts)
 
     approve_parser = subparsers.add_parser("approve", help="Save an approved candidate result as a reusable program")
