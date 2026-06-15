@@ -778,3 +778,35 @@ def test_content_cleaner_prompt_describes_json_rule_contract():
     assert "def clean" not in prompt
     assert "def analyze" not in prompt
     assert "批量处理入口" not in prompt
+
+
+class MockOptimizationProvider:
+    base_url = "https://fake.deepseek.local"
+    model = "deepseek-test"
+
+    def __init__(self, response_json):
+        self.response_json = response_json
+
+    def chat(self, system_prompt, user_payload, timeout_seconds=120, response_format=None):
+        return self.response_json
+
+def test_heading_optimization_success(tmp_path):
+    markdown_text = "# 第一章 数列\n## ϰο4\n正文内容\n"
+    markdown_file = tmp_path / "book.md"
+    markdown_file.write_text(markdown_text, encoding="utf-8")
+    
+    provider = MockOptimizationProvider('{"## ϰο4": "## 复习参考题 4"}')
+    heading_prompt = "# Headings prompt"
+    
+    mapping = core.run_heading_optimization(markdown_text, provider, heading_prompt)
+    assert mapping == {"## ϰο4": "## 复习参考题 4"}
+
+def test_heading_optimization_level_safety(tmp_path):
+    markdown_text = "## ϰο4\n"
+    # Mapping to a different level (H1 instead of H2)
+    provider = MockOptimizationProvider('{"## ϰο4": "# 复习参考题 4"}')
+    heading_prompt = "# Headings prompt"
+    
+    mapping = core.run_heading_optimization(markdown_text, provider, heading_prompt)
+    # Different heading levels should be discarded by validation safety check
+    assert mapping == {}
