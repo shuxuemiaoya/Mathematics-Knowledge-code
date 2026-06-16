@@ -68,7 +68,7 @@ Run commands from `C:\Mathematics-Knowledge\Mathematics-Knowledge-code`.
 
 When running `learn-from-provider`, the formatter executes the following five stages sequentially:
 
-1. **Stage 1: Heading Refinement**: Learns pattern rules via DeepSeek to normalize headings completely according to the TOC. TOC entries occupy H1-H3; headings not present in the TOC must be downgraded to H4-H6, with the target downgrade level chosen by DeepSeek. All heading modifications are driven entirely by DeepSeek's `heading_rules.json`. A structural audit runs immediately to validate that TOC chapter headings remain H1 before proceeding.
+1. **Stage 1: Heading Refinement**: Learns pattern rules via DeepSeek to normalize headings completely according to the TOC. DeepSeek is provided with a sample containing both the TOC and all H1 headings from the original text. TOC entries occupy H1-H3; headings not present in the TOC must be downgraded to H4-H6, with the target downgrade level chosen by DeepSeek. All heading modifications are driven entirely by DeepSeek's `heading_rules.json`. A structural audit runs immediately to validate that TOC chapter headings remain H1 before proceeding.
 2. **Stage 2: TOC Detection & Stripping**: Identifies start and end boundaries of the Table of Contents via DeepSeek to strip the TOC section while preserving prefaces and standard text.
 3. **Stage 3: Sample Section Extraction**: Extracts a representative sample H1 chapter section to serve as a baseline for formatting analysis.
 4. **Stage 4: Chapter-Inner Formatting**: Learns and applies Markdown normalization rules (whitespace, spacing, formula cleanup) protecting mathematical formulas, code fences, and other structural blocks.
@@ -230,7 +230,7 @@ Heading-rule application also skips code fences and display math blocks.
 
 ## Critical Rules
 
-- **Never modify the skill's own scripts or code during execution.** The files under `skills/mathos-formatting/scripts/` (including `mathos_formatting_core.py`, `mathos_formatting.py`, and `mathos_provider.py`) are read-only during skill execution. If a pipeline error is caused by a code defect (missing flag mapping, unrecognized heading pattern, unsupported rule type, etc.), the agent must stop and report the defect to the user, not patch the code to continue. Code changes require a separate, explicit user request outside the formatting workflow.
+- **Never modify the skill's own scripts or code during execution.** The files under `skills/mathos-formatting/scripts/` (including `mathos_formatting_core.py`, `mathos_formatting.py`, `mathos_provider.py`, `mathos_common.py`, `stage1_heading.py`, `stage2_3_toc.py`, `stage4_content.py`, `stage5_optimize.py`, `program_manager.py`, and `learning_pipeline.py`) are read-only during skill execution. If a pipeline error is caused by a code defect (missing flag mapping, unrecognized heading pattern, unsupported rule type, etc.), the agent must stop and report the defect to the user, not patch the code to continue. Code changes require a separate, explicit user request outside the formatting workflow.
 - Fail closed on deletion risk. A cleaner-looking candidate is invalid if it drops source content.
 - Stage 1 mutation and Stage 1 audit are separate: heading rules modify headings according to DeepSeek's `heading_rules.json`; `audit_stage1_headings` only validates that TOC chapter headings remain H1.
 - Stage 1 audit runs before TOC stripping so the original TOC remains available for heading context validation.

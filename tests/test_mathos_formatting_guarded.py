@@ -925,3 +925,32 @@ def test_parse_json_artifact_with_invalid_escapes():
     # \u1234 is a valid unicode escape sequence so it should remain untouched
     # \\d is a valid escape sequence (escaped backslash followed by d) so it should remain untouched as \\d
     assert parsed_json["notes"] == "test \\circ \\d \\s \u1234 \\d"
+
+
+def test_learning_stage1_input_contains_toc_and_h1(tmp_path):
+    markdown = tmp_path / "book.md"
+    markdown.write_text(SAMPLE_MARKDOWN, encoding="utf-8")
+    work_dir = tmp_path / "mathos-formatting" / "book"
+
+    captured_payloads = []
+    class CapturingProvider(SuccessfulMockProvider):
+        def chat(self, system_prompt: str, user_payload: str, timeout_seconds: int = 120, response_format: dict | None = None) -> str:
+            if "Heading Rules Prompt" in system_prompt:
+                captured_payloads.append(user_payload)
+            return super().chat(system_prompt, user_payload, timeout_seconds, response_format)
+
+    core.run_learning_from_provider(
+        markdown_path=markdown,
+        provider_client=CapturingProvider(toc_start_line=3, main_text_start_line=8),
+        heading_prompt="# Heading Rules Prompt",
+        content_prompt="# Content Cleaner Prompt",
+        work_dir=work_dir,
+    )
+
+    assert len(captured_payloads) == 1
+    payload = captured_payloads[0]
+    assert "# Table of Contents Sample" in payload
+    assert "# All H1 Headings in Original Text" in payload
+    assert "# 目录" in payload
+    assert "# 第一章 数列" in payload
+
