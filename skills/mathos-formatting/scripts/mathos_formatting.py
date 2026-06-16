@@ -20,16 +20,16 @@ def _print_json(payload: dict) -> None:
     print(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
-def _review_actions(candidate_path: Path, report_path: Path, approve_command: str | None = None) -> list[str]:
+def _self_check_actions(candidate_path: Path, report_path: Path, approve_command: str | None = None) -> list[str]:
     actions = [
-        f"Review the candidate Markdown: {candidate_path}",
-        f"Review the formatting report: {report_path}",
-        "If the format needs improvement, revise the JSON content rules or rerun learn-from-provider with a better prompt/sample.",
+        f"Run self-check on candidate Markdown: {candidate_path}",
+        f"Use the formatting report for self-check evidence: {report_path}",
+        "If self-check fails, revise the JSON rules or rerun learn-from-provider with a better prompt/sample.",
     ]
     if approve_command:
-        actions.append(f"If satisfied, save the format modification template: {approve_command}")
+        actions.append(f"If self-check passes, save the format modification template: {approve_command}")
     else:
-        actions.append("If satisfied, run approve with the heading rules and content_rules.json to save the format modification template.")
+        actions.append("If self-check passes, run approve with the heading rules and content_rules.json to save the format modification template.")
     actions.append("If not useful, discard the candidate and mathos-formatting work directory.")
     return actions
 
@@ -66,8 +66,8 @@ def command_apply_approved(args: argparse.Namespace) -> int:
             "report_path": str(result.report_path),
             "summary": result.summary,
             "warnings": result.warnings,
-            "review_required": True,
-            "next_actions": _review_actions(result.candidate_path, result.report_path),
+            "self_check_required": True,
+            "next_actions": _self_check_actions(result.candidate_path, result.report_path),
         }
     )
     return 0
@@ -76,24 +76,14 @@ def command_apply_approved(args: argparse.Namespace) -> int:
 def command_candidate_from_artifacts(args: argparse.Namespace) -> int:
     plugin_path = _artifact_path(args, "plugin")
     content_rules_path = _artifact_path(args, "content_rules")
+    opt_path = _artifact_path(args, "heading_optimizations")
     result = core.run_candidate_from_artifacts(
         markdown_path=Path(args.markdown),
         heading_rules_path=Path(args.heading_rules),
         plugin_path=plugin_path,
         content_rules_path=content_rules_path,
+        heading_optimizations_path=opt_path,
     )
-    if hasattr(args, "heading_optimizations") and args.heading_optimizations:
-        opt_path = Path(args.heading_optimizations)
-        if opt_path.exists():
-            candidate_path = result.candidate_path
-            cleaned = candidate_path.read_text(encoding="utf-8")
-            opt_mapping = json.loads(opt_path.read_text(encoding="utf-8"))
-            opt_lines = cleaned.splitlines()
-            for idx, l in enumerate(opt_lines):
-                stripped = l.strip()
-                if stripped in opt_mapping:
-                    opt_lines[idx] = l.replace(stripped, opt_mapping[stripped])
-            candidate_path.write_text("\n".join(opt_lines) + "\n", encoding="utf-8")
     approve_template = (
         "python skills/mathos-formatting/scripts/mathos_formatting.py approve "
         "--approved-root <approved_root> --plugin-id <plugin_id> "
@@ -108,8 +98,8 @@ def command_candidate_from_artifacts(args: argparse.Namespace) -> int:
             "report_path": str(result.report_path),
             "summary": result.summary,
             "warnings": result.warnings,
-            "review_required": True,
-            "next_actions": _review_actions(result.candidate_path, result.report_path, approve_template),
+            "self_check_required": True,
+            "next_actions": _self_check_actions(result.candidate_path, result.report_path, approve_template),
         }
     )
     return 0
@@ -143,10 +133,10 @@ def command_approve(args: argparse.Namespace) -> int:
         {
             "status": "approved",
             "program_dir": str(program_dir),
-            "review_required": False,
+            "self_check_required": False,
             "next_actions": [
                 f"Reuse this approved template with apply-approved: {program_dir}",
-                "Keep the approved template manual-only until enough reviewed runs justify broader automation.",
+                "Keep the approved template self-check-only until enough successful runs justify broader automation.",
             ],
         }
     )
@@ -176,8 +166,8 @@ def command_learn_from_provider(args: argparse.Namespace) -> int:
             "summary": result.summary,
             "warnings": result.warnings,
             "errors": result.errors,
-            "review_required": True,
-            "next_actions": _review_actions(
+            "self_check_required": True,
+            "next_actions": _self_check_actions(
                 result.candidate_path,
                 result.report_path,
                 (
@@ -217,7 +207,7 @@ def build_parser() -> argparse.ArgumentParser:
     candidate_parser.add_argument("--heading-optimizations")
     candidate_parser.set_defaults(func=command_candidate_from_artifacts)
 
-    approve_parser = subparsers.add_parser("approve", help="Save an approved candidate result as a reusable program")
+    approve_parser = subparsers.add_parser("approve", help="Save a self-check-passing candidate result as a reusable program")
     approve_parser.add_argument("--approved-root", required=True)
     approve_parser.add_argument("--plugin-id", required=True)
     approve_parser.add_argument("--heading-rules", required=True)
@@ -225,7 +215,7 @@ def build_parser() -> argparse.ArgumentParser:
     approve_parser.add_argument("--plugin")
     approve_parser.add_argument("--original", required=True)
     approve_parser.add_argument("--candidate", required=True)
-    approve_parser.add_argument("--summary", action="append", default=["user approved candidate result"])
+    approve_parser.add_argument("--summary", action="append", default=["self-check passed"])
     approve_parser.set_defaults(func=command_approve)
 
     learn_parser = subparsers.add_parser("learn-from-provider", help="Learn heading and content cleanup artifacts through DeepSeek")

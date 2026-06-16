@@ -402,17 +402,11 @@ CODE_FENCE_OPEN_RE = re.compile(r"^(`{3,}|~{3,}).*$")
 FLAG_MAP = {
     "MULTILINE": re.MULTILINE,
     "IGNORECASE": re.IGNORECASE,
+    "DOTALL": re.DOTALL,
 }
 CHINESE_CHAPTER_RE = re.compile(r"第\s*([一二三四五六七八九十百千万零〇两0-9]+)\s*章")
 ENGLISH_CHAPTER_RE = re.compile(r"\bChapter\s+([0-9]+)\b", re.IGNORECASE)
-GENERIC_CHINESE_HEADING_RE = re.compile(
-    r"^(小节|复习题|章末复习)(?:\s*[\(（]?\s*([一二三四五六七八九十百千万零〇两0-9]+)\s*[\)）]?)?$"
-)
-GENERIC_ENGLISH_HEADING_RE = re.compile(r"^(Review Questions)(?:\s+([0-9]+))?$", re.IGNORECASE)
-CONTEXTUAL_GENERIC_CHINESE_RE = re.compile(
-    r"^第[一二三四五六七八九十百千万零〇两0-9]+章\s+(?:小节|复习题|章末复习)(?:\s+[一二三四五六七八九十百千万零〇两0-9]+)?$"
-)
-CONTEXTUAL_GENERIC_ENGLISH_RE = re.compile(r"^Chapter\s+[0-9]+\s+Review Questions(?:\s+[0-9]+)?$", re.IGNORECASE)
+
 CHINESE_DIGIT_VALUES = {
     "零": 0,
     "〇": 0,
@@ -533,80 +527,6 @@ def _chapter_context_from_heading_text(text: str) -> tuple[str, str, str] | None
     return None
 
 
-def _generic_heading_parts(text: str) -> tuple[str, str, str | None] | None:
-    chinese_match = GENERIC_CHINESE_HEADING_RE.match(text)
-    if chinese_match:
-        return ("zh", chinese_match.group(1), chinese_match.group(2))
-    english_match = GENERIC_ENGLISH_HEADING_RE.match(text)
-    if english_match:
-        return ("en", "Review Questions", english_match.group(2))
-    return None
-
-
-def _has_generic_chapter_context(text: str) -> bool:
-    return bool(CONTEXTUAL_GENERIC_CHINESE_RE.match(text) or CONTEXTUAL_GENERIC_ENGLISH_RE.match(text))
-
-
-def _generic_heading_replacement(text: str, current_context: tuple[str, str, str] | None) -> str | None:
-    if _has_generic_chapter_context(text):
-        return text
-    parts = _generic_heading_parts(text)
-    if parts is None:
-        return None
-    language, label, explicit_number = parts
-    context = current_context
-    if explicit_number is not None:
-        if language == "zh":
-            chapter_number = _normalize_chinese_chapter_number(explicit_number)
-            context = ("zh", f"第{chapter_number}章", str(_chinese_number_to_int(explicit_number) or explicit_number))
-        else:
-            context = ("en", f"Chapter {explicit_number}", explicit_number)
-    if context is None or context[0] != language:
-        return None
-    suffix = ""
-    if explicit_number is not None:
-        explicit_suffix = str(_chinese_number_to_int(explicit_number) or explicit_number)
-        suffix = f" {explicit_suffix}"
-    return f"{context[1]} {label}{suffix}"
-
-
-def enrich_generic_headings_with_chapter_context(markdown: str) -> str:
-    protected_blocks = [
-        block
-        for block in _extract_protected_blocks(_line_offsets(markdown))
-        if block.kind in {"code_fence", "math_block"}
-    ]
-    current_context: tuple[str, str, str] | None = None
-    enriched_lines: list[str] = []
-    for line_number, line in enumerate(markdown.splitlines(keepends=True), start=1):
-        if _line_in_blocks(line_number, protected_blocks, {"code_fence", "math_block"}):
-            enriched_lines.append(line)
-            continue
-        line_without_ending, line_ending = _split_single_line_ending(line)
-        heading_match = HEADING_RE.match(line_without_ending)
-        if not heading_match:
-            enriched_lines.append(line)
-            continue
-        level = len(heading_match.group(1))
-        text = _normalize_atx_heading_text(heading_match.group(2)).strip()
-        if _has_generic_chapter_context(text):
-            if level != 4:
-                enriched_lines.append(f"#### {text}{line_ending}")
-            else:
-                enriched_lines.append(line)
-            continue
-        replacement = _generic_heading_replacement(text, current_context)
-        if replacement is not None:
-            enriched_lines.append(f"#### {replacement}{line_ending}")
-            continue
-        chapter_context = _chapter_context_from_heading_text(text)
-        if level == 1 and chapter_context is not None:
-            current_context = chapter_context
-            enriched_lines.append(line)
-            continue
-        enriched_lines.append(line)
-    return "".join(enriched_lines)
-
 
 def _toc_body_boundary(original_text: str) -> int:
     structure = extract_structure(original_text, "stage1-audit-original")
@@ -641,8 +561,6 @@ def audit_stage1_headings(original_text: str, stage1_text: str) -> list[str]:
     for heading in stage1_structure.headings:
         if heading.line_number <= toc_end_line:
             continue
-        if _has_generic_chapter_context(heading.text):
-            continue
         context = _chapter_context_from_heading_text(heading.text)
         if context is not None and context[1].casefold() in toc_chapters and heading.level != 1:
             raise FormattingError(
@@ -650,23 +568,8 @@ def audit_stage1_headings(original_text: str, stage1_text: str) -> list[str]:
                 f"at line {heading.line_number}: {heading.text}"
             )
 
-    for heading in stage1_structure.headings:
-        if heading.line_number <= toc_end_line:
-            continue
-        if _has_generic_chapter_context(heading.text) and heading.level != 4:
-            raise FormattingError(
-                "Stage 1 audit failed: contextual generic heading must be H4 "
-                f"at line {heading.line_number}: {heading.text}"
-            )
-        if _generic_heading_parts(heading.text) is not None and not _has_generic_chapter_context(heading.text):
-            raise FormattingError(
-                "Stage 1 audit failed: generic heading lacks chapter context "
-                f"at line {heading.line_number}: {heading.text}"
-            )
-
     return [
         "Stage 1 audit: chapter headings preserved as H1",
-        "Stage 1 audit: generic headings include chapter context",
     ]
 
 
@@ -914,14 +817,14 @@ def _line_in_blocks(line_number: int, blocks: list[TextBlock], kinds: set[str]) 
 def _apply_rules_to_span(markdown: str, rules: list[HeadingRule]) -> str:
     result = markdown
     for rule in rules:
+        escaped_replacement = rule.replacement.replace("\\", "\\\\")
         py_replacement = re.sub(
             r'\$\$|\$(\d+)',
             lambda m: '$' if m.group(0) == '$$' else f'\\g<{m.group(1)}>',
-            rule.replacement,
+            escaped_replacement,
         )
         result = re.sub(rule.pattern, py_replacement, result, flags=rule.flags)
     return result
-
 
 
 def apply_heading_rules(markdown: str, rules: list[HeadingRule]) -> str:
@@ -950,10 +853,11 @@ def apply_heading_rules(markdown: str, rules: list[HeadingRule]) -> str:
 def _regex_replacement(rule: ContentRule) -> str | object:
     if rule.replacement_mode == "literal":
         return lambda _match: rule.replacement
+    escaped_replacement = rule.replacement.replace("\\", "\\\\")
     return re.sub(
         r'\$\$|\$(\d+)',
         lambda m: '$' if m.group(0) == '$$' else f'\\g<{m.group(1)}>',
-        rule.replacement,
+        escaped_replacement,
     )
 
 
@@ -1136,7 +1040,7 @@ def save_approved_program(
         "h1_sample_hash": _sha256_text(h1_sample),
         "operations_summary": operations_summary,
         "original_approving_file_path": str(approving_source_path),
-        "allowed_scope": "manual-only",
+        "allowed_scope": "self-check-only",
     }
     (program_dir / "metadata.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
     (program_dir / "approval.md").write_text(
@@ -1147,7 +1051,7 @@ def save_approved_program(
                 f"Approved program: `{plugin_id}`",
                 f"Approving source: `{approving_source_path}`",
                 "",
-                "Allowed scope: `manual-only`",
+                "Allowed scope: `self-check-only`",
                 "",
             ]
         ),
@@ -1174,6 +1078,19 @@ def apply_approved_program(program_dir: Path, target_path: Path) -> ApprovedAppl
     candidate_path = create_fresh_candidate(target_path)
     markdown = candidate_path.read_text(encoding="utf-8")
     markdown = apply_heading_rules(markdown, rules)
+
+    # Conditionally strip TOC dynamically using local heuristic if metadata expects it
+    metadata_path = program_dir / "metadata.json"
+    if metadata_path.exists():
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        if metadata.get("toc_signature", False):
+            structure = extract_structure(markdown, "toc-detection")
+            if structure.toc_block is not None:
+                lines = markdown.splitlines(keepends=True)
+                before_toc = lines[:structure.toc_block.start_line - 1]
+                after_toc = lines[structure.toc_block.end_line:]
+                markdown = "".join(before_toc + after_toc)
+
     if content_rules_payload is not None:
         plugin_result = run_content_rules_protecting_headings(content_rules_payload, markdown)
     else:
@@ -1214,6 +1131,7 @@ def run_candidate_from_artifacts(
     heading_rules_path: Path,
     plugin_path: Path | None = None,
     content_rules_path: Path | None = None,
+    heading_optimizations_path: Path | None = None,
 ) -> CandidateRunResult:
     heading_payload = json.loads(heading_rules_path.read_text(encoding="utf-8"))
     rules = validate_heading_rules(heading_payload)
@@ -1235,7 +1153,18 @@ def run_candidate_from_artifacts(
     else:
         assert plugin is not None
         plugin_result = run_content_plugin_protecting_headings(plugin, markdown)
-    candidate_path.write_text(plugin_result.cleaned_markdown, encoding="utf-8")
+    cleaned = plugin_result.cleaned_markdown
+
+    if heading_optimizations_path is not None and heading_optimizations_path.exists():
+        opt_mapping = json.loads(heading_optimizations_path.read_text(encoding="utf-8"))
+        opt_lines = cleaned.splitlines()
+        for idx, l in enumerate(opt_lines):
+            stripped = l.strip()
+            if stripped in opt_mapping:
+                opt_lines[idx] = l.replace(stripped, opt_mapping[stripped])
+        cleaned = "\n".join(opt_lines) + "\n"
+
+    candidate_path.write_text(cleaned, encoding="utf-8")
 
     report_path = candidate_path.parent / f"{markdown_path.stem}.candidate-report.md"
     write_review_report(
@@ -1461,7 +1390,14 @@ def parse_json_artifact_from_text(text: str) -> str:
     fence = re.fullmatch(r"```(?:json)?\s*(.*?)```", stripped, flags=re.DOTALL)
     if fence:
         stripped = fence.group(1).strip()
-    return stripped
+    # Sanitize invalid backslash escape sequences in the JSON string
+    # Group 1 matches valid JSON escapes. Group 2 matches invalid backslashes.
+    cleaned = re.sub(
+        r'(\\["\\/bfnrt]|\\u[0-9a-fA-F]{4})|(\\)',
+        lambda m: m.group(1) if m.group(1) else '\\\\',
+        stripped,
+    )
+    return cleaned
 
 
 def find_total_pages_from_metadata(markdown_path: Path) -> int | None:
@@ -1547,7 +1483,7 @@ def run_heading_optimization(
                 continue
             k_level = len(k_strip) - len(k_strip.lstrip("#"))
             v_level = len(v_strip) - len(v_strip.lstrip("#"))
-            if k_level == v_level:
+            if k_level == v_level or 4 <= v_level <= 6:
                 validated[k_strip] = v_strip
         return validated
     except Exception:
@@ -1604,22 +1540,27 @@ def run_learning_from_provider(
         artifacts["toc_sample"] = _write_text_artifact(work_dir / "toc_sample.md", toc_sample)
 
         current_stage = "heading-provider"
-        artifacts["heading_prompt"] = _write_text_artifact(work_dir / "heading_rules_prompt.md", heading_prompt)
-        heading_response = provider_client.chat(heading_prompt, toc_sample, timeout_seconds=timeout_seconds, response_format={"type": "json_object"})
-        artifacts["heading_response"] = _write_text_artifact(work_dir / "heading_rules_response.json", heading_response)
-        heading_payload = json.loads(parse_json_artifact_from_text(heading_response))
-        rules = validate_heading_rules(heading_payload)
-        artifacts["heading_rules"] = _write_text_artifact(
-            work_dir / "heading_rules.json",
-            json.dumps(heading_payload, ensure_ascii=False, indent=2),
-        )
+        heading_rules_file = work_dir / "heading_rules.json"
+        if heading_rules_file.exists():
+            heading_payload = json.loads(heading_rules_file.read_text(encoding="utf-8"))
+            rules = validate_heading_rules(heading_payload)
+            artifacts["heading_rules"] = heading_rules_file
+        else:
+            artifacts["heading_prompt"] = _write_text_artifact(work_dir / "heading_rules_prompt.md", heading_prompt)
+            heading_response = provider_client.chat(heading_prompt, toc_sample, timeout_seconds=timeout_seconds, response_format={"type": "json_object"})
+            artifacts["heading_response"] = _write_text_artifact(work_dir / "heading_rules_response.json", heading_response)
+            heading_payload = json.loads(parse_json_artifact_from_text(heading_response))
+            rules = validate_heading_rules(heading_payload)
+            artifacts["heading_rules"] = _write_text_artifact(
+                work_dir / "heading_rules.json",
+                json.dumps(heading_payload, ensure_ascii=False, indent=2),
+            )
 
         current_stage = "stage1-apply"
         work_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy2(markdown_path, candidate_path)
         candidate_text = candidate_path.read_text(encoding="utf-8")
         stage1_text = apply_heading_rules(candidate_text, rules)
-        stage1_text = enrich_generic_headings_with_chapter_context(stage1_text)
         candidate_path.write_text(stage1_text, encoding="utf-8")
         artifacts["stage1_report"] = write_review_report(
             original_path=markdown_path,

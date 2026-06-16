@@ -144,14 +144,6 @@ def test_content_cleaner_prompt_forbids_destructive_edits():
     assert "警告" in prompt or "报告" in prompt or "analyze" in prompt
 
 
-def test_heading_rules_prompt_describes_generic_heading_context_policy():
-    prompt = (SKILL_ROOT / "agents" / "heading_rules_prompt.md").read_text(encoding="utf-8")
-
-    assert "复习题 (11)" in prompt
-    assert "第十一章 复习题 11" in prompt
-    assert "nearest preceding H1 chapter" in prompt
-    assert "Review Questions" in prompt
-
 
 def test_preservation_gate_rejects_image_removal():
     plugin = _plugin(lambda markdown: "\n".join(line for line in markdown.splitlines() if not line.startswith("![](")))
@@ -203,64 +195,23 @@ def test_preservation_gate_allows_blank_line_normalization():
     assert result.cleaned_markdown.count("$$") == SAMPLE_MARKDOWN.count("$$")
 
 
-def test_enrich_generic_headings_adds_explicit_and_current_chapter_context():
-    enriched = core.enrich_generic_headings_with_chapter_context(STAGE1_HEADING_MARKDOWN)
+def test_stage1_audit_is_validation_only():
+    # After heading rules applied, audit validates TOC chapter headings remain H1.
+    # No enrichment step required — the audit only checks structure.
+    summary = core.audit_stage1_headings(STAGE1_HEADING_MARKDOWN, STAGE1_HEADING_MARKDOWN)
 
-    assert "#### 第十章 小节" in enriched
-    assert "#### 第十一章 复习题 11" in enriched
-    assert "#### Chapter 5 Review Questions" in enriched
-    assert "# 小节" not in enriched
-    assert "# 复习题 (11)" not in enriched
-    assert "# Review Questions" not in enriched
-
-
-def test_enrich_generic_headings_forces_contextual_generic_headings_to_h4():
-    markdown = """# 第五章 一元一次方程
-
-# 第五章 章末复习
-"""
-
-    enriched = core.enrich_generic_headings_with_chapter_context(markdown)
-    lines = enriched.splitlines()
-
-    assert "#### 第五章 章末复习" in lines
-    assert "# 第五章 章末复习" not in lines
+    assert "Stage 1 audit: chapter headings preserved as H1" in summary
 
 
 def test_stage1_audit_rejects_demoted_body_chapter_matching_toc():
     broken = STAGE1_HEADING_MARKDOWN.replace(
-        "# 第十一章 不等式与不等式组\n\n# 复习题 (11)",
-        "#### 第十一章 不等式与不等式组\n\n#### 第十一章 复习题 11",
+        "# 第十一章 不等式与不等式组",
+        "#### 第十一章 不等式与不等式组",
     )
 
     with pytest.raises(core.FormattingError, match="chapter heading.+H1"):
         core.audit_stage1_headings(STAGE1_HEADING_MARKDOWN, broken)
 
-
-def test_stage1_audit_rejects_unenriched_generic_headings():
-    with pytest.raises(core.FormattingError, match="generic heading"):
-        core.audit_stage1_headings(STAGE1_HEADING_MARKDOWN, STAGE1_HEADING_MARKDOWN)
-
-
-def test_stage1_audit_rejects_contextual_generic_heading_at_h1():
-    bad = core.enrich_generic_headings_with_chapter_context(STAGE1_HEADING_MARKDOWN).replace(
-        "#### 第十一章 复习题 11",
-        "# 第十一章 复习题 11",
-    )
-
-    with pytest.raises(core.FormattingError, match="generic heading.+H4"):
-        core.audit_stage1_headings(STAGE1_HEADING_MARKDOWN, bad)
-
-
-def test_stage1_audit_is_validation_only():
-    enriched = core.enrich_generic_headings_with_chapter_context(STAGE1_HEADING_MARKDOWN)
-    before = enriched
-
-    summary = core.audit_stage1_headings(STAGE1_HEADING_MARKDOWN, enriched)
-
-    assert enriched == before
-    assert "Stage 1 audit: chapter headings preserved as H1" in summary
-    assert "Stage 1 audit: generic headings include chapter context" in summary
 
 
 class DestructiveProvider:
@@ -648,7 +599,7 @@ def clean(markdown: str) -> str:
     assert "正文 加粗。" in applied.candidate_path.read_text(encoding="utf-8")
 
 
-def test_cli_candidate_output_includes_review_required_and_next_actions(tmp_path):
+def test_cli_candidate_output_includes_self_check_required_and_next_actions(tmp_path):
     markdown = tmp_path / "book.md"
     markdown.write_text("# 第一章 数列\n\n正文 **加粗**。\n", encoding="utf-8")
     heading_rules_path = tmp_path / "heading_rules.json"
@@ -697,9 +648,9 @@ def test_cli_candidate_output_includes_review_required_and_next_actions(tmp_path
     )
     payload = json.loads(completed.stdout)
 
-    assert payload["review_required"] is True
+    assert payload["self_check_required"] is True
     assert isinstance(payload["next_actions"], list)
-    assert any("approve" in action for action in payload["next_actions"])
+    assert any("self-check passes" in action for action in payload["next_actions"])
     assert "正文 加粗。" in Path(payload["candidate_path"]).read_text(encoding="utf-8")
 
 
@@ -801,12 +752,176 @@ def test_heading_optimization_success(tmp_path):
     mapping = core.run_heading_optimization(markdown_text, provider, heading_prompt)
     assert mapping == {"## ϰο4": "## 复习参考题 4"}
 
-def test_heading_optimization_level_safety(tmp_path):
+def test_heading_optimization_allows_deepseek_demotion_with_parent_context(tmp_path):
+    markdown_text = "# Chapter 5 Sequences\n## Review Questions 5\n正文内容\n"
+    provider = MockOptimizationProvider('{"## Review Questions 5": "#### Chapter 5 Review Questions 5"}')
+    heading_prompt = "# Headings prompt"
+
+    mapping = core.run_heading_optimization(markdown_text, provider, heading_prompt)
+
+    assert mapping == {"## Review Questions 5": "#### Chapter 5 Review Questions 5"}
+
+def test_heading_optimization_blocks_promotions_to_toc_levels(tmp_path):
     markdown_text = "## ϰο4\n"
     # Mapping to a different level (H1 instead of H2)
     provider = MockOptimizationProvider('{"## ϰο4": "# 复习参考题 4"}')
     heading_prompt = "# Headings prompt"
     
     mapping = core.run_heading_optimization(markdown_text, provider, heading_prompt)
-    # Different heading levels should be discarded by validation safety check
+    # Promotions into TOC-owned H1-H3 levels should be discarded by validation safety check.
     assert mapping == {}
+
+
+def test_candidate_from_artifacts_does_not_enrich_headings(tmp_path):
+    markdown = tmp_path / "book.md"
+    markdown.write_text("# 第一章 数列\n\n# 小节\n\n正文\n", encoding="utf-8")
+    heading_rules_path = tmp_path / "heading_rules.json"
+    heading_rules_path.write_text(json.dumps(_heading_rules(), ensure_ascii=False), encoding="utf-8")
+    content_rules_path = tmp_path / "content_rules.json"
+    content_rules_path.write_text(json.dumps(_content_rules(), ensure_ascii=False), encoding="utf-8")
+
+    result = core.run_candidate_from_artifacts(
+        markdown_path=markdown,
+        heading_rules_path=heading_rules_path,
+        content_rules_path=content_rules_path,
+    )
+    candidate_text = result.candidate_path.read_text(encoding="utf-8")
+    # Enrichment is removed: headings are only modified by heading_rules.json (DeepSeek).
+    # 小节 should remain as-is (no chapter prefix added by core code).
+    assert "第一章 小节" not in candidate_text
+
+
+def test_apply_approved_program_does_not_enrich_headings(tmp_path):
+    markdown = tmp_path / "book.md"
+    markdown.write_text("# 第一章 数列\n\n# 小节\n\n正文\n", encoding="utf-8")
+    heading_rules_path = tmp_path / "heading_rules.json"
+    heading_rules_path.write_text(json.dumps(_heading_rules(), ensure_ascii=False), encoding="utf-8")
+    content_rules_path = tmp_path / "content_rules.json"
+    content_rules_path.write_text(json.dumps(_content_rules(), ensure_ascii=False), encoding="utf-8")
+
+    candidate = core.run_candidate_from_artifacts(
+        markdown_path=markdown,
+        heading_rules_path=heading_rules_path,
+        content_rules_path=content_rules_path,
+    )
+
+    approved_root = tmp_path / "approved"
+    program_dir = core.save_approved_program(
+        approved_root=approved_root,
+        plugin_id="test-no-enrich",
+        heading_rules=_heading_rules(),
+        plugin_path=None,
+        content_rules_path=content_rules_path,
+        original_path=markdown,
+        candidate_path=candidate.candidate_path,
+        approving_source_path=markdown,
+        operations_summary=["test"],
+    )
+
+    applied = core.apply_approved_program(program_dir, markdown)
+    candidate_text = applied.candidate_path.read_text(encoding="utf-8")
+    # Enrichment is removed: no chapter prefix should be added by core code.
+    assert "第一章 小节" not in candidate_text
+
+
+def test_apply_approved_program_strips_toc_conditionally(tmp_path):
+    # original markdown with a TOC
+    original_markdown = "# 数学\n\n# 目录\n\n# 第一章 数列 …… 1\n\n# 第一章 数列\n\n正文\n"
+    markdown = tmp_path / "book.md"
+    markdown.write_text(original_markdown, encoding="utf-8")
+
+    heading_rules_path = tmp_path / "heading_rules.json"
+    heading_rules = {
+        "rules": [
+            {
+                "id": "chapter",
+                "pattern": r"^# 第一章 数列(?: …… \d+)?$",
+                "replacement": "# 第一章 数列",
+                "flags": ["MULTILINE"],
+            }
+        ]
+    }
+    heading_rules_path.write_text(json.dumps(heading_rules, ensure_ascii=False), encoding="utf-8")
+    content_rules_path = tmp_path / "content_rules.json"
+    content_rules_path.write_text(json.dumps(_content_rules(), ensure_ascii=False), encoding="utf-8")
+
+    # For save_approved_program, we need a candidate.
+    # We strip the TOC manually for the candidate to mimic provider learning.
+    candidate_markdown = "# 数学\n\n# 第一章 数列\n\n正文\n"
+    candidate_path = tmp_path / "candidate.md"
+    candidate_path.write_text(candidate_markdown, encoding="utf-8")
+
+    approved_root = tmp_path / "approved"
+    program_dir = core.save_approved_program(
+        approved_root=approved_root,
+        plugin_id="test-toc-strip",
+        heading_rules=heading_rules,
+        plugin_path=None,
+        content_rules_path=content_rules_path,
+        original_path=markdown,
+        candidate_path=candidate_path,
+        approving_source_path=markdown,
+        operations_summary=["test"],
+    )
+
+    # Verify that metadata.json has toc_signature = True
+    metadata = json.loads((program_dir / "metadata.json").read_text(encoding="utf-8"))
+    assert metadata["toc_signature"] is True
+
+    # Now apply the approved program to a fresh target (which has a TOC)
+    target_markdown = "# 数学\n\n# 目录\n\n# 第一章 数列 …… 1\n\n# 第一章 数列\n\n正文\n"
+    target_path = tmp_path / "target.md"
+    target_path.write_text(target_markdown, encoding="utf-8")
+
+    applied = core.apply_approved_program(program_dir, target_path)
+    candidate_text = applied.candidate_path.read_text(encoding="utf-8")
+    assert "# 数学" in candidate_text
+    assert "# 第一章 数列" in candidate_text
+    assert "# 目录" not in candidate_text
+    assert "…… 1" not in candidate_text
+
+
+def test_run_candidate_from_artifacts_applies_heading_optimizations(tmp_path):
+    markdown = tmp_path / "book.md"
+    markdown.write_text("# 第一章 数列\n\n## ϰο4\n", encoding="utf-8")
+    heading_rules_path = tmp_path / "heading_rules.json"
+    heading_rules_path.write_text(json.dumps(_heading_rules(), ensure_ascii=False), encoding="utf-8")
+    content_rules_path = tmp_path / "content_rules.json"
+    content_rules_path.write_text(json.dumps(_content_rules(), ensure_ascii=False), encoding="utf-8")
+    opt_path = tmp_path / "heading_optimizations.json"
+    opt_path.write_text(json.dumps({"## ϰο4": "#### 第一章 数列 复习题 4"}, ensure_ascii=False), encoding="utf-8")
+
+    result = core.run_candidate_from_artifacts(
+        markdown_path=markdown,
+        heading_rules_path=heading_rules_path,
+        content_rules_path=content_rules_path,
+        heading_optimizations_path=opt_path,
+    )
+    candidate_text = result.candidate_path.read_text(encoding="utf-8")
+    assert "#### 第一章 数列 复习题 4" in candidate_text
+    assert "## ϰο4" not in candidate_text
+
+
+def test_apply_heading_rules_handles_latex_backslashes_in_replacement(tmp_path):
+    markdown = "# 章节\n"
+    rules = [
+        {
+            "id": "latex_heading",
+            "pattern": r"^# 章节$",
+            "replacement": r"# $\sqrt{2}$",
+            "flags": ["MULTILINE"]
+        }
+    ]
+    validated = core.validate_heading_rules({"rules": rules})
+    result = core.apply_heading_rules(markdown, validated)
+    assert r"# $\sqrt{2}$" in result
+
+
+def test_parse_json_artifact_with_invalid_escapes():
+    bad_json_raw = r'{"notes": "test \circ \d \s \u1234 \\d"}'
+    parsed = core.parse_json_artifact_from_text(bad_json_raw)
+    parsed_json = json.loads(parsed)
+    # \circ, \d, \s are invalid escape sequences so they should be escaped to \\circ, \\d, \\s
+    # \u1234 is a valid unicode escape sequence so it should remain untouched
+    # \\d is a valid escape sequence (escaped backslash followed by d) so it should remain untouched as \\d
+    assert parsed_json["notes"] == "test \\circ \\d \\s \u1234 \\d"

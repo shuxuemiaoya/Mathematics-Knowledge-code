@@ -34,6 +34,6 @@ Legacy approved directories may contain `content_cleaner.py` instead of `content
 - `original_approving_file_path`
 - `allowed_scope`
 
-Newly approved programs start with `"allowed_scope": "manual-only"` in `metadata.json`.
+Newly approved programs start with `"allowed_scope": "self-check-only"` in `metadata.json`.
 
-Reuse must still create a fresh candidate backup and review report. It must not modify the original Markdown file without a separate user approval step outside this skill.
+Reuse must still create a fresh candidate backup and self-check report. It must not modify the original Markdown file without a separate user approval step outside this skill.

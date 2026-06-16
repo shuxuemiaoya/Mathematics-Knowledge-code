@@ -1,0 +1,41 @@
+{
+  "rules": [
+    {
+      "id": "section_heading",
+      "pattern": "^# *\\*? *(\\d+\\.\\d+ .+)$",
+      "replacement": "## $1",
+      "flags": [
+        "MULTILINE"
+      ]
+    },
+    {
+      "id": "subsection_heading",
+      "pattern": "^# *\\*? *(\\d+\\.\\d+\\.\\d+ .+)$",
+      "replacement": "#### $1",
+      "flags": [
+        "MULTILINE"
+      ]
+    },
+    {
+      "id": "toc_special_sections",
+      "pattern": "^# ((?:观察与猜想|探究与发现|阅读与思考|数学活动|小结|信息技术应用|图说数学史)(?: .+)?)$",
+      "replacement": "## $1",
+      "flags": [
+        "MULTILINE"
+      ]
+    },
+    {
+      "id": "demote_remaining_h1",
+      "pattern": "^# (?!第[一二三四五六七八九十百千]+章(?: |$)|综合与实践 |目录 )(.+)$",
+      "replacement": "#### $1",
+      "flags": [
+        "MULTILINE"
+      ]
+    }
+  ],
+  "notes": [
+    "All TOC chapter headings remain H1, sections become H2, subsections become H3.",
+    "Non-TOC headings are demoted to H4; assumes original document uses only H1 headings.",
+    "Dynamic parent context addition for generic headings (e.g., '探究') is not attempted due to regex limitations."
+  ]
+}

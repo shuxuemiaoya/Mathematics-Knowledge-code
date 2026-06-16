@@ -1,0 +1,280 @@
+{
+  "plugin_id": "chapter_inner_markdown_formatter",
+  "plugin_version": "2.0.0",
+  "schema_version": "1.0.0",
+  "stage": "chapter_inner_formatting",
+  "description": "章节内部 Markdown 格式修复规则包，适用于已完成标题整理的教材章节，主要修复选择题选项粘连、数值空格、多余空行等问题，不修改任何标题行。",
+  "safety": {
+    "never_modify_heading_lines": true,
+    "heading_line_pattern": "^\\s*#{1,6}\\s+.*$",
+    "never_delete_images": true,
+    "never_rewrite_content": true,
+    "never_infer_answers": true,
+    "never_modify_markdown_tables": true,
+    "preserve_code_blocks": true,
+    "preserve_html_blocks": true,
+    "preserve_math_blocks": true,
+    "preserve_yaml_frontmatter": true,
+    "forbid_line_index_alignment_restore": true,
+    "forbid_heading_to_callout": true,
+    "forbid_heading_level_change": true
+  },
+  "execution_contract": {
+    "executor_language": "python",
+    "regex_engine": "python_re",
+    "allowed_regex_flags": [
+      "MULTILINE",
+      "DOTALL",
+      "IGNORECASE"
+    ],
+    "default_rule_scope": "non_heading_lines",
+    "restore_protected_blocks_order": "reverse",
+    "regex_replacement_backslash_policy": "use_lambda_replacement_when_replacement_mode_is_literal",
+    "variable_width_lookbehind_allowed": false,
+    "dry_run_required_before_write": true,
+    "report_required": true
+  },
+  "protected_blocks": [
+    {
+      "id": "yaml_frontmatter",
+      "name": "保护 YAML frontmatter",
+      "type": "block",
+      "pattern": "^---[\\s\\S]*?^---",
+      "flags": [
+        "MULTILINE"
+      ]
+    },
+    {
+      "id": "fenced_code_block",
+      "name": "保护 fenced code block",
+      "type": "block",
+      "pattern": "```[\\s\\S]*?```",
+      "flags": []
+    },
+    {
+      "id": "display_math_dollar",
+      "name": "保护 $$ 公式",
+      "type": "block",
+      "pattern": "\\$\\$[\\s\\S]*?\\$\\$",
+      "flags": []
+    },
+    {
+      "id": "display_math_bracket",
+      "name": "保护 \\[ 公式",
+      "type": "block",
+      "pattern": "\\\\\\[[\\s\\S]*?\\\\\\]",
+      "flags": []
+    },
+    {
+      "id": "html_details_block",
+      "name": "保护 HTML details 块",
+      "type": "block",
+      "pattern": "<details>[\\s\\S]*?</details>",
+      "flags": []
+    },
+    {
+      "id": "html_table_block",
+      "name": "保护 HTML 表格",
+      "type": "block",
+      "pattern": "<table>[\\s\\S]*?</table>",
+      "flags": []
+    },
+    {
+      "id": "markdown_table_block",
+      "name": "保护 Markdown 表格",
+      "type": "block",
+      "pattern": "(?:^\\|[^\\n]+\\|\\s*$\\r?\\n)+(?=^\\s*$)",
+      "flags": [
+        "MULTILINE"
+      ]
+    }
+  ],
+  "analyze": {
+    "checks": [
+      {
+        "id": "count_headings",
+        "name": "统计所有标题行数量",
+        "type": "count",
+        "pattern": "^\\s*#{1,6}\\s+",
+        "flags": [
+          "MULTILINE"
+        ],
+        "message": "文档中标题行总数"
+      },
+      {
+        "id": "count_math_formulas",
+        "name": "统计公式数量",
+        "type": "count",
+        "pattern": "\\$\\$|\\\\\\[|\\\\\\(|\\$",
+        "flags": [],
+        "message": "行内和行间公式数量（可能存在重复计数）"
+      },
+      {
+        "id": "count_images",
+        "name": "统计图片数量",
+        "type": "count",
+        "pattern": "!\\[.*?\\]\\(.*?\\)",
+        "flags": [],
+        "message": "图片总数"
+      },
+      {
+        "id": "count_tables",
+        "name": "统计表格数量",
+        "type": "count",
+        "pattern": "<table[\\s\\S]*?</table>|(?:^\\|[^\\n]+\\|\\s*$\\r?\\n)+",
+        "flags": [
+          "MULTILINE"
+        ],
+        "message": "表格总数（HTML 和 Markdown）"
+      },
+      {
+        "id": "count_code_blocks",
+        "name": "统计代码块数量",
+        "type": "count",
+        "pattern": "```[\\s\\S]*?```",
+        "flags": [],
+        "message": "代码块总数"
+      },
+      {
+        "id": "detect_excessive_blank_lines",
+        "name": "检测连续3个以上空行",
+        "type": "detect",
+        "pattern": "\\n{3,}",
+        "flags": [],
+        "message": "发现连续3个以上空行，建议压缩"
+      },
+      {
+        "id": "detect_image_caption_separation",
+        "name": "检测图片与题注可能分离",
+        "type": "detect",
+        "pattern": "^!\\[.*?\\]\\(.*?\\)\\n(?!\\s*$|^#{1,6}\\s|!\\[).*\\n",
+        "flags": [
+          "MULTILINE"
+        ],
+        "message": "图片后跟随非空非标题非图片行，可能是题注，建议检查"
+      },
+      {
+        "id": "detect_choice_options_on_same_line",
+        "name": "检测选择题选项粘连",
+        "type": "detect",
+        "pattern": "\\s\\([A-D]\\)\\s+",
+        "flags": [],
+        "message": "该行包含多个大写字母选项，可能需拆分"
+      },
+      {
+        "id": "detect_numeric_spaces",
+        "name": "检测数字间多余空格",
+        "type": "detect",
+        "pattern": "\\d\\s+\\d",
+        "flags": [],
+        "message": "可能存在数值被空格分隔，如 `1 2 0`，建议清理"
+      }
+    ]
+  },
+  "rules": [
+    {
+      "id": "remove_heading_trailing_spaces",
+      "name": "删除标题行尾多余空格",
+      "enabled": false,
+      "type": "regex_replace",
+      "scope": "non_heading_lines",
+      "phase": "pre_clean",
+      "risk_level": "low",
+      "pattern": "^\\s*(#{1,6}\\s+.*?)\\s+$",
+      "replacement": "$1",
+      "flags": [
+        "MULTILINE"
+      ],
+      "replacement_mode": "regex_template",
+      "notes": "此规则将作用于标题行，但被安全策略禁止，因此 enabled: false。仅作为记录。"
+    },
+    {
+      "id": "compress_excessive_blank_lines",
+      "name": "压缩连续三个及以上空行为一个空行",
+      "enabled": true,
+      "type": "blank_line_normalize",
+      "scope": "all_unprotected_text",
+      "phase": "blank_line_fix",
+      "risk_level": "low",
+      "pattern": "\\n{3,}",
+      "replacement": "\\n\\n",
+      "flags": [],
+      "replacement_mode": "regex_template",
+      "notes": "在非保护块内压缩多余空行，不处理标题行内容本身，执行器会保护标题行。"
+    },
+    {
+      "id": "fix_numeric_spaces",
+      "name": "修复数字间多余空格（合并相邻数字）",
+      "enabled": true,
+      "type": "regex_replace",
+      "scope": "non_heading_lines",
+      "phase": "formula_fix",
+      "risk_level": "medium",
+      "pattern": "(?<=\\d)\\s+(?=\\d)",
+      "replacement": "",
+      "flags": [],
+      "replacement_mode": "regex_template",
+      "notes": "删除数字与数字之间的任何空白字符，用于修复 OCR 导致的分隔，如 `1 2 0` -> `120`。风险：若文本中确有需要分隔的数字对（如 `2 3` 表示两个数），此规则会误合并。请在 dry-run 中审查结果。"
+    },
+    {
+      "id": "split_choice_options_upper_letters",
+      "name": "拆分选择题选项为每行一个（支持 (A) ... (B) ... 格式）",
+      "enabled": true,
+      "type": "choice_option_split",
+      "scope": "non_heading_lines",
+      "phase": "choice_fix",
+      "risk_level": "medium",
+      "pattern": "\\s+(?=\\([A-D]\\))",
+      "replacement": "\\n",
+      "flags": [],
+      "replacement_mode": "regex_template",
+      "notes": "在非标题行中，将连续的大写字母选项拆分为每个选项一行。保留首选项前的空格，确保格式整洁。"
+    },
+    {
+      "id": "report_image_caption_separation",
+      "name": "检测并报告图片与题注分离情况",
+      "enabled": false,
+      "type": "report_only",
+      "scope": "report_only",
+      "phase": "image_caption_fix",
+      "risk_level": "high",
+      "pattern": "!\\[.*?\\]\\(.*?\\)\\n(?!\\s*$|^#{1,6}\\s|!\\[)\\S+",
+      "flags": [
+        "MULTILINE"
+      ],
+      "replacement": "",
+      "replacement_mode": "literal",
+      "notes": "高风险规则，仅报告，不自动修复。检查图片后是否跟随可能的题注行。"
+    },
+    {
+      "id": "remove_trailing_spaces_lines",
+      "name": "删除所有非标题行行尾空格",
+      "enabled": true,
+      "type": "regex_replace",
+      "scope": "non_heading_lines",
+      "phase": "post_clean",
+      "risk_level": "low",
+      "pattern": "[ \\t]+$",
+      "replacement": "",
+      "flags": [
+        "MULTILINE"
+      ],
+      "replacement_mode": "regex_template",
+      "notes": "清除行末多余空格，保持整洁。"
+    }
+  ],
+  "warnings": [
+    "修复规则 `fix_numeric_spaces` 会合并所有相邻数字，请务必在 dry-run 中确认不会破坏实际需要分隔的数字对（例如表示范围的 `2 3`）。",
+    "选择题选项拆分基于半角括号 (A) 格式，如有全角括号或其他格式需额外处理。",
+    "图片与题注修复为高风险，仅提供报告模式，不自动修改。",
+    "所有标题行（以 # 开头）被安全策略保护，即使规则中不慎包含行首 #，执行器也不会修改它们。",
+    "当前规则包不修改或转换任何类似 `#### 第四章 思考` 的标题行，即使它们可能是教材栏目。如需转换为 callout，请在第一阶段处理。"
+  ],
+  "summary": [
+    "压缩连续空行（3个以上 -> 1个空行）",
+    "修复数字间多余空格（合并连续数字）",
+    "拆分选择题选项为每行一个（支持 (A) ... (B) ... 格式）",
+    "删除行尾空格",
+    "检测并报告图片题注分离、选项粘连、异常空行等"
+  ]
+}

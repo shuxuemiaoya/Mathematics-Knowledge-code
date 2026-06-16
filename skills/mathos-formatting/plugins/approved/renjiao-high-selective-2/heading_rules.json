@@ -1,0 +1,129 @@
+{
+  "rules": [
+    {
+      "id": "chapter_4",
+      "pattern": "^#? *第四章\\s*数列\\s*(?:[.．…·]+ *\\d+)?$",
+      "replacement": "# 第四章 数列",
+      "flags": [
+        "MULTILINE"
+      ]
+    },
+    {
+      "id": "chapter_5",
+      "pattern": "^#? *第五章(?:\\s*\\n\\s*#? *)?一元函数的导数及其应用\\s*(?:[.．…·]+ *\\d+)?$",
+      "replacement": "# 第五章 一元函数的导数及其应用",
+      "flags": [
+        "MULTILINE"
+      ]
+    },
+    {
+      "id": "section_numbered",
+      "pattern": "^#? *(\\d+\\.\\d+\\*?) +(.+?)(?: *[.．…·]+ *\\d+)?$",
+      "replacement": "## $1 $2",
+      "flags": [
+        "MULTILINE"
+      ]
+    },
+    {
+      "id": "section_4_4_star_latex",
+      "pattern": "^#? *4\\.\\s*\\$4\\^\\{\\*\\}\\$\\s*数学归纳法\\s*(?:[.．…·]+ *\\d+)?$",
+      "replacement": "## 4.4* 数学归纳法",
+      "flags": [
+        "MULTILINE"
+      ]
+    },
+    {
+      "id": "subsection_reading",
+      "pattern": "^#? *(阅读与思考|探究与发现|信息技术应用|文献阅读与数学写作\\*?) +(.+?)(?: *[.．…·]+ *\\d+)?$",
+      "replacement": "### $1 $2",
+      "flags": [
+        "MULTILINE"
+      ]
+    },
+    {
+      "id": "subsection_literature_latex",
+      "pattern": "^#? *文献阅读与数学写作\\s*\\$\\^\\{\\*\\}\\$\\s+(.+?)(?: *[.．…·]+ *\\d+)?$",
+      "replacement": "### 文献阅读与数学写作* $1",
+      "flags": [
+        "MULTILINE"
+      ]
+    },
+    {
+      "id": "xiaojie",
+      "pattern": "^#? *(小结)(?: *[.．…·]+ *\\d+)?$",
+      "replacement": "## $1",
+      "flags": [
+        "MULTILINE"
+      ]
+    },
+    {
+      "id": "review",
+      "pattern": "^#? *(复习参考题\\d+)(?: *[.．…·]+ *\\d+)?$",
+      "replacement": "## $1",
+      "flags": [
+        "MULTILINE"
+      ]
+    },
+    {
+      "id": "index",
+      "pattern": "^#? *(部分中英文词汇索引)(?: *[.．…·]+ *\\d+)?$",
+      "replacement": "## $1",
+      "flags": [
+        "MULTILINE"
+      ]
+    },
+    {
+      "id": "demote_directory",
+      "pattern": "^# +目录$",
+      "replacement": "#### 目录",
+      "flags": [
+        "MULTILINE"
+      ]
+    },
+    {
+      "id": "demote_thinking",
+      "pattern": "^# +思考$",
+      "replacement": "#### 第四章 思考",
+      "flags": [
+        "MULTILINE"
+      ]
+    },
+    {
+      "id": "demote_induction",
+      "pattern": "^# +归纳$",
+      "replacement": "#### 第四章 归纳",
+      "flags": [
+        "MULTILINE"
+      ]
+    },
+    {
+      "id": "demote_remaining_h1",
+      "pattern": "^# (?!第四章 数列|第五章 一元函数的导数及其应用)(.+)$",
+      "replacement": "#### $1",
+      "flags": [
+        "MULTILINE"
+      ]
+    },
+    {
+      "id": "demote_remaining_h2",
+      "pattern": "^## (?!4\\.1 数列的概念|4\\.2 等差数列|4\\.3 等比数列|4\\.4\\* 数学归纳法|小结|复习参考题4|5\\.1 导数的概念及其意义|5\\.2 导数的运算|5\\.3 导数在研究函数中的应用|复习参考题5|部分中英文词汇索引)(.+)$",
+      "replacement": "#### $1",
+      "flags": [
+        "MULTILINE"
+      ]
+    },
+    {
+      "id": "demote_remaining_h3",
+      "pattern": "^### (?!阅读与思考 斐波那契数列|阅读与思考 中国古代数学家求数列和的方法|探究与发现 牛顿法——用导数方法求方程的近似解|信息技术应用 图形技术与函数性质|文献阅读与数学写作\\* 微积分的创立与发展)(.+)$",
+      "replacement": "#### $1",
+      "flags": [
+        "MULTILINE"
+      ]
+    }
+  ],
+  "notes": [
+    "将所有TOC章节条目映射为H1-H3，非TOC标题强制降级到H4并添加上下文。",
+    "针对LaTeX数学格式的星号变体添加了特殊规则，确保匹配。",
+    "第四章和第五章的泛用标题（思考、归纳）通过显式规则补全章上下文。"
+  ]
+}
