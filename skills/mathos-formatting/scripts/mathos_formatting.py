@@ -24,12 +24,12 @@ def _self_check_actions(candidate_path: Path, report_path: Path, approve_command
     actions = [
         f"Run self-check on candidate Markdown: {candidate_path}",
         f"Use the formatting report for self-check evidence: {report_path}",
-        "If self-check fails, revise the JSON rules or rerun learn-from-provider with a better prompt/sample.",
+        "If self-check fails, revise the Python artifacts or rerun learn-from-provider with a better prompt/sample.",
     ]
     if approve_command:
         actions.append(f"If self-check passes, save the format modification template: {approve_command}")
     else:
-        actions.append("If self-check passes, run approve with the heading rules and content_rules.json to save the format modification template.")
+        actions.append("If self-check passes, run approve with heading_processor.py and content_processor.py to save the format modification template.")
     actions.append("If not useful, discard the candidate and mathos-formatting work directory.")
     return actions
 
@@ -74,21 +74,40 @@ def command_apply_approved(args: argparse.Namespace) -> int:
 
 
 def command_candidate_from_artifacts(args: argparse.Namespace) -> int:
+    heading_script_path = _artifact_path(args, "heading_script")
+    content_script_path = _artifact_path(args, "content_script")
+    title_rewrite_map_path = _artifact_path(args, "title_rewrite_map")
     plugin_path = _artifact_path(args, "plugin")
     content_rules_path = _artifact_path(args, "content_rules")
     opt_path = _artifact_path(args, "heading_optimizations")
+    heading_rules_path = _artifact_path(args, "heading_rules")
     result = core.run_candidate_from_artifacts(
         markdown_path=Path(args.markdown),
-        heading_rules_path=Path(args.heading_rules),
+        heading_script_path=heading_script_path,
+        content_script_path=content_script_path,
+        title_rewrite_map_path=title_rewrite_map_path,
+        heading_rules_path=heading_rules_path,
         plugin_path=plugin_path,
         content_rules_path=content_rules_path,
         heading_optimizations_path=opt_path,
     )
+    if heading_script_path and content_script_path:
+        artifact_args = (
+            f"--heading-script {heading_script_path} "
+            f"--content-script {content_script_path} "
+            f"{'--title-rewrite-map ' + str(title_rewrite_map_path) + ' ' if title_rewrite_map_path else ''}"
+        )
+    elif heading_rules_path:
+        artifact_args = (
+            f"--heading-rules {heading_rules_path} "
+            f"{'--content-rules ' + str(content_rules_path) if content_rules_path else '--plugin ' + str(plugin_path)} "
+        )
+    else:
+        artifact_args = ""
     approve_template = (
         "python skills/mathos-formatting/scripts/mathos_formatting.py approve "
         "--approved-root <approved_root> --plugin-id <plugin_id> "
-        f"--heading-rules {Path(args.heading_rules)} "
-        f"{'--content-rules ' + str(content_rules_path) if content_rules_path else '--plugin ' + str(plugin_path)} "
+        f"{artifact_args}"
         f"--original {Path(args.markdown)} --candidate {result.candidate_path}"
     )
     _print_json(
@@ -106,18 +125,22 @@ def command_candidate_from_artifacts(args: argparse.Namespace) -> int:
 
 
 def command_approve(args: argparse.Namespace) -> int:
-    heading_rules_path = Path(args.heading_rules)
-    heading_rules = json.loads(heading_rules_path.read_text(encoding="utf-8"))
+    heading_script_path = _artifact_path(args, "heading_script")
+    content_script_path = _artifact_path(args, "content_script")
+    title_rewrite_map_path = _artifact_path(args, "title_rewrite_map")
+    heading_rules_path = _artifact_path(args, "heading_rules")
+    heading_rules = None
+    if heading_rules_path is not None:
+        heading_rules = json.loads(heading_rules_path.read_text(encoding="utf-8"))
     plugin_path = _artifact_path(args, "plugin")
     content_rules_path = _artifact_path(args, "content_rules")
-    
     candidate = Path(args.candidate)
-    work_dir = candidate.parent
-    opt_src = work_dir / "heading_optimizations.json"
-    
     program_dir = core.save_approved_program(
         approved_root=Path(args.approved_root),
         plugin_id=args.plugin_id,
+        heading_script_path=heading_script_path,
+        content_script_path=content_script_path,
+        title_rewrite_map_path=title_rewrite_map_path,
         heading_rules=heading_rules,
         plugin_path=plugin_path,
         content_rules_path=content_rules_path,
@@ -126,9 +149,6 @@ def command_approve(args: argparse.Namespace) -> int:
         approving_source_path=Path(args.original),
         operations_summary=args.summary,
     )
-    if opt_src.exists():
-        import shutil
-        shutil.copy2(opt_src, program_dir / "heading_optimizations.json")
     _print_json(
         {
             "status": "approved",
@@ -136,7 +156,7 @@ def command_approve(args: argparse.Namespace) -> int:
             "self_check_required": False,
             "next_actions": [
                 f"Reuse this approved template with apply-approved: {program_dir}",
-                "Keep the approved template self-check-only until enough successful runs justify broader automation.",
+                "Keep the approved Python artifacts self-check-only until enough successful runs justify broader automation.",
             ],
         }
     )
@@ -173,8 +193,9 @@ def command_learn_from_provider(args: argparse.Namespace) -> int:
                 (
                     "python skills/mathos-formatting/scripts/mathos_formatting.py approve "
                     "--approved-root <approved_root> --plugin-id <plugin_id> "
-                    f"--heading-rules {result.artifacts.get('heading_rules')} "
-                    f"--content-rules {result.artifacts.get('content_rules')} "
+                    f"--heading-script {result.artifacts.get('heading_script')} "
+                    f"--content-script {result.artifacts.get('content_script')} "
+                    f"--title-rewrite-map {result.artifacts.get('title_rewrite_map')} "
                     f"--original {Path(args.markdown)} --candidate {result.candidate_path}"
                 ),
             ),
@@ -198,21 +219,27 @@ def build_parser() -> argparse.ArgumentParser:
 
     candidate_parser = subparsers.add_parser(
         "candidate-from-artifacts",
-        help="Create a fresh candidate backup from heading rules and JSON content rules or a legacy plugin",
+        help="Create a fresh candidate backup from Python formatting artifacts",
     )
     candidate_parser.add_argument("markdown")
-    candidate_parser.add_argument("--heading-rules", required=True)
-    candidate_parser.add_argument("--content-rules")
-    candidate_parser.add_argument("--plugin")
-    candidate_parser.add_argument("--heading-optimizations")
+    candidate_parser.add_argument("--heading-script", help="Python Stage 1 artifact: heading_processor.py")
+    candidate_parser.add_argument("--content-script", help="Python Stage 4 artifact: content_processor.py")
+    candidate_parser.add_argument("--title-rewrite-map", help="Optional Python Stage 5 artifact: title_rewrite_map.py")
+    candidate_parser.add_argument("--heading-rules", help="Legacy JSON heading_rules.json")
+    candidate_parser.add_argument("--content-rules", help="Legacy JSON content_rules.json")
+    candidate_parser.add_argument("--plugin", help="Legacy Python content_cleaner.py")
+    candidate_parser.add_argument("--heading-optimizations", help="Legacy JSON heading_optimizations.json")
     candidate_parser.set_defaults(func=command_candidate_from_artifacts)
 
     approve_parser = subparsers.add_parser("approve", help="Save a self-check-passing candidate result as a reusable program")
     approve_parser.add_argument("--approved-root", required=True)
     approve_parser.add_argument("--plugin-id", required=True)
-    approve_parser.add_argument("--heading-rules", required=True)
-    approve_parser.add_argument("--content-rules")
-    approve_parser.add_argument("--plugin")
+    approve_parser.add_argument("--heading-script", help="Python Stage 1 artifact: heading_processor.py")
+    approve_parser.add_argument("--content-script", help="Python Stage 4 artifact: content_processor.py")
+    approve_parser.add_argument("--title-rewrite-map", help="Optional Python Stage 5 artifact: title_rewrite_map.py")
+    approve_parser.add_argument("--heading-rules", help="Legacy JSON heading_rules.json")
+    approve_parser.add_argument("--content-rules", help="Legacy JSON content_rules.json")
+    approve_parser.add_argument("--plugin", help="Legacy Python content_cleaner.py")
     approve_parser.add_argument("--original", required=True)
     approve_parser.add_argument("--candidate", required=True)
     approve_parser.add_argument("--summary", action="append", default=["self-check passed"])

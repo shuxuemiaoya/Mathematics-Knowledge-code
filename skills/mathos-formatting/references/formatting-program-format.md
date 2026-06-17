@@ -2,29 +2,34 @@
 
 Approved programs live under `plugins/approved/<plugin-id>/`.
 
+## New Python Artifact Format
+
 Required files:
 
-- `heading_rules.json`
-- `content_rules.json`
+- `heading_processor.py`
+- `content_processor.py`
 - `metadata.json`
 - `approval.md`
 - `sample_before.md`
 - `sample_after.md`
 
-`heading_rules.json` stores the validated regex rules used before plugin cleanup.
+Optional file:
 
-`content_rules.json` stores the validated JSON chapter-inner formatting rule package generated for Stage 4. It must include `plugin_id`, `plugin_version`, `schema_version`, `stage`, `safety`, `execution_contract`, `protected_blocks`, `analyze.checks`, `rules`, `warnings`, and `summary`.
+- `title_rewrite_map.py`
 
-The JSON executor supports safe enabled v1 rule types: `literal_replace`, `regex_replace`, `line_regex_replace`, `blank_line_normalize`, `choice_option_split`, `callout_spacing_fix`, and `formula_whitelist_fix`. `report_only` rules are analysis-only. Enabled mutating `image_caption_fix` rules are rejected in v1 unless disabled or represented as report-only guidance.
+`heading_processor.py` is the Stage 1 batch processor. `content_processor.py` is the Stage 4 batch processor. Both are validated Python artifacts and are executed only against temporary sandbox copies of the candidate Markdown.
 
-The executor always preserves heading lines, fenced code blocks, math blocks, HTML details blocks, YAML frontmatter, and markdown table blocks. It also fails closed if image count decreases, details count decreases, math delimiter count changes, table-like line count decreases, or heading lines change.
+Stage 1 and Stage 4 processors must start with `import os`, import `Path` from `pathlib`, import `re`, and define `get_target_root()`, `protect_blocks()`, `restore_blocks()`, `replace_in_file()`, and `main()`.
 
-Legacy approved directories may contain `content_cleaner.py` instead of `content_rules.json`. Those Python cleaners remain readable for backward compatibility, but new approved templates should store `content_rules.json`.
+`title_rewrite_map.py` is the Stage 5 artifact. It must define only `TITLE_REWRITE_MAP: dict[str, str]`, with Markdown heading-line keys and values.
+
+## Metadata
 
 `metadata.json` records:
 
 - `plugin_id`
 - `version`
+- `artifact_mode`
 - `approval_timestamp`
 - `source_file_family_evidence`
 - `heading_signature`
@@ -36,4 +41,17 @@ Legacy approved directories may contain `content_cleaner.py` instead of `content
 
 Newly approved programs start with `"allowed_scope": "self-check-only"` in `metadata.json`.
 
-Reuse must still create a fresh candidate backup and self-check report. It must not modify the original Markdown file without a separate user approval step outside this skill.
+## Safety
+
+Approved Python artifacts must not import or call network, subprocess, shell, deletion, move, rename, recursive copy, or arbitrary file-write APIs. Reuse must create a fresh candidate backup and self-check report. It must not modify the original Markdown file without a separate explicit user approval step outside this skill.
+
+## Legacy Compatibility
+
+Older approved directories may contain:
+
+- `heading_rules.json`
+- `content_rules.json`
+- `content_cleaner.py`
+- `heading_optimizations.json`
+
+These legacy formats remain readable only for transition. New approved programs must use `heading_processor.py`, `content_processor.py`, and optional `title_rewrite_map.py`.

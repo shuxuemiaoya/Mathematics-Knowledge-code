@@ -134,6 +134,44 @@ def _heading_rules():
     }
 
 
+def _batch_processor_source(replacements=None):
+    replacements = replacements or []
+    replacement_lines = "\n".join(
+        f"    text = text.replace({old!r}, {new!r})" for old, new in replacements
+    )
+    return f'''import os
+from pathlib import Path
+import re
+
+def get_target_root() -> Path:
+    return Path(input().strip()).resolve()
+
+def protect_blocks(text: str):
+    return text, []
+
+def restore_blocks(text: str, blocks):
+    return text
+
+def replace_in_file(path: Path) -> None:
+    text = path.read_text(encoding="utf-8")
+{replacement_lines or "    text = text"}
+    path.write_text(text, encoding="utf-8")
+
+def main() -> None:
+    root = get_target_root()
+    for path in root.rglob("*.md"):
+        replace_in_file(path)
+
+if __name__ == "__main__":
+    main()
+'''
+
+
+def _title_rewrite_source(mapping=None):
+    mapping = mapping or {}
+    return "TITLE_REWRITE_MAP: dict[str, str] = " + repr(mapping) + "\n"
+
+
 def test_content_cleaner_prompt_forbids_destructive_edits():
     prompt = (SKILL_ROOT / "agents" / "content_cleaner_prompt.md").read_text(encoding="utf-8").lower()
 
@@ -141,7 +179,7 @@ def test_content_cleaner_prompt_forbids_destructive_edits():
     assert "<details>" in prompt
     assert "公式" in prompt
     assert "表格" in prompt
-    assert "警告" in prompt or "报告" in prompt or "analyze" in prompt
+    assert "禁止" in prompt or "不允许" in prompt
 
 
 
@@ -220,43 +258,12 @@ class DestructiveProvider:
 
     def chat(self, system_prompt: str, user_payload: str, timeout_seconds: int = 120, response_format: dict | None = None) -> str:
         if "Heading Rules Prompt" in system_prompt:
-            return json.dumps(
-                {
-                    "rules": [
-                        {
-                            "id": "chapter",
-                            "pattern": r"^# 第一章 数列(?: …… \d+)?$",
-                            "replacement": "# 第一章 数列",
-                            "flags": ["MULTILINE"],
-                        }
-                    ]
-                },
-                ensure_ascii=False,
-            )
+            return _batch_processor_source([("# 第一章 数列 …… 1", "# 第一章 数列")])
         if "TOC Detection Prompt" in system_prompt:
             return json.dumps({"toc_start_line": 3, "main_text_start_line": 8}, ensure_ascii=False)
-        return json.dumps(
-            _content_rules(
-                rules=[
-                    {
-                        "id": "delete_images",
-                        "name": "delete images",
-                        "enabled": True,
-                        "type": "regex_replace",
-                        "scope": "all_unprotected_text",
-                        "phase": "post_clean",
-                        "risk_level": "high",
-                        "pattern": r"!\[[^\]]*\]\([^)]+\)\n?",
-                        "replacement": "",
-                        "flags": [],
-                        "replacement_mode": "regex_template",
-                        "notes": "destructive",
-                    }
-                ],
-                summary=["removed media"],
-            ),
-            ensure_ascii=False,
-        )
+        if "Content Cleaner Prompt" in system_prompt:
+            return _batch_processor_source([("![](images/a.png)\n\n", "")])
+        return _title_rewrite_source()
 
 
 def test_learning_fails_closed_when_generated_cleaner_is_destructive(tmp_path):
@@ -292,49 +299,18 @@ class SuccessfulMockProvider:
 
     def chat(self, system_prompt: str, user_payload: str, timeout_seconds: int = 120, response_format: dict | None = None) -> str:
         if "Heading Rules Prompt" in system_prompt:
-            return json.dumps(
-                {
-                    "rules": [
-                        {
-                            "id": "chapter",
-                            "pattern": r"^# 第一章 数列(?: …… \d+)?$",
-                            "replacement": "# 第一章 数列",
-                            "flags": ["MULTILINE"],
-                        }
-                    ]
-                },
-                ensure_ascii=False,
-            )
+            return _batch_processor_source([("# 第一章 数列 …… 1", "# 第一章 数列")])
         if "TOC Detection Prompt" in system_prompt:
             return json.dumps({"toc_start_line": self.toc_start, "main_text_start_line": self.main_text_start}, ensure_ascii=False)
-        return json.dumps(_content_rules(summary=[]), ensure_ascii=False)
+        if "Content Cleaner Prompt" in system_prompt:
+            return _batch_processor_source()
+        return _title_rewrite_source()
 
 
 class JsonRulesProvider(SuccessfulMockProvider):
     def chat(self, system_prompt: str, user_payload: str, timeout_seconds: int = 120, response_format: dict | None = None) -> str:
         if "Content Cleaner Prompt" in system_prompt:
-            return json.dumps(
-                _content_rules(
-                    rules=[
-                        {
-                            "id": "remove_bold",
-                            "name": "remove bold markers",
-                            "enabled": True,
-                            "type": "regex_replace",
-                            "scope": "non_heading_lines",
-                            "phase": "pre_clean",
-                            "risk_level": "low",
-                            "pattern": r"\*\*([^\n*]+?)\*\*",
-                            "replacement": "$1",
-                            "flags": [],
-                            "replacement_mode": "regex_template",
-                            "notes": "remove bold markers outside headings",
-                        }
-                    ],
-                    summary=["removed bold markers"],
-                ),
-                ensure_ascii=False,
-            )
+            return _batch_processor_source([("**粗体**", "粗体")])
         return super().chat(system_prompt, user_payload, timeout_seconds, response_format)
 
 
@@ -344,19 +320,7 @@ class DemotingChapterProvider(SuccessfulMockProvider):
 
     def chat(self, system_prompt: str, user_payload: str, timeout_seconds: int = 120, response_format: dict | None = None) -> str:
         if "Heading Rules Prompt" in system_prompt:
-            return json.dumps(
-                {
-                    "rules": [
-                        {
-                            "id": "bad_demote_chapter",
-                            "pattern": r"^# 第十一章 不等式与不等式组$",
-                            "replacement": "#### 第十一章 不等式与不等式组",
-                            "flags": ["MULTILINE"],
-                        }
-                    ]
-                },
-                ensure_ascii=False,
-            )
+            return _batch_processor_source([("# 第十一章 不等式与不等式组", "#### 第十一章 不等式与不等式组")])
         return super().chat(system_prompt, user_payload, timeout_seconds, response_format)
 
 
@@ -415,7 +379,7 @@ def test_learning_strips_only_toc(tmp_path):
     assert "# 第一章 数列" in candidate_text
 
 
-def test_learning_stage4_uses_json_rules_not_python_plugin(tmp_path):
+def test_learning_stage4_uses_python_processor_not_json_rules(tmp_path):
     markdown = tmp_path / "book.md"
     markdown.write_text(SAMPLE_MARKDOWN + "\n正文有 **粗体**。\n", encoding="utf-8")
     work_dir = tmp_path / "mathos-formatting" / "book"
@@ -430,10 +394,20 @@ def test_learning_stage4_uses_json_rules_not_python_plugin(tmp_path):
 
     candidate_text = (work_dir / "candidate.md").read_text(encoding="utf-8")
     assert "正文有 粗体。" in candidate_text
-    assert (work_dir / "content_rules_response.json").exists()
-    assert (work_dir / "content_rules.json").exists()
+    assert (work_dir / "heading_processor.py").exists()
+    assert (work_dir / "content_processor_response.py").exists()
+    assert (work_dir / "content_processor.py").exists()
+    assert (work_dir / "title_rewrite_map.py").exists()
+    assert not (work_dir / "content_rules_response.json").exists()
+    assert not (work_dir / "content_rules.json").exists()
     assert not (work_dir / "content_cleaner.py").exists()
-    assert result.summary == ["removed bold markers", "Preservation images: 1 -> 1", "Preservation details blocks: 1 -> 1", "Preservation math delimiters: 2 -> 2", "Preservation table-like lines: 3 -> 3"]
+    assert result.summary == [
+        "content_processor.py applied",
+        "Preservation images: 1 -> 1",
+        "Preservation details blocks: 1 -> 1",
+        "Preservation math delimiters: 2 -> 2",
+        "Preservation table-like lines: 3 -> 3",
+    ]
 
 
 def test_json_rule_executor_preserves_headings_and_protected_blocks():
@@ -602,33 +576,10 @@ def clean(markdown: str) -> str:
 def test_cli_candidate_output_includes_self_check_required_and_next_actions(tmp_path):
     markdown = tmp_path / "book.md"
     markdown.write_text("# 第一章 数列\n\n正文 **加粗**。\n", encoding="utf-8")
-    heading_rules_path = tmp_path / "heading_rules.json"
-    heading_rules_path.write_text(json.dumps(_heading_rules(), ensure_ascii=False), encoding="utf-8")
-    content_rules_path = tmp_path / "content_rules.json"
-    content_rules_path.write_text(
-        json.dumps(
-            _content_rules(
-                rules=[
-                    {
-                        "id": "remove_bold",
-                        "name": "remove bold",
-                        "enabled": True,
-                        "type": "regex_replace",
-                        "scope": "non_heading_lines",
-                        "phase": "pre_clean",
-                        "risk_level": "low",
-                        "pattern": r"\*\*([^\n*]+?)\*\*",
-                        "replacement": "$1",
-                        "flags": [],
-                        "replacement_mode": "regex_template",
-                        "notes": "remove bold markers",
-                    }
-                ]
-            ),
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
-    )
+    heading_script = tmp_path / "heading_processor.py"
+    content_script = tmp_path / "content_processor.py"
+    heading_script.write_text(_batch_processor_source(), encoding="utf-8")
+    content_script.write_text(_batch_processor_source([("**加粗**", "加粗")]), encoding="utf-8")
 
     completed = subprocess.run(
         [
@@ -636,10 +587,10 @@ def test_cli_candidate_output_includes_self_check_required_and_next_actions(tmp_
             str(SKILL_ROOT / "scripts" / "mathos_formatting.py"),
             "candidate-from-artifacts",
             str(markdown),
-            "--heading-rules",
-            str(heading_rules_path),
-            "--content-rules",
-            str(content_rules_path),
+            "--heading-script",
+            str(heading_script),
+            "--content-script",
+            str(content_script),
         ],
         check=True,
         capture_output=True,
@@ -707,46 +658,44 @@ def test_learning_fails_when_main_text_start_line_invalid(tmp_path):
         )
 
 
-def test_content_cleaner_prompt_describes_json_rule_contract():
+def test_content_cleaner_prompt_describes_python_batch_contract():
     prompt_path = SKILL_ROOT / "agents" / "content_cleaner_prompt.md"
     prompt = prompt_path.read_text(encoding="utf-8").lower()
 
-    assert "合法 json 对象" in prompt
-    assert "不输出 python 代码" in prompt
-    assert "plugin_id" in prompt
-    assert "schema_version" in prompt
-    assert "execution_contract" in prompt
-    assert "protected_blocks" in prompt
-    assert "analyze" in prompt
-    assert "rules" in prompt
-    assert "warnings" in prompt
-    assert "summary" in prompt
-    assert "literal_replace" in prompt
-    assert "replacement_mode" in prompt
-    assert "never_modify_heading_lines" in prompt
-    assert "replace_in_file" not in prompt
-    assert "def main" not in prompt
+    assert "python" in prompt
+    assert "import os" in prompt
+    assert "from pathlib import path" in prompt
+    assert "import re" in prompt
+    assert "get_target_root" in prompt
+    assert "replace_in_file" in prompt
+    assert "def main" in prompt
+    assert "完整 python 文件" in prompt
+    assert "json" in prompt
+    assert "json。" in prompt or "不要输出 json" in prompt or "禁止输出 json" in prompt
+    assert "plugin_id" not in prompt
+    assert "schema_version" not in prompt
+    assert "execution_contract" not in prompt
     assert "def clean" not in prompt
     assert "def analyze" not in prompt
-    assert "批量处理入口" not in prompt
+    assert "main()" in prompt or "def main" in prompt
 
 
 class MockOptimizationProvider:
     base_url = "https://fake.deepseek.local"
     model = "deepseek-test"
 
-    def __init__(self, response_json):
-        self.response_json = response_json
+    def __init__(self, response_source):
+        self.response_source = response_source
 
     def chat(self, system_prompt, user_payload, timeout_seconds=120, response_format=None):
-        return self.response_json
+        return self.response_source
 
 def test_heading_optimization_success(tmp_path):
     markdown_text = "# 第一章 数列\n## ϰο4\n正文内容\n"
     markdown_file = tmp_path / "book.md"
     markdown_file.write_text(markdown_text, encoding="utf-8")
     
-    provider = MockOptimizationProvider('{"## ϰο4": "## 复习参考题 4"}')
+    provider = MockOptimizationProvider(_title_rewrite_source({"## ϰο4": "## 复习参考题 4"}))
     heading_prompt = "# Headings prompt"
     
     mapping = core.run_heading_optimization(markdown_text, provider, heading_prompt)
@@ -754,7 +703,7 @@ def test_heading_optimization_success(tmp_path):
 
 def test_heading_optimization_allows_deepseek_demotion_with_parent_context(tmp_path):
     markdown_text = "# Chapter 5 Sequences\n## Review Questions 5\n正文内容\n"
-    provider = MockOptimizationProvider('{"## Review Questions 5": "#### Chapter 5 Review Questions 5"}')
+    provider = MockOptimizationProvider(_title_rewrite_source({"## Review Questions 5": "#### Chapter 5 Review Questions 5"}))
     heading_prompt = "# Headings prompt"
 
     mapping = core.run_heading_optimization(markdown_text, provider, heading_prompt)
@@ -764,7 +713,7 @@ def test_heading_optimization_allows_deepseek_demotion_with_parent_context(tmp_p
 def test_heading_optimization_blocks_promotions_to_toc_levels(tmp_path):
     markdown_text = "## ϰο4\n"
     # Mapping to a different level (H1 instead of H2)
-    provider = MockOptimizationProvider('{"## ϰο4": "# 复习参考题 4"}')
+    provider = MockOptimizationProvider(_title_rewrite_source({"## ϰο4": "# 复习参考题 4"}))
     heading_prompt = "# Headings prompt"
     
     mapping = core.run_heading_optimization(markdown_text, provider, heading_prompt)
@@ -772,21 +721,79 @@ def test_heading_optimization_blocks_promotions_to_toc_levels(tmp_path):
     assert mapping == {}
 
 
+@pytest.mark.parametrize(
+    "source, message",
+    [
+        (_batch_processor_source() + "\nos.remove('x.md')\n", "unsafe"),
+        ("import os\nimport subprocess\nfrom pathlib import Path\nimport re\n" + _batch_processor_source().split("import re\n", 1)[1], "unsafe import"),
+        (_batch_processor_source().replace("text = text", "eval('1 + 1')"), "unsafe call"),
+        ("import os\nfrom pathlib import Path\nimport re\nimport urllib\n\ndef get_target_root(): pass\n\ndef protect_blocks(text): pass\n\ndef restore_blocks(text, blocks): pass\n\ndef replace_in_file(path): pass\n\ndef main(): pass\n", "unsafe import"),
+        ("import os\nfrom pathlib import Path\nimport re\n\ndef main(): pass\n", "missing functions"),
+    ],
+)
+def test_python_batch_artifact_rejects_dangerous_or_incomplete_source(source, message):
+    with pytest.raises(core.FormattingError, match=message):
+        core.validate_batch_processor_source(source)
+
+
+def test_python_batch_artifact_runs_in_sandbox_without_touching_original(tmp_path):
+    original = tmp_path / "book.md"
+    original.write_text("# 第一章\n\n正文 **加粗**。\n", encoding="utf-8")
+    script = tmp_path / "content_processor.py"
+    script.write_text(_batch_processor_source([("**加粗**", "加粗")]), encoding="utf-8")
+
+    candidate = core.run_candidate_from_artifacts(
+        markdown_path=original,
+        heading_script_path=script,
+        content_script_path=script,
+    )
+
+    assert "正文 加粗。" in candidate.candidate_path.read_text(encoding="utf-8")
+    assert "正文 **加粗**。" in original.read_text(encoding="utf-8")
+
+
+def test_python_batch_artifact_rejects_candidate_too_short(tmp_path):
+    original = tmp_path / "book.md"
+    original.write_text("# 第一章\n\n" + ("正文内容。\n" * 80), encoding="utf-8")
+    heading_script = tmp_path / "heading_processor.py"
+    content_script = tmp_path / "content_processor.py"
+    heading_script.write_text(_batch_processor_source(), encoding="utf-8")
+    content_script.write_text(
+        _batch_processor_source([(("正文内容。\n" * 80), "")]),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(core.FormattingError, match="candidate too short"):
+        core.run_candidate_from_artifacts(
+            markdown_path=original,
+            heading_script_path=heading_script,
+            content_script_path=content_script,
+        )
+
+
+def test_title_rewrite_map_python_source_is_parsed_and_applied():
+    source = _title_rewrite_source({"## Review Questions 5": "#### Chapter 5 Review Questions 5"})
+    mapping = core.validate_title_rewrite_source(source)
+
+    assert mapping == {"## Review Questions 5": "#### Chapter 5 Review Questions 5"}
+    assert "#### Chapter 5 Review Questions 5" in core.apply_title_rewrite_map("## Review Questions 5\n", mapping)
+
+
 def test_candidate_from_artifacts_does_not_enrich_headings(tmp_path):
     markdown = tmp_path / "book.md"
     markdown.write_text("# 第一章 数列\n\n# 小节\n\n正文\n", encoding="utf-8")
-    heading_rules_path = tmp_path / "heading_rules.json"
-    heading_rules_path.write_text(json.dumps(_heading_rules(), ensure_ascii=False), encoding="utf-8")
-    content_rules_path = tmp_path / "content_rules.json"
-    content_rules_path.write_text(json.dumps(_content_rules(), ensure_ascii=False), encoding="utf-8")
+    heading_script = tmp_path / "heading_processor.py"
+    content_script = tmp_path / "content_processor.py"
+    heading_script.write_text(_batch_processor_source(), encoding="utf-8")
+    content_script.write_text(_batch_processor_source(), encoding="utf-8")
 
     result = core.run_candidate_from_artifacts(
         markdown_path=markdown,
-        heading_rules_path=heading_rules_path,
-        content_rules_path=content_rules_path,
+        heading_script_path=heading_script,
+        content_script_path=content_script,
     )
     candidate_text = result.candidate_path.read_text(encoding="utf-8")
-    # Enrichment is removed: headings are only modified by heading_rules.json (DeepSeek).
+    # Enrichment is removed: headings are only modified by provider artifacts.
     # 小节 should remain as-is (no chapter prefix added by core code).
     assert "第一章 小节" not in candidate_text
 
@@ -794,24 +801,23 @@ def test_candidate_from_artifacts_does_not_enrich_headings(tmp_path):
 def test_apply_approved_program_does_not_enrich_headings(tmp_path):
     markdown = tmp_path / "book.md"
     markdown.write_text("# 第一章 数列\n\n# 小节\n\n正文\n", encoding="utf-8")
-    heading_rules_path = tmp_path / "heading_rules.json"
-    heading_rules_path.write_text(json.dumps(_heading_rules(), ensure_ascii=False), encoding="utf-8")
-    content_rules_path = tmp_path / "content_rules.json"
-    content_rules_path.write_text(json.dumps(_content_rules(), ensure_ascii=False), encoding="utf-8")
+    heading_script = tmp_path / "heading_processor.py"
+    content_script = tmp_path / "content_processor.py"
+    heading_script.write_text(_batch_processor_source(), encoding="utf-8")
+    content_script.write_text(_batch_processor_source(), encoding="utf-8")
 
     candidate = core.run_candidate_from_artifacts(
         markdown_path=markdown,
-        heading_rules_path=heading_rules_path,
-        content_rules_path=content_rules_path,
+        heading_script_path=heading_script,
+        content_script_path=content_script,
     )
 
     approved_root = tmp_path / "approved"
     program_dir = core.save_approved_program(
         approved_root=approved_root,
         plugin_id="test-no-enrich",
-        heading_rules=_heading_rules(),
-        plugin_path=None,
-        content_rules_path=content_rules_path,
+        heading_script_path=heading_script,
+        content_script_path=content_script,
         original_path=markdown,
         candidate_path=candidate.candidate_path,
         approving_source_path=markdown,
@@ -830,20 +836,10 @@ def test_apply_approved_program_strips_toc_conditionally(tmp_path):
     markdown = tmp_path / "book.md"
     markdown.write_text(original_markdown, encoding="utf-8")
 
-    heading_rules_path = tmp_path / "heading_rules.json"
-    heading_rules = {
-        "rules": [
-            {
-                "id": "chapter",
-                "pattern": r"^# 第一章 数列(?: …… \d+)?$",
-                "replacement": "# 第一章 数列",
-                "flags": ["MULTILINE"],
-            }
-        ]
-    }
-    heading_rules_path.write_text(json.dumps(heading_rules, ensure_ascii=False), encoding="utf-8")
-    content_rules_path = tmp_path / "content_rules.json"
-    content_rules_path.write_text(json.dumps(_content_rules(), ensure_ascii=False), encoding="utf-8")
+    heading_script = tmp_path / "heading_processor.py"
+    content_script = tmp_path / "content_processor.py"
+    heading_script.write_text(_batch_processor_source([("# 第一章 数列 …… 1", "# 第一章 数列")]), encoding="utf-8")
+    content_script.write_text(_batch_processor_source(), encoding="utf-8")
 
     # For save_approved_program, we need a candidate.
     # We strip the TOC manually for the candidate to mimic provider learning.
@@ -855,9 +851,8 @@ def test_apply_approved_program_strips_toc_conditionally(tmp_path):
     program_dir = core.save_approved_program(
         approved_root=approved_root,
         plugin_id="test-toc-strip",
-        heading_rules=heading_rules,
-        plugin_path=None,
-        content_rules_path=content_rules_path,
+        heading_script_path=heading_script,
+        content_script_path=content_script,
         original_path=markdown,
         candidate_path=candidate_path,
         approving_source_path=markdown,
@@ -876,26 +871,25 @@ def test_apply_approved_program_strips_toc_conditionally(tmp_path):
     applied = core.apply_approved_program(program_dir, target_path)
     candidate_text = applied.candidate_path.read_text(encoding="utf-8")
     assert "# 数学" in candidate_text
-    assert "# 第一章 数列" in candidate_text
-    assert "# 目录" not in candidate_text
-    assert "…… 1" not in candidate_text
+    assert "# 第一章 数列 …… 1" in candidate_text
+    assert "# 目录" in candidate_text
 
 
-def test_run_candidate_from_artifacts_applies_heading_optimizations(tmp_path):
+def test_run_candidate_from_artifacts_applies_title_rewrite_map(tmp_path):
     markdown = tmp_path / "book.md"
     markdown.write_text("# 第一章 数列\n\n## ϰο4\n", encoding="utf-8")
-    heading_rules_path = tmp_path / "heading_rules.json"
-    heading_rules_path.write_text(json.dumps(_heading_rules(), ensure_ascii=False), encoding="utf-8")
-    content_rules_path = tmp_path / "content_rules.json"
-    content_rules_path.write_text(json.dumps(_content_rules(), ensure_ascii=False), encoding="utf-8")
-    opt_path = tmp_path / "heading_optimizations.json"
-    opt_path.write_text(json.dumps({"## ϰο4": "#### 第一章 数列 复习题 4"}, ensure_ascii=False), encoding="utf-8")
+    heading_script = tmp_path / "heading_processor.py"
+    content_script = tmp_path / "content_processor.py"
+    title_map = tmp_path / "title_rewrite_map.py"
+    heading_script.write_text(_batch_processor_source(), encoding="utf-8")
+    content_script.write_text(_batch_processor_source(), encoding="utf-8")
+    title_map.write_text(_title_rewrite_source({"## ϰο4": "#### 第一章 数列 复习题 4"}), encoding="utf-8")
 
     result = core.run_candidate_from_artifacts(
         markdown_path=markdown,
-        heading_rules_path=heading_rules_path,
-        content_rules_path=content_rules_path,
-        heading_optimizations_path=opt_path,
+        heading_script_path=heading_script,
+        content_script_path=content_script,
+        title_rewrite_map_path=title_map,
     )
     candidate_text = result.candidate_path.read_text(encoding="utf-8")
     assert "#### 第一章 数列 复习题 4" in candidate_text
@@ -953,4 +947,3 @@ def test_learning_stage1_input_contains_toc_and_h1(tmp_path):
     assert "# All H1 Headings in Original Text" in payload
     assert "# 目录" in payload
     assert "# 第一章 数列" in payload
-

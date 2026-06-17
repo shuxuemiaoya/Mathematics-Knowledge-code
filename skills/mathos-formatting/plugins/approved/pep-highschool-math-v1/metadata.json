@@ -1,0 +1,21 @@
+{
+  "plugin_id": "pep-highschool-math-v1",
+  "version": "1.0.0",
+  "artifact_mode": "python",
+  "approval_timestamp": "2026-06-17T13:23:28.348349+00:00",
+  "source_file_family_evidence": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中必修 第二册数学电子课本.md",
+  "heading_signature": {
+    "4": 206,
+    "1": 20,
+    "2": 39,
+    "3": 56
+  },
+  "toc_signature": true,
+  "h1_sample_hash": "f9a172b920f3b5639be34ce55c8ce07b81ae581486f3560e8f396b9753815524",
+  "operations_summary": [
+    "self-check passed",
+    "self-check passed"
+  ],
+  "original_approving_file_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中必修 第二册数学电子课本.md",
+  "allowed_scope": "self-check-only"
+}

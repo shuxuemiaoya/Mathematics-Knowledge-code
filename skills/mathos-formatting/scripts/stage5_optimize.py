@@ -1,12 +1,11 @@
 from __future__ import annotations
 import difflib
-import json
 import re
 import sys
 from pathlib import Path
 from mathos_common import (
     FormattingError, _strip_single_line_ending,
-    _split_single_line_ending, parse_json_artifact_from_text
+    validate_title_rewrite_source, parse_python_source_artifact
 )
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
@@ -82,19 +81,19 @@ def run_heading_optimization(
     input_payload = "\n".join(heading_lines)
     try:
         response = provider_client.chat(
-            prompt, input_payload, timeout_seconds=timeout_seconds, response_format={"type": "json_object"}
+            prompt, input_payload, timeout_seconds=timeout_seconds, response_format=None
         )
-        payload = json.loads(parse_json_artifact_from_text(response))
-        validated = {}
-        for k, v in payload.items():
-            k_strip = k.strip()
-            v_strip = v.strip()
-            if not k_strip.startswith("#") or not v_strip.startswith("#"):
-                continue
-            k_level = len(k_strip) - len(k_strip.lstrip("#"))
-            v_level = len(v_strip) - len(v_strip.lstrip("#"))
-            if k_level == v_level or 4 <= v_level <= 6:
-                validated[k_strip] = v_strip
-        return validated
+        return validate_title_rewrite_source(parse_python_source_artifact(response))
     except Exception:
         return {}
+
+
+def apply_title_rewrite_map(markdown: str, mapping: dict[str, str]) -> str:
+    if not mapping:
+        return markdown
+    lines = markdown.splitlines()
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped in mapping:
+            lines[index] = line.replace(stripped, mapping[stripped])
+    return "\n".join(lines) + "\n"

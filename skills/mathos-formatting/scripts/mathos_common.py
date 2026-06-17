@@ -4,6 +4,8 @@ import hashlib
 import importlib.util
 import json
 import re
+import shutil
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -105,6 +107,17 @@ class FormattingError(RuntimeError):
 SAFE_IMPORTS = {"re", "math", "typing"}
 UNSAFE_CALL_NAMES = {"open", "exec", "eval", "compile", "__import__", "getattr", "globals", "locals", "vars"}
 UNSAFE_ATTRIBUTE_ROOTS = {"__builtins__", "builtins", "os", "sys", "subprocess", "pathlib", "socket", "requests", "urllib", "http", "shutil"}
+PYTHON_ARTIFACT_ALLOWED_IMPORTS = {"os", "re", "pathlib"}
+PYTHON_ARTIFACT_UNSAFE_IMPORTS = {
+    "subprocess", "shutil", "socket", "requests", "urllib", "http", "ftplib", "pathlib2"
+}
+PYTHON_ARTIFACT_UNSAFE_CALLS = {
+    "eval", "exec", "compile", "__import__", "remove", "unlink", "rename", "rmdir", "removedirs", "system", "popen"
+}
+PYTHON_ARTIFACT_UNSAFE_ATTRS = {
+    "remove", "unlink", "rename", "rmdir", "removedirs", "system", "popen", "rmtree",
+    "move", "copy", "copy2", "copytree", "urlopen", "request",
+}
 
 def _validate_plugin_ast(source: str) -> None:
     tree = ast.parse(source)
@@ -603,3 +616,152 @@ def parse_python_artifact_from_text(text: str) -> str:
         raise FormattingError("python artifact must define analyze() and clean()")
     return stripped
 
+
+def parse_python_source_artifact(text: str) -> str:
+    stripped = text.strip()
+    fence = re.fullmatch(r"```(?:python)?\s*(.*?)```", stripped, flags=re.DOTALL)
+    if fence:
+        stripped = fence.group(1).strip()
+    try:
+        ast.parse(stripped)
+    except SyntaxError as exc:
+        raise FormattingError(f"python artifact is not valid Python: {exc}") from exc
+    return stripped + ("\n" if not stripped.endswith("\n") else "")
+
+
+def _validate_python_artifact_ast(source: str) -> ast.Module:
+    tree = ast.parse(source)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                root = alias.name.split(".")[0]
+                if root in PYTHON_ARTIFACT_UNSAFE_IMPORTS or root not in PYTHON_ARTIFACT_ALLOWED_IMPORTS:
+                    raise FormattingError(f"unsafe import in python artifact: {alias.name}")
+        elif isinstance(node, ast.ImportFrom):
+            root = (node.module or "").split(".")[0]
+            if root in PYTHON_ARTIFACT_UNSAFE_IMPORTS or root not in PYTHON_ARTIFACT_ALLOWED_IMPORTS:
+                raise FormattingError(f"unsafe import in python artifact: {node.module}")
+        elif isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name) and node.func.id in PYTHON_ARTIFACT_UNSAFE_CALLS:
+                raise FormattingError(f"unsafe call in python artifact: {node.func.id}")
+            if isinstance(node.func, ast.Attribute) and node.func.attr in PYTHON_ARTIFACT_UNSAFE_ATTRS:
+                raise FormattingError(f"unsafe attribute call in python artifact: {node.func.attr}")
+        elif isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
+            if node.value.id in {"subprocess", "shutil", "socket", "requests", "urllib", "http"}:
+                raise FormattingError(f"unsafe attribute access in python artifact: {node.value.id}.{node.attr}")
+    return tree
+
+
+def validate_batch_processor_source(source: str) -> None:
+    tree = _validate_python_artifact_ast(source)
+    if not source.startswith("import os"):
+        raise FormattingError("python batch artifact must start with import os")
+    required_imports = {"os": False, "re": False, "Path": False}
+    required_functions = {"get_target_root", "protect_blocks", "restore_blocks", "replace_in_file", "main"}
+    defined_functions: set[str] = set()
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "os":
+                    required_imports["os"] = True
+                if alias.name == "re":
+                    required_imports["re"] = True
+        elif isinstance(node, ast.ImportFrom) and node.module == "pathlib":
+            for alias in node.names:
+                if alias.name == "Path":
+                    required_imports["Path"] = True
+        elif isinstance(node, ast.FunctionDef):
+            defined_functions.add(node.name)
+    missing_imports = [name for name, present in required_imports.items() if not present]
+    if missing_imports:
+        raise FormattingError(f"python batch artifact missing imports: {', '.join(missing_imports)}")
+    missing_functions = sorted(required_functions - defined_functions)
+    if missing_functions:
+        raise FormattingError(f"python batch artifact missing functions: {', '.join(missing_functions)}")
+
+
+def validate_title_rewrite_source(source: str) -> dict[str, str]:
+    tree = _validate_python_artifact_ast(source)
+    assignments = [
+        node for node in tree.body
+        if isinstance(node, (ast.Assign, ast.AnnAssign))
+    ]
+    other_statements = [
+        node for node in tree.body
+        if not isinstance(node, (ast.Assign, ast.AnnAssign, ast.Expr))
+    ]
+    if other_statements:
+        raise FormattingError("title rewrite artifact must only define TITLE_REWRITE_MAP")
+    title_node: ast.AST | None = None
+    for node in assignments:
+        if isinstance(node, ast.Assign):
+            if any(isinstance(target, ast.Name) and target.id == "TITLE_REWRITE_MAP" for target in node.targets):
+                title_node = node.value
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.target.id == "TITLE_REWRITE_MAP":
+            title_node = node.value
+    if title_node is None:
+        raise FormattingError("title rewrite artifact must define TITLE_REWRITE_MAP")
+    try:
+        mapping = ast.literal_eval(title_node)
+    except Exception as exc:
+        raise FormattingError("TITLE_REWRITE_MAP must be a literal dict") from exc
+    if not isinstance(mapping, dict):
+        raise FormattingError("TITLE_REWRITE_MAP must be a dict")
+    validated: dict[str, str] = {}
+    for key, value in mapping.items():
+        if not isinstance(key, str) or not isinstance(value, str):
+            raise FormattingError("TITLE_REWRITE_MAP keys and values must be strings")
+        key_strip = key.strip()
+        value_strip = value.strip()
+        if not HEADING_RE.match(key_strip) or not HEADING_RE.match(value_strip):
+            raise FormattingError("TITLE_REWRITE_MAP keys and values must be Markdown heading lines")
+        key_level = len(key_strip) - len(key_strip.lstrip("#"))
+        value_level = len(value_strip) - len(value_strip.lstrip("#"))
+        if not (key_level == value_level or 4 <= value_level <= 6):
+            raise FormattingError("TITLE_REWRITE_MAP may only preserve level or downgrade to H4-H6")
+        validated[key_strip] = value_strip
+    return validated
+
+
+def validate_candidate_not_too_short(before: str, after: str, stage: str) -> None:
+    before_len = len(before.strip())
+    after_len = len(after.strip())
+    if before_len >= 200 and after_len < before_len * 0.5:
+        raise FormattingError(
+            f"candidate too short after {stage}: {after_len} characters after, {before_len} before"
+        )
+
+
+def run_batch_processor_in_sandbox(
+    script_path: Path,
+    markdown: str,
+    work_dir: Path,
+    sandbox_name: str,
+    filename: str = "candidate.md",
+) -> str:
+    script_path = script_path.resolve()
+    source = script_path.read_text(encoding="utf-8")
+    validate_batch_processor_source(source)
+    sandbox_root = work_dir / "_python-artifact-sandboxes" / sandbox_name
+    if sandbox_root.exists():
+        shutil.rmtree(sandbox_root)
+    sandbox_root.mkdir(parents=True)
+    candidate = sandbox_root / filename
+    candidate.write_text(markdown, encoding="utf-8")
+    completed = subprocess.run(
+        [sys.executable, str(script_path)],
+        input=str(sandbox_root) + "\n",
+        text=True,
+        capture_output=True,
+        cwd=str(sandbox_root),
+        timeout=120,
+        encoding="utf-8",
+    )
+    if completed.returncode != 0:
+        raise FormattingError(
+            "python batch artifact failed "
+            f"(exit {completed.returncode}): {completed.stderr.strip() or completed.stdout.strip()}"
+        )
+    if not candidate.exists():
+        raise FormattingError("python batch artifact removed the sandbox candidate")
+    return candidate.read_text(encoding="utf-8")

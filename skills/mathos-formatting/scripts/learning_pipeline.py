@@ -1,17 +1,18 @@
 from __future__ import annotations
 import json
-import shutil
 import sys
 from pathlib import Path
 from mathos_common import (
     FormattingError, extract_structure, _write_text_artifact, write_learning_state,
     learning_work_dir_for, learning_candidate_path_for, LearningRunState, LearningRunResult,
-    find_total_pages_from_metadata, extract_first_20_pages, parse_json_artifact_from_text
+    extract_first_20_pages, parse_json_artifact_from_text, parse_python_source_artifact,
+    run_batch_processor_in_sandbox, validate_batch_processor_source, validate_title_rewrite_source,
+    validate_candidate_not_too_short,
 )
-from stage1_heading import validate_heading_rules, apply_heading_rules, audit_stage1_headings
+from stage1_heading import audit_stage1_headings
 from stage2_3_toc import extract_toc_sample, extract_h1_sample
-from stage4_content import validate_content_rules, run_content_rules_protecting_headings
-from stage5_optimize import run_heading_optimization, write_review_report
+from stage4_content import content_preservation_counts, validate_content_preservation, preservation_summary
+from stage5_optimize import apply_title_rewrite_map, write_review_report
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_SCRIPT_DIR) not in sys.path:
@@ -66,38 +67,34 @@ def run_learning_from_provider(
         )
         artifacts["toc_sample"] = _write_text_artifact(work_dir / "toc_sample.md", toc_and_h1)
         current_stage = "heading-provider"
-        heading_rules_file = work_dir / "heading_rules.json"
-        if heading_rules_file.exists():
-            heading_payload = json.loads(heading_rules_file.read_text(encoding="utf-8"))
-            rules = validate_heading_rules(heading_payload)
-            artifacts["heading_rules"] = heading_rules_file
+        heading_script_file = work_dir / "heading_processor.py"
+        if heading_script_file.exists():
+            heading_source = heading_script_file.read_text(encoding="utf-8")
+            validate_batch_processor_source(heading_source)
+            artifacts["heading_script"] = heading_script_file
         else:
-            artifacts["heading_prompt"] = _write_text_artifact(work_dir / "heading_rules_prompt.md", heading_prompt)
-            heading_response = provider_client.chat(heading_prompt, toc_and_h1, timeout_seconds=timeout_seconds, response_format={"type": "json_object"})
-            artifacts["heading_response"] = _write_text_artifact(work_dir / "heading_rules_response.json", heading_response)
-            heading_payload = json.loads(parse_json_artifact_from_text(heading_response))
-            rules = validate_heading_rules(heading_payload)
-            artifacts["heading_rules"] = _write_text_artifact(
-                work_dir / "heading_rules.json",
-                json.dumps(heading_payload, ensure_ascii=False, indent=2),
-            )
+            artifacts["heading_prompt"] = _write_text_artifact(work_dir / "heading_processor_prompt.md", heading_prompt)
+            heading_response = provider_client.chat(heading_prompt, toc_and_h1, timeout_seconds=timeout_seconds, response_format=None)
+            artifacts["heading_response"] = _write_text_artifact(work_dir / "heading_processor_response.py", heading_response)
+            heading_source = parse_python_source_artifact(heading_response)
+            validate_batch_processor_source(heading_source)
+            artifacts["heading_script"] = _write_text_artifact(heading_script_file, heading_source)
         current_stage = "stage1-apply"
         work_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(markdown_path, candidate_path)
-        candidate_text = candidate_path.read_text(encoding="utf-8")
-        stage1_text = apply_heading_rules(candidate_text, rules)
+        candidate_text = original_text
+        stage1_text = run_batch_processor_in_sandbox(heading_script_file, candidate_text, work_dir, "stage1-heading")
         candidate_path.write_text(stage1_text, encoding="utf-8")
         artifacts["stage1_report"] = write_review_report(
             original_path=markdown_path, candidate_path=candidate_path,
             report_path=work_dir / "stage1_heading_report.md",
-            heading_summary=[rule.rule_id for rule in rules], plugin_summary=[], warnings=[]
+            heading_summary=["heading_processor.py"], plugin_summary=[], warnings=[]
         )
         current_stage = "stage1-audit"
         stage1_audit_summary = audit_stage1_headings(original_text, stage1_text)
         artifacts["stage1_report"] = write_review_report(
             original_path=markdown_path, candidate_path=candidate_path,
             report_path=work_dir / "stage1_heading_report.md",
-            heading_summary=[rule.rule_id for rule in rules] + stage1_audit_summary,
+            heading_summary=["heading_processor.py"] + stage1_audit_summary,
             plugin_summary=[], warnings=[]
         )
         current_stage = "toc-detection-provider"
@@ -138,48 +135,48 @@ def run_learning_from_provider(
         current_stage = "content-provider"
         artifacts["content_prompt"] = _write_text_artifact(work_dir / "content_cleaner_prompt.md", content_prompt)
         content_response = provider_client.chat(
-            content_prompt, h1_sample, timeout_seconds=timeout_seconds, response_format={"type": "json_object"}
+            content_prompt, h1_sample, timeout_seconds=timeout_seconds, response_format=None
         )
-        artifacts["content_response"] = _write_text_artifact(work_dir / "content_rules_response.json", content_response)
-        content_rules_payload = json.loads(parse_json_artifact_from_text(content_response))
-        validate_content_rules(content_rules_payload)
-        artifacts["content_rules"] = _write_text_artifact(
-            work_dir / "content_rules.json", json.dumps(content_rules_payload, ensure_ascii=False, indent=2)
-        )
+        artifacts["content_response"] = _write_text_artifact(work_dir / "content_processor_response.py", content_response)
+        content_source = parse_python_source_artifact(content_response)
+        validate_batch_processor_source(content_source)
+        content_script_file = work_dir / "content_processor.py"
+        artifacts["content_script"] = _write_text_artifact(content_script_file, content_source)
         current_stage = "stage4-apply"
         try:
-            plugin_result = run_content_rules_protecting_headings(content_rules_payload, stripped_text)
+            cleaned_text = run_batch_processor_in_sandbox(content_script_file, stripped_text, work_dir, "stage4-content")
+            validate_candidate_not_too_short(stripped_text, cleaned_text, "stage4-content")
+            before_preservation = content_preservation_counts(stripped_text)
+            after_preservation = content_preservation_counts(cleaned_text)
+            validate_content_preservation(before_preservation, after_preservation)
         except FormattingError:
             candidate_path.write_text(stripped_text, encoding="utf-8")
             raise
+        plugin_summary = ["content_processor.py applied", *preservation_summary(before_preservation, after_preservation)]
         current_stage = "heading-optimization-provider"
         heading_opt_prompt_path = Path(__file__).resolve().parent.parent / "agents" / "heading_optimization_prompt.md"
         heading_opt_prompt = heading_opt_prompt_path.read_text(encoding="utf-8")
         artifacts["heading_opt_prompt"] = _write_text_artifact(work_dir / "heading_optimization_prompt.md", heading_opt_prompt)
-        opt_mapping = run_heading_optimization(
-            plugin_result.cleaned_markdown, provider_client, heading_opt_prompt, timeout_seconds=timeout_seconds
+        opt_response = provider_client.chat(
+            heading_opt_prompt, cleaned_text, timeout_seconds=timeout_seconds, response_format=None
         )
-        final_markdown = plugin_result.cleaned_markdown
+        artifacts["title_rewrite_response"] = _write_text_artifact(work_dir / "title_rewrite_map_response.py", opt_response)
+        title_source = parse_python_source_artifact(opt_response)
+        opt_mapping = validate_title_rewrite_source(title_source)
+        title_map_path = work_dir / "title_rewrite_map.py"
+        artifacts["title_rewrite_map"] = _write_text_artifact(title_map_path, title_source)
+        final_markdown = cleaned_text
         if opt_mapping:
-            artifacts["heading_optimizations"] = _write_text_artifact(
-                work_dir / "heading_optimizations.json", json.dumps(opt_mapping, ensure_ascii=False, indent=2)
-            )
-            opt_lines = final_markdown.splitlines()
-            for idx, l in enumerate(opt_lines):
-                stripped = l.strip()
-                if stripped in opt_mapping:
-                    opt_lines[idx] = l.replace(stripped, opt_mapping[stripped])
-            final_markdown = "\n".join(opt_lines) + "\n"
+            final_markdown = apply_title_rewrite_map(final_markdown, opt_mapping)
         candidate_path.write_text(final_markdown, encoding="utf-8")
         artifacts["candidate"] = candidate_path
         artifacts["report"] = write_review_report(
             original_path=markdown_path, candidate_path=candidate_path, report_path=report_path,
-            heading_summary=[rule.rule_id for rule in rules], plugin_summary=plugin_result.summary,
-            warnings=plugin_result.warnings
+            heading_summary=["heading_processor.py"], plugin_summary=plugin_summary,
+            warnings=warnings
         )
-        warnings.extend(plugin_result.warnings)
         state("complete", "candidate-written")
-        return LearningRunResult("candidate-written", work_dir, candidate_path, report_path, artifacts, plugin_result.summary, warnings, errors)
+        return LearningRunResult("candidate-written", work_dir, candidate_path, report_path, artifacts, plugin_summary, warnings, errors)
     except Exception as exc:
         if not errors:
             errors.append(str(exc))
