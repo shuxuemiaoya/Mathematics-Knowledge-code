@@ -7,7 +7,7 @@ from types import ModuleType
 from mathos_common import (
     PreservationCounts, PluginResult, FormattingError,
     HEADING_RE, IMAGE_REFERENCE_RE, DETAILS_OPEN_RE,
-    _content_protected_line_mask, _is_table_line
+    _content_protected_line_mask, _is_table_line, extract_structure
 )
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
@@ -36,6 +36,87 @@ CONTENT_ALLOWED_RULE_TYPES = {
     "literal_replace", "regex_replace", "line_regex_replace", "blank_line_normalize",
     "choice_option_split", "callout_spacing_fix", "formula_whitelist_fix", "image_caption_fix", "report_only"
 }
+
+
+def validate_stage2_heading_preservation(before: str, after: str) -> list[str]:
+    def heading_lines(markdown: str, label: str) -> list[str]:
+        lines = markdown.splitlines()
+        structure = extract_structure(markdown, label)
+        return [lines[heading.line_number - 1] for heading in structure.headings]
+
+    before_headings = heading_lines(before, "stage2-before")
+    after_headings = heading_lines(after, "stage2-after")
+    if before_headings != after_headings:
+        raise FormattingError("Stage 2 content processor changed finalized heading lines")
+    return [f"Stage 2 preserved {len(before_headings)} finalized heading lines"]
+
+
+def protect_stage2_heading_lines(markdown: str) -> tuple[str, dict[str, str]]:
+    lines = markdown.splitlines(keepends=True)
+    structure = extract_structure(markdown, "stage2-heading-protection")
+    heading_tokens: dict[str, str] = {}
+    for index, heading in enumerate(structure.headings, start=1):
+        token = f"MATHOSFINALHEADINGTOKEN{index:06d}"
+        if token in markdown:
+            raise FormattingError("Stage 2 heading token collides with source content")
+        line_index = heading.line_number - 1
+        raw_line = lines[line_index]
+        if raw_line.endswith("\r\n"):
+            body, ending = raw_line[:-2], "\r\n"
+        elif raw_line.endswith(("\n", "\r")):
+            body, ending = raw_line[:-1], raw_line[-1]
+        else:
+            body, ending = raw_line, ""
+        heading_tokens[token] = body
+        lines[line_index] = token + ending
+    return "".join(lines), heading_tokens
+
+
+def restore_stage2_heading_lines(markdown: str, heading_tokens: dict[str, str]) -> str:
+    restored = markdown
+    for token, heading_line in heading_tokens.items():
+        if restored.count(token) != 1:
+            raise FormattingError(f"Stage 2 heading token was changed or removed: {token}")
+        restored = restored.replace(token, heading_line, 1)
+    return restored
+
+
+def protect_stage2_guarded_content(markdown: str) -> tuple[str, dict[str, str]]:
+    protected = markdown
+    tokens: dict[str, str] = {}
+
+    def replace_match(match: re.Match[str]) -> str:
+        token = f"MATHOSPROTECTEDTOKEN{len(tokens) + 1:06d}"
+        if token in markdown:
+            raise FormattingError("Stage 2 protected token collides with source content")
+        tokens[token] = match.group(0)
+        return token
+
+    patterns = [
+        (r"\A---(?:\r?\n)[\s\S]*?^---[ \t]*(?:\r?\n|$)", re.MULTILINE),
+        (r"(?ms)^```[^\n]*\n.*?^```[ \t]*$|^~~~[^\n]*\n.*?^~~~[ \t]*$", 0),
+        (r"<details(?:\s|>)[\s\S]*?</details\s*>", re.IGNORECASE),
+        (r"<(center|table|figure|div)\b[^>]*>[\s\S]*?</\1\s*>", re.IGNORECASE),
+        (r"\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]", 0),
+        (r"`[^`\n]+`", 0),
+        (r"(?<!\$)\$(?!\$)[^\n$]+\$", 0),
+        (r"(?m)^>\s*\[![^\]]+\].*$", 0),
+        (r"(?m)^#{1,6}\s+.*$", 0),
+        (r"(?m)^.*\|.*$", 0),
+        (r"!\[[^\]]*\]\([^)]+\)|<img\s+[^>]*src=[^>]*>", re.IGNORECASE),
+    ]
+    for pattern, flags in patterns:
+        protected = re.sub(pattern, replace_match, protected, flags=flags)
+    return protected, tokens
+
+
+def restore_stage2_guarded_content(markdown: str, tokens: dict[str, str]) -> str:
+    restored = markdown
+    for token, original in reversed(list(tokens.items())):
+        if restored.count(token) != 1:
+            raise FormattingError(f"Stage 2 protected token was changed or removed: {token}")
+        restored = restored.replace(token, original, 1)
+    return restored
 CONTENT_ALLOWED_SCOPES = {
     "non_heading_lines", "all_unprotected_text", "all_unprotected_non_heading_text",
     "math_text_only", "image_caption_region", "callout_region", "report_only"
@@ -220,6 +301,8 @@ def preservation_summary(before: PreservationCounts, after: PreservationCounts) 
 def validate_content_preservation(before: PreservationCounts, after: PreservationCounts) -> None:
     if after.image_references < before.image_references:
         raise FormattingError(f"content cleaner removed image references ({before.image_references} before, {after.image_references} after)")
+    if after.details_blocks != before.details_blocks:
+        raise FormattingError(f"content cleaner changed details block count ({before.details_blocks} before, {after.details_blocks} after)")
     if after.math_delimiters != before.math_delimiters:
         raise FormattingError(f"content cleaner changed math delimiter count ({before.math_delimiters} before, {after.math_delimiters} after)")
     if after.table_like_lines < before.table_like_lines:

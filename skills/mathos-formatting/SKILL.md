@@ -7,7 +7,7 @@ description: Use for MathOS Markdown formatting when provider-generated Python a
 
 ## Overview
 
-This repo-local skill formats MathOS Markdown after conversion and before segmentation. The current main path is Python artifact mode: Stage 1, Stage 4, and Stage 5 consume DeepSeek-generated Python files; Stage 2 TOC detection remains JSON because it only returns line numbers. Candidate-producing commands never replace the original Markdown file.
+This repo-local skill formats MathOS Markdown after conversion and before segmentation. Stage 1 uses DeepSeek to extract an immutable verbatim TOC, generate a sandboxed heading processor, delete the recorded TOC span, and validate the final heading structure. Stage 2 then applies the generated content processor. Candidate-producing commands never replace the original Markdown file.
 
 ## When To Use
 
@@ -17,7 +17,6 @@ Use this skill when a MathOS `.md` file needs:
 - Provider-backed heading normalization according to the TOC.
 - TOC stripping with preface/body preservation.
 - Chapter-inner Markdown cleanup through a generated Python batch processor.
-- Stage 5 title cleanup through `TITLE_REWRITE_MAP`.
 - A self-check candidate and report before segmentation.
 - An approved reusable formatting program for the same source family.
 - Diagnosis of heading, TOC, protected-region, Python-artifact, or preservation failures.
@@ -62,11 +61,10 @@ Run commands from `C:\Mathematics-Knowledge\Mathematics-Knowledge-code`.
 
 ## Provider Stages
 
-1. **Stage 1 Heading Processor**: DeepSeek returns Python source saved as `heading_processor_response.py`, normalized to `heading_processor.py`, then executed against a temporary sandbox copy of `candidate.md`.
-2. **Stage 2 TOC Detection**: DeepSeek returns JSON saved as `toc_detection_response.json`; only `toc_start_line` and `main_text_start_line` are used.
-3. **Stage 3 H1 Sample Extraction**: The local runtime extracts an H1 sample after TOC stripping.
-4. **Stage 4 Content Processor**: DeepSeek returns Python source saved as `content_processor_response.py`, normalized to `content_processor.py`, then executed against a temporary sandbox copy of the stripped candidate.
-5. **Stage 5 Title Rewrite Map**: DeepSeek returns Python source defining `TITLE_REWRITE_MAP`, saved as `title_rewrite_map_response.py` and normalized to `title_rewrite_map.py`.
+1. **Stage 1 TOC Extraction**: DeepSeek returns unchanged numbered lines from the first-20-page sample. The runtime validates one complete contiguous span and saves those source lines as immutable `toc.md`.
+2. **Stage 1 Heading Processor**: The runtime combines `toc.md` with all unprotected body headings in `toc_and_headings.md`; DeepSeek returns `heading_processor.py`, which runs only in a temporary sandbox.
+3. **Stage 1 Removal And Validation**: The runtime deletes the original recorded TOC line interval, builds `heading_check_input.md`, and requires passing DeepSeek JSON before continuing.
+4. **Stage 2 Content Processor**: DeepSeek returns `content_processor.py`, which runs against the validated, TOC-free candidate. Later stages may not modify headings.
 
 ## Input And Output Contract
 
@@ -74,9 +72,8 @@ Inputs:
 
 - Source path exists, is a file, ends in `.md`, and is UTF-8 Markdown.
 - Provider learning reads secrets from `.env`; never print or persist secret values.
-- Stage 1/4 artifacts are Python batch scripts.
-- Stage 5 artifact is a Python title-map file.
-- Stage 2 remains JSON line-number output.
+- Stage 1 heading and Stage 2 content artifacts are Python batch scripts.
+- Stage 1 TOC output is verbatim Markdown; Stage 1 validation output is JSON.
 
 Outputs:
 
@@ -90,21 +87,22 @@ Outputs:
 
 Provider learning work directories may include:
 
-- `toc_sample.md`
+- `toc_detection_sample.md`
+- `toc_detection_response.md`
+- `toc.md`
+- `toc_and_headings.md`
 - `heading_processor_prompt.md`
 - `heading_processor_response.py`
 - `heading_processor.py`
 - `stage1_heading_report.md`
 - `toc_detection_prompt.md`
-- `toc_detection_sample.md`
-- `toc_detection_response.json`
+- `heading_check_prompt.md`
+- `heading_check_input.md`
+- `heading_check_response.json`
 - `h1_sample.md`
 - `content_cleaner_prompt.md`
 - `content_processor_response.py`
 - `content_processor.py`
-- `heading_optimization_prompt.md`
-- `title_rewrite_map_response.py`
-- `title_rewrite_map.py`
 - `_python-artifact-sandboxes\`
 - `candidate.md`
 - `candidate-report.md`
@@ -124,7 +122,7 @@ Legacy directories may contain `heading_rules.json`, `content_rules.json`, `cont
 
 ## Python Artifact Contract
 
-Stage 1 and Stage 4 Python scripts must:
+Stage 1 heading and Stage 2 content Python scripts must:
 
 - Start with `import os`.
 - Include `from pathlib import Path` and `import re`.
@@ -133,7 +131,7 @@ Stage 1 and Stage 4 Python scripts must:
 - Preserve display math, code fences, YAML frontmatter, markdown tables, headings where required, and other protected blocks.
 - Run only inside the runtime-created temporary sandbox.
 
-Stage 5 files must define only:
+Legacy explicit title-map commands may still consume:
 
 ```python
 TITLE_REWRITE_MAP: dict[str, str] = {
@@ -147,28 +145,29 @@ Every key and value must be a Markdown heading line. Values may keep the same le
 
 The self-check loop must protect or validate:
 
-- TOC before Stage 1 audit, to avoid accidental TOC deletion during heading validation.
+- Immutable `toc.md` and the original validated TOC line interval.
 - Display math blocks delimited by `$$` or `\[` and `\]`.
 - Fenced code blocks using backticks or tildes.
 - YAML frontmatter.
 - Markdown table lines.
 - Image references.
 - HTML `<details>` blocks unless the user has explicitly changed the content contract and tests for that behavior.
-- Heading lines during Stage 4 content cleanup.
+- Heading lines during Stage 2 content cleanup.
 
 ## Critical Rules
 
 - Fail closed on deletion risk.
-- Stage 1/4 generated scripts run only in temporary sandbox directories.
+- Generated heading/content scripts run only in temporary sandbox directories.
 - Never execute generated Python against the original Markdown directory.
 - Never accept a Python artifact that imports network, subprocess, shell, or unsafe filesystem modules.
 - Reject artifacts that call `open`, `eval`, `exec`, external commands, delete, move, rename, or recursively copy files.
-- Stage 1 mutation and Stage 1 audit are separate. The audit validates; it does not mutate.
-- Stage 1 audit runs before TOC stripping.
+- Stage 1 processing must preserve line count, non-heading content, protected blocks, heading count, and heading order.
+- TOC deletion uses the original validated line interval; it never searches modified text for new boundaries.
+- DeepSeek heading validation must pass before Stage 2 begins.
 - H1-H3 are reserved for TOC-derived structure; non-TOC headings must be H4-H6.
-- Headings like `Section` or `Review Questions 5` should receive parent context through provider-generated artifacts, not hardcoded runtime enrichment.
+- No heading may receive newly invented parent or chapter context.
 - 不得给没有父级信息的标题名字添加或改写出任何父级/章节前缀（例如：独立的“练习”标题在降级时应保持为“练习”名字，而不能改写为含父级信息的“第X章 练习”）。
-- Stage 5 uses `TITLE_REWRITE_MAP`, not JSON.
+- `learn-from-provider` does not generate or apply a late `TITLE_REWRITE_MAP`; explicit legacy artifact commands remain compatible.
 - Never save a reusable program until the candidate passes self-check.
 - Never replace the original source without explicit approval.
 
@@ -177,11 +176,12 @@ The self-check loop must protect or validate:
 Stop and keep artifacts when:
 
 - Source is missing, non-Markdown, or unreadable.
-- Provider output is invalid Python for Stage 1/4/5.
-- Stage 2 JSON is invalid or returns unusable line numbers.
+- Provider output is invalid Python for the heading or content processor.
+- TOC output is modified, incomplete, disjoint, ambiguous, or includes unrelated text.
+- Heading validation JSON is invalid, false, reports errors, or has a count mismatch.
 - Python artifact is missing required imports or functions.
 - Python artifact contains dangerous imports or calls.
-- Stage 1 audit rejects TOC heading levels.
+- Stage 1 validation rejects TOC hierarchy or non-TOC H1-H3 headings.
 - TOC stripping would remove preface or body content.
 - Candidate becomes too short or preservation counts drop.
 - Display math, code fence, YAML, table, image, details, or heading preservation fails.
@@ -197,23 +197,23 @@ Before calling the work successful, run:
 ```powershell
 python skills\mathos-formatting\scripts\mathos_formatting.py --help
 python -m pytest tests\test_mathos_formatting_guarded.py -q
-rg "content_rules.json|heading_rules.json|heading_optimizations.json|json_object" skills\mathos-formatting tests
+rg "content_rules.json|heading_rules.json|heading_optimizations.json" skills\mathos-formatting tests
 ```
 
-The final `rg` should show only legacy compatibility or Stage 2 TOC JSON references.
+The final `rg` should show only explicit legacy compatibility references.
 
 Required validation coverage:
 
 - Accidental TOC deletion is caught.
 - Heading level judgment is checked against TOC-derived structure.
 - Display math, code fences, YAML frontmatter, and tables are protected.
-- Invalid provider JSON is still tested for Stage 2 TOC detection.
-- Invalid provider Python is rejected for Stage 1/4/5.
+- Invalid heading-check JSON is rejected before Stage 2.
+- Invalid provider Python is rejected for heading and content processors.
 - Candidate-too-short or content-loss output fails closed.
 - Original file cannot be replaced without explicit user approval.
 - Dangerous Python artifacts are rejected, including `os.remove`, `subprocess`, arbitrary write `open`, network imports/calls, and missing required functions.
-- Stage 1/4 scripts only affect sandbox candidate copies.
-- Stage 5 parses and applies `TITLE_REWRITE_MAP`.
+- Generated scripts only affect sandbox candidate copies.
+- Provider learning produces no late title-map artifact.
 - Legacy approved programs still apply through the compatibility branch.
 
 ## Review And Approval Workflow
@@ -222,7 +222,7 @@ Manual review is not the acceptance gate. Candidate-producing commands set `self
 
 1. Read `run-state.json`, `candidate.md`, and the report.
 2. Confirm the original file was not modified.
-3. Verify heading alignment and Stage 1 audit evidence.
+3. Verify immutable TOC evidence, stored boundaries, and the passing heading-check response.
 4. Verify preservation counts and protected-region behavior.
 5. Confirm candidate length is plausible.
 6. If all checks pass, save the approved program.
@@ -234,8 +234,8 @@ Use `apply-approved` only for sources from the same self-check-passing family.
 
 Reuse behavior:
 
-- 删除目录和标题调整的环节不能复用，只有 Stage 4 对内容的修改（content_processor.py）能复用。
-- 对于同一系列的其他书籍，不能直接使用 `apply-approved` 运行全部阶段，必须使用混合 `learn-from-provider` 工作流：在目标书籍的工作目录中预先放置已批准的 `content_processor.py` 以供 Stage 4 复用，而 Stage 1（标题规范化）、Stage 2/3（目录检测与删除）、Stage 5（标题降级图）必须针对每本书单独运行和生成。
+- 删除目录和标题调整的环节不能复用，只有 Stage 2 对内容的修改（content_processor.py）能复用。
+- 对于同一系列的其他书籍，不能直接使用 `apply-approved` 运行全部阶段；只能在 `learn-from-provider` 中复用已批准的 `content_processor.py`。TOC 提取、标题处理和标题校验必须针对每本书单独运行。
 - Prefer `heading_processor.py` and `content_processor.py`.
 - Apply `title_rewrite_map.py` when present.
 - Fall back to legacy JSON or legacy `content_cleaner.py` only when no Python artifacts exist.

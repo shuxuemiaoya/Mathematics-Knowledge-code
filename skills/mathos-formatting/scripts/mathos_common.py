@@ -89,6 +89,9 @@ class LearningRunState:
     warnings: list[str]
     errors: list[str]
     approved: bool
+    toc_start_line: int | None = None
+    toc_end_line: int | None = None
+    stage1_validated: bool = False
 
 @dataclass(frozen=True)
 class LearningRunResult:
@@ -203,6 +206,9 @@ def write_learning_state(work_dir: Path, state: LearningRunState) -> Path:
         "warnings": state.warnings,
         "errors": state.errors,
         "approved": state.approved,
+        "toc_start_line": state.toc_start_line,
+        "toc_end_line": state.toc_end_line,
+        "stage1_validated": state.stage1_validated,
     }
     state_path = work_dir / "run-state.json"
     state_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")

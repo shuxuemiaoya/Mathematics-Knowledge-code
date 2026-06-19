@@ -1,6 +1,7 @@
 from pathlib import Path
 import importlib.util
 import json
+import re
 import subprocess
 from types import ModuleType
 import sys
@@ -257,36 +258,37 @@ class DestructiveProvider:
     model = "deepseek-test"
 
     def chat(self, system_prompt: str, user_payload: str, timeout_seconds: int = 120, response_format: dict | None = None) -> str:
+        if "TOC Verbatim Extraction Prompt" in system_prompt:
+            return "3: # 目录\n4: \n5: # 第一章 数列 …… 1\n6: 1.1 数列的概念 …… 2\n"
         if "Heading Rules Prompt" in system_prompt:
             return _batch_processor_source([("# 第一章 数列 …… 1", "# 第一章 数列"), ("# 数学", "#### 数学")])
-        if "TOC Detection Prompt" in system_prompt:
-            return json.dumps({"toc_start_line": 3, "main_text_start_line": 8}, ensure_ascii=False)
+        if "Heading Validation Prompt" in system_prompt:
+            return json.dumps({"valid": True, "checked_heading_count": 3, "errors": []})
         if "Content Cleaner Prompt" in system_prompt:
             return _batch_processor_source([("![](images/a.png)\n\n", "")])
-        return _title_rewrite_source()
+        raise AssertionError(f"unexpected provider prompt: {system_prompt[:80]}")
 
 
-def test_learning_fails_closed_when_generated_cleaner_is_destructive(tmp_path):
+def test_learning_runtime_protection_neutralizes_destructive_image_rule(tmp_path):
     markdown = tmp_path / "book.md"
     markdown.write_text(SAMPLE_MARKDOWN, encoding="utf-8")
     work_dir = tmp_path / "mathos-formatting" / "book"
 
-    with pytest.raises(core.FormattingError, match="image"):
-        core.run_learning_from_provider(
-            markdown_path=markdown,
-            provider_client=DestructiveProvider(),
-            heading_prompt="# Heading Rules Prompt",
-            content_prompt="# Content Cleaner Prompt",
-            work_dir=work_dir,
-        )
+    core.run_learning_from_provider(
+        markdown_path=markdown,
+        provider_client=DestructiveProvider(),
+        heading_prompt="# Heading Rules Prompt",
+        content_prompt="# Content Cleaner Prompt",
+        work_dir=work_dir,
+    )
 
     candidate_text = (work_dir / "candidate.md").read_text(encoding="utf-8")
     assert "![](images/a.png)" in candidate_text
     assert "<details>" in candidate_text
     state = json.loads((work_dir / "run-state.json").read_text(encoding="utf-8"))
-    assert state["status"] == "failed"
-    assert state["stage"] == "stage4-apply"
-    assert "image" in state["errors"][0]
+    assert state["status"] == "candidate-written"
+    assert state["stage"] == "complete"
+    assert state["errors"] == []
 
 
 class SuccessfulMockProvider:
@@ -298,13 +300,16 @@ class SuccessfulMockProvider:
         self.main_text_start = main_text_start_line
 
     def chat(self, system_prompt: str, user_payload: str, timeout_seconds: int = 120, response_format: dict | None = None) -> str:
+        if "TOC Verbatim Extraction Prompt" in system_prompt:
+            return "3: # 目录\n4: \n5: # 第一章 数列 …… 1\n6: 1.1 数列的概念 …… 2\n"
         if "Heading Rules Prompt" in system_prompt:
             return _batch_processor_source([("# 第一章 数列 …… 1", "# 第一章 数列"), ("# 数学", "#### 数学")])
-        if "TOC Detection Prompt" in system_prompt:
-            return json.dumps({"toc_start_line": self.toc_start, "main_text_start_line": self.main_text_start}, ensure_ascii=False)
+        if "Heading Validation Prompt" in system_prompt:
+            count = sum(1 for line in user_payload.splitlines() if re.match(r"^\d+: #{1,6}\s+", line))
+            return json.dumps({"valid": True, "checked_heading_count": count, "errors": []})
         if "Content Cleaner Prompt" in system_prompt:
             return _batch_processor_source()
-        return _title_rewrite_source()
+        raise AssertionError(f"unexpected provider prompt: {system_prompt[:80]}")
 
 
 class JsonRulesProvider(SuccessfulMockProvider):
@@ -319,8 +324,12 @@ class DemotingChapterProvider(SuccessfulMockProvider):
         super().__init__(toc_start_line=1, main_text_start_line=7)
 
     def chat(self, system_prompt: str, user_payload: str, timeout_seconds: int = 120, response_format: dict | None = None) -> str:
+        if "TOC Verbatim Extraction Prompt" in system_prompt:
+            return "1: # 目录\n2: \n3: # 第十一章 不等式与不等式组 120\n"
         if "Heading Rules Prompt" in system_prompt:
             return _batch_processor_source([("# 第十一章 不等式与不等式组", "#### 第十一章 不等式与不等式组")])
+        if "Heading Validation Prompt" in system_prompt:
+            return json.dumps({"valid": False, "checked_heading_count": 1, "errors": ["TOC chapter is not H1"]})
         return super().chat(system_prompt, user_payload, timeout_seconds, response_format)
 
 
@@ -339,7 +348,7 @@ def test_learning_fails_closed_when_stage1_demotes_body_chapter(tmp_path):
     )
     work_dir = tmp_path / "mathos-formatting" / "book"
 
-    with pytest.raises(core.FormattingError, match="chapter heading.+H1"):
+    with pytest.raises(core.FormattingError, match="rejected"):
         core.run_learning_from_provider(
             markdown_path=markdown,
             provider_client=DemotingChapterProvider(),
@@ -353,7 +362,7 @@ def test_learning_fails_closed_when_stage1_demotes_body_chapter(tmp_path):
     assert (work_dir / "stage1_heading_report.md").exists()
     state = json.loads((work_dir / "run-state.json").read_text(encoding="utf-8"))
     assert state["status"] == "failed"
-    assert state["stage"] == "stage1-audit"
+    assert state["stage"] == "heading-validation"
 
 
 def test_learning_strips_only_toc(tmp_path):
@@ -397,17 +406,19 @@ def test_learning_stage4_uses_python_processor_not_json_rules(tmp_path):
     assert (work_dir / "heading_processor.py").exists()
     assert (work_dir / "content_processor_response.py").exists()
     assert (work_dir / "content_processor.py").exists()
-    assert (work_dir / "title_rewrite_map.py").exists()
+    assert not (work_dir / "title_rewrite_map.py").exists()
     assert not (work_dir / "content_rules_response.json").exists()
     assert not (work_dir / "content_rules.json").exists()
     assert not (work_dir / "content_cleaner.py").exists()
     assert result.summary == [
         "content_processor.py applied",
+        "Stage 2 preserved 3 finalized heading lines",
         "Preservation images: 1 -> 1",
         "Preservation details blocks: 1 -> 1",
         "Preservation math delimiters: 2 -> 2",
         "Preservation table-like lines: 3 -> 3",
-        "Final heading audit: all H1-H3 headings verified against TOC",
+        "Stage 1 processor preserved line count, heading order, and non-heading content",
+        "DeepSeek heading validation passed for 3 headings",
     ]
 
 
@@ -611,18 +622,22 @@ def test_learning_fallback_when_toc_missing(tmp_path):
     markdown.write_text(SAMPLE_MARKDOWN, encoding="utf-8")
     work_dir = tmp_path / "mathos-formatting" / "book"
 
-    core.run_learning_from_provider(
-        markdown_path=markdown,
-        provider_client=SuccessfulMockProvider(toc_start_line=None, main_text_start_line=8),
-        heading_prompt="# Heading Rules Prompt",
-        content_prompt="# Content Cleaner Prompt",
-        work_dir=work_dir,
-    )
+    class MissingTocProvider(SuccessfulMockProvider):
+        def chat(self, system_prompt, user_payload, timeout_seconds=120, response_format=None):
+            if "TOC Verbatim Extraction Prompt" in system_prompt:
+                return ""
+            return super().chat(system_prompt, user_payload, timeout_seconds, response_format)
 
-    candidate_text = (work_dir / "candidate.md").read_text(encoding="utf-8")
-    # Fallback: keep entire document intact
-    assert "#### 数学" in candidate_text
-    assert "# 目录" in candidate_text
+    with pytest.raises(core.FormattingError, match="empty"):
+        core.run_learning_from_provider(
+            markdown_path=markdown,
+            provider_client=MissingTocProvider(None, None),
+            heading_prompt="# Heading Rules Prompt",
+            content_prompt="# Content Cleaner Prompt",
+            work_dir=work_dir,
+        )
+    state = json.loads((work_dir / "run-state.json").read_text(encoding="utf-8"))
+    assert state["stage"] == "toc-extraction"
 
 
 def test_learning_fallback_when_boundaries_invalid(tmp_path):
@@ -630,29 +645,36 @@ def test_learning_fallback_when_boundaries_invalid(tmp_path):
     markdown.write_text(SAMPLE_MARKDOWN, encoding="utf-8")
     work_dir = tmp_path / "mathos-formatting" / "book"
 
-    # Mismatched bounds: toc_start_line > main_text_start_line
-    core.run_learning_from_provider(
-        markdown_path=markdown,
-        provider_client=SuccessfulMockProvider(toc_start_line=10, main_text_start_line=5),
-        heading_prompt="# Heading Rules Prompt",
-        content_prompt="# Content Cleaner Prompt",
-        work_dir=work_dir,
-    )
+    class DisjointTocProvider(SuccessfulMockProvider):
+        def chat(self, system_prompt, user_payload, timeout_seconds=120, response_format=None):
+            if "TOC Verbatim Extraction Prompt" in system_prompt:
+                return "3: # 目录\n5: # 第一章 数列 …… 1\n"
+            return super().chat(system_prompt, user_payload, timeout_seconds, response_format)
 
-    candidate_text = (work_dir / "candidate.md").read_text(encoding="utf-8")
-    # Fallback: keep entire document intact
-    assert "#### 数学" in candidate_text
-    assert "# 目录" in candidate_text
+    with pytest.raises(core.FormattingError, match="contiguous"):
+        core.run_learning_from_provider(
+            markdown_path=markdown,
+            provider_client=DisjointTocProvider(None, None),
+            heading_prompt="# Heading Rules Prompt",
+            content_prompt="# Content Cleaner Prompt",
+            work_dir=work_dir,
+        )
 
 
-def test_learning_fails_when_main_text_start_line_invalid(tmp_path):
+def test_learning_fails_when_toc_text_is_modified(tmp_path):
     markdown = tmp_path / "book.md"
     markdown.write_text(SAMPLE_MARKDOWN, encoding="utf-8")
     work_dir = tmp_path / "mathos-formatting" / "book"
-    with pytest.raises(core.FormattingError, match="main_text_start_line"):
+    class ModifiedTocProvider(SuccessfulMockProvider):
+        def chat(self, system_prompt, user_payload, timeout_seconds=120, response_format=None):
+            if "TOC Verbatim Extraction Prompt" in system_prompt:
+                return "3: # 目录\n4: \n5: # 第一章 数列 1\n6: 1.1 数列的概念 …… 2\n"
+            return super().chat(system_prompt, user_payload, timeout_seconds, response_format)
+
+    with pytest.raises(core.FormattingError, match="verbatim"):
         core.run_learning_from_provider(
             markdown_path=markdown,
-            provider_client=SuccessfulMockProvider(toc_start_line=3, main_text_start_line="invalid"),
+            provider_client=ModifiedTocProvider(None, None),
             heading_prompt="# Heading Rules Prompt",
             content_prompt="# Content Cleaner Prompt",
             work_dir=work_dir,
@@ -679,6 +701,91 @@ def test_content_cleaner_prompt_describes_python_batch_contract():
     assert "def clean" not in prompt
     assert "def analyze" not in prompt
     assert "main()" in prompt or "def main" in prompt
+
+
+def test_stage2_rejects_heading_changes_and_prompt_preserves_guarded_content():
+    with pytest.raises(core.FormattingError, match="heading lines"):
+        core.validate_stage2_heading_preservation(
+            "# 第一章\n\n#### 练习\n\n正文\n",
+            "# 第一章\n\n> [!practice] 练习\n\n正文\n",
+        )
+
+    prompt = (SKILL_ROOT / "agents" / "content_cleaner_prompt.md").read_text(encoding="utf-8").lower()
+    assert "heading lines are immutable" in prompt
+    assert "preserve every markdown image reference exactly" in prompt
+    assert "preserve every <details>" in prompt
+
+
+def test_stage2_runtime_protects_and_restores_finalized_headings():
+    markdown = "# 第一章\n\n#### 练习\n\n正文 **加粗**。\n"
+
+    protected, heading_tokens = core.protect_stage2_heading_lines(markdown)
+    assert "# 第一章" not in protected
+    assert "#### 练习" not in protected
+
+    cleaned = protected.replace("**加粗**", "加粗")
+    restored = core.restore_stage2_heading_lines(cleaned, heading_tokens)
+
+    assert restored == "# 第一章\n\n#### 练习\n\n正文 加粗。\n"
+
+    with pytest.raises(core.FormattingError, match="heading token"):
+        core.restore_stage2_heading_lines(cleaned.replace(next(iter(heading_tokens)), ""), heading_tokens)
+
+
+def test_stage2_runtime_owns_all_guarded_content_protection():
+    markdown = """---
+title: **keep**
+---
+# 第一章
+
+![](images/a.png)
+
+<details>
+**keep details**
+```mermaid
+graph TD
+```
+</details>
+
+$$
+x ** y
+$$
+
+| **head** | value |
+| --- | --- |
+
+<center><img src="images/b.png" style="max-width:100%;"></center>
+
+> [!example] 方向角为 $45^{\\circ}$
+
+正文 **加粗**。
+"""
+
+    protected, tokens = core.protect_stage2_guarded_content(markdown)
+    assert "<center>" not in protected
+    assert "> [!example]" not in protected
+    processed = protected.replace("**", "")
+    restored = core.restore_stage2_guarded_content(processed, tokens)
+
+    assert "title: **keep**" in restored
+    assert "# 第一章" in restored
+    assert "![](images/a.png)" in restored
+    assert "**keep details**" in restored
+    assert "```mermaid\ngraph TD\n```" in restored
+    assert "x ** y" in restored
+    assert "| **head** | value |" in restored
+    assert '<center><img src="images/b.png" style="max-width:100%;"></center>' in restored
+    assert "> [!example] 方向角为 $45^{\\circ}$" in restored
+    assert "正文 加粗。" in restored
+
+
+def test_heading_prompt_forbids_sys_and_uses_builtin_input_for_sandbox_root():
+    prompt = (SKILL_ROOT / "agents" / "heading_rules_prompt.md").read_text(encoding="utf-8").lower()
+
+    assert "never import `sys`" in prompt
+    assert "input()" in prompt
+    assert "heading_rewrites" in prompt
+    assert "placeholder" in prompt
 
 
 class MockOptimizationProvider:
@@ -945,7 +1052,213 @@ def test_learning_stage1_input_contains_toc_and_h1(tmp_path):
 
     assert len(captured_payloads) == 1
     payload = captured_payloads[0]
-    assert "# Table of Contents Sample" in payload
-    assert "# All H1 Headings in Original Text" in payload
+    assert "<!-- BEGIN IMMUTABLE TOC -->" in payload
+    assert "<!-- BEGIN BODY HEADINGS -->" in payload
     assert "# 目录" in payload
+    assert "1: # 数学" in payload
     assert "# 第一章 数列" in payload
+
+
+def test_validate_verbatim_toc_response_returns_exact_contiguous_source_span():
+    sample = "1: # 数学\n2: \n3: # 目录\n4: # 第一章 数列 …… 1\n5: 1.1 数列的概念 …… 2\n6: \n7: # 第一章 数列\n"
+    response = "3: # 目录\n4: # 第一章 数列 …… 1\n5: 1.1 数列的概念 …… 2\n"
+
+    toc = core.validate_verbatim_toc_response(sample, response)
+
+    assert toc.start_line == 3
+    assert toc.end_line == 5
+    assert toc.markdown == "# 目录\n# 第一章 数列 …… 1\n1.1 数列的概念 …… 2\n"
+
+
+def test_validate_verbatim_toc_response_keeps_media_in_span_but_not_toc_markdown():
+    sample = (
+        "104: # 目录\n105: \n106: # 第一章 有理数\n"
+        "107: \n108: ![](images/chapter.jpg)\n109: \n110: <details>\n"
+        "111: <summary>natural_image</summary>\n112: chapter artwork\n113: </details>\n"
+        "114: \n115: 1.1 正数和负数 2\n116: \n117: # 第一章 有理数\n"
+    )
+    response = "\n".join(sample.splitlines()[:12]) + "\n"
+
+    toc = core.validate_verbatim_toc_response(sample, response)
+
+    assert (toc.start_line, toc.end_line) == (104, 115)
+    assert toc.markdown == "# 目录\n# 第一章 有理数\n1.1 正数和负数 2\n"
+
+
+@pytest.mark.parametrize(
+    "response, message",
+    [
+        ("3: # 目录\n5: 1.1 数列的概念 …… 2\n", "contiguous"),
+        ("3: # 目录\n4: # 第一章 数列 1\n", "verbatim"),
+        ("3: # 目录\n4: # 第一章 数列 …… 1\n", "incomplete"),
+        ("1: # 数学\n2: \n3: # 目录\n4: # 第一章 数列 …… 1\n5: 1.1 数列的概念 …… 2\n", "unrelated"),
+        ("3: # 目录\n4: # 第一章 数列 …… 1\n5: 1.1 数列的概念 …… 2\n6: \n7: # 第一章 数列\n", "unrelated"),
+    ],
+)
+def test_validate_verbatim_toc_response_rejects_unsafe_spans(response, message):
+    sample = "1: # 数学\n2: \n3: # 目录\n4: # 第一章 数列 …… 1\n5: 1.1 数列的概念 …… 2\n6: \n7: # 第一章 数列\n"
+
+    with pytest.raises(core.FormattingError, match=message):
+        core.validate_verbatim_toc_response(sample, response)
+
+
+def test_extract_body_headings_excludes_toc_code_and_math_blocks():
+    markdown = """# 封面
+
+# 目录
+# 第一章 数列 …… 1
+
+```md
+# 伪标题
+```
+
+$$
+# 伪数学标题
+$$
+
+# 第一章 数列
+#### 练习
+"""
+
+    headings = core.extract_body_headings(markdown, toc_start_line=3, toc_end_line=4)
+
+    assert [(item.line_number, item.raw_line) for item in headings] == [
+        (1, "# 封面"),
+        (14, "# 第一章 数列"),
+        (15, "#### 练习"),
+    ]
+
+
+def test_heading_check_payload_declares_local_count_and_prompt_accepts_non_toc_h4():
+    headings = [
+        core.ExtractedHeading(1, "第一章", "# 第一章", 10),
+        core.ExtractedHeading(4, "练习", "#### 练习", 20),
+    ]
+
+    payload = core.build_toc_and_headings_markdown("# 目录\n# 第一章\n", headings)
+    prompt = (SKILL_ROOT / "agents" / "heading_check_prompt.md").read_text(encoding="utf-8")
+
+    assert "<!-- BODY HEADING COUNT: 2 -->" in payload
+    assert "must not be reported as errors" in prompt
+    assert "copy the declared body heading count" in prompt.lower()
+
+
+def test_validate_heading_processor_result_rejects_non_heading_and_parent_context_changes():
+    original = "# 第一章 数列\n\n# 练习\n\n正文。\n"
+
+    with pytest.raises(core.FormattingError, match="non-heading"):
+        core.validate_heading_processor_result(original, original.replace("正文。", "改写正文。"))
+
+    with pytest.raises(core.FormattingError, match="parent context"):
+        core.validate_heading_processor_result(original, original.replace("# 练习", "#### 第一章 练习"))
+
+    with pytest.raises(core.FormattingError, match="parent context"):
+        core.validate_heading_processor_result(original, original.replace("# 练习", "#### 1.1 练习"))
+
+
+def test_validate_heading_check_response_requires_success_and_matching_count():
+    summary = core.validate_heading_check_response(
+        json.dumps({"valid": True, "checked_heading_count": 2, "errors": []}, ensure_ascii=False),
+        expected_heading_count=2,
+    )
+    assert summary == ["DeepSeek heading validation passed for 2 headings"]
+
+    with pytest.raises(core.FormattingError, match="count"):
+        core.validate_heading_check_response(
+            json.dumps({"valid": True, "checked_heading_count": 1, "errors": []}),
+            expected_heading_count=2,
+        )
+
+    with pytest.raises(core.FormattingError, match="rejected"):
+        core.validate_heading_check_response(
+            json.dumps({"valid": False, "checked_heading_count": 2, "errors": ["non-TOC H1"]}),
+            expected_heading_count=2,
+        )
+
+
+class Stage1WorkflowProvider:
+    base_url = "https://fake.deepseek.local"
+    model = "deepseek-test"
+
+    def __init__(self, heading_check_valid=True):
+        self.heading_check_valid = heading_check_valid
+        self.calls = []
+
+    def chat(self, system_prompt, user_payload, timeout_seconds=120, response_format=None):
+        if "TOC Verbatim Extraction Prompt" in system_prompt:
+            stage = "toc"
+            response = "3: # 目录\n4: \n5: # 第一章 数列 …… 1\n6: 1.1 数列的概念 …… 2\n"
+        elif "Heading Rules Prompt" in system_prompt:
+            stage = "heading"
+            response = _batch_processor_source([("# 数学", "#### 数学")])
+        elif "Heading Validation Prompt" in system_prompt:
+            stage = "heading-check"
+            errors = [] if self.heading_check_valid else ["non-TOC H1: 数学"]
+            response = json.dumps(
+                {
+                    "valid": self.heading_check_valid,
+                    "checked_heading_count": 3,
+                    "errors": errors,
+                },
+                ensure_ascii=False,
+            )
+        elif "Content Cleaner Prompt" in system_prompt:
+            stage = "content"
+            response = _batch_processor_source()
+        else:
+            raise AssertionError(f"unexpected provider prompt: {system_prompt[:80]}")
+        self.calls.append((stage, user_payload, response_format))
+        return response
+
+
+def test_learning_uses_new_stage1_provider_order_and_artifacts(tmp_path):
+    markdown = tmp_path / "book.md"
+    markdown.write_text(SAMPLE_MARKDOWN, encoding="utf-8")
+    original_hash = markdown.read_bytes()
+    work_dir = tmp_path / "mathos-formatting" / "book"
+    provider = Stage1WorkflowProvider()
+
+    result = core.run_learning_from_provider(
+        markdown_path=markdown,
+        provider_client=provider,
+        heading_prompt="# Heading Rules Prompt",
+        content_prompt="# Content Cleaner Prompt",
+        work_dir=work_dir,
+    )
+
+    assert [call[0] for call in provider.calls] == ["toc", "heading", "heading-check", "content"]
+    assert (work_dir / "toc.md").read_text(encoding="utf-8") == (
+        "# 目录\n# 第一章 数列 …… 1\n1.1 数列的概念 …… 2\n"
+    )
+    assert "<!-- BEGIN IMMUTABLE TOC -->" in (work_dir / "toc_and_headings.md").read_text(encoding="utf-8")
+    assert "#### 数学" in (work_dir / "heading_check_input.md").read_text(encoding="utf-8")
+    assert (work_dir / "heading_check_response.json").exists()
+    assert not (work_dir / "title_rewrite_map.py").exists()
+    assert "# 目录" not in result.candidate_path.read_text(encoding="utf-8")
+    assert markdown.read_bytes() == original_hash
+    state = json.loads((work_dir / "run-state.json").read_text(encoding="utf-8"))
+    assert state["toc_start_line"] == 3
+    assert state["toc_end_line"] == 6
+    assert state["stage1_validated"] is True
+
+
+def test_learning_stops_before_stage2_when_heading_check_rejects(tmp_path):
+    markdown = tmp_path / "book.md"
+    markdown.write_text(SAMPLE_MARKDOWN, encoding="utf-8")
+    work_dir = tmp_path / "mathos-formatting" / "book"
+    provider = Stage1WorkflowProvider(heading_check_valid=False)
+
+    with pytest.raises(core.FormattingError, match="rejected"):
+        core.run_learning_from_provider(
+            markdown_path=markdown,
+            provider_client=provider,
+            heading_prompt="# Heading Rules Prompt",
+            content_prompt="# Content Cleaner Prompt",
+            work_dir=work_dir,
+        )
+
+    assert [call[0] for call in provider.calls] == ["toc", "heading", "heading-check"]
+    assert not (work_dir / "content_processor_response.py").exists()
+    state = json.loads((work_dir / "run-state.json").read_text(encoding="utf-8"))
+    assert state["stage"] == "heading-validation"
+    assert state["status"] == "failed"

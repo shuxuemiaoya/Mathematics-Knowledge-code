@@ -15,6 +15,7 @@ if str(_SCRIPT_DIR) not in sys.path:
 
 from mathos_common import *
 from stage1_heading import *
+from stage1_workflow import *
 from stage2_3_toc import *
 from stage4_content import *
 from stage5_optimize import *

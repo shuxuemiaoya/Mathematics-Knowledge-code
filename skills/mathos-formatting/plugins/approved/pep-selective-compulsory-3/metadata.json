@@ -1,0 +1,20 @@
+{
+  "plugin_id": "pep-selective-compulsory-3",
+  "version": "1.0.0",
+  "artifact_mode": "python",
+  "approval_timestamp": "2026-06-19T03:41:45.734764+00:00",
+  "source_file_family_evidence": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本.md",
+  "heading_signature": {
+    "4": 146,
+    "1": 4,
+    "2": 16
+  },
+  "toc_signature": true,
+  "h1_sample_hash": "5b8f5acb41bad65dd8c3ac56f98bf73211eed55f3433339a38c514bf86a9850e",
+  "operations_summary": [
+    "self-check passed",
+    "Choice Book 3 formatting self-check passed"
+  ],
+  "original_approving_file_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\高中\\课本\\【人教版】高中选择性必修 第三册数学电子课本.md",
+  "allowed_scope": "self-check-only"
+}

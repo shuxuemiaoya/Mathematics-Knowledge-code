@@ -195,7 +195,6 @@ def command_learn_from_provider(args: argparse.Namespace) -> int:
                     "--approved-root <approved_root> --plugin-id <plugin_id> "
                     f"--heading-script {result.artifacts.get('heading_script')} "
                     f"--content-script {result.artifacts.get('content_script')} "
-                    f"--title-rewrite-map {result.artifacts.get('title_rewrite_map')} "
                     f"--original {Path(args.markdown)} --candidate {result.candidate_path}"
                 ),
             ),
@@ -223,8 +222,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     candidate_parser.add_argument("markdown")
     candidate_parser.add_argument("--heading-script", help="Python Stage 1 artifact: heading_processor.py")
-    candidate_parser.add_argument("--content-script", help="Python Stage 4 artifact: content_processor.py")
-    candidate_parser.add_argument("--title-rewrite-map", help="Optional Python Stage 5 artifact: title_rewrite_map.py")
+    candidate_parser.add_argument("--content-script", help="Python Stage 2 artifact: content_processor.py")
+    candidate_parser.add_argument("--title-rewrite-map", help="Optional legacy Python artifact: title_rewrite_map.py")
     candidate_parser.add_argument("--heading-rules", help="Legacy JSON heading_rules.json")
     candidate_parser.add_argument("--content-rules", help="Legacy JSON content_rules.json")
     candidate_parser.add_argument("--plugin", help="Legacy Python content_cleaner.py")
@@ -235,8 +234,8 @@ def build_parser() -> argparse.ArgumentParser:
     approve_parser.add_argument("--approved-root", required=True)
     approve_parser.add_argument("--plugin-id", required=True)
     approve_parser.add_argument("--heading-script", help="Python Stage 1 artifact: heading_processor.py")
-    approve_parser.add_argument("--content-script", help="Python Stage 4 artifact: content_processor.py")
-    approve_parser.add_argument("--title-rewrite-map", help="Optional Python Stage 5 artifact: title_rewrite_map.py")
+    approve_parser.add_argument("--content-script", help="Python Stage 2 artifact: content_processor.py")
+    approve_parser.add_argument("--title-rewrite-map", help="Optional legacy Python artifact: title_rewrite_map.py")
     approve_parser.add_argument("--heading-rules", help="Legacy JSON heading_rules.json")
     approve_parser.add_argument("--content-rules", help="Legacy JSON content_rules.json")
     approve_parser.add_argument("--plugin", help="Legacy Python content_cleaner.py")
