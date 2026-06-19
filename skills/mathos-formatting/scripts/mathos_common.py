@@ -748,6 +748,9 @@ def run_batch_processor_in_sandbox(
     sandbox_root.mkdir(parents=True)
     candidate = sandbox_root / filename
     candidate.write_text(markdown, encoding="utf-8")
+    import os
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
     completed = subprocess.run(
         [sys.executable, str(script_path)],
         input=str(sandbox_root) + "\n",
@@ -756,6 +759,7 @@ def run_batch_processor_in_sandbox(
         cwd=str(sandbox_root),
         timeout=120,
         encoding="utf-8",
+        env=env,
     )
     if completed.returncode != 0:
         raise FormattingError(

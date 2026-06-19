@@ -18,7 +18,7 @@ from mathos_common import (
     validate_title_rewrite_source,
     _sha256_text,
 )
-from stage1_heading import apply_heading_rules, validate_heading_rules
+from stage1_heading import apply_heading_rules, validate_heading_rules, audit_final_headings
 from stage4_content import (
     content_preservation_counts,
     preservation_summary,
@@ -197,39 +197,74 @@ def save_approved_program(
     return program_dir
 
 
-def _strip_toc_if_needed(markdown: str, program_dir: Path) -> str:
+def _strip_toc_if_needed(markdown: str, program_dir: Path, toc_block = None) -> str:
     metadata_path = program_dir / "metadata.json"
     if not metadata_path.exists():
         return markdown
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     if not metadata.get("toc_signature", False):
         return markdown
-    structure = extract_structure(markdown, "toc-detection")
-    if structure.toc_block is None:
+    if toc_block is None:
+        structure = extract_structure(markdown, "toc-detection")
+        toc_block = structure.toc_block
+    if toc_block is None:
         return markdown
     lines = markdown.splitlines(keepends=True)
-    before_toc = lines[:structure.toc_block.start_line - 1]
-    after_toc = lines[structure.toc_block.end_line:]
+    before_toc = lines[:toc_block.start_line - 1]
+    after_toc = lines[toc_block.end_line:]
     return "".join(before_toc + after_toc)
 
 
 def _apply_python_program(program_dir: Path, target_path: Path) -> ApprovedApplyResult:
     candidate_path = create_fresh_candidate(target_path)
     markdown = candidate_path.read_text(encoding="utf-8")
+    original_text = markdown
+    
+    # Detect TOC block on the original text before running the heading script
+    orig_structure = extract_structure(original_text, "original-toc-detection")
+    toc_block = orig_structure.toc_block
+    
+    heading_script = program_dir / "heading_processor.py"
     content_script = program_dir / "content_processor.py"
-    if not content_script.exists():
-        raise FormattingError("python approved program must contain content_processor.py")
-    before_content = markdown
-    cleaned = run_batch_processor_in_sandbox(content_script, markdown, candidate_path.parent, "approved-stage4")
-    validate_candidate_not_too_short(before_content, cleaned, "approved-stage4")
-    summary = _plugin_summary(before_content, cleaned, "Python content processor applied")
-    candidate_path.write_text(cleaned, encoding="utf-8")
+    title_map_script = program_dir / "title_rewrite_map.py"
+    
+    heading_summary = []
+    
+    # 1. Run heading_processor.py if it exists
+    if heading_script.exists():
+        markdown = run_batch_processor_in_sandbox(heading_script, markdown, candidate_path.parent, "approved-stage1")
+        heading_summary.append("heading_processor.py applied")
+        
+    # 2. Strip TOC if needed
+    markdown = _strip_toc_if_needed(markdown, program_dir, toc_block)
+    
+    # 3. Run content_processor.py if it exists
+    if content_script.exists():
+        before_content = markdown
+        cleaned = run_batch_processor_in_sandbox(content_script, markdown, candidate_path.parent, "approved-stage4")
+        validate_candidate_not_too_short(before_content, cleaned, "approved-stage4")
+        summary = _plugin_summary(before_content, cleaned, "Python content processor applied")
+        markdown = cleaned
+    else:
+        summary = []
+        
+    # 4. Run title_rewrite_map.py if it exists
+    if title_map_script.exists():
+        mapping = validate_title_rewrite_source(title_map_script.read_text(encoding="utf-8"))
+        markdown = apply_title_rewrite_map(markdown, mapping)
+        heading_summary.append("title_rewrite_map.py applied")
+        
+    # 5. Run final heading audit
+    final_audit = audit_final_headings(original_text, markdown)
+    heading_summary.extend(final_audit)
+    
+    candidate_path.write_text(markdown, encoding="utf-8")
     report_path = candidate_path.parent / f"{target_path.stem}.approved-report.md"
     write_review_report(
         original_path=target_path,
         candidate_path=candidate_path,
         report_path=report_path,
-        heading_summary=[],
+        heading_summary=heading_summary,
         plugin_summary=summary,
         warnings=[],
     )
@@ -298,20 +333,39 @@ def run_candidate_from_artifacts(
 
     candidate_path = create_fresh_candidate(markdown_path)
     markdown = candidate_path.read_text(encoding="utf-8")
+    original_text = markdown
+    
+    # Detect TOC on original markdown before heading script runs
+    orig_structure = extract_structure(original_text, "original-toc-detection")
+    toc_block = orig_structure.toc_block
+    
     stage1 = run_batch_processor_in_sandbox(heading_script_path, markdown, candidate_path.parent, "candidate-stage1")
+    
+    # Strip TOC locally if present
+    if toc_block is not None:
+        lines = stage1.splitlines(keepends=True)
+        before_toc = lines[:toc_block.start_line - 1]
+        after_toc = lines[toc_block.end_line:]
+        stage1 = "".join(before_toc + after_toc)
+        
     stage4 = run_batch_processor_in_sandbox(content_script_path, stage1, candidate_path.parent, "candidate-stage4")
     validate_candidate_not_too_short(stage1, stage4, "candidate-stage4")
     summary = _plugin_summary(stage1, stage4, "Python content processor applied")
     if title_rewrite_map_path is not None:
         mapping = validate_title_rewrite_source(title_rewrite_map_path.read_text(encoding="utf-8"))
         stage4 = apply_title_rewrite_map(stage4, mapping)
+        
+    # Run final heading audit
+    final_audit = audit_final_headings(original_text, stage4)
+    heading_summary = ["heading_processor.py"] + final_audit
+    
     candidate_path.write_text(stage4, encoding="utf-8")
     report_path = candidate_path.parent / f"{markdown_path.stem}.candidate-report.md"
     write_review_report(
         original_path=markdown_path,
         candidate_path=candidate_path,
         report_path=report_path,
-        heading_summary=["heading_processor.py"],
+        heading_summary=heading_summary,
         plugin_summary=summary,
         warnings=[],
     )

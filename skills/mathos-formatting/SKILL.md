@@ -167,6 +167,7 @@ The self-check loop must protect or validate:
 - Stage 1 audit runs before TOC stripping.
 - H1-H3 are reserved for TOC-derived structure; non-TOC headings must be H4-H6.
 - Headings like `Section` or `Review Questions 5` should receive parent context through provider-generated artifacts, not hardcoded runtime enrichment.
+- 不得给没有父级信息的标题名字添加或改写出任何父级/章节前缀（例如：独立的“练习”标题在降级时应保持为“练习”名字，而不能改写为含父级信息的“第X章 练习”）。
 - Stage 5 uses `TITLE_REWRITE_MAP`, not JSON.
 - Never save a reusable program until the candidate passes self-check.
 - Never replace the original source without explicit approval.
@@ -233,6 +234,8 @@ Use `apply-approved` only for sources from the same self-check-passing family.
 
 Reuse behavior:
 
+- 删除目录和标题调整的环节不能复用，只有 Stage 4 对内容的修改（content_processor.py）能复用。
+- 对于同一系列的其他书籍，不能直接使用 `apply-approved` 运行全部阶段，必须使用混合 `learn-from-provider` 工作流：在目标书籍的工作目录中预先放置已批准的 `content_processor.py` 以供 Stage 4 复用，而 Stage 1（标题规范化）、Stage 2/3（目录检测与删除）、Stage 5（标题降级图）必须针对每本书单独运行和生成。
 - Prefer `heading_processor.py` and `content_processor.py`.
 - Apply `title_rewrite_map.py` when present.
 - Fall back to legacy JSON or legacy `content_cleaner.py` only when no Python artifacts exist.

@@ -9,7 +9,7 @@ from mathos_common import (
     run_batch_processor_in_sandbox, validate_batch_processor_source, validate_title_rewrite_source,
     validate_candidate_not_too_short,
 )
-from stage1_heading import audit_stage1_headings
+from stage1_heading import audit_stage1_headings, audit_final_headings
 from stage2_3_toc import extract_toc_sample, extract_h1_sample
 from stage4_content import content_preservation_counts, validate_content_preservation, preservation_summary
 from stage5_optimize import apply_title_rewrite_map, write_review_report
@@ -97,6 +97,10 @@ def run_learning_from_provider(
             heading_summary=["heading_processor.py"] + stage1_audit_summary,
             plugin_summary=[], warnings=[]
         )
+        current_stage = "h1-sample"
+        stage1_structure = extract_structure(stage1_text, str(markdown_path))
+        h1_sample = extract_h1_sample(stage1_text, stage1_structure, h1_index=h1_index)
+        artifacts["h1_sample"] = _write_text_artifact(work_dir / "h1_sample.md", h1_sample)
         current_stage = "toc-detection-provider"
         toc_prompt_path = Path(__file__).resolve().parent.parent / "agents" / "toc_detection_prompt.md"
         toc_prompt = toc_prompt_path.read_text(encoding="utf-8")
@@ -128,20 +132,21 @@ def run_learning_from_provider(
             except (ValueError, TypeError):
                 pass
         candidate_path.write_text(stripped_text, encoding="utf-8")
-        current_stage = "h1-sample"
-        updated_structure = extract_structure(stripped_text, str(candidate_path))
-        h1_sample = extract_h1_sample(stripped_text, updated_structure, h1_index=h1_index)
-        artifacts["h1_sample"] = _write_text_artifact(work_dir / "h1_sample.md", h1_sample)
-        current_stage = "content-provider"
-        artifacts["content_prompt"] = _write_text_artifact(work_dir / "content_cleaner_prompt.md", content_prompt)
-        content_response = provider_client.chat(
-            content_prompt, h1_sample, timeout_seconds=timeout_seconds, response_format=None
-        )
-        artifacts["content_response"] = _write_text_artifact(work_dir / "content_processor_response.py", content_response)
-        content_source = parse_python_source_artifact(content_response)
-        validate_batch_processor_source(content_source)
         content_script_file = work_dir / "content_processor.py"
-        artifacts["content_script"] = _write_text_artifact(content_script_file, content_source)
+        if content_script_file.exists():
+            content_source = content_script_file.read_text(encoding="utf-8")
+            validate_batch_processor_source(content_source)
+            artifacts["content_script"] = content_script_file
+        else:
+            current_stage = "content-provider"
+            artifacts["content_prompt"] = _write_text_artifact(work_dir / "content_cleaner_prompt.md", content_prompt)
+            content_response = provider_client.chat(
+                content_prompt, h1_sample, timeout_seconds=timeout_seconds, response_format=None
+            )
+            artifacts["content_response"] = _write_text_artifact(work_dir / "content_processor_response.py", content_response)
+            content_source = parse_python_source_artifact(content_response)
+            validate_batch_processor_source(content_source)
+            artifacts["content_script"] = _write_text_artifact(content_script_file, content_source)
         current_stage = "stage4-apply"
         try:
             cleaned_text = run_batch_processor_in_sandbox(content_script_file, stripped_text, work_dir, "stage4-content")
@@ -168,6 +173,8 @@ def run_learning_from_provider(
         final_markdown = cleaned_text
         if opt_mapping:
             final_markdown = apply_title_rewrite_map(final_markdown, opt_mapping)
+        final_audit_summary = audit_final_headings(original_text, final_markdown)
+        plugin_summary.extend(final_audit_summary)
         candidate_path.write_text(final_markdown, encoding="utf-8")
         artifacts["candidate"] = candidate_path
         artifacts["report"] = write_review_report(

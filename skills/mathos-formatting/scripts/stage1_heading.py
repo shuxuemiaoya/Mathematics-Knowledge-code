@@ -114,13 +114,37 @@ def _normalize_toc_page_heading_with_fallback(text: str) -> str:
     from mathos_common import TOC_ENTRY_PAGE_RE
     return TOC_ENTRY_PAGE_RE.sub("", text).strip()
 
+def _clean_comparison_key(text: str) -> str:
+    text = re.sub(r'([\.…\-—·．\s]+\s*\d+|\s+\d+)$', '', text)
+    text = re.sub(r'[\.…\-—·．\s]+$', '', text)
+    text = re.sub(r'\s+', '', text)
+    return text.lower()
+
 def audit_stage1_headings(original_text: str, stage1_text: str) -> list[str]:
-    toc_end_line = _toc_body_boundary(original_text)
+    structure = extract_structure(original_text, "stage1-audit-original")
+    if structure.toc_block is None:
+        return ["Stage 1 audit skipped: no TOC block found in original text"]
+        
+    toc_start_line = structure.toc_block.start_line
+    toc_end_line = structure.toc_block.end_line
     toc_chapters = _toc_chapter_contexts(original_text)
-    stage1_structure = extract_structure(stage1_text, "stage1-audit-candidate")
+    
     original_lines = original_text.splitlines()
+    toc_titles = set()
+    for line in original_lines[structure.toc_block.start_line - 1:structure.toc_block.end_line]:
+        stripped = line.strip()
+        if stripped.startswith('!['):
+            continue
+        heading_match = HEADING_RE.match(stripped)
+        if heading_match:
+            title_text = _normalize_atx_heading_text(heading_match.group(2)).strip()
+        else:
+            title_text = stripped
+        toc_titles.add(_clean_comparison_key(title_text))
+            
+    stage1_structure = extract_structure(stage1_text, "stage1-audit-candidate")
     for heading in stage1_structure.headings:
-        if heading.line_number <= toc_end_line:
+        if toc_start_line <= heading.line_number <= toc_end_line:
             continue
         if heading.line_number <= len(original_lines):
             orig_line = original_lines[heading.line_number - 1].strip()
@@ -133,4 +157,63 @@ def audit_stage1_headings(original_text: str, stage1_text: str) -> list[str]:
                         "Stage 1 audit failed: chapter heading matching TOC must remain H1 "
                         f"at line {heading.line_number}: {heading.text}"
                     )
-    return ["Stage 1 audit: chapter headings preserved as H1"]
+        
+        # Check that H1-H3 headings outside the TOC are valid TOC/chapter headings
+        if heading.level in {1, 2, 3}:
+            clean_text = _clean_comparison_key(heading.text)
+            context = _chapter_context_from_heading_text(heading.text)
+            is_valid_toc = (
+                clean_text in toc_titles or
+                (context is not None and context[1].casefold() in toc_chapters)
+            )
+            if not is_valid_toc:
+                raise FormattingError(
+                    f"Stage 1 audit failed: non-TOC H{heading.level} heading found "
+                    f"at line {heading.line_number}: {heading.text}"
+                )
+                
+    return [
+        "Stage 1 audit: chapter headings preserved as H1",
+        "Stage 1 audit: non-TOC H1-H3 headings demoted",
+    ]
+
+def audit_final_headings(original_text: str, final_text: str) -> list[str]:
+    structure = extract_structure(original_text, "audit-original")
+    if structure.toc_block is None:
+        return ["Final heading audit skipped: no TOC reference found in original text"]
+    
+    final_structure = extract_structure(final_text, "audit-final")
+    if final_structure.toc_block is not None:
+        return ["Final heading audit skipped: TOC block is still present in candidate"]
+        
+    original_lines = original_text.splitlines()
+    toc_titles = set()
+    for line in original_lines[structure.toc_block.start_line - 1:structure.toc_block.end_line]:
+        stripped = line.strip()
+        if stripped.startswith('!['):
+            continue
+        heading_match = HEADING_RE.match(stripped)
+        if heading_match:
+            title_text = _normalize_atx_heading_text(heading_match.group(2)).strip()
+        else:
+            title_text = stripped
+        toc_titles.add(_clean_comparison_key(title_text))
+        
+    toc_chapters = _toc_chapter_contexts(original_text)
+    
+    for heading in final_structure.headings:
+        if heading.level in {1, 2, 3}:
+            clean_text = _clean_comparison_key(heading.text)
+            context = _chapter_context_from_heading_text(heading.text)
+            is_valid_toc = (
+                clean_text in toc_titles or
+                (context is not None and context[1].casefold() in toc_chapters)
+            )
+            if not is_valid_toc:
+                raise FormattingError(
+                    f"Final heading audit failed: non-TOC H{heading.level} heading found: {heading.text}"
+                )
+    return [
+        "Final heading audit: all H1-H3 headings verified against TOC"
+    ]
+

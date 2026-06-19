@@ -20,6 +20,25 @@ def extract_toc_sample(markdown: str, structure: MarkdownStructure, max_followin
     return "\n".join(sample_lines).strip() + "\n"
 
 def extract_h1_sample(markdown: str, structure: MarkdownStructure, h1_index: int = 0) -> str:
-    if h1_index < 0 or h1_index >= len(structure.h1_sections):
+    from mathos_common import _chapter_context_from_heading_text
+    
+    toc_end = structure.toc_block.end_line if structure.toc_block else 0
+    
+    # Prioritize H1 sections that look like chapters and start after the TOC
+    chapter_sections = [
+        sec for sec in structure.h1_sections
+        if sec.start_line > toc_end and _chapter_context_from_heading_text(sec.heading) is not None
+    ]
+    if chapter_sections:
+        if h1_index < len(chapter_sections):
+            return chapter_sections[h1_index].text.strip() + "\n"
+            
+    # Fallback to any H1 sections starting after the TOC
+    post_toc_sections = [
+        sec for sec in structure.h1_sections
+        if sec.start_line > toc_end
+    ]
+    if h1_index < 0 or h1_index >= len(post_toc_sections):
         raise FormattingError("H1 section not found")
-    return structure.h1_sections[h1_index].text.strip() + "\n"
+    return post_toc_sections[h1_index].text.strip() + "\n"
+

@@ -58,17 +58,17 @@ STAGE1_HEADING_MARKDOWN = """# 目录
 
 # 第十章 数据的收集、整理与描述
 
-# 小节
+#### 小节
 
 正文。
 
 # 第十一章 不等式与不等式组
 
-# 复习题 (11)
+#### 复习题 (11)
 
 # Chapter 5 Derivatives
 
-# Review Questions
+#### Review Questions
 """
 
 
@@ -258,7 +258,7 @@ class DestructiveProvider:
 
     def chat(self, system_prompt: str, user_payload: str, timeout_seconds: int = 120, response_format: dict | None = None) -> str:
         if "Heading Rules Prompt" in system_prompt:
-            return _batch_processor_source([("# 第一章 数列 …… 1", "# 第一章 数列")])
+            return _batch_processor_source([("# 第一章 数列 …… 1", "# 第一章 数列"), ("# 数学", "#### 数学")])
         if "TOC Detection Prompt" in system_prompt:
             return json.dumps({"toc_start_line": 3, "main_text_start_line": 8}, ensure_ascii=False)
         if "Content Cleaner Prompt" in system_prompt:
@@ -299,7 +299,7 @@ class SuccessfulMockProvider:
 
     def chat(self, system_prompt: str, user_payload: str, timeout_seconds: int = 120, response_format: dict | None = None) -> str:
         if "Heading Rules Prompt" in system_prompt:
-            return _batch_processor_source([("# 第一章 数列 …… 1", "# 第一章 数列")])
+            return _batch_processor_source([("# 第一章 数列 …… 1", "# 第一章 数列"), ("# 数学", "#### 数学")])
         if "TOC Detection Prompt" in system_prompt:
             return json.dumps({"toc_start_line": self.toc_start, "main_text_start_line": self.main_text_start}, ensure_ascii=False)
         if "Content Cleaner Prompt" in system_prompt:
@@ -371,7 +371,7 @@ def test_learning_strips_only_toc(tmp_path):
 
     candidate_text = (work_dir / "candidate.md").read_text(encoding="utf-8")
     # Title heading before TOC must be kept
-    assert "# 数学" in candidate_text
+    assert "#### 数学" in candidate_text
     # TOC must be stripped (lines 3 to 7)
     assert "# 目录" not in candidate_text
     assert "1.1 数列的概念 …… 2" not in candidate_text
@@ -407,6 +407,7 @@ def test_learning_stage4_uses_python_processor_not_json_rules(tmp_path):
         "Preservation details blocks: 1 -> 1",
         "Preservation math delimiters: 2 -> 2",
         "Preservation table-like lines: 3 -> 3",
+        "Final heading audit: all H1-H3 headings verified against TOC",
     ]
 
 
@@ -620,7 +621,7 @@ def test_learning_fallback_when_toc_missing(tmp_path):
 
     candidate_text = (work_dir / "candidate.md").read_text(encoding="utf-8")
     # Fallback: keep entire document intact
-    assert "# 数学" in candidate_text
+    assert "#### 数学" in candidate_text
     assert "# 目录" in candidate_text
 
 
@@ -640,7 +641,7 @@ def test_learning_fallback_when_boundaries_invalid(tmp_path):
 
     candidate_text = (work_dir / "candidate.md").read_text(encoding="utf-8")
     # Fallback: keep entire document intact
-    assert "# 数学" in candidate_text
+    assert "#### 数学" in candidate_text
     assert "# 目录" in candidate_text
 
 
@@ -832,7 +833,7 @@ def test_apply_approved_program_does_not_enrich_headings(tmp_path):
 
 def test_apply_approved_program_strips_toc_conditionally(tmp_path):
     # original markdown with a TOC
-    original_markdown = "# 数学\n\n# 目录\n\n# 第一章 数列 …… 1\n\n# 第一章 数列\n\n正文\n"
+    original_markdown = "#### 数学\n\n# 目录\n\n# 第一章 数列 …… 1\n\n# 第一章 数列\n\n正文\n"
     markdown = tmp_path / "book.md"
     markdown.write_text(original_markdown, encoding="utf-8")
 
@@ -843,7 +844,7 @@ def test_apply_approved_program_strips_toc_conditionally(tmp_path):
 
     # For save_approved_program, we need a candidate.
     # We strip the TOC manually for the candidate to mimic provider learning.
-    candidate_markdown = "# 数学\n\n# 第一章 数列\n\n正文\n"
+    candidate_markdown = "#### 数学\n\n# 第一章 数列\n\n正文\n"
     candidate_path = tmp_path / "candidate.md"
     candidate_path.write_text(candidate_markdown, encoding="utf-8")
 
@@ -864,20 +865,21 @@ def test_apply_approved_program_strips_toc_conditionally(tmp_path):
     assert metadata["toc_signature"] is True
 
     # Now apply the approved program to a fresh target (which has a TOC)
-    target_markdown = "# 数学\n\n# 目录\n\n# 第一章 数列 …… 1\n\n# 第一章 数列\n\n正文\n"
+    target_markdown = "#### 数学\n\n# 目录\n\n# 第一章 数列 …… 1\n\n# 第一章 数列\n\n正文\n"
     target_path = tmp_path / "target.md"
     target_path.write_text(target_markdown, encoding="utf-8")
 
     applied = core.apply_approved_program(program_dir, target_path)
     candidate_text = applied.candidate_path.read_text(encoding="utf-8")
-    assert "# 数学" in candidate_text
-    assert "# 第一章 数列 …… 1" in candidate_text
-    assert "# 目录" in candidate_text
+    assert "#### 数学" in candidate_text
+    assert "# 第一章 数列" in candidate_text
+    assert "# 目录" not in candidate_text
+    assert "…… 1" not in candidate_text
 
 
 def test_run_candidate_from_artifacts_applies_title_rewrite_map(tmp_path):
     markdown = tmp_path / "book.md"
-    markdown.write_text("# 第一章 数列\n\n## ϰο4\n", encoding="utf-8")
+    markdown.write_text("# 目录\n\n# 第一章 数列 …… 1\n\n# 第一章 数列\n\n## ϰο4\n", encoding="utf-8")
     heading_script = tmp_path / "heading_processor.py"
     content_script = tmp_path / "content_processor.py"
     title_map = tmp_path / "title_rewrite_map.py"
