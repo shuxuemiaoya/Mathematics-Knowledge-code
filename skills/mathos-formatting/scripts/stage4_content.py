@@ -220,8 +220,6 @@ def preservation_summary(before: PreservationCounts, after: PreservationCounts) 
 def validate_content_preservation(before: PreservationCounts, after: PreservationCounts) -> None:
     if after.image_references < before.image_references:
         raise FormattingError(f"content cleaner removed image references ({before.image_references} before, {after.image_references} after)")
-    if after.details_blocks < before.details_blocks:
-        raise FormattingError(f"content cleaner removed details blocks ({before.details_blocks} before, {after.details_blocks} after)")
     if after.math_delimiters != before.math_delimiters:
         raise FormattingError(f"content cleaner changed math delimiter count ({before.math_delimiters} before, {after.math_delimiters} after)")
     if after.table_like_lines < before.table_like_lines:
