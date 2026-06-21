@@ -21,5 +21,14 @@ Rules:
 - Non-TOC H4-H6 headings are valid and must not be reported as errors merely because they are absent from the TOC.
 - Reject invented TOC entries, hierarchy changes, reordered headings, or OCR corrections that change TOC meaning.
 - Generic headings must not gain parent or chapter context.
-- Set `valid` to false and add a precise error for every violation.
+- Match headings using the same conservative, meaning-preserving OCR equivalence used by Stage 3.
+- Circled digits and the same Arabic digit are equivalent; for example, `③` and `3` are equivalent.
+- Numeric value must remain identical; for example, `⑨` and `3` are not equivalent.
+- Full-width or half-width punctuation and insignificant spacing differences are equivalent only when title meaning, source order, and hierarchy are unchanged.
+- Preserve the body heading text; validation does not require rewriting an equivalent OCR form to the TOC spelling.
+- Set `valid` to false and return at most 20 unique errors that represent genuine violations.
+- Do not repeat an error string, even when the same violation pattern occurs on several headings.
+- The `errors` array may contain only genuine violations. Never include an allowed equivalence, a non-error explanation, or any sentence saying that something is not an error.
+- Before responding, remove every allowed equivalence from `errors`. If no genuine violations remain, return `valid: true` and `errors: []`.
+- `valid: false` requires at least one genuine violation in `errors`; `valid: true` requires `errors: []`.
 - Do not return Markdown fences or text outside the JSON object.

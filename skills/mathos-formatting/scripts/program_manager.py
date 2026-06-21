@@ -18,8 +18,8 @@ from mathos_common import (
     validate_title_rewrite_source,
     _sha256_text,
 )
-from stage1_heading import apply_heading_rules, validate_heading_rules, audit_final_headings
-from stage4_content import (
+from legacy_heading_rules import apply_heading_rules, validate_heading_rules, audit_final_headings
+from step6_content_processing import (
     content_preservation_counts,
     preservation_summary,
     run_content_plugin_protecting_headings,
@@ -27,7 +27,8 @@ from stage4_content import (
     validate_content_preservation,
     validate_content_rules,
 )
-from stage5_optimize import apply_title_rewrite_map, write_review_report
+from legacy_title_map import apply_title_rewrite_map
+from reporting import write_review_report
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_SCRIPT_DIR) not in sys.path:
@@ -173,7 +174,18 @@ def save_approved_program(
         raise FormattingError(f"approved plugin already exists: {plugin_id}")
     program_dir.mkdir(parents=True)
     _copy_validated_batch_script(heading_script_path, program_dir / "heading_processor.py")
-    _copy_validated_batch_script(content_script_path, program_dir / "content_processor.py")
+
+    shared_script_path = approved_root / "content_processor.py"
+    is_shared = False
+    if shared_script_path.exists():
+        try:
+            if shared_script_path.read_bytes() == content_script_path.read_bytes():
+                is_shared = True
+        except Exception:
+            pass
+    if not is_shared:
+        _copy_validated_batch_script(content_script_path, program_dir / "content_processor.py")
+
     if title_rewrite_map_path is not None:
         _copy_validated_title_map(title_rewrite_map_path, program_dir / "title_rewrite_map.py")
 
@@ -226,6 +238,10 @@ def _apply_python_program(program_dir: Path, target_path: Path) -> ApprovedApply
     
     heading_script = program_dir / "heading_processor.py"
     content_script = program_dir / "content_processor.py"
+    if not content_script.exists():
+        shared_script = program_dir.parent / "content_processor.py"
+        if shared_script.exists():
+            content_script = shared_script
     title_map_script = program_dir / "title_rewrite_map.py"
     
     heading_summary = []
@@ -241,8 +257,8 @@ def _apply_python_program(program_dir: Path, target_path: Path) -> ApprovedApply
     # 3. Run content_processor.py if it exists
     if content_script.exists():
         before_content = markdown
-        cleaned = run_batch_processor_in_sandbox(content_script, markdown, candidate_path.parent, "approved-stage4")
-        validate_candidate_not_too_short(before_content, cleaned, "approved-stage4")
+        cleaned = run_batch_processor_in_sandbox(content_script, markdown, candidate_path.parent, "approved-step6")
+        validate_candidate_not_too_short(before_content, cleaned, "approved-step6")
         summary = _plugin_summary(before_content, cleaned, "Python content processor applied")
         markdown = cleaned
     else:
@@ -305,7 +321,11 @@ def _apply_legacy_program(program_dir: Path, target_path: Path) -> ApprovedApply
 
 
 def apply_approved_program(program_dir: Path, target_path: Path) -> ApprovedApplyResult:
-    if (program_dir / "heading_processor.py").exists() or (program_dir / "content_processor.py").exists():
+    if (
+        (program_dir / "heading_processor.py").exists()
+        or (program_dir / "content_processor.py").exists()
+        or (program_dir.parent / "content_processor.py").exists()
+    ):
         return _apply_python_program(program_dir, target_path)
     return _apply_legacy_program(program_dir, target_path)
 
@@ -348,18 +368,18 @@ def run_candidate_from_artifacts(
         after_toc = lines[toc_block.end_line:]
         stage1 = "".join(before_toc + after_toc)
         
-    stage4 = run_batch_processor_in_sandbox(content_script_path, stage1, candidate_path.parent, "candidate-stage4")
-    validate_candidate_not_too_short(stage1, stage4, "candidate-stage4")
-    summary = _plugin_summary(stage1, stage4, "Python content processor applied")
+    stage2 = run_batch_processor_in_sandbox(content_script_path, stage1, candidate_path.parent, "candidate-step6")
+    validate_candidate_not_too_short(stage1, stage2, "candidate-step6")
+    summary = _plugin_summary(stage1, stage2, "Python content processor applied")
     if title_rewrite_map_path is not None:
         mapping = validate_title_rewrite_source(title_rewrite_map_path.read_text(encoding="utf-8"))
-        stage4 = apply_title_rewrite_map(stage4, mapping)
+        stage2 = apply_title_rewrite_map(stage2, mapping)
         
     # Run final heading audit
-    final_audit = audit_final_headings(original_text, stage4)
+    final_audit = audit_final_headings(original_text, stage2)
     heading_summary = ["heading_processor.py"] + final_audit
     
-    candidate_path.write_text(stage4, encoding="utf-8")
+    candidate_path.write_text(stage2, encoding="utf-8")
     report_path = candidate_path.parent / f"{markdown_path.stem}.candidate-report.md"
     write_review_report(
         original_path=markdown_path,

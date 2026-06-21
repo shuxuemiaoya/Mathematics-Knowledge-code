@@ -40,6 +40,7 @@ Run commands from `C:\Mathematics-Knowledge\Mathematics-Knowledge-code`.
 | Task | Command |
 | --- | --- |
 | CLI help | `python skills\mathos-formatting\scripts\mathos_formatting.py --help` |
+| Fully automated run | `python skills\mathos-formatting\scripts\mathos_formatting.py run "<source.md>" --env ..\.env` |
 | Inspect only | `python skills\mathos-formatting\scripts\mathos_formatting.py inspect "<source.md>"` |
 | Learn Python artifacts | `python skills\mathos-formatting\scripts\mathos_formatting.py learn-from-provider "<source.md>" --env ..\.env` |
 | Learn into explicit work dir | `python skills\mathos-formatting\scripts\mathos_formatting.py learn-from-provider "<source.md>" --env ..\.env --work-dir "<work-dir>" --timeout-seconds 120 --h1-index 0` |
@@ -51,20 +52,34 @@ Run commands from `C:\Mathematics-Knowledge\Mathematics-Knowledge-code`.
 
 ## Workflow SOP
 
-1. Inspect unknown source families before formatting.
-2. Use `learn-from-provider` for new or changed families.
-3. Use `candidate-from-artifacts` after editing generated Python artifacts.
-4. Run the self-check loop on `candidate.md` and the report. Manual review is not an approval gate; the skill self-check is.
-5. Save a reusable program only after the candidate passes self-check.
-6. Ask separately before replacing the original Markdown with the candidate. Keep an audit backup such as `original-before-formatting.md` when replacement is approved.
-7. Run segmentation only after the approved candidate has explicitly replaced the source.
+1. Prefer `run` for ordinary single-file formatting. It executes provider learning, conservative recovery, deterministic self-checking, and final judgment in one process.
+2. Read only `<work-dir>\result-summary.json` after `run` completes.
+3. When its status is `failed`, read only the path in `error_artifact`; do not load all intermediate artifacts into the agent context.
+4. Use `learn-from-provider` directly only for development or focused diagnosis.
+5. Use `candidate-from-artifacts` after editing generated Python artifacts.
+6. Save a reusable program only when `result-summary.json` has `safe_to_approve: true`.
+7. Ask separately before replacing the original Markdown with the candidate. Keep an audit backup such as `original-before-formatting.md` when replacement is approved.
+8. Run segmentation only after the approved candidate has explicitly replaced the source.
 
 ## Provider Stages
 
 1. **Stage 1 TOC Extraction**: DeepSeek returns unchanged numbered lines from the first-20-page sample. The runtime validates one complete contiguous span and saves those source lines as immutable `toc.md`.
-2. **Stage 1 Heading Processor**: The runtime combines `toc.md` with all unprotected body headings in `toc_and_headings.md`; DeepSeek returns `heading_processor.py`, which runs only in a temporary sandbox.
+2. **Stage 1 Heading Processor**: The runtime combines `toc.md` with all unprotected body headings in `toc_and_headings.md`. It sends that exact payload to DeepSeek twice: the first call returns `heading_processor.py`, which runs only in a temporary sandbox; the independent second call returns the explanatory `heading_expected_result.md`.
 3. **Stage 1 Removal And Validation**: The runtime deletes the original recorded TOC line interval, builds `heading_check_input.md`, and requires passing DeepSeek JSON before continuing.
 4. **Stage 2 Content Processor**: DeepSeek returns `content_processor.py`, which runs against the validated, TOC-free candidate. Later stages may not modify headings.
+
+## Runtime Module Layout
+
+`scripts\learning_pipeline.py` is orchestration only. The current workflow has one implementation module per step:
+
+1. `step1_toc_extraction.py` - first-20-page extraction, provider call, verbatim TOC validation, and `toc.md`.
+2. `step2_heading_extraction.py` - protected heading extraction and `toc_and_headings.md`.
+3. `step3_heading_processing.py` - heading processor generation, expected-result generation, sandbox execution, and invariant checks.
+4. `step4_toc_removal.py` - deletion by the original validated TOC interval.
+5. `step5_heading_validation.py` - final heading payload, provider check, and JSON validation.
+6. `step6_content_processing.py` - Stage 2 content generation, runtime protection, execution, and preservation checks.
+
+Compatibility-only behavior is isolated under `legacy_heading_rules.py`, `legacy_title_map.py`, and `legacy_toc_helpers.py`. Shared report generation lives in `reporting.py`.
 
 ## Input And Output Contract
 
@@ -73,12 +88,15 @@ Inputs:
 - Source path exists, is a file, ends in `.md`, and is UTF-8 Markdown.
 - Provider learning reads secrets from `.env`; never print or persist secret values.
 - Stage 1 heading and Stage 2 content artifacts are Python batch scripts.
+- `heading_expected_result.md` is a validated explanatory artifact. It records the modified TOC, change details, and expected effect, but does not drive candidate mutation or replace Step 5 validation.
 - Stage 1 TOC output is verbatim Markdown; Stage 1 validation output is JSON.
 
 Outputs:
 
 - `inspect`, `learn-from-provider`, `candidate-from-artifacts`, and `apply-approved` do not modify the original source.
 - Provider learning writes `<work-dir>\candidate.md`, reports, generated artifacts, and `run-state.json`.
+- Automated `run` additionally writes `<work-dir>\result-summary.json` and `automation-checkpoint.json`.
+- `result-summary.json` is the only normal agent-readable artifact. It contains final status, self-check booleans, candidate/report paths, recovery status, and either zero or one `error_artifact`.
 - Artifact/application runs write a fresh candidate under the source directory's `mathos-formatting` area.
 - Approved programs are written under `skills\mathos-formatting\plugins\approved\<program-id>\`.
 - CLI JSON includes status, candidate path, report path, warnings, `self_check_required`, and `next_actions`.
@@ -94,6 +112,7 @@ Provider learning work directories may include:
 - `heading_processor_prompt.md`
 - `heading_processor_response.py`
 - `heading_processor.py`
+- `heading_expected_result.md`
 - `stage1_heading_report.md`
 - `toc_detection_prompt.md`
 - `heading_check_prompt.md`
@@ -107,6 +126,16 @@ Provider learning work directories may include:
 - `candidate.md`
 - `candidate-report.md`
 - `run-state.json`
+- `result-summary.json`
+- `automation-checkpoint.json`
+
+## Automated Run Contract
+
+`run` leaves the source unchanged and returns `0` only when deterministic self-checking passes. It returns nonzero after writing a failure digest when any stage or self-check fails.
+
+Recovery is guarded by a SHA-256 execution fingerprint covering the source bytes, heading and content prompts, provider identity, timeout, and selected H1 sample. A matching fingerprint may reuse the generated `heading_processor.py` and `content_processor.py`. A mismatch removes those reusable processors from the selected work directory before restarting the provider pipeline.
+
+On success, `result-summary.json` contains `status: passed`, `safe_to_approve: true`, and no error artifact. On failure it contains `status: failed`, `failed_stage`, `safe_to_approve: false`, and exactly one `error_artifact`. Codex should inspect that one artifact and no others unless a human explicitly requests deeper diagnosis.
 
 Approved Python program directories contain:
 
@@ -179,6 +208,7 @@ Stop and keep artifacts when:
 - Provider output is invalid Python for the heading or content processor.
 - TOC output is modified, incomplete, disjoint, ambiguous, or includes unrelated text.
 - Heading validation JSON is invalid, false, reports errors, or has a count mismatch.
+- Heading validation errors contain self-negating text such as `not an error` or `不是错误`; treat the provider response as internally contradictory and fail closed.
 - Python artifact is missing required imports or functions.
 - Python artifact contains dangerous imports or calls.
 - Stage 1 validation rejects TOC hierarchy or non-TOC H1-H3 headings.

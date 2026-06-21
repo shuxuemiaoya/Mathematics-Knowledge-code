@@ -1,0 +1,21 @@
+{
+  "plugin_id": "jie-ti-jue-xing-deng-cheng-v1",
+  "version": "1.0.0",
+  "artifact_mode": "python",
+  "approval_timestamp": "2026-06-21T10:50:15.611918+00:00",
+  "source_file_family_evidence": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\test\\2025解题觉醒邓诚数学.md",
+  "heading_signature": {
+    "4": 125,
+    "1": 5,
+    "2": 28,
+    "3": 167
+  },
+  "toc_signature": true,
+  "h1_sample_hash": "b2a2838c7711cdf51ea555540fa24b7c41c5ef03774404bfc7fc6618b95aabbf",
+  "operations_summary": [
+    "self-check passed",
+    "self-check passed"
+  ],
+  "original_approving_file_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\test\\2025解题觉醒邓诚数学.md",
+  "allowed_scope": "self-check-only"
+}

@@ -14,10 +14,15 @@ if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
 from mathos_common import *
-from stage1_heading import *
-from stage1_workflow import *
-from stage2_3_toc import *
-from stage4_content import *
-from stage5_optimize import *
+from legacy_heading_rules import *
+from legacy_title_map import *
+from legacy_toc_helpers import *
+from reporting import *
+from step1_toc_extraction import *
+from step2_heading_extraction import *
+from step3_heading_processing import *
+from step4_toc_removal import *
+from step5_heading_validation import *
+from step6_content_processing import *
 from program_manager import *
 from learning_pipeline import *

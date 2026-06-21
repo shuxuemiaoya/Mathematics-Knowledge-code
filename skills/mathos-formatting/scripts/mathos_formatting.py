@@ -14,6 +14,7 @@ if str(SCRIPT_DIR) not in sys.path:
 
 import mathos_formatting_core as core
 import mathos_provider as provider
+from automation_runner import run_automated_formatting
 
 
 def _print_json(payload: dict) -> None:
@@ -203,6 +204,24 @@ def command_learn_from_provider(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_run(args: argparse.Namespace) -> int:
+    settings = provider.load_provider_settings(Path(args.env))
+    provider_client = provider.DeepSeekProviderClient(settings)
+    heading_prompt = (SCRIPT_DIR.parent / "agents" / "heading_rules_prompt.md").read_text(encoding="utf-8")
+    content_prompt = (SCRIPT_DIR.parent / "agents" / "content_cleaner_prompt.md").read_text(encoding="utf-8")
+    result = run_automated_formatting(
+        markdown_path=Path(args.markdown),
+        provider_client=provider_client,
+        heading_prompt=heading_prompt,
+        content_prompt=content_prompt,
+        work_dir=Path(args.work_dir) if args.work_dir else None,
+        timeout_seconds=args.timeout_seconds,
+        h1_index=args.h1_index,
+    )
+    _print_json(result.digest)
+    return result.exit_code
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="MathOS adaptive Markdown formatting operator")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -251,6 +270,17 @@ def build_parser() -> argparse.ArgumentParser:
     learn_parser.add_argument("--timeout-seconds", type=int, default=120)
     learn_parser.add_argument("--h1-index", type=int, default=0)
     learn_parser.set_defaults(func=command_learn_from_provider)
+
+    run_parser = subparsers.add_parser(
+        "run",
+        help="Run provider formatting, recovery, self-checking, and final judgment",
+    )
+    run_parser.add_argument("markdown")
+    run_parser.add_argument("--env", required=True)
+    run_parser.add_argument("--work-dir")
+    run_parser.add_argument("--timeout-seconds", type=int, default=120)
+    run_parser.add_argument("--h1-index", type=int, default=0)
+    run_parser.set_defaults(func=command_run)
     return parser
 
 

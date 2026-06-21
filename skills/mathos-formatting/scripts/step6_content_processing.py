@@ -5,9 +5,12 @@ from pathlib import Path
 from dataclasses import dataclass
 from types import ModuleType
 from mathos_common import (
-    PreservationCounts, PluginResult, FormattingError,
+    PreservationCounts, PluginResult, FormattingError, MarkdownStructure,
     HEADING_RE, IMAGE_REFERENCE_RE, DETAILS_OPEN_RE,
-    _content_protected_line_mask, _is_table_line, extract_structure
+    _content_protected_line_mask, _is_table_line, _write_text_artifact,
+    extract_structure, parse_python_source_artifact,
+    run_batch_processor_in_sandbox, validate_batch_processor_source,
+    validate_candidate_not_too_short,
 )
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
@@ -27,6 +30,30 @@ class ContentRule:
     replacement_mode: str
     search: str
     enabled: bool
+
+
+@dataclass(frozen=True)
+class ContentProcessingResult:
+    markdown: str
+    summary: list[str]
+    script_path: Path
+
+
+def extract_h1_sample(markdown: str, structure: MarkdownStructure, h1_index: int = 0) -> str:
+    from mathos_common import _chapter_context_from_heading_text
+
+    toc_end = structure.toc_block.end_line if structure.toc_block else 0
+    chapter_sections = [
+        section
+        for section in structure.h1_sections
+        if section.start_line > toc_end and _chapter_context_from_heading_text(section.heading) is not None
+    ]
+    if chapter_sections and h1_index < len(chapter_sections):
+        return chapter_sections[h1_index].text.strip() + "\n"
+    post_toc_sections = [section for section in structure.h1_sections if section.start_line > toc_end]
+    if h1_index < 0 or h1_index >= len(post_toc_sections):
+        raise FormattingError("H1 section not found")
+    return post_toc_sections[h1_index].text.strip() + "\n"
 
 CONTENT_REQUIRED_KEYS = {
     "plugin_id", "plugin_version", "schema_version", "stage", "description",
@@ -338,3 +365,55 @@ def run_content_rules_protecting_headings(payload: dict, markdown: str) -> Plugi
         summary=result.summary + preservation_summary(before_counts, after_counts),
         warnings=result.warnings,
     )
+
+
+def run_content_processing(
+    markdown_path: Path,
+    markdown: str,
+    content_prompt: str,
+    provider_client: object,
+    work_dir: Path,
+    candidate_path: Path,
+    artifacts: dict[str, Path],
+    timeout_seconds: int,
+    h1_index: int,
+) -> ContentProcessingResult:
+    structure = extract_structure(markdown, str(markdown_path))
+    h1_sample = extract_h1_sample(markdown, structure, h1_index=h1_index)
+    artifacts["h1_sample"] = _write_text_artifact(work_dir / "h1_sample.md", h1_sample)
+    script_path = work_dir / "content_processor.py"
+    if script_path.exists():
+        source = script_path.read_text(encoding="utf-8")
+        validate_batch_processor_source(source)
+        artifacts["content_script"] = script_path
+    else:
+        artifacts["content_prompt"] = _write_text_artifact(
+            work_dir / "content_cleaner_prompt.md", content_prompt
+        )
+        response = provider_client.chat(
+            content_prompt, h1_sample, timeout_seconds=timeout_seconds, response_format=None
+        )
+        artifacts["content_response"] = _write_text_artifact(
+            work_dir / "content_processor_response.py", response
+        )
+        source = parse_python_source_artifact(response)
+        validate_batch_processor_source(source)
+        artifacts["content_script"] = _write_text_artifact(script_path, source)
+    try:
+        protected, tokens = protect_stage2_guarded_content(markdown)
+        processed = run_batch_processor_in_sandbox(script_path, protected, work_dir, "step6-content-processing")
+        cleaned = restore_stage2_guarded_content(processed, tokens)
+        validate_candidate_not_too_short(markdown, cleaned, "step6-content-processing")
+        heading_summary = validate_stage2_heading_preservation(markdown, cleaned)
+        before_counts = content_preservation_counts(markdown)
+        after_counts = content_preservation_counts(cleaned)
+        validate_content_preservation(before_counts, after_counts)
+    except FormattingError:
+        candidate_path.write_text(markdown, encoding="utf-8")
+        raise
+    summary = [
+        "content_processor.py applied",
+        *heading_summary,
+        *preservation_summary(before_counts, after_counts),
+    ]
+    return ContentProcessingResult(cleaned, summary, script_path)

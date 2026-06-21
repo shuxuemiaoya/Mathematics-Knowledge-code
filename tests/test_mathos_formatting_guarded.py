@@ -20,6 +20,33 @@ sys.modules["mathos_formatting_core"] = core
 core_spec.loader.exec_module(core)
 
 
+def test_current_workflow_uses_one_clearly_named_module_per_step():
+    scripts = SKILL_ROOT / "scripts"
+    expected = {
+        "step1_toc_extraction.py",
+        "step2_heading_extraction.py",
+        "step3_heading_processing.py",
+        "step4_toc_removal.py",
+        "step5_heading_validation.py",
+        "step6_content_processing.py",
+    }
+    legacy_stage_names = {
+        "stage1_workflow.py",
+        "stage2_3_toc.py",
+        "stage4_content.py",
+        "stage5_optimize.py",
+    }
+
+    assert expected <= {path.name for path in scripts.glob("*.py")}
+    assert legacy_stage_names.isdisjoint(path.name for path in scripts.glob("*.py"))
+
+    orchestrator = (scripts / "learning_pipeline.py").read_text(encoding="utf-8")
+    for module_name in sorted(expected):
+        assert f"from {module_name[:-3]} import" in orchestrator
+    assert "stage4-apply" not in orchestrator
+    assert "stage4-content" not in orchestrator
+
+
 SAMPLE_MARKDOWN = """# 数学
 
 # 目录
@@ -70,6 +97,22 @@ STAGE1_HEADING_MARKDOWN = """# 目录
 # Chapter 5 Derivatives
 
 #### Review Questions
+"""
+
+
+HEADING_EXPECTED_RESULT = """# 修改后的目录
+
+- `# 第一章 数列`
+- `## 1.1 数列的概念`
+
+# 标题修改明细
+
+- `# 第一章 数列` -> `# 第一章 数列`
+- `# 练习` -> `#### 练习`
+
+# 预期效果
+
+- TOC 标题保持 H1-H3，非目录标题降级为 H4-H6。
 """
 
 
@@ -168,6 +211,103 @@ if __name__ == "__main__":
 '''
 
 
+class HeadingDualOutputProvider:
+    def __init__(self, expected_result=HEADING_EXPECTED_RESULT):
+        self.expected_result = expected_result
+        self.calls = []
+
+    def chat(self, system_prompt, user_payload, timeout_seconds=120, response_format=None):
+        self.calls.append((system_prompt, user_payload, response_format))
+        if "Heading Expected Result Prompt" in system_prompt:
+            return self.expected_result
+        return _batch_processor_source()
+
+
+def test_validate_heading_expected_result_requires_safe_three_section_markdown():
+    assert core.validate_heading_expected_result(HEADING_EXPECTED_RESULT) == HEADING_EXPECTED_RESULT
+
+    invalid_responses = [
+        "",
+        "# 修改后的目录\n\n# 预期效果\n",
+        "# 标题修改明细\n\n# 修改后的目录\n\n# 预期效果\n",
+        "```markdown\n# 修改后的目录\n```\n",
+        '{"modified_toc": []}',
+        "import os\n\ndef main():\n    pass\n",
+    ]
+    for response in invalid_responses:
+        with pytest.raises(core.FormattingError, match="heading expected result"):
+            core.validate_heading_expected_result(response)
+
+
+def test_step3_writes_expected_result_from_same_payload_without_extra_work_artifacts(tmp_path):
+    provider = HeadingDualOutputProvider()
+    work_dir = tmp_path / "work"
+    candidate = work_dir / "candidate.md"
+    source = tmp_path / "book.md"
+    original = "# 第一章 数列\n\n# 练习\n"
+    source.write_text(original, encoding="utf-8")
+    artifacts = {}
+
+    core.run_heading_processing(
+        source,
+        original,
+        "SAME TOC AND HEADINGS PAYLOAD",
+        "# Heading Rules Prompt",
+        provider,
+        work_dir,
+        candidate,
+        artifacts,
+        120,
+    )
+
+    assert len(provider.calls) == 2
+    assert provider.calls[0][1] == provider.calls[1][1] == "SAME TOC AND HEADINGS PAYLOAD"
+    expected_path = work_dir / "heading_expected_result.md"
+    assert expected_path.read_text(encoding="utf-8") == HEADING_EXPECTED_RESULT
+    assert artifacts["heading_expected_result"] == expected_path
+    assert not (work_dir / "heading_expected_result_prompt.md").exists()
+    assert not (work_dir / "heading_expected_result_response.md").exists()
+
+
+def test_step3_reuses_expected_result_and_regenerates_only_when_missing(tmp_path):
+    work_dir = tmp_path / "work"
+    work_dir.mkdir()
+    (work_dir / "heading_processor.py").write_text(_batch_processor_source(), encoding="utf-8")
+    (work_dir / "heading_expected_result.md").write_text(HEADING_EXPECTED_RESULT, encoding="utf-8")
+    source = tmp_path / "book.md"
+    source.write_text("# 第一章 数列\n", encoding="utf-8")
+
+    reuse_provider = HeadingDualOutputProvider()
+    core.run_heading_processing(
+        source,
+        "# 第一章 数列\n",
+        "PAYLOAD",
+        "# Heading Rules Prompt",
+        reuse_provider,
+        work_dir,
+        work_dir / "candidate.md",
+        {},
+        120,
+    )
+    assert reuse_provider.calls == []
+
+    (work_dir / "heading_expected_result.md").unlink()
+    regenerate_provider = HeadingDualOutputProvider()
+    core.run_heading_processing(
+        source,
+        "# 第一章 数列\n",
+        "PAYLOAD",
+        "# Heading Rules Prompt",
+        regenerate_provider,
+        work_dir,
+        work_dir / "candidate.md",
+        {},
+        120,
+    )
+    assert len(regenerate_provider.calls) == 1
+    assert "Heading Expected Result Prompt" in regenerate_provider.calls[0][0]
+
+
 def _title_rewrite_source(mapping=None):
     mapping = mapping or {}
     return "TITLE_REWRITE_MAP: dict[str, str] = " + repr(mapping) + "\n"
@@ -262,6 +402,8 @@ class DestructiveProvider:
             return "3: # 目录\n4: \n5: # 第一章 数列 …… 1\n6: 1.1 数列的概念 …… 2\n"
         if "Heading Rules Prompt" in system_prompt:
             return _batch_processor_source([("# 第一章 数列 …… 1", "# 第一章 数列"), ("# 数学", "#### 数学")])
+        if "Heading Expected Result Prompt" in system_prompt:
+            return HEADING_EXPECTED_RESULT
         if "Heading Validation Prompt" in system_prompt:
             return json.dumps({"valid": True, "checked_heading_count": 3, "errors": []})
         if "Content Cleaner Prompt" in system_prompt:
@@ -304,6 +446,8 @@ class SuccessfulMockProvider:
             return "3: # 目录\n4: \n5: # 第一章 数列 …… 1\n6: 1.1 数列的概念 …… 2\n"
         if "Heading Rules Prompt" in system_prompt:
             return _batch_processor_source([("# 第一章 数列 …… 1", "# 第一章 数列"), ("# 数学", "#### 数学")])
+        if "Heading Expected Result Prompt" in system_prompt:
+            return HEADING_EXPECTED_RESULT
         if "Heading Validation Prompt" in system_prompt:
             count = sum(1 for line in user_payload.splitlines() if re.match(r"^\d+: #{1,6}\s+", line))
             return json.dumps({"valid": True, "checked_heading_count": count, "errors": []})
@@ -362,7 +506,7 @@ def test_learning_fails_closed_when_stage1_demotes_body_chapter(tmp_path):
     assert (work_dir / "stage1_heading_report.md").exists()
     state = json.loads((work_dir / "run-state.json").read_text(encoding="utf-8"))
     assert state["status"] == "failed"
-    assert state["stage"] == "heading-validation"
+    assert state["stage"] == "step5-heading-validation"
 
 
 def test_learning_strips_only_toc(tmp_path):
@@ -637,7 +781,7 @@ def test_learning_fallback_when_toc_missing(tmp_path):
             work_dir=work_dir,
         )
     state = json.loads((work_dir / "run-state.json").read_text(encoding="utf-8"))
-    assert state["stage"] == "toc-extraction"
+    assert state["stage"] == "step1-toc-extraction"
 
 
 def test_learning_fallback_when_boundaries_invalid(tmp_path):
@@ -1085,6 +1229,76 @@ def test_validate_verbatim_toc_response_keeps_media_in_span_but_not_toc_markdown
     assert toc.markdown == "# 目录\n# 第一章 有理数\n1.1 正数和负数 2\n"
 
 
+def test_validate_verbatim_toc_response_accepts_wrapped_entries_and_repeated_headers():
+    sample = (
+        "1: # 目录\n2: # CONTENTS\n3: 考点 3 导数的基础（三）——\n"
+        "4: \n5: 导数的几何意义 026\n6: # 目录\n7: # CONTENTS\n"
+        "8: 新情境索引\n9: P154 T12\n10: \n11: # 正文\n"
+    )
+    response = "\n".join(sample.splitlines()[:9]) + "\n"
+
+    toc = core.validate_verbatim_toc_response(sample, response)
+
+    assert (toc.start_line, toc.end_line) == (1, 9)
+    assert toc.markdown == (
+        "# 目录\n# CONTENTS\n考点 3 导数的基础（三）——\n"
+        "导数的几何意义 026\n# 目录\n# CONTENTS\n新情境索引\nP154 T12\n"
+    )
+
+
+def test_validate_verbatim_toc_response_accepts_entries_before_internal_header():
+    sample = (
+        "1: # 专题一\n2: # 集合与逻辑\n3: 考点 1 集合的概念 007\n"
+        "4: ![](images/toc-page.jpg)\n5: # 目录\n6: # CONTENTS\n"
+        "7: 考点 2 集合间的基本关系 008\n8: \n9: # 正文\n"
+    )
+    response = "\n".join(sample.splitlines()[:7]) + "\n"
+
+    toc = core.validate_verbatim_toc_response(sample, response)
+
+    assert (toc.start_line, toc.end_line) == (1, 7)
+    assert toc.markdown == (
+        "# 专题一\n# 集合与逻辑\n考点 1 集合的概念 007\n"
+        "# 目录\n# CONTENTS\n考点 2 集合间的基本关系 008\n"
+    )
+
+
+def test_validate_verbatim_toc_response_rejects_headerless_toc_like_span():
+    sample = "1: # 专题一\n2: 考点 1 集合的概念 007\n3: 考点 2 集合间的基本关系 008\n"
+
+    with pytest.raises(core.FormattingError, match="recognized TOC heading anchor"):
+        core.validate_verbatim_toc_response(sample, sample)
+
+
+def test_validate_verbatim_toc_response_rejects_unfinished_wrapped_entry():
+    sample = "1: # 目录\n2: 第一章 数列 1\n3: 考点 3 导数的基础（三）——\n"
+
+    with pytest.raises(core.FormattingError, match="unfinished wrapped TOC entry"):
+        core.validate_verbatim_toc_response(sample, sample)
+
+
+def test_validate_verbatim_toc_response_rejects_body_tail_without_trimming():
+    sample = (
+        "1: # 目录\n2: 第一章 数列 1\n3: \n4: # 第一章 数列\n"
+        "5: 本章学习数列的基本概念。\n"
+    )
+
+    with pytest.raises(core.FormattingError, match="unrelated body text"):
+        core.validate_verbatim_toc_response(sample, sample)
+
+
+def test_toc_detection_prompt_explains_wrapped_entries_and_body_boundary():
+    prompt = (SKILL_ROOT / "agents" / "toc_detection_prompt.md").read_text(encoding="utf-8")
+
+    assert "wrapped TOC entry" in prompt
+    assert "repeated `# 目录` or `# CONTENTS`" in prompt
+    assert "stop before the first main-text line" in prompt
+    assert "Do not return the remainder of the sample" in prompt
+    assert "Begin at the earliest TOC title or entry" in prompt
+    assert "later internal `# 目录` or `# CONTENTS` anchor" in prompt
+    assert "Do not prepend cover, preface, author, or date lines" in prompt
+
+
 @pytest.mark.parametrize(
     "response, message",
     [
@@ -1141,6 +1355,11 @@ def test_heading_check_payload_declares_local_count_and_prompt_accepts_non_toc_h
     assert "<!-- BODY HEADING COUNT: 2 -->" in payload
     assert "must not be reported as errors" in prompt
     assert "copy the declared body heading count" in prompt.lower()
+    assert "`③` and `3` are equivalent" in prompt
+    assert "`⑨` and `3` are not equivalent" in prompt
+    assert "at most 20 unique errors" in prompt
+    assert "Do not repeat an error string" in prompt
+    assert "every violation" not in prompt
 
 
 def test_validate_heading_processor_result_rejects_non_heading_and_parent_context_changes():
@@ -1176,6 +1395,62 @@ def test_validate_heading_check_response_requires_success_and_matching_count():
         )
 
 
+def test_validate_heading_check_response_rejects_duplicate_and_oversized_errors():
+    duplicate_response = json.dumps(
+        {
+            "valid": False,
+            "checked_heading_count": 2,
+            "errors": ["same violation", "same violation"],
+        }
+    )
+    with pytest.raises(core.FormattingError, match="unique"):
+        core.validate_heading_check_response(duplicate_response, expected_heading_count=2)
+
+    oversized_response = json.dumps(
+        {
+            "valid": False,
+            "checked_heading_count": 21,
+            "errors": [f"violation {index}" for index in range(21)],
+        }
+    )
+    with pytest.raises(core.FormattingError, match="at most 20"):
+        core.validate_heading_check_response(oversized_response, expected_heading_count=21)
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        "Circled digits are equivalent, so this is not an error.",
+        "圈号数字与阿拉伯数字等价，因此这不是错误。",
+    ],
+)
+def test_validate_heading_check_response_rejects_self_negating_errors(error):
+    response = json.dumps(
+        {
+            "valid": False,
+            "checked_heading_count": 1,
+            "errors": [error],
+        },
+        ensure_ascii=False,
+    )
+
+    with pytest.raises(core.FormattingError, match="internally contradictory"):
+        core.validate_heading_check_response(response, expected_heading_count=1)
+
+
+def test_validate_heading_check_response_keeps_genuine_candidate_rejections():
+    response = json.dumps(
+        {
+            "valid": False,
+            "checked_heading_count": 1,
+            "errors": ["Non-TOC heading uses H2."],
+        }
+    )
+
+    with pytest.raises(core.FormattingError, match="rejected the candidate"):
+        core.validate_heading_check_response(response, expected_heading_count=1)
+
+
 class Stage1WorkflowProvider:
     base_url = "https://fake.deepseek.local"
     model = "deepseek-test"
@@ -1191,6 +1466,9 @@ class Stage1WorkflowProvider:
         elif "Heading Rules Prompt" in system_prompt:
             stage = "heading"
             response = _batch_processor_source([("# 数学", "#### 数学")])
+        elif "Heading Expected Result Prompt" in system_prompt:
+            stage = "heading-expected-result"
+            response = HEADING_EXPECTED_RESULT
         elif "Heading Validation Prompt" in system_prompt:
             stage = "heading-check"
             errors = [] if self.heading_check_valid else ["non-TOC H1: 数学"]
@@ -1226,7 +1504,13 @@ def test_learning_uses_new_stage1_provider_order_and_artifacts(tmp_path):
         work_dir=work_dir,
     )
 
-    assert [call[0] for call in provider.calls] == ["toc", "heading", "heading-check", "content"]
+    assert [call[0] for call in provider.calls] == [
+        "toc",
+        "heading",
+        "heading-expected-result",
+        "heading-check",
+        "content",
+    ]
     assert (work_dir / "toc.md").read_text(encoding="utf-8") == (
         "# 目录\n# 第一章 数列 …… 1\n1.1 数列的概念 …… 2\n"
     )
@@ -1257,8 +1541,156 @@ def test_learning_stops_before_stage2_when_heading_check_rejects(tmp_path):
             work_dir=work_dir,
         )
 
-    assert [call[0] for call in provider.calls] == ["toc", "heading", "heading-check"]
+    assert [call[0] for call in provider.calls] == [
+        "toc",
+        "heading",
+        "heading-expected-result",
+        "heading-check",
+    ]
     assert not (work_dir / "content_processor_response.py").exists()
     state = json.loads((work_dir / "run-state.json").read_text(encoding="utf-8"))
-    assert state["stage"] == "heading-validation"
+    assert state["stage"] == "step5-heading-validation"
     assert state["status"] == "failed"
+
+
+def _load_automation_runner():
+    runner_path = SKILL_ROOT / "scripts" / "automation_runner.py"
+    spec = importlib.util.spec_from_file_location("automation_runner", runner_path)
+    runner = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    sys.modules["automation_runner"] = runner
+    spec.loader.exec_module(runner)
+    return runner
+
+
+def test_automated_run_writes_one_passing_digest_and_keeps_source_unchanged(tmp_path):
+    runner = _load_automation_runner()
+    markdown = tmp_path / "book.md"
+    markdown.write_text(SAMPLE_MARKDOWN, encoding="utf-8")
+    original_bytes = markdown.read_bytes()
+    work_dir = tmp_path / "mathos-formatting" / "book"
+
+    result = runner.run_automated_formatting(
+        markdown_path=markdown,
+        provider_client=Stage1WorkflowProvider(),
+        heading_prompt="# Heading Rules Prompt",
+        content_prompt="# Content Cleaner Prompt",
+        work_dir=work_dir,
+    )
+
+    digest = json.loads((work_dir / "result-summary.json").read_text(encoding="utf-8"))
+    assert result.exit_code == 0
+    assert digest["status"] == "passed"
+    assert digest["failed_stage"] is None
+    assert digest["error_artifact"] is None
+    assert digest["source_unchanged"] is True
+    assert digest["stage1_validated"] is True
+    assert digest["preservation_validated"] is True
+    assert digest["safe_to_approve"] is True
+    assert Path(digest["candidate_path"]).exists()
+    assert markdown.read_bytes() == original_bytes
+
+
+class InvalidTocProvider(Stage1WorkflowProvider):
+    def chat(self, system_prompt, user_payload, timeout_seconds=120, response_format=None):
+        if "TOC Verbatim Extraction Prompt" in system_prompt:
+            self.calls.append(("toc", user_payload, response_format))
+            return "not numbered TOC output"
+        return super().chat(system_prompt, user_payload, timeout_seconds, response_format)
+
+
+class InvalidHeadingExpectedResultProvider(Stage1WorkflowProvider):
+    def chat(self, system_prompt, user_payload, timeout_seconds=120, response_format=None):
+        if "Heading Expected Result Prompt" in system_prompt:
+            self.calls.append(("heading-expected-result", user_payload, response_format))
+            return "invalid expected result"
+        return super().chat(system_prompt, user_payload, timeout_seconds, response_format)
+
+
+def test_automated_run_failure_digest_routes_to_exactly_one_error_artifact(tmp_path):
+    runner = _load_automation_runner()
+    markdown = tmp_path / "book.md"
+    markdown.write_text(SAMPLE_MARKDOWN, encoding="utf-8")
+    work_dir = tmp_path / "mathos-formatting" / "book"
+
+    result = runner.run_automated_formatting(
+        markdown_path=markdown,
+        provider_client=InvalidTocProvider(),
+        heading_prompt="# Heading Rules Prompt",
+        content_prompt="# Content Cleaner Prompt",
+        work_dir=work_dir,
+    )
+
+    digest = json.loads((work_dir / "result-summary.json").read_text(encoding="utf-8"))
+    assert result.exit_code == 1
+    assert digest["status"] == "failed"
+    assert digest["failed_stage"] == "step1-toc-extraction"
+    assert Path(digest["error_artifact"]).name == "toc_detection_response.md"
+    assert digest["safe_to_approve"] is False
+    assert len(digest["errors"]) == 1
+
+
+def test_automated_run_routes_invalid_heading_expected_result_to_new_artifact(tmp_path):
+    runner = _load_automation_runner()
+    markdown = tmp_path / "book.md"
+    markdown.write_text(SAMPLE_MARKDOWN, encoding="utf-8")
+    work_dir = tmp_path / "mathos-formatting" / "book"
+
+    result = runner.run_automated_formatting(
+        markdown_path=markdown,
+        provider_client=InvalidHeadingExpectedResultProvider(),
+        heading_prompt="# Heading Rules Prompt",
+        content_prompt="# Content Cleaner Prompt",
+        work_dir=work_dir,
+    )
+
+    assert result.exit_code == 1
+    assert result.digest["failed_stage"] == "step3-heading-processing"
+    assert Path(result.digest["error_artifact"]).name == "heading_expected_result.md"
+    assert (work_dir / "heading_expected_result.md").read_text(encoding="utf-8") == (
+        "invalid expected result"
+    )
+
+
+def test_cli_exposes_fully_automated_run_command():
+    cli = SKILL_ROOT / "scripts" / "mathos_formatting.py"
+    completed = subprocess.run(
+        [sys.executable, str(cli), "run", "--help"],
+        text=True,
+        capture_output=True,
+        encoding="utf-8",
+    )
+
+    assert completed.returncode == 0
+    assert "--env" in completed.stdout
+    assert "--work-dir" in completed.stdout
+    assert "--timeout-seconds" in completed.stdout
+
+
+def test_automated_run_recovers_with_matching_fingerprint(tmp_path):
+    runner = _load_automation_runner()
+    markdown = tmp_path / "book.md"
+    markdown.write_text(SAMPLE_MARKDOWN, encoding="utf-8")
+    work_dir = tmp_path / "mathos-formatting" / "book"
+
+    first_provider = Stage1WorkflowProvider()
+    first = runner.run_automated_formatting(
+        markdown_path=markdown,
+        provider_client=first_provider,
+        heading_prompt="# Heading Rules Prompt",
+        content_prompt="# Content Cleaner Prompt",
+        work_dir=work_dir,
+    )
+    second_provider = Stage1WorkflowProvider()
+    second = runner.run_automated_formatting(
+        markdown_path=markdown,
+        provider_client=second_provider,
+        heading_prompt="# Heading Rules Prompt",
+        content_prompt="# Content Cleaner Prompt",
+        work_dir=work_dir,
+    )
+
+    assert first.exit_code == 0
+    assert second.exit_code == 0
+    assert second.digest["resumed"] is True
+    assert [call[0] for call in second_provider.calls] == ["toc", "heading-check"]
