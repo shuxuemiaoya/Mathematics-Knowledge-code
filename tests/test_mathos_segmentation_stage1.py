@@ -78,7 +78,7 @@ def test_build_plan_uses_sandbox_folder_and_short_links(tmp_path):
     plan = seg.build_segmentation_plan(source, vault_root=vault_root, target_depth=None)
 
     assert plan.sandbox_dir == source.parent / "book"
-    assert plan.master_path == source.parent / "book" / "000_book目录.md"
+    assert plan.master_path == source
     assert [item.link_title for item in plan.segments] == [
         "1.1.1 集合的概念",
         "1.1.2 集合的基本关系",
@@ -317,8 +317,7 @@ def test_build_plan_does_not_write_content_files(tmp_path):
     plan = seg.build_segmentation_plan(source, vault_root=vault_root)
 
     assert not plan.sandbox_dir.exists()
-    assert not plan.master_path.exists()
-    assert not any(item.output_path.exists() for item in plan.segments)
+    assert plan.master_path.read_text(encoding="utf-8") == SAMPLE_MARKDOWN
 
 
 def test_render_master_directory_contains_only_directory_links(tmp_path):
@@ -328,9 +327,9 @@ def test_render_master_directory_contains_only_directory_links(tmp_path):
     source.write_text(SAMPLE_MARKDOWN, encoding="utf-8")
     plan = seg.build_segmentation_plan(source, vault_root=vault_root)
 
-    master = seg.render_master_directory(plan)
+    master = seg.render_master_directory(plan, SAMPLE_MARKDOWN)
 
-    assert master == "# 目录\n\n- [[第一章 集合与常用逻辑用语]]\n"
+    assert master == "\n\n- [[第一章 集合与常用逻辑用语]]\n"
 
 
 def test_render_master_directory_links_disambiguated_note_stems(tmp_path):
@@ -353,9 +352,10 @@ def test_render_master_directory_links_disambiguated_note_stems(tmp_path):
     plan = seg.build_segmentation_plan(source, vault_root=vault_root)
     ch1 = next(node for node in plan.nodes if node.note_stem == "第一章")
 
-    text = seg.render_directory_note(ch1)
+    text = seg.render_directory_note(ch1, SAMPLE_MARKDOWN)
 
-    assert text == "# 目录\n\n- [[1.1 重复]]\n- [[1.1 重复 - 02]]\n"
+    assert "- [[1.1 重复]]" in text
+    assert "- [[1.1 重复 - 02]]" in text
 
 
 def test_build_segment_command_uses_resolved_paths_and_yes(tmp_path):
@@ -394,9 +394,7 @@ def test_write_segmentation_package_creates_master_and_raw_slices(tmp_path):
     first_segment = (plan.sandbox_dir / "1.1.1 集合的概念.md").read_text(encoding="utf-8")
     assert first_segment.startswith("### 1.1.1 集合的概念")
     assert "# 1.1.1 集合的概念" not in first_segment.splitlines()
-    assert plan.master_path.read_text(encoding="utf-8") == seg.render_master_directory(plan)
-    assert source.read_text(encoding="utf-8") == SAMPLE_MARKDOWN
-    assert seg.file_sha256(source) == original_hash
+    assert plan.master_path.read_text(encoding="utf-8") == seg.render_master_directory(plan, SAMPLE_MARKDOWN)
 
 
 def test_write_refuses_existing_sandbox_without_overwrite(tmp_path):
@@ -508,7 +506,8 @@ def test_main_segment_writes_package_and_records(tmp_path, monkeypatch):
     exit_code = seg.main(["segment", str(source), "--vault-root", str(vault_root), "--yes"])
 
     assert exit_code == 0
-    assert (source.parent / "book" / "000_book目录.md").exists()
+    assert source.exists()
+    assert not (source.parent / "book" / "000_book目录.md").exists()
     assert list((repo_root / "agent-memory" / "records").glob("*-segmentation-stage1-book"))
 
 
@@ -581,7 +580,7 @@ def test_build_plan_creates_layered_nodes_and_counts(tmp_path):
 
     plan = seg.build_segmentation_plan(source, vault_root=vault_root)
 
-    assert plan.master_path == source.parent / "book" / "000_book目录.md"
+    assert plan.master_path == source
     assert [node.note_stem for node in plan.top_level_nodes] == ["第六章 平面向量及其应用", "第七章 复数"]
     assert plan.counts["nodes"] == 10
     assert plan.counts["directory_nodes"] == 5
@@ -604,9 +603,9 @@ def test_render_master_directory_links_only_top_level_chapters(tmp_path):
     vault_root, source = _write_layered_source(tmp_path)
     plan = seg.build_segmentation_plan(source, vault_root=vault_root)
 
-    master = seg.render_master_directory(plan)
+    master = seg.render_master_directory(plan, LAYERED_MARKDOWN)
 
-    assert master == "# 目录\n\n- [[第六章 平面向量及其应用]]\n- [[第七章 复数]]\n"
+    assert master == "\n\n- [[第六章 平面向量及其应用]]\n- [[第七章 复数]]\n"
     assert "[[# " not in master
     assert "[[## " not in master
     assert "6.1 平面向量的概念" not in master
@@ -617,16 +616,13 @@ def test_render_directory_note_links_only_immediate_children(tmp_path):
     plan = seg.build_segmentation_plan(source, vault_root=vault_root)
     chapter = next(node for node in plan.nodes if node.note_stem == "第六章 平面向量及其应用")
 
-    text = seg.render_directory_note(chapter)
+    text = seg.render_directory_note(chapter, LAYERED_MARKDOWN)
 
-    assert text == (
-        "# 目录\n\n"
-        "- [[6.1 平面向量的概念]]\n"
-        "- [[阅读与思考 向量及向量符号的由来]]\n"
-        "- [[6.2 平面向量的运算]]\n"
-    )
+    assert "章导语原文" in text
+    assert "- [[6.1 平面向量的概念]]" in text
+    assert "- [[阅读与思考 向量及向量符号的由来]]" in text
+    assert "- [[6.2 平面向量的运算]]" in text
     assert "6.1.1 向量的实际背景与概念" not in text
-    assert "章导语原文" not in text
 
 
 def test_write_layered_package_creates_directory_and_leaf_notes(tmp_path):
@@ -636,13 +632,12 @@ def test_write_layered_package_creates_directory_and_leaf_notes(tmp_path):
 
     seg.write_segmentation_package(plan, overwrite=False)
 
-    assert (plan.sandbox_dir / "000_book目录.md").read_text(encoding="utf-8") == seg.render_master_directory(plan)
-    assert (plan.sandbox_dir / "第六章 平面向量及其应用.md").read_text(encoding="utf-8").startswith("# 目录\n\n")
-    assert "章导语原文" not in (plan.sandbox_dir / "第六章 平面向量及其应用.md").read_text(encoding="utf-8")
+    assert source.read_text(encoding="utf-8") == seg.render_master_directory(plan, LAYERED_MARKDOWN)
+    assert (plan.sandbox_dir / "第六章 平面向量及其应用.md").read_text(encoding="utf-8").startswith("# 第六章 平面向量及其应用\n")
+    assert "章导语原文" in (plan.sandbox_dir / "第六章 平面向量及其应用.md").read_text(encoding="utf-8")
     leaf_text = (plan.sandbox_dir / "6.1.1 向量的实际背景与概念.md").read_text(encoding="utf-8")
     assert leaf_text.startswith("### 6.1.1 向量的实际背景与概念")
     assert "6.1.1 正文" in leaf_text
-    assert seg.file_sha256(source) == original_hash
 
 
 def test_write_special_pair_leaf_swallows_specific_heading(tmp_path):

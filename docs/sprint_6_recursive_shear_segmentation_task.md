@@ -1,0 +1,13 @@
+- [x] Task 1: Update DirectoryNode Data Structure and Path Configurations
+  - [x] Add body_end property to DirectoryNode
+  - [x] Update master note path definition to source_path
+- [x] Task 2: Implement Preservation Rendering for Non-Leaf and Master Directory Notes
+  - [x] Rewrite render_directory_note to preserve body text
+  - [x] Rewrite render_master_directory to preserve book preface
+  - [x] Update write_segmentation_package call signature
+- [x] Task 3: Adjust Verification Logic for In-Place Master File
+  - [x] Modify verify_package file count checks
+  - [x] Disable source file hash check in write verification if in-place
+- [x] Task 4: Test and Execute the Segmentation on All Textbooks
+  - [x] Run plan on textbook 2 and verify no error
+  - [x] Run segment on all 5 textbooks and confirm output files and preface preservation

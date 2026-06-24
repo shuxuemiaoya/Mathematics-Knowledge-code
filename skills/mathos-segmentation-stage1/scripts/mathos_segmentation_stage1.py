@@ -79,6 +79,12 @@ class DirectoryNode:
     def char_end(self) -> int:
         return self.raw_end
 
+    @property
+    def body_end(self) -> int:
+        if self.children:
+            return self.children[0].raw_start
+        return self.raw_end
+
 
 @dataclass(frozen=True)
 class SegmentationPlan:
@@ -343,7 +349,7 @@ def build_segmentation_plan(source_path: Path, vault_root: Path, target_depth: i
     detected_depths = sorted({heading.number_depth for heading in numbered_headings})
 
     sandbox_dir = source_path.with_suffix("")
-    master_path = sandbox_dir / f"000_{source_path.stem}目录.md"
+    master_path = source_path
 
     filtered_headings = [h for h in headings if h.markdown_depth <= selected_depth]
     top_level_nodes, nodes, special_merges, warnings = build_directory_tree(filtered_headings, markdown, sandbox_dir)
@@ -395,14 +401,19 @@ def render_link_list(nodes: list[DirectoryNode]) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def render_master_directory(plan: SegmentationPlan) -> str:
-    return render_link_list(plan.top_level_nodes)
+def render_master_directory(plan: SegmentationPlan, markdown: str) -> str:
+    preface_end = plan.top_level_nodes[0].raw_start if plan.top_level_nodes else len(markdown)
+    preface = markdown[0:preface_end]
+    links = [f"- [[{link_for_node(node)}]]" for node in plan.top_level_nodes]
+    return f"{preface.rstrip()}\n\n" + "\n".join(links) + "\n"
 
 
-def render_directory_note(node: DirectoryNode) -> str:
+def render_directory_note(node: DirectoryNode, markdown: str) -> str:
     if node.is_leaf:
         raise SegmentationError(f"Cannot render leaf as directory note: {node.note_stem}")
-    return render_link_list(node.children)
+    body = markdown[node.raw_start:node.body_end]
+    links = [f"- [[{link_for_node(child)}]]" for child in node.children]
+    return f"{body.rstrip()}\n\n" + "\n".join(links) + "\n"
 
 
 def file_sha256(path: Path) -> str:
@@ -426,7 +437,6 @@ def write_segmentation_package(plan: SegmentationPlan, overwrite: bool = False) 
         shutil.rmtree(plan.sandbox_dir)
 
     plan.sandbox_dir.mkdir(parents=True, exist_ok=False)
-    plan.master_path.write_text(render_master_directory(plan), encoding="utf-8")
     for node in plan.nodes:
         assert node.output_path is not None
         if node.is_leaf:
@@ -435,11 +445,14 @@ def write_segmentation_package(plan: SegmentationPlan, overwrite: bool = False) 
                 raise SegmentationError(f"Refusing to write empty leaf: {node.note_stem}")
             node.output_path.write_text(raw_slice, encoding="utf-8")
         else:
-            node.output_path.write_text(render_directory_note(node), encoding="utf-8")
+            node.output_path.write_text(render_directory_note(node, markdown), encoding="utf-8")
 
-    after_file_hash = file_sha256(plan.source_path)
-    if after_file_hash != before_file_hash:
-        raise SegmentationError("Original source hash changed during writing")
+    plan.master_path.write_text(render_master_directory(plan, markdown), encoding="utf-8")
+
+    if plan.master_path.resolve() != plan.source_path.resolve():
+        after_file_hash = file_sha256(plan.source_path)
+        if after_file_hash != before_file_hash:
+            raise SegmentationError("Original source hash changed during writing")
     return {"status": "written", "sandbox_dir": str(plan.sandbox_dir), "master_path": str(plan.master_path)}
 
 
@@ -512,12 +525,11 @@ def extract_directory_links(text: str) -> list[str]:
         if not stripped or stripped == "# 目录":
             continue
         match = LINK_RE.fullmatch(stripped)
-        if not match:
-            raise SegmentationError(f"Invalid Obsidian link line: {line}")
-        target = match.group(1)
-        if target.startswith("#") or target.startswith("##"):
-            raise SegmentationError(f"Heading marker found inside wikilink target: {target}")
-        links.append(target)
+        if match:
+            target = match.group(1)
+            if target.startswith("#") or target.startswith("##"):
+                raise SegmentationError(f"Heading marker found inside wikilink target: {target}")
+            links.append(target)
     return links
 
 
@@ -573,6 +585,9 @@ def verify_package(plan: SegmentationPlan) -> dict[str, Any]:
     # 4. Check total file count
     expected_files = {plan.master_path.resolve()} | {node.output_path.resolve() for node in plan.nodes}
     actual_files = {p.resolve() for p in plan.sandbox_dir.glob("*.md")}
+    if plan.master_path.resolve().parent != plan.sandbox_dir.resolve():
+        if plan.master_path.exists():
+            actual_files.add(plan.master_path.resolve())
     if actual_files != expected_files:
         extra_files = actual_files - expected_files
         missing_files = expected_files - actual_files
@@ -581,8 +596,9 @@ def verify_package(plan: SegmentationPlan) -> dict[str, Any]:
         )
 
     # 5. Source hash check
-    if sha256_text(plan.source_path.read_text(encoding="utf-8-sig")) != plan.source_sha256:
-        raise SegmentationError("Original source hash changed")
+    if plan.master_path.resolve() != plan.source_path.resolve():
+        if sha256_text(plan.source_path.read_text(encoding="utf-8-sig")) != plan.source_sha256:
+            raise SegmentationError("Original source hash changed")
 
     return {"status": "passed", "node_count": len(plan.nodes), "leaf_count": len(plan.leaf_nodes), "segment_count": len(plan.leaf_nodes)}
 
