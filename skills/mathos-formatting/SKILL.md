@@ -195,7 +195,7 @@ The self-check loop must protect or validate:
 - DeepSeek heading validation must pass before Stage 2 begins.
 - H1-H3 are reserved for TOC-derived structure; non-TOC headings must be H4-H6.
 - No heading may receive newly invented parent or chapter context.
-- 不得给没有父级信息的标题名字添加或改写出任何父级/章节前缀（例如：独立的“练习”标题在降级时应保持为“练习”名字，而不能改写为含父级信息的“第X章 练习”）。
+- Do not prepend or rewrite any parent or chapter prefix for headings that lack parent context (e.g., an independent "Exercise" heading should remain "Exercise" when downgraded, and must not be rewritten to include parent information like "Chapter X Exercise").
 - `learn-from-provider` does not generate or apply a late `TITLE_REWRITE_MAP`; explicit legacy artifact commands remain compatible.
 - Never save a reusable program until the candidate passes self-check.
 - Never replace the original source without explicit approval.
@@ -208,7 +208,7 @@ Stop and keep artifacts when:
 - Provider output is invalid Python for the heading or content processor.
 - TOC output is modified, incomplete, disjoint, ambiguous, or includes unrelated text.
 - Heading validation JSON is invalid, false, reports errors, or has a count mismatch.
-- Heading validation errors contain self-negating text such as `not an error` or `不是错误`; treat the provider response as internally contradictory and fail closed.
+- Heading validation errors contain self-negating text such as `not an error` or the Chinese literal `不是错误`; treat the provider response as internally contradictory and fail closed.
 - Python artifact is missing required imports or functions.
 - Python artifact contains dangerous imports or calls.
 - Stage 1 validation rejects TOC hierarchy or non-TOC H1-H3 headings.
@@ -257,6 +257,7 @@ Manual review is not the acceptance gate. Candidate-producing commands set `self
 5. Confirm candidate length is plausible.
 6. If all checks pass, save the approved program.
 7. Ask separately before replacing the original source with the candidate.
+8. **Save Generalized Formatting Templates**: If the approved program is intended to serve as a general formatting specification for a book family (e.g., textbook-family-v1), clean the plugin directory after `approve` completes. Go to `skills/mathos-formatting/plugins/approved/<program-id>` and manually delete the book-specific `heading_processor.py` and sample comparison files (`sample_before.md`, `sample_after.md`). Keep only the generalized Stage 2 `content_processor.py`, `metadata.json`, and `approval.md`.
 
 ## Reuse Approved Programs
 
@@ -264,8 +265,9 @@ Use `apply-approved` only for sources from the same self-check-passing family.
 
 Reuse behavior:
 
-- 删除目录和标题调整的环节不能复用，只有 Stage 2 对内容的修改（content_processor.py）能复用。
-- 对于同一系列的其他书籍，不能直接使用 `apply-approved` 运行全部阶段；只能在 `learn-from-provider` 中复用已批准的 `content_processor.py`。TOC 提取、标题处理和标题校验必须针对每本书单独运行。
+- Directory deletion and heading adjustment stages cannot be reused; only the Stage 2 content processor (`content_processor.py`) can be reused.
+- For other books in the same family, you cannot directly apply the entire program using `apply-approved`. You must run TOC extraction, heading processing, and heading validation individually for each book, but you can reuse the approved `content_processor.py` during `learn-from-provider` (or by manually compiling candidates from artifacts).
+- **Generalized Template Pruning**: When creating a family-wide general formatting template, manually prune the plugin folder to remove all book-specific files (e.g., `heading_processor.py`) and comparison samples, leaving only `content_processor.py`, `metadata.json`, and `approval.md`.
 - Prefer `heading_processor.py` and `content_processor.py`.
 - Apply `title_rewrite_map.py` when present.
 - Fall back to legacy JSON or legacy `content_cleaner.py` only when no Python artifacts exist.

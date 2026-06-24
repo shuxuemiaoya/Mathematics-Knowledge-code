@@ -47,6 +47,30 @@ def test_current_workflow_uses_one_clearly_named_module_per_step():
     assert "stage4-content" not in orchestrator
 
 
+def test_prompt_sources_use_step_prefixed_filenames():
+    agents = SKILL_ROOT / "agents"
+    expected = {
+        "step1_toc_detection_prompt.md",
+        "step3_heading_processor_prompt.md",
+        "step3_heading_expected_result_prompt.md",
+        "step5_heading_validation_prompt.md",
+        "step6_content_processor_prompt.md",
+        "legacy_heading_optimization_prompt.md",
+    }
+    superseded = {
+        "toc_detection_prompt.md",
+        "heading_rules_prompt.md",
+        "heading_expected_result_prompt.md",
+        "heading_check_prompt.md",
+        "content_cleaner_prompt.md",
+        "heading_optimization_prompt.md",
+    }
+
+    actual = {path.name for path in agents.glob("*_prompt.md")}
+    assert expected <= actual
+    assert superseded.isdisjoint(actual)
+
+
 SAMPLE_MARKDOWN = """# 数学
 
 # 目录
@@ -100,19 +124,8 @@ STAGE1_HEADING_MARKDOWN = """# 目录
 """
 
 
-HEADING_EXPECTED_RESULT = """# 修改后的目录
-
-- `# 第一章 数列`
-- `## 1.1 数列的概念`
-
-# 标题修改明细
-
-- `# 第一章 数列` -> `# 第一章 数列`
-- `# 练习` -> `#### 练习`
-
-# 预期效果
-
-- TOC 标题保持 H1-H3，非目录标题降级为 H4-H6。
+HEADING_EXPECTED_RESULT = """- # 第一章 数列
+- ## 1.1 数列的概念
 """
 
 
@@ -223,14 +236,12 @@ class HeadingDualOutputProvider:
         return _batch_processor_source()
 
 
-def test_validate_heading_expected_result_requires_safe_three_section_markdown():
+def test_validate_heading_expected_result_requires_safe_markdown():
     assert core.validate_heading_expected_result(HEADING_EXPECTED_RESULT) == HEADING_EXPECTED_RESULT
 
     invalid_responses = [
         "",
-        "# 修改后的目录\n\n# 预期效果\n",
-        "# 标题修改明细\n\n# 修改后的目录\n\n# 预期效果\n",
-        "```markdown\n# 修改后的目录\n```\n",
+        "```markdown\n- # 第一章 数列\n```\n",
         '{"modified_toc": []}',
         "import os\n\ndef main():\n    pass\n",
     ]
@@ -258,14 +269,16 @@ def test_step3_writes_expected_result_from_same_payload_without_extra_work_artif
         candidate,
         artifacts,
         120,
+        toc_markdown="TOC",
     )
 
     assert len(provider.calls) == 2
-    assert provider.calls[0][1] == provider.calls[1][1] == "SAME TOC AND HEADINGS PAYLOAD"
+    assert provider.calls[0][1] == "SAME TOC AND HEADINGS PAYLOAD"
+    assert provider.calls[1][1] == "TOC"
     expected_path = work_dir / "heading_expected_result.md"
     assert expected_path.read_text(encoding="utf-8") == HEADING_EXPECTED_RESULT
     assert artifacts["heading_expected_result"] == expected_path
-    assert not (work_dir / "heading_expected_result_prompt.md").exists()
+    assert not (work_dir / "step3_heading_expected_result_prompt.md").exists()
     assert not (work_dir / "heading_expected_result_response.md").exists()
 
 
@@ -288,6 +301,7 @@ def test_step3_reuses_expected_result_and_regenerates_only_when_missing(tmp_path
         work_dir / "candidate.md",
         {},
         120,
+        toc_markdown="TOC",
     )
     assert reuse_provider.calls == []
 
@@ -303,6 +317,7 @@ def test_step3_reuses_expected_result_and_regenerates_only_when_missing(tmp_path
         work_dir / "candidate.md",
         {},
         120,
+        toc_markdown="TOC",
     )
     assert len(regenerate_provider.calls) == 1
     assert "Heading Expected Result Prompt" in regenerate_provider.calls[0][0]
@@ -314,7 +329,7 @@ def _title_rewrite_source(mapping=None):
 
 
 def test_content_cleaner_prompt_forbids_destructive_edits():
-    prompt = (SKILL_ROOT / "agents" / "content_cleaner_prompt.md").read_text(encoding="utf-8").lower()
+    prompt = (SKILL_ROOT / "agents" / "step6_content_processor_prompt.md").read_text(encoding="utf-8").lower()
 
     assert "图片" in prompt
     assert "<details>" in prompt
@@ -331,7 +346,7 @@ def test_preservation_gate_rejects_image_removal():
         core.run_content_plugin_protecting_headings(plugin, SAMPLE_MARKDOWN)
 
 
-def test_preservation_gate_rejects_details_removal():
+def test_preservation_gate_allows_details_removal():
     def clean(markdown: str) -> str:
         lines = []
         in_details = False
@@ -346,8 +361,9 @@ def test_preservation_gate_rejects_details_removal():
             lines.append(line)
         return "\n".join(lines)
 
-    with pytest.raises(core.FormattingError, match="details"):
-        core.run_content_plugin_protecting_headings(_plugin(clean), SAMPLE_MARKDOWN)
+    result = core.run_content_plugin_protecting_headings(_plugin(clean), SAMPLE_MARKDOWN)
+
+    assert "<details>" not in result.cleaned_markdown
 
 
 def test_preservation_gate_rejects_math_block_count_change():
@@ -370,8 +386,21 @@ def test_preservation_gate_allows_blank_line_normalization():
     result = core.run_content_plugin_protecting_headings(plugin, SAMPLE_MARKDOWN)
 
     assert result.cleaned_markdown.count("![](") == SAMPLE_MARKDOWN.count("![](")
-    assert result.cleaned_markdown.count("<details>") == SAMPLE_MARKDOWN.count("<details>")
     assert result.cleaned_markdown.count("$$") == SAMPLE_MARKDOWN.count("$$")
+
+
+def test_preservation_gate_allows_image_layout_conversion_when_targets_preserved():
+    plugin = _plugin(
+        lambda markdown: markdown.replace(
+            "![](images/a.png)",
+            '<center><img src="images/a.png" style="max-width:100%;"></center>',
+        )
+    )
+
+    result = core.run_content_plugin_protecting_headings(plugin, SAMPLE_MARKDOWN)
+
+    assert "![](images/a.png)" not in result.cleaned_markdown
+    assert '<img src="images/a.png"' in result.cleaned_markdown
 
 
 def test_stage1_audit_is_validation_only():
@@ -411,26 +440,27 @@ class DestructiveProvider:
         raise AssertionError(f"unexpected provider prompt: {system_prompt[:80]}")
 
 
-def test_learning_runtime_protection_neutralizes_destructive_image_rule(tmp_path):
+def test_learning_runtime_rejects_destructive_image_rule(tmp_path):
     markdown = tmp_path / "book.md"
     markdown.write_text(SAMPLE_MARKDOWN, encoding="utf-8")
     work_dir = tmp_path / "mathos-formatting" / "book"
 
-    core.run_learning_from_provider(
-        markdown_path=markdown,
-        provider_client=DestructiveProvider(),
-        heading_prompt="# Heading Rules Prompt",
-        content_prompt="# Content Cleaner Prompt",
-        work_dir=work_dir,
-    )
+    with pytest.raises(core.FormattingError, match="image targets"):
+        core.run_learning_from_provider(
+            markdown_path=markdown,
+            provider_client=DestructiveProvider(),
+            heading_prompt="# Heading Rules Prompt",
+            content_prompt="# Content Cleaner Prompt",
+            work_dir=work_dir,
+        )
 
     candidate_text = (work_dir / "candidate.md").read_text(encoding="utf-8")
     assert "![](images/a.png)" in candidate_text
     assert "<details>" in candidate_text
     state = json.loads((work_dir / "run-state.json").read_text(encoding="utf-8"))
-    assert state["status"] == "candidate-written"
-    assert state["stage"] == "complete"
-    assert state["errors"] == []
+    assert state["status"] == "failed"
+    assert state["stage"] == "step6-content-processing"
+    assert state["errors"]
 
 
 class SuccessfulMockProvider:
@@ -556,13 +586,12 @@ def test_learning_stage4_uses_python_processor_not_json_rules(tmp_path):
     assert not (work_dir / "content_cleaner.py").exists()
     assert result.summary == [
         "content_processor.py applied",
-        "Stage 2 preserved 3 finalized heading lines",
         "Preservation images: 1 -> 1",
         "Preservation details blocks: 1 -> 1",
         "Preservation math delimiters: 2 -> 2",
         "Preservation table-like lines: 3 -> 3",
         "Stage 1 processor preserved line count, heading order, and non-heading content",
-        "DeepSeek heading validation passed for 3 headings",
+        "DeepSeek heading validation passed for 2 headings",
     ]
 
 
@@ -826,7 +855,7 @@ def test_learning_fails_when_toc_text_is_modified(tmp_path):
 
 
 def test_content_cleaner_prompt_describes_python_batch_contract():
-    prompt_path = SKILL_ROOT / "agents" / "content_cleaner_prompt.md"
+    prompt_path = SKILL_ROOT / "agents" / "step6_content_processor_prompt.md"
     prompt = prompt_path.read_text(encoding="utf-8").lower()
 
     assert "python" in prompt
@@ -847,17 +876,20 @@ def test_content_cleaner_prompt_describes_python_batch_contract():
     assert "main()" in prompt or "def main" in prompt
 
 
-def test_stage2_rejects_heading_changes_and_prompt_preserves_guarded_content():
+def test_stage2_legacy_guard_rejects_heading_changes_but_prompt_allows_whitelist_formatting():
     with pytest.raises(core.FormattingError, match="heading lines"):
         core.validate_stage2_heading_preservation(
             "# 第一章\n\n#### 练习\n\n正文\n",
             "# 第一章\n\n> [!practice] 练习\n\n正文\n",
         )
 
-    prompt = (SKILL_ROOT / "agents" / "content_cleaner_prompt.md").read_text(encoding="utf-8").lower()
-    assert "heading lines are immutable" in prompt
-    assert "preserve every markdown image reference exactly" in prompt
-    assert "preserve every <details>" in prompt
+    prompt = (SKILL_ROOT / "agents" / "step6_content_processor_prompt.md").read_text(encoding="utf-8").lower()
+    assert "通用 markdown 格式修正 python 代码生成专家" in prompt
+    assert "h1-h3 默认视为结构标题" in prompt
+    assert "不改变图片路径" in prompt
+    assert "apply_image_caption_fixes" in prompt
+    assert "heading lines are immutable" not in prompt
+    assert "preserve every markdown image reference exactly" not in prompt
 
 
 def test_stage2_runtime_protects_and_restores_finalized_headings():
@@ -906,15 +938,25 @@ $$
 """
 
     protected, tokens = core.protect_stage2_guarded_content(markdown)
-    assert "<center>" not in protected
-    assert "> [!example]" not in protected
-    processed = protected.replace("**", "")
+    assert "# 第一章" in protected
+    assert "![](images/a.png)" in protected
+    assert "<details>" in protected
+    assert "<center>" in protected
+    assert "> [!example]" in protected
+    processed = (
+        protected
+        .replace("**", "")
+        .replace("![](images/a.png)", '<center><img src="images/a.png"></center>')
+        .replace("<details>\n", "")
+        .replace("</details>\n", "")
+    )
     restored = core.restore_stage2_guarded_content(processed, tokens)
 
     assert "title: **keep**" in restored
     assert "# 第一章" in restored
-    assert "![](images/a.png)" in restored
-    assert "**keep details**" in restored
+    assert '<center><img src="images/a.png"></center>' in restored
+    assert "keep details" in restored
+    assert "<details>" not in restored
     assert "```mermaid\ngraph TD\n```" in restored
     assert "x ** y" in restored
     assert "| **head** | value |" in restored
@@ -924,12 +966,16 @@ $$
 
 
 def test_heading_prompt_forbids_sys_and_uses_builtin_input_for_sandbox_root():
-    prompt = (SKILL_ROOT / "agents" / "heading_rules_prompt.md").read_text(encoding="utf-8").lower()
+    prompt = (SKILL_ROOT / "agents" / "step3_heading_processor_prompt.md").read_text(encoding="utf-8").lower()
 
-    assert "never import `sys`" in prompt
-    assert "input()" in prompt
-    assert "heading_rewrites" in prompt
-    assert "placeholder" in prompt
+    assert "markdown 标题结构规范化专家" in prompt
+    assert "toc 是唯一权威来源" in prompt
+    assert "目录外的标题禁止使用 h1-h3" in prompt
+    assert "应降级为 h4-h6" in prompt
+    assert "不得自行创造新的 h1、h2、h3" in prompt
+    assert "仅处理标题行" in prompt
+    assert "title_rewrite_map" in prompt
+    assert "只输出 python 文件源码，不输出解释" in prompt
 
 
 class MockOptimizationProvider:
@@ -1288,7 +1334,7 @@ def test_validate_verbatim_toc_response_rejects_body_tail_without_trimming():
 
 
 def test_toc_detection_prompt_explains_wrapped_entries_and_body_boundary():
-    prompt = (SKILL_ROOT / "agents" / "toc_detection_prompt.md").read_text(encoding="utf-8")
+    prompt = (SKILL_ROOT / "agents" / "step1_toc_detection_prompt.md").read_text(encoding="utf-8")
 
     assert "wrapped TOC entry" in prompt
     assert "repeated `# 目录` or `# CONTENTS`" in prompt
@@ -1350,7 +1396,7 @@ def test_heading_check_payload_declares_local_count_and_prompt_accepts_non_toc_h
     ]
 
     payload = core.build_toc_and_headings_markdown("# 目录\n# 第一章\n", headings)
-    prompt = (SKILL_ROOT / "agents" / "heading_check_prompt.md").read_text(encoding="utf-8")
+    prompt = (SKILL_ROOT / "agents" / "step5_heading_validation_prompt.md").read_text(encoding="utf-8")
 
     assert "<!-- BODY HEADING COUNT: 2 -->" in payload
     assert "must not be reported as errors" in prompt
@@ -1468,7 +1514,7 @@ class Stage1WorkflowProvider:
             response = _batch_processor_source([("# 数学", "#### 数学")])
         elif "Heading Expected Result Prompt" in system_prompt:
             stage = "heading-expected-result"
-            response = HEADING_EXPECTED_RESULT
+            response = HEADING_EXPECTED_RESULT if self.heading_check_valid else "- # Mismatched Heading"
         elif "Heading Validation Prompt" in system_prompt:
             stage = "heading-check"
             errors = [] if self.heading_check_valid else ["non-TOC H1: 数学"]
@@ -1508,7 +1554,6 @@ def test_learning_uses_new_stage1_provider_order_and_artifacts(tmp_path):
         "toc",
         "heading",
         "heading-expected-result",
-        "heading-check",
         "content",
     ]
     assert (work_dir / "toc.md").read_text(encoding="utf-8") == (
@@ -1517,6 +1562,22 @@ def test_learning_uses_new_stage1_provider_order_and_artifacts(tmp_path):
     assert "<!-- BEGIN IMMUTABLE TOC -->" in (work_dir / "toc_and_headings.md").read_text(encoding="utf-8")
     assert "#### 数学" in (work_dir / "heading_check_input.md").read_text(encoding="utf-8")
     assert (work_dir / "heading_check_response.json").exists()
+    expected_prompt_artifacts = {
+        "step1_toc_detection_prompt.md",
+        "step3_heading_processor_prompt.md",
+        "step5_heading_validation_prompt.md",
+        "step6_content_processor_prompt.md",
+    }
+    superseded_prompt_artifacts = {
+        "toc_detection_prompt.md",
+        "heading_processor_prompt.md",
+        "heading_check_prompt.md",
+        "content_cleaner_prompt.md",
+    }
+    work_files = {path.name for path in work_dir.iterdir() if path.is_file()}
+    assert expected_prompt_artifacts <= work_files
+    assert superseded_prompt_artifacts.isdisjoint(work_files)
+    assert "step3_heading_expected_result_prompt.md" not in work_files
     assert not (work_dir / "title_rewrite_map.py").exists()
     assert "# 目录" not in result.candidate_path.read_text(encoding="utf-8")
     assert markdown.read_bytes() == original_hash
@@ -1545,7 +1606,6 @@ def test_learning_stops_before_stage2_when_heading_check_rejects(tmp_path):
         "toc",
         "heading",
         "heading-expected-result",
-        "heading-check",
     ]
     assert not (work_dir / "content_processor_response.py").exists()
     state = json.loads((work_dir / "run-state.json").read_text(encoding="utf-8"))
@@ -1603,7 +1663,7 @@ class InvalidHeadingExpectedResultProvider(Stage1WorkflowProvider):
     def chat(self, system_prompt, user_payload, timeout_seconds=120, response_format=None):
         if "Heading Expected Result Prompt" in system_prompt:
             self.calls.append(("heading-expected-result", user_payload, response_format))
-            return "invalid expected result"
+            return "```python\nprint('invalid expected result')\n```"
         return super().chat(system_prompt, user_payload, timeout_seconds, response_format)
 
 
@@ -1648,7 +1708,7 @@ def test_automated_run_routes_invalid_heading_expected_result_to_new_artifact(tm
     assert result.digest["failed_stage"] == "step3-heading-processing"
     assert Path(result.digest["error_artifact"]).name == "heading_expected_result.md"
     assert (work_dir / "heading_expected_result.md").read_text(encoding="utf-8") == (
-        "invalid expected result"
+        "```python\nprint('invalid expected result')\n```"
     )
 
 
@@ -1693,4 +1753,4 @@ def test_automated_run_recovers_with_matching_fingerprint(tmp_path):
     assert first.exit_code == 0
     assert second.exit_code == 0
     assert second.digest["resumed"] is True
-    assert [call[0] for call in second_provider.calls] == ["toc", "heading-check"]
+    assert [call[0] for call in second_provider.calls] == ["toc"]

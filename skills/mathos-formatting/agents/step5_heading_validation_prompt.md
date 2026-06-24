@@ -24,6 +24,7 @@ Rules:
 - Match headings using the same conservative, meaning-preserving OCR equivalence used by Stage 3.
 - Circled digits and the same Arabic digit are equivalent; for example, `③` and `3` are equivalent.
 - Numeric value must remain identical; for example, `⑨` and `3` are not equivalent.
+- Escaped markdown characters (such as `\*`) in the TOC and the same characters without escape (or spaces) in the body headings are equivalent.
 - Full-width or half-width punctuation and insignificant spacing differences are equivalent only when title meaning, source order, and hierarchy are unchanged.
 - Preserve the body heading text; validation does not require rewriting an equivalent OCR form to the TOC spelling.
 - Set `valid` to false and return at most 20 unique errors that represent genuine violations.

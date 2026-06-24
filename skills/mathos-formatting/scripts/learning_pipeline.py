@@ -90,6 +90,7 @@ def run_learning_from_provider(
             candidate_path,
             artifacts,
             timeout_seconds,
+            toc_markdown=toc.markdown,
         )
 
         current_step = "step4-toc-removal"

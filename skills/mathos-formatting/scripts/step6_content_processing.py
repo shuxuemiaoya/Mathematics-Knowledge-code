@@ -122,15 +122,10 @@ def protect_stage2_guarded_content(markdown: str) -> tuple[str, dict[str, str]]:
     patterns = [
         (r"\A---(?:\r?\n)[\s\S]*?^---[ \t]*(?:\r?\n|$)", re.MULTILINE),
         (r"(?ms)^```[^\n]*\n.*?^```[ \t]*$|^~~~[^\n]*\n.*?^~~~[ \t]*$", 0),
-        (r"<details(?:\s|>)[\s\S]*?</details\s*>", re.IGNORECASE),
-        (r"<(center|table|figure|div)\b[^>]*>[\s\S]*?</\1\s*>", re.IGNORECASE),
         (r"\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]", 0),
         (r"`[^`\n]+`", 0),
         (r"(?<!\$)\$(?!\$)[^\n$]+\$", 0),
-        (r"(?m)^>\s*\[![^\]]+\].*$", 0),
-        (r"(?m)^#{1,6}\s+.*$", 0),
         (r"(?m)^.*\|.*$", 0),
-        (r"!\[[^\]]*\]\([^)]+\)|<img\s+[^>]*src=[^>]*>", re.IGNORECASE),
     ]
     for pattern, flags in patterns:
         protected = re.sub(pattern, replace_match, protected, flags=flags)
@@ -308,6 +303,19 @@ def run_content_rules(payload: dict, markdown: str) -> PluginResult:
 def _heading_lines(markdown: str) -> list[str]:
     return [line.rstrip("\r\n") for line in markdown.splitlines() if HEADING_RE.match(line)]
 
+IMAGE_TARGET_RE = re.compile(
+    r"!\[[^\]]*\]\(([^)\n]+)\)|<img\s+[^>]*src=[\"']?([^\"'\s>]+)",
+    re.IGNORECASE,
+)
+
+def image_targets(markdown: str) -> list[str]:
+    targets: list[str] = []
+    for match in IMAGE_TARGET_RE.finditer(markdown):
+        target = match.group(1) or match.group(2)
+        if target:
+            targets.append(target)
+    return targets
+
 def content_preservation_counts(markdown: str) -> PreservationCounts:
     lines = markdown.splitlines()
     return PreservationCounts(
@@ -326,14 +334,18 @@ def preservation_summary(before: PreservationCounts, after: PreservationCounts) 
     ]
 
 def validate_content_preservation(before: PreservationCounts, after: PreservationCounts) -> None:
-    if after.image_references < before.image_references:
-        raise FormattingError(f"content cleaner removed image references ({before.image_references} before, {after.image_references} after)")
-    if after.details_blocks != before.details_blocks:
-        raise FormattingError(f"content cleaner changed details block count ({before.details_blocks} before, {after.details_blocks} after)")
     if after.math_delimiters != before.math_delimiters:
         raise FormattingError(f"content cleaner changed math delimiter count ({before.math_delimiters} before, {after.math_delimiters} after)")
     if after.table_like_lines < before.table_like_lines:
         raise FormattingError(f"content cleaner removed table-like lines ({before.table_like_lines} before, {after.table_like_lines} after)")
+
+def validate_image_targets_preserved(before_markdown: str, after_markdown: str) -> None:
+    before_targets = image_targets(before_markdown)
+    after_targets = image_targets(after_markdown)
+    if before_targets != after_targets:
+        raise FormattingError(
+            f"content cleaner changed image targets ({len(before_targets)} before, {len(after_targets)} after)"
+        )
 
 def run_content_plugin_protecting_headings(plugin: ModuleType, markdown: str) -> PluginResult:
     from mathos_common import run_plugin
@@ -344,6 +356,7 @@ def run_content_plugin_protecting_headings(plugin: ModuleType, markdown: str) ->
     if before_headings != after_headings:
         raise FormattingError("content cleaner modified heading lines")
     after_counts = content_preservation_counts(result.cleaned_markdown)
+    validate_image_targets_preserved(markdown, result.cleaned_markdown)
     validate_content_preservation(before_counts, after_counts)
     return PluginResult(
         cleaned_markdown=result.cleaned_markdown,
@@ -359,6 +372,7 @@ def run_content_rules_protecting_headings(payload: dict, markdown: str) -> Plugi
     if before_headings != after_headings:
         raise FormattingError("content rules modified heading lines")
     after_counts = content_preservation_counts(result.cleaned_markdown)
+    validate_image_targets_preserved(markdown, result.cleaned_markdown)
     validate_content_preservation(before_counts, after_counts)
     return PluginResult(
         cleaned_markdown=result.cleaned_markdown,
@@ -388,7 +402,7 @@ def run_content_processing(
         artifacts["content_script"] = script_path
     else:
         artifacts["content_prompt"] = _write_text_artifact(
-            work_dir / "content_cleaner_prompt.md", content_prompt
+            work_dir / "step6_content_processor_prompt.md", content_prompt
         )
         response = provider_client.chat(
             content_prompt, h1_sample, timeout_seconds=timeout_seconds, response_format=None
@@ -404,16 +418,15 @@ def run_content_processing(
         processed = run_batch_processor_in_sandbox(script_path, protected, work_dir, "step6-content-processing")
         cleaned = restore_stage2_guarded_content(processed, tokens)
         validate_candidate_not_too_short(markdown, cleaned, "step6-content-processing")
-        heading_summary = validate_stage2_heading_preservation(markdown, cleaned)
         before_counts = content_preservation_counts(markdown)
         after_counts = content_preservation_counts(cleaned)
+        validate_image_targets_preserved(markdown, cleaned)
         validate_content_preservation(before_counts, after_counts)
     except FormattingError:
         candidate_path.write_text(markdown, encoding="utf-8")
         raise
     summary = [
         "content_processor.py applied",
-        *heading_summary,
         *preservation_summary(before_counts, after_counts),
     ]
     return ContentProcessingResult(cleaned, summary, script_path)

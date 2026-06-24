@@ -167,8 +167,8 @@ def command_approve(args: argparse.Namespace) -> int:
 def command_learn_from_provider(args: argparse.Namespace) -> int:
     settings = provider.load_provider_settings(Path(args.env))
     provider_client = provider.DeepSeekProviderClient(settings)
-    heading_prompt = (SCRIPT_DIR.parent / "agents" / "heading_rules_prompt.md").read_text(encoding="utf-8")
-    content_prompt = (SCRIPT_DIR.parent / "agents" / "content_cleaner_prompt.md").read_text(encoding="utf-8")
+    heading_prompt = (SCRIPT_DIR.parent / "agents" / "step3_heading_processor_prompt.md").read_text(encoding="utf-8")
+    content_prompt = (SCRIPT_DIR.parent / "agents" / "step6_content_processor_prompt.md").read_text(encoding="utf-8")
     result = core.run_learning_from_provider(
         markdown_path=Path(args.markdown),
         provider_client=provider_client,
@@ -207,8 +207,8 @@ def command_learn_from_provider(args: argparse.Namespace) -> int:
 def command_run(args: argparse.Namespace) -> int:
     settings = provider.load_provider_settings(Path(args.env))
     provider_client = provider.DeepSeekProviderClient(settings)
-    heading_prompt = (SCRIPT_DIR.parent / "agents" / "heading_rules_prompt.md").read_text(encoding="utf-8")
-    content_prompt = (SCRIPT_DIR.parent / "agents" / "content_cleaner_prompt.md").read_text(encoding="utf-8")
+    heading_prompt = (SCRIPT_DIR.parent / "agents" / "step3_heading_processor_prompt.md").read_text(encoding="utf-8")
+    content_prompt = (SCRIPT_DIR.parent / "agents" / "step6_content_processor_prompt.md").read_text(encoding="utf-8")
     result = run_automated_formatting(
         markdown_path=Path(args.markdown),
         provider_client=provider_client,

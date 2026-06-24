@@ -199,10 +199,12 @@ def run_toc_extraction(
     artifacts: dict[str, Path],
     timeout_seconds: int,
 ) -> VerbatimToc:
-    prompt_path = Path(__file__).resolve().parent.parent / "agents" / "toc_detection_prompt.md"
+    prompt_path = Path(__file__).resolve().parent.parent / "agents" / "step1_toc_detection_prompt.md"
     prompt = prompt_path.read_text(encoding="utf-8")
     sample = extract_first_20_pages(markdown, markdown_path)
-    artifacts["toc_detection_prompt"] = _write_text_artifact(work_dir / "toc_detection_prompt.md", prompt)
+    artifacts["toc_detection_prompt"] = _write_text_artifact(
+        work_dir / "step1_toc_detection_prompt.md", prompt
+    )
     artifacts["toc_detection_sample"] = _write_text_artifact(work_dir / "toc_detection_sample.md", sample)
     response = provider_client.chat(prompt, sample, timeout_seconds=timeout_seconds, response_format=None)
     artifacts["toc_detection_response"] = _write_text_artifact(work_dir / "toc_detection_response.md", response)

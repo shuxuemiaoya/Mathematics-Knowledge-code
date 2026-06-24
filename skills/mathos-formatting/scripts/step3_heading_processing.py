@@ -26,12 +26,6 @@ PARENT_CONTEXT_RE = re.compile(
     re.IGNORECASE,
 )
 
-EXPECTED_RESULT_SECTIONS = (
-    "# 修改后的目录",
-    "# 标题修改明细",
-    "# 预期效果",
-)
-
 
 class HeadingExpectedResultError(FormattingError):
     def __init__(self, message: str, artifact_path: Path):
@@ -94,22 +88,11 @@ def validate_heading_expected_result(text: str) -> str:
         raise FormattingError("heading expected result must not be JSON")
     if re.search(r"(?m)^(?:import\s+|from\s+\S+\s+import\s+|def\s+\w+\s*\()", stripped):
         raise FormattingError("heading expected result must not contain Python")
-
-    h1_sections = re.findall(r"(?m)^# [^#\r\n].*$", stripped)
-    if h1_sections != list(EXPECTED_RESULT_SECTIONS):
-        raise FormattingError(
-            "heading expected result must contain exactly the three required sections in order"
-        )
-    for index, section in enumerate(EXPECTED_RESULT_SECTIONS):
-        start = stripped.index(section) + len(section)
-        end = stripped.index(EXPECTED_RESULT_SECTIONS[index + 1]) if index + 1 < len(EXPECTED_RESULT_SECTIONS) else len(stripped)
-        if not stripped[start:end].strip():
-            raise FormattingError(f"heading expected result section is empty: {section}")
     return text
 
 
 def _ensure_heading_expected_result(
-    heading_payload: str,
+    toc_markdown: str,
     provider_client: object,
     work_dir: Path,
     artifacts: dict[str, Path],
@@ -124,10 +107,14 @@ def _ensure_heading_expected_result(
         except FormattingError:
             pass
 
-    prompt_path = Path(__file__).resolve().parent.parent / "agents" / "heading_expected_result_prompt.md"
+    prompt_path = (
+        Path(__file__).resolve().parent.parent
+        / "agents"
+        / "step3_heading_expected_result_prompt.md"
+    )
     response = provider_client.chat(
         prompt_path.read_text(encoding="utf-8"),
-        heading_payload,
+        toc_markdown,
         timeout_seconds=timeout_seconds,
         response_format=None,
     )
@@ -149,6 +136,7 @@ def run_heading_processing(
     candidate_path: Path,
     artifacts: dict[str, Path],
     timeout_seconds: int,
+    toc_markdown: str = "",
 ) -> HeadingProcessingResult:
     script_path = work_dir / "heading_processor.py"
     if script_path.exists():
@@ -157,7 +145,7 @@ def run_heading_processing(
         artifacts["heading_script"] = script_path
     else:
         artifacts["heading_prompt"] = _write_text_artifact(
-            work_dir / "heading_processor_prompt.md", heading_prompt
+            work_dir / "step3_heading_processor_prompt.md", heading_prompt
         )
         response = provider_client.chat(
             heading_prompt, heading_payload, timeout_seconds=timeout_seconds, response_format=None
@@ -169,7 +157,7 @@ def run_heading_processing(
         validate_batch_processor_source(source)
         artifacts["heading_script"] = _write_text_artifact(script_path, source)
     _ensure_heading_expected_result(
-        heading_payload,
+        toc_markdown,
         provider_client,
         work_dir,
         artifacts,
@@ -188,3 +176,4 @@ def run_heading_processing(
         warnings=[],
     )
     return HeadingProcessingResult(processed, summary, script_path)
+
