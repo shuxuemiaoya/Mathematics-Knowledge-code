@@ -11,3 +11,7 @@
 - [x] Task 4: Test and Execute the Segmentation on All Textbooks
   - [x] Run plan on textbook 2 and verify no error
   - [x] Run segment on all 5 textbooks and confirm output files and preface preservation
+- [x] Task 5: Implement Source File Backup Logic
+  - [x] Add backup file creation before overwriting source file in python script
+  - [x] Update SKILL.md documentation to describe backup behavior
+  - [x] Run pytest to verify all tests pass

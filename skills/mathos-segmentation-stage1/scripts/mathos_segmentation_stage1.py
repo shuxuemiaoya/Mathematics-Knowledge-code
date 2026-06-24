@@ -447,6 +447,10 @@ def write_segmentation_package(plan: SegmentationPlan, overwrite: bool = False) 
         else:
             node.output_path.write_text(render_directory_note(node, markdown), encoding="utf-8")
 
+    if plan.master_path.resolve() == plan.source_path.resolve():
+        backup_path = plan.source_path.with_suffix(plan.source_path.suffix + ".bak")
+        backup_path.write_text(markdown, encoding="utf-8")
+
     plan.master_path.write_text(render_master_directory(plan, markdown), encoding="utf-8")
 
     if plan.master_path.resolve() != plan.source_path.resolve():

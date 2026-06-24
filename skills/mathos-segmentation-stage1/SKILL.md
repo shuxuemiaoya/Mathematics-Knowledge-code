@@ -56,7 +56,7 @@ Leaf notes contain raw source slices. The operator does not prepend headings, fr
 
 Special pairs such as `## 阅读与思考` followed by `### 向量及向量符号的由来` are merged into one leaf note.
 
-The original source Markdown is never modified or deleted.
+The original source Markdown is updated in-place to serve as the master directory note (containing the book preface and links to H1 chapters), and a backup of the original source file is created next to it with a `.md.bak` suffix.
 
 ## Stop Conditions
 
