@@ -81,28 +81,27 @@ def apply_choice_fixes(text: str) -> str:
     return text
 
 def apply_callout_fixes(text: str) -> str:
-    """通用 callout 规则：删除装饰图片，将明确栏目转 callout。"""
-    # 删除栏目标题前的装饰图片
+    """通用 callout 规则：删除教科书装饰图片，并将栏目标题转为 callout。"""
+    # 删除教科书特殊标题前的图片链接和空行，添加特殊标记
     text = re.sub(
-        r'(?m)^[ \t]*!\[[^\]]*\]\([^\)\n]+\)[ \t]*(?:\r?\n)+(?=^[ \t]*#{1,6}\s*(?:归纳|练习|溯源|探究|思考|观察|复习巩固|综合运用|拓广探索)\b)',
+        r'(?m)^[ \t]*!\[[^\]]*\]\([^\)\n]+\)[ \t]*(?:\r?\n)+(?=^[ \t]*#\s*(?:归纳|练习|溯源|探究|思考|观察|复习巩固|综合运用|拓广探索)\b)',
         '',
         text,
     )
-    # 将明确栏目转 Obsidian callout
-    text = re.sub(r'(?m)^[ \t]*(?:#{4,6}\s+|#\s+)?探究\b', r'> [!explore] 探究', text)
-    text = re.sub(r'(?m)^[ \t]*(?:#{4,6}\s+|#\s+)?思考\b', r'> [!think] 思考', text)
-    text = re.sub(r'(?m)^[ \t]*(?:#{4,6}\s+|#\s+)?尝试·思考\b', r'> [!think] 尝试·思考', text)
-    text = re.sub(r'(?m)^[ \t]*(?:#{4,6}\s+|#\s+)?观察\b', r'> [!observe] 观察', text)
-    text = re.sub(r'(?m)^[ \t]*(?:#{4,6}\s+|#\s+)?归纳\b', r'> [!tip] 归纳', text)
-    text = re.sub(r'(?m)^[ \t]*(?:#{4,6}\s+|#\s+)?尝试·交流\b', r'> [!tip] 尝试·交流', text)
-    text = re.sub(r'(?m)^[ \t]*(?:#{4,6}\s+|#\s+)?回顾·反思\b', r'> [!summary] 回顾·反思', text)
-    text = re.sub(r'(?m)^[ \t]*(?:#{4,6}\s+|#\s+)?操作·交流\b', r'> [!todo] 操作·交流', text)
-    text = re.sub(r'(?m)^[ \t]*(?:#{4,6}\s+|#\s+)?溯源\b', r'> [!quote] 溯源', text)
-    # 例题转 callout
-    text = re.sub(r'(?m)^[ \t]*(?:#{1,6}\s+)?(例\s*\d+\b.*)$', r'> [!example]- \1', text)
-    # 清理 callout 空行，并确保 callout 前有空行
-    text = re.sub(r'(?m)^(>.*)\n(?!\n)', r'\1\n', text)
-    text = re.sub(r'(?m)(?<!\n)\n(> )', r'\n\n\1', text)
+    text = re.sub(r'(?m)^#\s+探究\b', r'> [!explore] 探究', text)
+    text = re.sub(r'(?m)^#\s+思考\b', r'> [!think] 思考', text)
+    text = re.sub(r'(?m)^#\s+尝试·思考\b', r'> [!think] 尝试·思考', text)
+    text = re.sub(r'(?m)^#\s+观察\b', r'> [!observe] 观察', text)
+    text = re.sub(r'(?m)^#\s+归纳\b', r'> [!tip] 归纳', text)
+    text = re.sub(r'(?m)^#\s+尝试·交流\b', r'> [!tip] 尝试·交流', text)
+    text = re.sub(r'(?m)^#\s+回顾·反思\b', r'> [!summary] 回顾·反思', text)
+    text = re.sub(r'(?m)^#\s+操作·交流\b', r'> [!todo] 操作·交流', text)
+    text = re.sub(r'(?m)^#\s+溯源\b', r'> [!quote] 溯源', text)
+    text = re.sub(r'(?m)^(?:#\s+)?(例\s*\d+\b.*)$', r'> [!example]- \1', text)
+    text = re.sub(r'(?m)^(?:#\s+)?(例 \d+\b.*)$', r'> [!example]- \1', text)
+    text = re.sub(r'(?m)^(> \[!(?:quote|explore|think|observe|tip|summary|todo)\] (?:思考·交流|溯源|探究|思考|观察|归纳|尝试·思考|尝试·交流|回顾·反思|操作·交流))[ \t]*\r?\n[ \t]*\r?\n', r'\1\n', text)
+    text = re.sub(r'(?m)^(> \[!example\]-[^\n]*)(\n[ \t]*\n)', r'\1\n', text)
+    text = re.sub(r'(?m)(?<!\n)\n(?=[ \t]*> \[!)', '\n\n', text)
     return text
 
 def apply_heading_case_fixes(text: str) -> str:
@@ -138,8 +137,199 @@ def apply_image_caption_fixes(text: str) -> str:
     text = re.sub(r'(?m)^[ \t]*#\s*(!\[[^\]]*\]\([^\)\n]+\))[ \t]*$', r'\1', text)
     text = re.sub(r'(?m)^[ \t]*#\s*(图\s*\d+(?:\.\d+)*(?:-\d+)?)[ \t]*$', r'\1', text)
     text = re.sub(r'(?m)^[ \t]*#\s*([（(][^）)\r\n]+[）)])[ \t]*$', r'\1', text)
-    # 图片空行清理
+
+    def fix_misordered_image_caption_blocks(text: str) -> str:
+        image_re = re.compile(r'^[ \t]*!\[[^\]]*\]\(([^)\r\n]+)\)[ \t]*$')
+        caption_re = re.compile(r'^[ \t]*(?:图\s*\d+(?:\.\d+)*(?:-\d+)?|[（(][^）)\r\n]+[）)])[ \t]*$')
+        blank_re = re.compile(r'^[ \t]*$')
+        lines = text.splitlines(True)
+        out = []
+        i = 0
+        while i < len(lines):
+            if image_re.match(lines[i]):
+                imgs = []
+                block_lines = []
+                while i < len(lines) and (image_re.match(lines[i]) or blank_re.match(lines[i])):
+                    if image_re.match(lines[i]):
+                        imgs.append(image_re.match(lines[i]).group(1))
+                    block_lines.append(lines[i])
+                    i += 1
+                while i < len(lines) and blank_re.match(lines[i]):
+                    block_lines.append(lines[i])
+                    i += 1
+                caps = []
+                cap_lines = []
+                while i < len(lines) and caption_re.match(lines[i]):
+                    caps.append(caption_re.match(lines[i]).group(0).strip())
+                    cap_lines.append(lines[i])
+                    i += 1
+                if len(imgs) >= 2 and len(imgs) == len(caps):
+                    table = [
+                        '> <center>',
+                        '> ',
+                        '| ' + ' | '.join(f'![]({img})' for img in imgs) + ' |',
+                        '| ' + ' | '.join(['---'] * len(imgs)) + ' |',
+                        '| ' + ' | '.join(caps) + ' |',
+                        '> </center>'
+                    ]
+                    out.append('\n'.join(table) + '\n')
+                    continue
+                out.extend(block_lines)
+                out.extend(cap_lines)
+                continue
+            out.append(lines[i])
+            i += 1
+        return ''.join(out)
+
+    def convert_labeled_figure_table(match):
+        content = match.group(0)
+        pairs = re.findall(
+            r'!\[[^\]]*\]\(([^)\n]+)\)[ \t]*(?:\r?\n)+[ \t]*[（(]\s*([^）)]+?)\s*[）)]([^\r\n]*)',
+            content,
+        )
+        caption_match = re.search(
+            r'(?m)^[ \t]*((?:图\s*\d+(?:\.\d+)*(?:-\d+)?)|(?:[（(]第\s*\d+\s*题[）)]))[ \t]*$',
+            content,
+        )
+        if len(pairs) < 2:
+            return content
+        image_cells = [f'![]({img})' for img, _, _ in pairs]
+        label_cells = [f'（{num}）{suffix.strip()}'.strip() for _, num, suffix in pairs]
+        table = [
+            '> <center>',
+            '> ',
+            '> | ' + ' | '.join(image_cells) + ' |',
+            '> | ' + ' | '.join(['---'] * len(image_cells)) + ' |',
+            '> | ' + ' | '.join(label_cells) + ' |',
+            '> </center>'
+        ]
+        if caption_match:
+            table.append(f'> <center>{caption_match.group(1)}</center>')
+            table.append('> ')
+            return '\n'.join(table) + '\n'
+        return '\n'.join(table) + '\n'
+
+    labeled_figure_table_pattern = re.compile(
+        r'(?m)'
+        r'(?:'
+        r'^[ \t]*!\[[^\]]*\]\([^\)\n]+\)[ \t]*(?:\r?\n)+'
+        r'[ \t]*[（(]\s*[^）)]+?\s*[）)][^\r\n]*(?:[ \t]*\r?\n+)'
+        r'){2,}'
+        r'(?:^[ \t]*(?:图\s*\d+(?:\.\d+)*(?:-\d+)?|[（(]第\s*\d+\s*题[）)])[ \t]*$)?'
+    )
+    text = labeled_figure_table_pattern.sub(convert_labeled_figure_table, text)
+
+    text = fix_misordered_image_caption_blocks(text)
     text = re.sub(r'(?m)(?:\r?\n[ \t]*)+(?=> (?:\||<center>))', '\n', text)
+
+    def convert_question_figure_row(match):
+        content = match.group(0)
+        imgs = re.findall(r'!\[[^\]]*\]\(([^)\n]+)\)', content)
+        caption_match = re.search(
+            r'(?m)^[ \t]*[（(]第\s*(\d+)\s*题[）)][ \t]*$',
+            content,
+        )
+        if not caption_match:
+            return content
+        question_num = caption_match.group(1)
+        image_cells = [f'![]({img})' for img in imgs]
+        table = [
+            '> <center>',
+            '> ',
+            '> | ' + ' | '.join(image_cells) + ' |',
+            '> | ' + ' | '.join(['---'] * len(image_cells)) + ' |',
+            '> </center>',
+            f'> <center>（第{question_num}题）</center>',
+            '> '
+        ]
+        return '\n'.join(table) + '\n'
+
+    question_figure_row_pattern = re.compile(
+        r'(?m)'
+        r'(?:^[ \t]*!\[[^\]]*\]\([^\)\n]+\)[ \t]*(?:[ \t]*\r?\n)+){2,}'
+        r'^[ \t]*[（(]第\s*\d+\s*题[）)][ \t]*$'
+    )
+    text = question_figure_row_pattern.sub(convert_question_figure_row, text)
+
+    def convert_numbered_figure_row(match):
+        content = match.group(0)
+        imgs = re.findall(r'!\[[^\]]*\]\(([^)\n]+)\)', content)
+        caption_match = re.search(
+            r'(?m)^[ \t]*[（(](\d+)[）)][ \t]*$',
+            content,
+        )
+        if not caption_match:
+            return content
+        num = caption_match.group(1)
+        image_cells = [f'![]({img})' for img in imgs]
+        table = [
+            '> <center>',
+            '> ',
+            '> | ' + ' | '.join(image_cells) + ' |',
+            '> | ' + ' | '.join(['---'] * len(image_cells)) + ' |',
+            '> </center>',
+            f'> <center>（{num}）</center>',
+            '> '
+        ]
+        return '\n'.join(table) + '\n'
+
+    numbered_figure_row_pattern = re.compile(
+        r'(?m)'
+        r'(?:^[ \t]*!\[[^\]]*\]\([^\)\n]+\)[ \t]*(?:[ \t]*\r?\n)+){2,}'
+        r'^[ \t]*[（(]\d+[）)][ \t]*$'
+    )
+    text = numbered_figure_row_pattern.sub(convert_numbered_figure_row, text)
+
+    def convert_plain_figure_table(match):
+        content = match.group(0)
+        imgs = re.findall(r'!\[[^\]]*\]\(([^)\n]+)\)', content)
+        caption_match = re.search(
+            r'(?m)^[ \t]*图\s*(\d+(?:\.\d+)*(?:-\d+)?)[ \t]*$',
+            content,
+        )
+        if len(imgs) < 2 or not caption_match:
+            return content
+        image_cells = [f'![]({img})' for img in imgs]
+        table = [
+            '> <center>',
+            '> ',  
+            '> | ' + ' | '.join(image_cells) + ' |',
+            '> | ' + ' | '.join(['---'] * len(image_cells)) + ' |',
+            '> </center>',
+            f'> <center>图{caption_match.group(1)}</center>',
+            '> '
+        ]
+        return '\n'.join(table) + '\n'
+
+    plain_figure_table_pattern = re.compile(
+        r'(?m)'
+        r'(?:^[ \t]*!\[[^\]]*\]\([^\)\n]+\)[ \t]*(?:[ \t]*\r?\n)+){2,}'
+        r'^[ \t]*图\s*\d+(?:\.\d+)*(?:-\d+)?[ \t]*$'
+    )
+    text = plain_figure_table_pattern.sub(convert_plain_figure_table, text)
+
+    text = re.sub(r'(?m)(?:\r?\n[ \t]*)+(?=> (?:\||<center>))', '\n', text)
+
+    text = re.sub(
+        r'(?m)^(?P<prefix>>[ \t]*)(?P<row>\|[^\n]*\|)\s*(?P<center><center>(?:图|ͼ)\d+(?:\.\d+)*(?:-\d+)?</center>)\s*$',
+        lambda m: f"{m.group('prefix')}{m.group('row')}\n\n{m.group('prefix')}{m.group('center')}",
+        text,
+    )
+
+    def convert_single_figure_markdown(match):
+        img = match.group(1)
+        figure_num = match.group(2)
+        question_num = match.group(3)
+        caption = f'图{figure_num}' if figure_num else f'（第{question_num}题）'
+        return f'<center><img src="{img}" style="max-width:100%;"></center><center>{caption}</center>'
+
+    single_figure_markdown_pattern = re.compile(
+        r'(?m)'
+        r'^[ \t]*!\[[^\]]*\]\(([^)\n]+)\)[ \t]*(?:\r?\n)+'
+        r'[ \t]*(?:图\s*(\d+(?:\.\d+)*(?:-\d+)?)|[（(]第\s*(\d+)\s*题[）)])[ \t]*$'
+    )
+    text = single_figure_markdown_pattern.sub(convert_single_figure_markdown, text)
+
     text = re.sub(r'(?m)(?:\r?\n[ \t]*)+(?=<center><img)', '\n', text)
     text = re.sub(r'(?:\r?\n[ \t]*)+(?=<center>)', '', text)
     text = re.sub(r'</center>\n>', '</center>', text)
@@ -178,7 +368,6 @@ def replace_in_file(path: Path) -> None:
     new = text
     new = apply_basic_cleanup(new)
     new = apply_details_removal(new)
-    new = apply_formula_fixes(new)
     new = apply_choice_fixes(new)
     new = apply_callout_fixes(new)
     new = apply_heading_case_fixes(new)
@@ -186,6 +375,8 @@ def replace_in_file(path: Path) -> None:
     new = apply_blank_line_fixes(new)
     new = compress_blank_lines(new)
     new = restore_blocks(new, blocks)
+    new = apply_formula_fixes(new)
+    new = compress_blank_lines(new)
     if new != original:
         try:
             path.write_text(new, encoding='utf-8')
