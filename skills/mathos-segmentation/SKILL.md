@@ -1,9 +1,9 @@
 ---
-name: mathos-segmentation-stage1
-description: Use after mathos-formatting to split one formatted Markdown file into an Obsidian sandbox package with a master directory and raw segment notes.
+name: mathos-segmentation
+description: Use after mathos-formatting to split one formatted Markdown file into an Obsidian sandbox package with a master directory and raw segment notes, after running an automatic LLM-based heading disambiguation preprocessor.
 ---
 
-# MathOS Segmentation Stage One Operator
+# MathOS Segmentation Operator
 
 Status: operational.
 
@@ -16,7 +16,7 @@ This skill does not call an LLM, clean content, classify concepts, classify exer
 Run a plan first:
 
 ```powershell
-python .\skills\mathos-segmentation-stage1\scripts\mathos_segmentation_stage1.py plan `
+python .\skills\mathos-segmentation\scripts\mathos_segmentation.py plan `
   "<source.md>" `
   --vault-root "<vault root>" `
   --yes
@@ -25,7 +25,7 @@ python .\skills\mathos-segmentation-stage1\scripts\mathos_segmentation_stage1.py
 Then write the sandbox package:
 
 ```powershell
-python .\skills\mathos-segmentation-stage1\scripts\mathos_segmentation_stage1.py segment `
+python .\skills\mathos-segmentation\scripts\mathos_segmentation.py segment `
   "<source.md>" `
   --vault-root "<vault root>" `
   --yes
@@ -75,8 +75,8 @@ Stop and report when:
 
 Report:
 
-- Stage name: `segmentation-stage1`;
-- Skill: `skills/mathos-segmentation-stage1`;
+- Stage name: `segmentation`;
+- Skill: `skills/mathos-segmentation`;
 - Source Markdown path;
 - Vault root;
 - Command used;

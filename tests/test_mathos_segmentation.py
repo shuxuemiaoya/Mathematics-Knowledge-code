@@ -5,13 +5,24 @@ import sys
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-SCRIPT_PATH = REPO_ROOT / "skills" / "mathos-segmentation-stage1" / "scripts" / "mathos_segmentation_stage1.py"
+SCRIPT_PATH = REPO_ROOT / "skills" / "mathos-segmentation" / "scripts" / "mathos_segmentation.py"
 
-spec = importlib.util.spec_from_file_location("mathos_segmentation_stage1", SCRIPT_PATH)
+spec = importlib.util.spec_from_file_location("mathos_segmentation", SCRIPT_PATH)
 seg = importlib.util.module_from_spec(spec)
 assert spec.loader is not None
-sys.modules["mathos_segmentation_stage1"] = seg
+sys.modules["mathos_segmentation"] = seg
 spec.loader.exec_module(seg)
+ORIGINAL_RUN_LLM_DISAMBIGUATION = seg.run_llm_disambiguation
+
+import pytest
+
+@pytest.fixture(autouse=True)
+def mock_run_llm_disambiguation(monkeypatch):
+    monkeypatch.setattr(
+        seg,
+        "run_llm_disambiguation",
+        lambda source_path, vault_root, env_path=None: (0, source_path.read_text(encoding="utf-8-sig"))
+    )
 
 
 def assert_segmentation_error_contains(expected_text, func, *args, **kwargs):
@@ -24,8 +35,8 @@ def assert_segmentation_error_contains(expected_text, func, *args, **kwargs):
 
 
 def test_module_exposes_stage_constants():
-    assert seg.STAGE_NAME == "segmentation-stage1"
-    assert seg.SKILL_NAME == "skills/mathos-segmentation-stage1"
+    assert seg.STAGE_NAME == "segmentation"
+    assert seg.SKILL_NAME == "skills/mathos-segmentation"
 
 
 SAMPLE_MARKDOWN = """# 第一章 集合与常用逻辑用语
@@ -85,7 +96,7 @@ def test_build_plan_uses_sandbox_folder_and_short_links(tmp_path):
         "1.2.1 函数的概念",
     ]
     assert plan.next_command.startswith(
-        r"python .\skills\mathos-segmentation-stage1\scripts\mathos_segmentation_stage1.py segment"
+        r"python .\skills\mathos-segmentation\scripts\mathos_segmentation.py segment"
     )
     assert "'" + str(source.resolve()) + "'" in plan.next_command
     assert "--vault-root '" + str(vault_root.resolve()) + "'" in plan.next_command
@@ -367,7 +378,7 @@ def test_build_segment_command_uses_resolved_paths_and_yes(tmp_path):
     command = seg.build_segment_command(source, vault_root, target_depth=2)
 
     assert command == (
-        r"python .\skills\mathos-segmentation-stage1\scripts\mathos_segmentation_stage1.py segment "
+        r"python .\skills\mathos-segmentation\scripts\mathos_segmentation.py segment "
         f"'{source.resolve()}' --vault-root '{vault_root.resolve()}' --target-depth 2 --yes"
     )
 
@@ -427,12 +438,12 @@ def test_write_run_records_creates_state_manifest_and_summary(tmp_path):
     state = json.loads((record_dir / "run-state.json").read_text(encoding="utf-8"))
     manifest = json.loads((record_dir / "manifest.json").read_text(encoding="utf-8"))
     summary = (record_dir / "run-summary.md").read_text(encoding="utf-8")
-    assert state["stage"] == "segmentation-stage1"
+    assert state["stage"] == "segmentation"
     assert state["status"] == "completed"
     assert state["counts"]["segments"] == 3
     assert manifest["master_path"] == str(plan.master_path)
     assert manifest["verification"]["status"] == "passed"
-    assert "Stage name: segmentation-stage1" in summary
+    assert "Stage name: segmentation" in summary
 
 
 def test_verify_package_checks_links_and_source_hash(tmp_path):
@@ -489,7 +500,7 @@ def test_main_plan_prints_json_without_writing_package(tmp_path, capsys):
     captured = capsys.readouterr()
     payload = json.loads(captured.out)
     assert exit_code == 0
-    assert payload["stage"] == "segmentation-stage1"
+    assert payload["stage"] == "segmentation"
     assert payload["counts"]["segments"] == 3
     assert not (source.parent / "book").exists()
 
@@ -508,7 +519,7 @@ def test_main_segment_writes_package_and_records(tmp_path, monkeypatch):
     assert exit_code == 0
     assert source.exists()
     assert not (source.parent / "book" / "000_book目录.md").exists()
-    assert list((repo_root / "agent-memory" / "records").glob("*-segmentation-stage1-book"))
+    assert list((repo_root / "agent-memory" / "records").glob("*-segmentation-book"))
 
 
 def test_main_segment_requires_yes(tmp_path, capsys):
@@ -733,3 +744,96 @@ def test_select_target_depth_falls_back_when_no_depth_3():
     headings = seg.extract_numbered_headings(markdown_with_h2)
     # Target depth should fall back to max (2) since 3 doesn't exist
     assert seg.select_target_depth(headings, None) == 2
+
+
+def test_extract_headings_with_parent_h1():
+    markdown = """# 第一章 集合与常用逻辑用语
+## 1.1 集合的概念
+### 1.1.1 集合与元素
+## 小结
+# 第二章 函数
+## 复习参考题
+"""
+    headings = seg.extract_headings_with_parent_h1(markdown)
+    assert len(headings) == 4
+    
+    assert headings[0]["title"] == "集合的概念"
+    assert headings[0]["full_title"] == "1.1 集合的概念"
+    assert headings[0]["parent_h1"] == "第一章 集合与常用逻辑用语"
+    assert headings[0]["level"] == 2
+    
+    assert headings[1]["title"] == "集合与元素"
+    assert headings[1]["full_title"] == "1.1.1 集合与元素"
+    assert headings[1]["parent_h1"] == "第一章 集合与常用逻辑用语"
+    assert headings[1]["level"] == 3
+    
+    assert headings[2]["title"] == "小结"
+    assert headings[2]["full_title"] == "小结"
+    assert headings[2]["parent_h1"] == "第一章 集合与常用逻辑用语"
+    assert headings[2]["level"] == 2
+    
+    assert headings[3]["title"] == "复习参考题"
+    assert headings[3]["full_title"] == "复习参考题"
+    assert headings[3]["parent_h1"] == "第二章 函数"
+    assert headings[3]["level"] == 2
+
+
+def test_apply_disambiguation_rewrites():
+    markdown = "# 第一章 集合\n## 小结\n## 1.1 概念\n## 复习参考题\n"
+    rewrites = [
+        {"line_index": 1, "original_text": "小结", "new_text": "集合 小结"},
+        {"line_index": 3, "original_text": "复习参考题", "new_text": "集合 复习参考题"}
+    ]
+    new_markdown = seg.apply_disambiguation_rewrites(markdown, rewrites)
+    assert new_markdown == "# 第一章 集合\n## 集合 小结\n## 1.1 概念\n## 集合 复习参考题\n"
+
+
+def test_run_llm_disambiguation_success(tmp_path, monkeypatch):
+    vault_root = tmp_path / "vault"
+    source = vault_root / "book.md"
+    source.parent.mkdir(parents=True)
+    original_content = "# 第一章 集合\n## 小结\n"
+    source.write_text(original_content, encoding="utf-8")
+    
+    env_file = vault_root / ".env"
+    env_file.write_text("DEEPSEEK_API_KEY=testkey\nDEEPSEEK_MODEL=testmodel\nDEEPSEEK_BASE_URL=https://api.test.com\n", encoding="utf-8")
+    
+    class DummyClient:
+        def __init__(self, settings):
+            assert settings.api_key == "testkey"
+            assert settings.model == "testmodel"
+            assert settings.base_url == "https://api.test.com"
+        def chat(self, system_prompt, user_payload, response_format=None):
+            return json.dumps({
+                "rewrites": [
+                    {"line_index": 1, "original_text": "小结", "new_text": "集合 小结"}
+                ]
+            })
+            
+    monkeypatch.setattr(seg.provider, "DeepSeekProviderClient", DummyClient)
+    
+    count, new_text = ORIGINAL_RUN_LLM_DISAMBIGUATION(source, vault_root, env_file)
+    assert count == 1
+    assert new_text == "# 第一章 集合\n## 集合 小结\n"
+    
+    # Verify backup is created with original content
+    backup_path = source.with_suffix(source.suffix + ".bak")
+    assert backup_path.is_file()
+    assert backup_path.read_text(encoding="utf-8") == original_content
+    
+    # Verify in-place overwrite
+    assert source.read_text(encoding="utf-8") == "# 第一章 集合\n## 集合 小结\n"
+    
+    # Run again with no modifications returned
+    class DummyClientNoChanges:
+        def __init__(self, settings):
+            pass
+        def chat(self, system_prompt, user_payload, response_format=None):
+            return json.dumps({"rewrites": []})
+            
+    monkeypatch.setattr(seg.provider, "DeepSeekProviderClient", DummyClientNoChanges)
+    count, new_text = ORIGINAL_RUN_LLM_DISAMBIGUATION(source, vault_root, env_file)
+    assert count == 0
+    assert new_text == "# 第一章 集合\n## 集合 小结\n"
+    # Backup remains original content (doesn't get overwritten by the modified state)
+    assert backup_path.read_text(encoding="utf-8") == original_content

@@ -1,0 +1,11 @@
+- [ ] Task 1: Rename Folder, Files, and Constants
+  - [ ] Perform the physical file renames
+  - [ ] Update internal constants and paths
+- [ ] Task 2: Implement Heading Disambiguation Preprocessing Logic
+  - [ ] Write get_h1_core_title and is_ambiguous_heading helpers
+  - [ ] Write disambiguation preprocessor logic
+  - [ ] Integrate preprocessing step into CLI entry points
+- [ ] Task 3: Update Test Suite and Verify Correctness
+  - [ ] Add unit tests for disambiguation
+  - [ ] Run pytest and confirm all 117+ tests pass
+  - [ ] Run segment on a textbook to verify in vault

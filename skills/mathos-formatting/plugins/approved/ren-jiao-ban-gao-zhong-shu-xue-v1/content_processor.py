@@ -84,21 +84,21 @@ def apply_callout_fixes(text: str) -> str:
     """通用 callout 规则：删除教科书装饰图片，并将栏目标题转为 callout。"""
     # 删除教科书特殊标题前的图片链接和空行，添加特殊标记
     text = re.sub(
-        r'(?m)^[ \t]*!\[[^\]]*\]\([^\)\n]+\)[ \t]*(?:\r?\n)+(?=^[ \t]*#\s*(?:归纳|练习|溯源|探究|思考|观察|复习巩固|综合运用|拓广探索)\b)',
+        r'(?m)^[ \t]*!\[[^\]]*\]\([^\)\n]+\)[ \t]*(?:\r?\n)+(?=^[ \t]*#{4,6}\s*(?:归纳|练习|溯源|探究|思考|观察|复习巩固|综合运用|拓广探索)\b)',
         '',
         text,
     )
-    text = re.sub(r'(?m)^#\s+探究\b', r'> [!explore] 探究', text)
-    text = re.sub(r'(?m)^#\s+思考\b', r'> [!think] 思考', text)
-    text = re.sub(r'(?m)^#\s+尝试·思考\b', r'> [!think] 尝试·思考', text)
-    text = re.sub(r'(?m)^#\s+观察\b', r'> [!observe] 观察', text)
-    text = re.sub(r'(?m)^#\s+归纳\b', r'> [!tip] 归纳', text)
-    text = re.sub(r'(?m)^#\s+尝试·交流\b', r'> [!tip] 尝试·交流', text)
-    text = re.sub(r'(?m)^#\s+回顾·反思\b', r'> [!summary] 回顾·反思', text)
-    text = re.sub(r'(?m)^#\s+操作·交流\b', r'> [!todo] 操作·交流', text)
-    text = re.sub(r'(?m)^#\s+溯源\b', r'> [!quote] 溯源', text)
-    text = re.sub(r'(?m)^(?:#\s+)?(例\s*\d+\b.*)$', r'> [!example]- \1', text)
-    text = re.sub(r'(?m)^(?:#\s+)?(例 \d+\b.*)$', r'> [!example]- \1', text)
+    text = re.sub(r'(?m)^#{4,6}\s+探究\b', r'> [!explore] 探究', text)
+    text = re.sub(r'(?m)^#{4,6}\s+思考\b', r'> [!think] 思考', text)
+    text = re.sub(r'(?m)^#{4,6}\s+尝试·思考\b', r'> [!think] 尝试·思考', text)
+    text = re.sub(r'(?m)^#{4,6}\s+观察\b', r'> [!observe] 观察', text)
+    text = re.sub(r'(?m)^#{4,6}\s+归纳\b', r'> [!tip] 归纳', text)
+    text = re.sub(r'(?m)^#{4,6}\s+尝试·交流\b', r'> [!tip] 尝试·交流', text)
+    text = re.sub(r'(?m)^#{4,6}\s+回顾·反思\b', r'> [!summary] 回顾·反思', text)
+    text = re.sub(r'(?m)^#{4,6}\s+操作·交流\b', r'> [!todo] 操作·交流', text)
+    text = re.sub(r'(?m)^#{4,6}\s+溯源\b', r'> [!quote] 溯源', text)
+    text = re.sub(r'(?m)^(?:#{4,6}\s+)?(例\s*\d+\b.*)$', r'> [!example]- \1', text)
+    text = re.sub(r'(?m)^(?:#{4,6}\s+)?(例 \d+\b.*)$', r'> [!example]- \1', text)
     text = re.sub(r'(?m)^(> \[!(?:quote|explore|think|observe|tip|summary|todo)\] (?:思考·交流|溯源|探究|思考|观察|归纳|尝试·思考|尝试·交流|回顾·反思|操作·交流))[ \t]*\r?\n[ \t]*\r?\n', r'\1\n', text)
     text = re.sub(r'(?m)^(> \[!example\]-[^\n]*)(\n[ \t]*\n)', r'\1\n', text)
     text = re.sub(r'(?m)(?<!\n)\n(?=[ \t]*> \[!)', '\n\n', text)
@@ -106,37 +106,36 @@ def apply_callout_fixes(text: str) -> str:
 
 def apply_heading_case_fixes(text: str) -> str:
     """明确标题模式修正。"""
-    text = re.sub(r'(?m)^(#\s+第[一二三四五六七八九十百]+章[^\r\n]*)\s*\r?\n\s*#\s+', r'\1 ', text)
-    text = re.sub(r'(?m)^#\s+([（(]\d+[）)].*)$', r'\1', text)
-    text = re.sub(r'(?m)^#\s+(\d+[\.．]\s*)', r'#### \1', text)
-    text = re.sub(r'(?m)^#\s+(习题\s*\d+(?:\.\d+)*)', r'## \1', text)
-    text = re.sub(r'(?m)^#+\s+(\d+\.\d+\.\d+\b.*)$', r'### \1', text)
-    text = re.sub(r'(?m)^#+\s+(\d+\.\d+\b(?!\.\d).*)$', r'## \1', text)
-    text = re.sub(r'(?m)^#\s+知识技能\b', r'### 知识技能', text)
-    text = re.sub(r'(?m)^#\s+问题解决\b', r'### 问题解决', text)
-    text = re.sub(r'(?m)^#\s+联系拓广\b', r'### 联系拓广', text)
-    text = re.sub(r'(?m)^#\s+数学理解\b', r'### 数学理解', text)
-    text = re.sub(r'(?m)^#\s+阅读[与·和]思考\b', r'## 阅读与思考', text)
-    text = re.sub(r'(?m)^(## 阅读与思考)\s*\r?\n\s*#\s+', r'\1\n### ', text)
-    text = re.sub(r'(?m)^#\s+探究[与·和]发现\b', r'## 探究与发现', text)
-    text = re.sub(r'(?m)^(## 探究与发现)\s*\r?\n\s*#\s+', r'\1\n### ', text)
-    text = re.sub(r'(?m)^#\s+练习\b', r'#### 练习', text)
-    text = re.sub(r'(?m)^#\s+随堂练习\b', r'#### 随堂练习', text)
-    text = re.sub(r'(?m)^#\s+复习参考题\s*(\d*)\b', r'## 复习参考题\1', text)
-    text = re.sub(r'(?m)^#\s+复习巩固\b', r'### 复习巩固', text)
-    text = re.sub(r'(?m)^#\s+综合运用\b', r'### 综合运用', text)
-    text = re.sub(r'(?m)^#\s+拓广探索\b', r'### 拓广探索', text)
-    text = re.sub(r'(?m)^#\s+小结\b', r'## 小结', text)
-    text = re.sub(r'(?m)^#\s+([一二三四五六七八九十]+、)', r'### \1', text)
-    text = re.sub(r'(?m)^#\s+（([一二三四五六七八九十]+)）', r'### （\1）', text)
+    text = re.sub(r'(?m)^#{4,6}\s+([（(]\d+[）)].*)$', r'\1', text)
+    text = re.sub(r'(?m)^#{4,6}\s+(\d+[\.．]\s*)', r'#### \1', text)
+    text = re.sub(r'(?m)^#{4,6}\s+(习题\s*\d+(?:\.\d+)*)', r'## \1', text)
+    text = re.sub(r'(?m)^#{4,6}\s+(\d+\.\d+\.\d+\b.*)$', r'### \1', text)
+    text = re.sub(r'(?m)^#{4,6}\s+(\d+\.\d+\b(?!\.\d).*)$', r'## \1', text)
+    text = re.sub(r'(?m)^#{4,6}\s+知识技能\b', r'### 知识技能', text)
+    text = re.sub(r'(?m)^#{4,6}\s+问题解决\b', r'### 问题解决', text)
+    text = re.sub(r'(?m)^#{4,6}\s+联系拓广\b', r'### 联系拓广', text)
+    text = re.sub(r'(?m)^#{4,6}\s+数学理解\b', r'### 数学理解', text)
+    text = re.sub(r'(?m)^#{4,6}\s+阅读[与·和]思考\b', r'## 阅读与思考', text)
+    text = re.sub(r'(?m)^(## 阅读与思考)\s*\r?\n\s*#{4,6}\s+', r'\1\n### ', text)
+    text = re.sub(r'(?m)^#{4,6}\s+探究[与·和]发现\b', r'## 探究与发现', text)
+    text = re.sub(r'(?m)^(## 探究与发现)\s*\r?\n\s*#{4,6}\s+', r'\1\n### ', text)
+    text = re.sub(r'(?m)^#{4,6}\s+练习\b', r'#### 练习', text)
+    text = re.sub(r'(?m)^#{4,6}\s+随堂练习\b', r'#### 随堂练习', text)
+    text = re.sub(r'(?m)^#{4,6}\s+复习参考题\s*(\d*)\b', r'## 复习参考题\1', text)
+    text = re.sub(r'(?m)^#{4,6}\s+复习巩固\b', r'### 复习巩固', text)
+    text = re.sub(r'(?m)^#{4,6}\s+综合运用\b', r'### 综合运用', text)
+    text = re.sub(r'(?m)^#{4,6}\s+拓广探索\b', r'### 拓广探索', text)
+    text = re.sub(r'(?m)^#{4,6}\s+小结\b', r'## 小结', text)
+    text = re.sub(r'(?m)^#{4,6}\s+([一二三四五六七八九十]+、)', r'### \1', text)
+    text = re.sub(r'(?m)^#{4,6}\s+（([一二三四五六七八九十]+)）', r'### （\1）', text)
     return text
 
 def apply_image_caption_fixes(text: str) -> str:
     """图片与题注修正。"""
-    # 删除图片和题注误识别为标题
-    text = re.sub(r'(?m)^[ \t]*#\s*(!\[[^\]]*\]\([^\)\n]+\))[ \t]*$', r'\1', text)
-    text = re.sub(r'(?m)^[ \t]*#\s*(图\s*\d+(?:\.\d+)*(?:-\d+)?)[ \t]*$', r'\1', text)
-    text = re.sub(r'(?m)^[ \t]*#\s*([（(][^）)\r\n]+[）)])[ \t]*$', r'\1', text)
+    # 删除图片和题注误识别为标题（只匹配 H4–H6）
+    text = re.sub(r'(?m)^[ \t]*#{4,6}\s*(!\[[^\]]*\]\([^\)\n]+\))[ \t]*$', r'\1', text)
+    text = re.sub(r'(?m)^[ \t]*#{4,6}\s*(图\s*\d+(?:\.\d+)*(?:-\d+)?)[ \t]*$', r'\1', text)
+    text = re.sub(r'(?m)^[ \t]*#{4,6}\s*([（(][^）)\r\n]+[）)])[ \t]*$', r'\1', text)
 
     def fix_misordered_image_caption_blocks(text: str) -> str:
         image_re = re.compile(r'^[ \t]*!\[[^\]]*\]\(([^)\r\n]+)\)[ \t]*$')
