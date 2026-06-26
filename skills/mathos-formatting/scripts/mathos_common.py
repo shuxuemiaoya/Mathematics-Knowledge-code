@@ -263,7 +263,7 @@ HEADING_LIKE_RE = re.compile(
     r"\d+(?:\.\d+)+\s+.+|"
     r"(阅读与思考|探究与发现|信息技术应用|文献阅读|小结|复习参考题).*)$"
 )
-TOC_ENTRY_PAGE_RE = re.compile(r"(?:…+|\.{2,}|·{2,}|．{2,}|\s+)\s*\d+\s*$")
+TOC_ENTRY_PAGE_RE = re.compile(r"(?:…+|\.{2,}|·{2,}|．{2,}|\s+|/)\s*\d+\s*$")
 CODE_FENCE_OPEN_RE = re.compile(r"^(`{3,}|~{3,}).*$")
 FLAG_MAP = {
     "MULTILINE": re.MULTILINE,

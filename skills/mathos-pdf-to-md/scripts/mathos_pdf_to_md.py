@@ -477,6 +477,7 @@ def extract_mineru_zip(
     pdf_stem: str,
     artifact_dir: Path,
     part_label: str,
+    target_md: Path | None = None,
 ) -> ExtractedPart:
     output_md.parent.mkdir(parents=True, exist_ok=True)
     artifact_extract_dir = artifact_dir / "extracted" / part_label
@@ -498,7 +499,8 @@ def extract_mineru_zip(
             target_artifact.write_bytes(archive.read(member))
             if safe_path.parts and safe_path.parts[0] == "images":
                 relative_inside_images = Path(*safe_path.parts[1:])
-                final_asset = output_md.parent / "images" / pdf_stem / relative_inside_images
+                dest_parent = target_md.parent if target_md is not None else output_md.parent
+                final_asset = dest_parent / "images" / pdf_stem / relative_inside_images
                 final_asset.parent.mkdir(parents=True, exist_ok=True)
                 final_asset.write_bytes(archive.read(member))
                 assets.append(final_asset)
@@ -566,6 +568,7 @@ def convert_job(job: PdfJob, client: MineruClient, artifact_dir: Path) -> Conver
                         pdf_stem=asset_namespace,
                         artifact_dir=artifact_dir,
                         part_label=part_label,
+                        target_md=job.target_md,
                     )
                 )
         if len(extracted_parts) > 1:

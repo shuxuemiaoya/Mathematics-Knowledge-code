@@ -9,11 +9,22 @@ Status: operational.
 
 Use this operator after `mathos-formatting` when one formatted long Markdown file should be split by numbered headings into raw Obsidian notes.
 
-This skill does not call an LLM, clean content, classify concepts, classify exercises, judge mathematical correctness, or modify the original source Markdown.
+This skill contains two stages:
+1. Stage 1 (LLM-based Heading Disambiguation): Automatically prefix ambiguous subheadings (e.g. `## 小结`) with their parent H1 core title using an LLM.
+2. Stage 2 (Deterministic Segmentation): Split the disambiguated Markdown file into a master directory and raw Obsidian segment notes.
 
 ## Workflow
 
-Run a plan first:
+First, run LLM-based heading disambiguation (Stage 1):
+
+```powershell
+python .\skills\mathos-segmentation\scripts\mathos_disambiguation.py `
+  "<source.md>" `
+  --vault-root "<vault root>" `
+  --yes
+```
+
+Next, run a plan for the deterministic segmentation (Stage 2 - Plan):
 
 ```powershell
 python .\skills\mathos-segmentation\scripts\mathos_segmentation.py plan `
@@ -22,7 +33,7 @@ python .\skills\mathos-segmentation\scripts\mathos_segmentation.py plan `
   --yes
 ```
 
-Then write the sandbox package:
+Finally, write the sandbox package (Stage 2 - Segment):
 
 ```powershell
 python .\skills\mathos-segmentation\scripts\mathos_segmentation.py segment `

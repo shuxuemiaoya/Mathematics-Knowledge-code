@@ -11,6 +11,14 @@
 
 生成用于修正 Markdown 标题层级的规则。
 
+> [!IMPORTANT]
+> **绝对严禁的规则**：
+> - 你在 `TOC_HEADINGS` 字典中填入的所有键（keys），必须与目录中每一行对应的标题内容**完全一致**（仅去除行尾的页码和导引符，如“/2”、“…… 18”）。
+> - **必须原样保留标题开头的任何章节号、小节序号前缀（例如“第一章”、“1”、“2”、“1.1”等），绝对不许删除、修改或剥离它们！**
+> - 例如，如果目录中有 `1 生活中的立体图形 /2`，对应的键必须是 `"1 生活中的立体图形"`（保留开头的 `1`）。如果目录中有 `回顾与思考 /18`，对应的键是 `"回顾与思考"`。
+> - 这是因为后期的验证器会比对是否包含这些序号前缀。如果剥离了序号，会导致后期的验证失败。
+
+
 ## Core Rule
 
 TOC 是唯一权威来源。
@@ -97,7 +105,7 @@ from pathlib import Path
 import re
 
 # 权威目录标题与其预期层级的映射（1=H1, 2=H2, 3=H3）
-# 注意：键必须是目录中的标题去除页码和导引符（如“…… 1”）后的干净文本。
+# 注意：键必须是目录中的标题去除末尾页码和导引符（如“…… 1”、“ /2”）后的干净文本。必须原样保留标题开头的章节号和序号前缀（如“第一章”、“1”、“2”、“1.1”等），绝对不能将其剥离或删除！
 TOC_HEADINGS: dict[str, int] = {
     # 填入你提取自 TOC 块的所有标题，例如：
     # "第一章 集合与常用逻辑用语": 1,
@@ -123,6 +131,7 @@ def replace_in_file(path: Path) -> None:
     
     lines = text.splitlines()
     new_lines = []
+    merged_indices = set()
     
     in_yaml = len(lines) > 0 and lines[0].strip() == "---"
     in_code = False
@@ -138,10 +147,38 @@ def replace_in_file(path: Path) -> None:
     
     toc_no_spaces = {clean_txt(k): k for k in TOC_HEADINGS}
     
-    # 编译用于提取章节/序号前缀的正则表达式（例如 1.1, 3.3, 3.1.2）
+    # 编译用于提取章节/序号前缀的正则表达式
     SECTION_NUM_RE = re.compile(r"^(\d+(?:\.\d+)+)\b")
+    CHINESE_CHAPTER_RE = re.compile(r"第\s*([一二三四五六七八九十百千万零〇两0-9]+)\s*章")
+    ENGLISH_CHAPTER_RE = re.compile(r"\bChapter\s+([0-9]+)\b", re.IGNORECASE)
+    PARENT_CONTEXT_RE = re.compile(
+        r"^(?:\s*\d+(?:[.．]\d+)+\s+|"
+        r"\s*第\s*[一二三四五六七八九十百千万零〇两0-9]+\s*[章节篇部单元]\s*|"
+        r"\s*(?:Part|Chapter|Section)\s+[A-Z0-9IVXLC]+\b)",
+        re.IGNORECASE,
+    )
+    
+    def adds_parent_context(before: str, after: str) -> bool:
+        before_has = bool(CHINESE_CHAPTER_RE.search(before) or ENGLISH_CHAPTER_RE.search(before) or PARENT_CONTEXT_RE.search(before))
+        after_has = bool(CHINESE_CHAPTER_RE.search(after) or ENGLISH_CHAPTER_RE.search(after) or PARENT_CONTEXT_RE.search(after))
+        return after_has and not before_has
     
     for index, line in enumerate(lines):
+        if index in merged_indices:
+            stripped = line.strip()
+            match = re.match(r"^(#{1,6})\s+(.+?)\s*$", stripped)
+            if match:
+                level = len(match.group(1))
+                title_text = match.group(2).strip()
+                expected_level = min(6, level + 3)
+                new_line = "#" * expected_level + " " + title_text
+            else:
+                new_line = stripped
+            leading = line[:len(line) - len(line.lstrip())]
+            trailing = line[len(line.rstrip()):]
+            new_lines.append(leading + new_line + trailing)
+            continue
+            
         stripped = line.strip()
         if in_yaml:
             new_lines.append(line)
@@ -173,17 +210,17 @@ def replace_in_file(path: Path) -> None:
         if match:
             level = len(match.group(1))
             title_text = match.group(2).strip()
-            # 剥离可能残留在正文标题中的页码尾巴（如数字、带点的页码），仅在必要时
+            # 剥离可能残留在正文标题中的页码尾巴，仅在必要时
             title_clean = re.sub(r'(?:\s+…+|\s+\.{2,}|\s+·{2,}|\s+．{2,}|\s+)\s*\d+$', '', title_text).strip()
             title_clean_no_space = clean_txt(title_clean)
             
             matched_toc_key = None
             
-            # 1. 精确匹配（忽略空格与转义符）
+            # 1. 精确匹配
             if title_clean_no_space in toc_no_spaces:
                 matched_toc_key = toc_no_spaces[title_clean_no_space]
             
-            # 2. 章节/序号前缀匹配（主要解决 OCR 错误及公式空格差异）
+            # 2. 章节/序号前缀匹配
             if not matched_toc_key:
                 num_match = SECTION_NUM_RE.match(title_clean)
                 if num_match:
@@ -196,51 +233,61 @@ def replace_in_file(path: Path) -> None:
                             matched_toc_key = tk
                             break
             
-            # 3. 后缀匹配（忽略空格与转义符，应对拆分标题）
+            # 3. 后缀匹配
             if not matched_toc_key:
                 for tk_ns, tk in toc_no_spaces.items():
                     if tk_ns.endswith(title_clean_no_space):
-                        matched_toc_key = tk
-                        break
+                        if not adds_parent_context(title_text, tk):
+                            matched_toc_key = tk
+                            break
             
-            # 4. 前缀与后续内容匹配（处理被拆分为“标题行”和“普通正文行”的标题，不修改非标题行）
+            # 4. 前缀与后续内容匹配
             if not matched_toc_key:
                 for tk_ns, tk in toc_no_spaces.items():
-                    if tk_ns.startswith(title_clean_no_space) and len(title_clean_no_space) > 3:
-                        remaining_part = tk_ns[len(title_clean_no_space):]
-                        
-                        # 检测下一个非空行是否为标题行，若是则无需在此前缀匹配，因为后续的标题行会通过后缀匹配正确处理
-                        is_next_part_heading = False
-                        lookahead_index = index + 1
-                        while lookahead_index < len(lines):
-                            next_line_stripped = lines[lookahead_index].strip()
-                            if next_line_stripped:
-                                if next_line_stripped.startswith("#"):
-                                    is_next_part_heading = True
-                                break
-                            lookahead_index += 1
-                        
-                        if not is_next_part_heading:
-                            lookahead_text = ""
+                    if tk_ns.startswith(title_clean_no_space) and len(title_clean_no_space) >= 3:
+                        if not adds_parent_context(title_text, tk):
+                            remaining_part = tk_ns[len(title_clean_no_space):]
+                            
+                            is_next_part_heading = False
                             lookahead_index = index + 1
-                            non_empty_count = 0
-                            while lookahead_index < len(lines) and non_empty_count < 3:
+                            next_heading_text = ""
+                            while lookahead_index < len(lines):
                                 next_line_stripped = lines[lookahead_index].strip()
                                 if next_line_stripped:
-                                    non_empty_count += 1
-                                    lookahead_text += clean_txt(next_line_stripped)
+                                    if next_line_stripped.startswith("#"):
+                                        is_next_part_heading = True
+                                        next_heading_match = re.match(r"^(#{1,6})\s+(.+?)\s*$", next_line_stripped)
+                                        if next_heading_match:
+                                            next_heading_text = clean_txt(next_heading_match.group(2))
+                                    break
                                 lookahead_index += 1
-                            if remaining_part and remaining_part in lookahead_text:
-                                matched_toc_key = tk
-                                break
+                            
+                            if is_next_part_heading:
+                                # 如果下一个标题就是拆分标题的剩余部分，则匹配成功
+                                if next_heading_text == remaining_part:
+                                    matched_toc_key = tk
+                                    merged_indices.add(lookahead_index)
+                                    break
+                            else:
+                                lookahead_text = ""
+                                lookahead_index = index + 1
+                                non_empty_count = 0
+                                while lookahead_index < len(lines) and non_empty_count < 3:
+                                    next_line_stripped = lines[lookahead_index].strip()
+                                    if next_line_stripped:
+                                        non_empty_count += 1
+                                        lookahead_text += clean_txt(next_line_stripped)
+                                    lookahead_index += 1
+                                if remaining_part and remaining_part in lookahead_text:
+                                    matched_toc_key = tk
+                                    break
             
             if matched_toc_key:
                 expected_level = TOC_HEADINGS[matched_toc_key]
-                # 写入候选文件时去除转义反斜杠，保证标题干净整洁并与 expected 保持一致
                 canonical_title = matched_toc_key
                 new_line = "#" * expected_level + " " + canonical_title
             else:
-                # 4. 前缀匹配（忽略空格与转义符，拆分标题中的引导标题，需降级）
+                # 5. 前缀匹配（忽略空格与转义符，拆分标题中的引导标题，需降级）
                 is_prefix = False
                 for tk_ns in toc_no_spaces:
                     if tk_ns.startswith(title_clean_no_space):
@@ -271,4 +318,4 @@ if __name__ == "__main__":
     main()
 ```
 
-只输出以上完整的 Python 源码，不得输出任何 markdown 代码包裹块之外的描述文本。确保 `TOC_HEADINGS` 字典中包含你根据 IMMUTABLE TOC 块整理出的所有正确项目和层级。
+只输出以上完整的 Python 源码，不得输出任何 markdown 代码包裹块之外描述文本。确保 `TOC_HEADINGS` 字典中包含你根据 IMMUTABLE TOC 块整理出的所有正确项目和层级。

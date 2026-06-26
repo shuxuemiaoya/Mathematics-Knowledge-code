@@ -1,0 +1,22 @@
+{
+  "plugin_id": "bei-shi-da-ban-chu-zhong-shu-xue-v1",
+  "version": "1.0.0",
+  "artifact_mode": "python",
+  "approval_timestamp": "2026-06-25T05:47:59.509463+00:00",
+  "source_file_family_evidence": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\初中\\课本\\【2024版】【北师大版】\\【2024版】【北师大版】七年级上册数学.md",
+  "heading_signature": {
+    "4": 5,
+    "5": 202,
+    "1": 7,
+    "2": 20,
+    "3": 14
+  },
+  "toc_signature": true,
+  "h1_sample_hash": "a02ba478bb6fd04445d0cf98530242ae9a8b5069f64cf707e34339b0a3c16668",
+  "operations_summary": [
+    "self-check passed",
+    "self-check passed"
+  ],
+  "original_approving_file_path": "C:\\Mathematics-Knowledge\\Secondary-School-Mathematics-Knowledge-Map\\初中\\课本\\【2024版】【北师大版】\\【2024版】【北师大版】七年级上册数学.md",
+  "allowed_scope": "self-check-only"
+}
