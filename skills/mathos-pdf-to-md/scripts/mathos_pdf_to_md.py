@@ -366,7 +366,12 @@ def make_data_id(source_pdf: Path, part_index: int, part_count: int) -> str:
 def build_batch_payload(parts: list[PdfPart]) -> dict[str, Any]:
     return {
         "files": [
-            {"name": part.upload_path.name, "data_id": part.data_id, "is_ocr": True}
+            {
+                "name": part.upload_path.name,
+                "data_id": part.data_id,
+                "is_ocr": True,
+                "is_layout": False,
+            }
             for part in parts
         ],
         "model_version": "vlm",
