@@ -1,3 +1,0 @@
-Template notice placeholder.
-
-List bundled third-party notices or local operational notes here when required.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Render Exam LaTeX PDFs"
+  short_description: "Create polished paper and solution PDFs from Markdown"
+  default_prompt: "Use $render-exam-latex-pdfs to create polished LaTeX and PDF editions of this reformatted exam paper and its worked-solution version."

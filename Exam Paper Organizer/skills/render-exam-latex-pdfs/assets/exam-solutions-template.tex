@@ -1,0 +1,116 @@
+\documentclass[UTF8,12pt,a4paper]{ctexart}
+
+\usepackage[margin=2.15cm,headheight=16pt,headsep=0.7cm,footskip=1.15cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{longtable,array}
+\usepackage{eso-pic}
+\usepackage{hyperref}
+
+\definecolor{SolutionTeal}{HTML}{176B75}
+\definecolor{SolutionBlue}{HTML}{2E5FA7}
+\definecolor{SolutionInk}{HTML}{20303C}
+\definecolor{SolutionMuted}{HTML}{667784}
+\definecolor{SolutionPanel}{HTML}{EEF7F7}
+\definecolor{SolutionRule}{HTML}{8CC7C9}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=SolutionBlue,
+  urlcolor=SolutionTeal,
+  citecolor=SolutionBlue,
+  pdfborder={0 0 0}
+}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.55em}
+\setlength{\emergencystretch}{3em}
+\renewcommand{\arraystretch}{1.24}
+\linespread{1.2}
+\setcounter{secnumdepth}{0}
+
+\setlength{\leftmargini}{2.4em}
+\setlength{\leftmarginii}{2.15em}
+\renewcommand{\labelenumi}{\arabic{enumi}.}
+\providecommand{\toprule}{\hline}
+\providecommand{\midrule}{\hline}
+\providecommand{\bottomrule}{\hline}
+
+\ctexset{
+  section={format=\Large\bfseries\color{SolutionBlue},beforeskip=1.4em,afterskip=0.8em},
+  subsection={format=\large\bfseries\color{SolutionTeal},beforeskip=1.05em,afterskip=0.5em},
+  subsubsection={format=\normalsize\bfseries\color{SolutionInk},beforeskip=0.85em,afterskip=0.4em}
+}
+
+\newcommand{\SolutionPageOverlay}{%
+  \AtPageUpperLeft{%
+    \raisebox{-1.18cm}[0pt][0pt]{\hspace*{2.15cm}%
+      \makebox[0pt][l]{\small\bfseries\color{SolutionBlue}试题解析}}}%
+  \AtPageUpperLeft{%
+    \raisebox{-1.18cm}[0pt][0pt]{\hspace*{\dimexpr\paperwidth-2.15cm\relax}%
+      \makebox[0pt][r]{\small\normalfont\color{SolutionTeal}Worked Solutions}}}%
+  \AtPageUpperLeft{%
+    \raisebox{-1.72cm}[0pt][0pt]{\hspace*{2.15cm}%
+      \textcolor{SolutionRule}{\rule{\dimexpr\paperwidth-4.3cm\relax}{0.7pt}}}}%
+  \AtPageLowerLeft{%
+    \raisebox{0.82cm}[0pt][0pt]{\hspace*{2.15cm}%
+      \makebox[\dimexpr\paperwidth-4.3cm\relax][c]{\small\color{SolutionMuted}\thepage}}}%
+}
+\AddToShipoutPictureFG{\SolutionPageOverlay}
+\pagestyle{empty}
+\makeatletter
+\let\ps@plain\ps@empty
+\makeatother
+\newcommand{\useExamPageStyle}{\AddToShipoutPictureFG*{\SolutionPageOverlay}}
+
+\newenvironment{examSolutionBox}{%
+  \par\medskip\begingroup
+  \setlength{\leftskip}{1.0em}\setlength{\rightskip}{0.9em}%
+  \noindent\textcolor{SolutionTeal}{\bfseries\large 解析}\par
+  \smallskip\noindent\textcolor{SolutionRule}{\rule{\dimexpr\linewidth-\leftskip-\rightskip\relax}{0.8pt}}\par
+  \smallskip\color{SolutionInk}%
+}{%
+  \par\smallskip\noindent\textcolor{SolutionRule}{\rule{\dimexpr\linewidth-\leftskip-\rightskip\relax}{0.8pt}}\par
+  \endgroup\medskip
+}
+
+\makeatletter
+\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
+\def\maxheight{\ifdim\Gin@nat@height>0.8\textheight 0.8\textheight\else\Gin@nat@height\fi}
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+\providecommand{\pandocbounded}[1]{#1}
+\makeatother
+
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+
+$if(highlighting-macros)$
+$highlighting-macros$
+$endif$
+$for(header-includes)$
+$header-includes$
+$endfor$
+
+\begin{document}
+\color{SolutionInk}
+
+$if(title)$
+\begin{center}
+  {\LARGE\bfseries\color{SolutionBlue}$title$\par}
+  \vspace{0.35em}
+  {\color{SolutionTeal}\rule{0.32\textwidth}{1.4pt}}
+\end{center}
+\vspace{0.85em}
+$endif$
+
+$for(include-before)$
+$include-before$
+$endfor$
+
+$body$
+
+$for(include-after)$
+$include-after$
+$endfor$
+
+\end{document}

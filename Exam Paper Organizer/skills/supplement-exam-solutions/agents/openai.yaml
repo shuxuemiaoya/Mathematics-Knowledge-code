@@ -1,0 +1,4 @@
+interface:
+  display_name: "Supplement Exam Solutions"
+  short_description: "Create a sibling exam with compact worked solutions"
+  default_prompt: "Use $supplement-exam-solutions to create a sibling （解析版） Markdown file with compact inline answers while leaving the source unchanged."

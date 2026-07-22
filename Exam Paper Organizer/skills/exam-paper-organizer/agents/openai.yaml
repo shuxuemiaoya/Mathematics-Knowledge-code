@@ -1,0 +1,4 @@
+interface:
+  display_name: "Exam Paper Organizer"
+  short_description: "Batch-organize papers, solutions, images, and PDFs"
+  default_prompt: "Use $exam-paper-organizer to organize every exam paper in this folder, clean its images, add worked solutions, and publish polished paper and solutions PDFs."

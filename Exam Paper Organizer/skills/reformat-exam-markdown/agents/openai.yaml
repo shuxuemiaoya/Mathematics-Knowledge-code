@@ -1,0 +1,4 @@
+interface:
+  display_name: "Reformat Exam Markdown"
+  short_description: "Format exams with paged compact answer keys"
+  default_prompt: "Use $reformat-exam-markdown to format this exam with a separate page-broken and compact answer key."

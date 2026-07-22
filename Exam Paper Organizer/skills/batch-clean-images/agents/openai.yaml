@@ -1,0 +1,4 @@
+interface:
+  display_name: "Batch Clean Images"
+  short_description: "Fast upscale, transparency, and scribble removal"
+  default_prompt: "Use $batch-clean-images to process every image in this folder quickly, preserve printed text, remove only handwritten scribbles, upscale it, and return a transparent PNG."

@@ -1,3 +1,0 @@
-Template license placeholder.
-
-Replace this file with the correct license text when creating a production skill.
