@@ -15,7 +15,6 @@ from step2_heading_extraction import run_heading_extraction
 from step3_heading_processing import run_heading_processing
 from step4_toc_removal import run_toc_removal
 from step5_heading_validation import run_heading_validation
-from step6_content_processing import run_content_processing
 
 
 def _provider_identity(provider_client: object) -> tuple[str, str]:
@@ -29,10 +28,12 @@ def run_learning_from_provider(
     markdown_path: Path,
     provider_client: object,
     heading_prompt: str,
-    content_prompt: str,
     work_dir: Path | None = None,
     timeout_seconds: int = 120,
+<<<<<<< Updated upstream:skills/mathos-formatting/scripts/learning_pipeline.py
     h1_index: int = 0,
+=======
+>>>>>>> Stashed changes:MathOS Agent/skills/mathos-formatting/scripts/learning_pipeline.py
 ) -> LearningRunResult:
     markdown_path = markdown_path.resolve()
     work_dir = work_dir or learning_work_dir_for(markdown_path)
@@ -60,7 +61,6 @@ def run_learning_from_provider(
                 artifacts=artifacts,
                 warnings=warnings,
                 errors=errors,
-                approved=False,
                 toc_start_line=toc_start_line,
                 toc_end_line=toc_end_line,
                 stage1_validated=stage1_validated,
@@ -103,6 +103,7 @@ def run_learning_from_provider(
         stage1_validated = True
         state(current_step, "stage1-validated")
 
+<<<<<<< Updated upstream:skills/mathos-formatting/scripts/learning_pipeline.py
         current_step = "step6-content-processing"
         content_result = run_content_processing(
             markdown_path,
@@ -118,6 +119,11 @@ def run_learning_from_provider(
 
         summary = [*content_result.summary, *heading_result.summary, *heading_check_summary]
         candidate_path.write_text(content_result.markdown, encoding="utf-8")
+=======
+        final_markdown = stripped_text
+        summary = [*heading_result.summary, *heading_check_summary]
+        candidate_path.write_text(final_markdown, encoding="utf-8")
+>>>>>>> Stashed changes:MathOS Agent/skills/mathos-formatting/scripts/learning_pipeline.py
         artifacts["candidate"] = candidate_path
         artifacts["report"] = write_review_report(
             original_path=markdown_path,

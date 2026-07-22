@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Promptfoo assertion: validates generated Python scripts (step3 and step6).
+Promptfoo assertion: validates generated heading Python scripts.
 
 Checks:
   - Required imports: import os, from pathlib import Path, import re

@@ -19,6 +19,12 @@ It does not judge generated content quality.
 
 ## Python Workflow
 
+Run commands from:
+
+```text
+C:\Mathematics-Knowledge\Mathematics-Knowledge-code\MathOS Agent
+```
+
 Fast plan before conversion:
 
 ```powershell
@@ -29,7 +35,7 @@ python .\skills\mathos-pdf-to-md\scripts\mathos_pdf_to_md.py plan `
   --yes
 ```
 
-The `plan` command does not call MinerU. It returns compact JSON with pending files, skipped files, and the exact next conversion command.
+The `plan` command does not call MinerU. It returns compact JSON with pending files, skipped files, and the exact next conversion command. It does not write operational memory or run records.
 
 Use this command shape:
 
@@ -55,6 +61,32 @@ C:\Mathematics-Knowledge\.env
 
 Do not print or save the API key.
 
+## No Memory Or Records
+
+The `pdf-to-md` stage must not use `agent-memory/`, `agent-memory/records/`, run-summary templates, failure ledgers, artifact indexes, or saved `run-state.json` files.
+
+Use only:
+
+- stdout JSON emitted by `plan` or `convert`.
+- The final Markdown files and copied image assets in the configured output tree.
+- Transient temporary directories created by the Python runtime during conversion.
+
+Temporary MinerU zips and split-part Markdown are implementation details. Do not preserve them as agent records unless the user explicitly asks for a separate diagnostic run.
+
+## Pipeline Handoff
+
+This skill is normally the first stage of `/mathos agent <path>`. After a successful `convert` run, do not treat PDF conversion as the end of the user request unless the user explicitly asked for PDF-to-Markdown only.
+
+After `convert` exits:
+
+1. Read the compact JSON printed by the `convert` command on stdout.
+2. If `status` is `completed`, `failed` is `0`, and `converted` is greater than `0`, collect each `outputs[].target_md`.
+3. Invoke `skills/mathos-formatting` for every converted Markdown file.
+4. If `converted` is `0` and `skipped` is greater than `0`, report the existing Markdown outputs and ask only if the user wants to format skipped existing files.
+5. If any conversion failed, stop at the PDF stage and report the stdout failure categories before attempting formatting.
+
+Use the compact stdout JSON for this handoff; do not enumerate generated image assets unless needed for a failure diagnosis.
+
 ## Before Running
 
 1. Confirm the user provided an explicit source PDF or directory.
@@ -62,7 +94,6 @@ Do not print or save the API key.
 3. If `--output-root` is not provided, confirm the remembered output root from `skills/mathos-pdf-to-md/config.json`.
 4. Confirm `C:\Mathematics-Knowledge\.env` contains `MINERU_API_KEY`.
 5. Confirm the source directory is under `source_base`.
-6. Confirm where run records will be written under `agent-memory/records/`.
 
 ## Conversion Behavior
 
@@ -80,7 +111,7 @@ Do not print or save the API key.
 
 ## Execution Monitoring
 
-Read `run-state.json` first. It is the compact machine-readable run status and includes counts, output paths, retryable failures, permanent failures, and the next retry command.
+Read the command's stdout JSON first. It is the compact machine-readable run status and includes counts, output paths, retryable failures, permanent failures, and the next retry command.
 
 Track these signals during the run:
 
@@ -98,7 +129,7 @@ Track these signals during the run:
 
 ## Stop Conditions
 
-Stop the task and preserve logs when any of these conditions occur:
+Stop the task and summarize stdout/stderr when any of these conditions occur:
 
 - The Python process crashes.
 - The command exits non-zero.
@@ -127,23 +158,11 @@ Every completed or stopped run must include:
 - Completion status.
 - Stop reason, if stopped.
 - Output folder paths.
-- Log paths.
+- Log paths only when the user explicitly requested a diagnostic run that writes logs.
 - Counts for attempted, converted, failed, skipped, and warning items.
 - Representative failure categories.
 - Split-part counts and merge status when a source PDF was split.
-- Next operational step.
-
-## Save Records
-
-When the run produces useful operational information, save records using:
-
-- `agent-memory/templates/run-summary.md`
-- `agent-memory/templates/failure-ledger.json`
-- `agent-memory/templates/artifact-index.md`
-
-The Python workflow writes run records under `agent-memory/records/<date>-pdf-to-md-<slug>/`.
-
-Each run writes `run-state.json` for fast monitoring and resume decisions. Prefer it over reading full manifests unless details are needed.
+- Next operational step, including whether formatting was started, skipped, or blocked.
 
 ## Boundary Reminder
 

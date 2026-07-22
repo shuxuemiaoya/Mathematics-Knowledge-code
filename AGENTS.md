@@ -12,7 +12,7 @@ It coordinates repo-local skills and workflows for the knowledge-graph build pro
 PDF / Word -> Markdown -> Formatting -> Segmentation Stage One -> Future graph stages
 ```
 
-The agent is responsible for implementation coordination, execution monitoring, output summaries, and operational memory.
+The agent is responsible for implementation coordination, execution monitoring, and output summaries.
 
 ## Boundaries
 
@@ -22,7 +22,7 @@ The agent does not review edits for correctness unless a future human-approved s
 
 The agent does not create, modify, or rewrite skills automatically.
 
-The agent may record operational observations for human review, but humans decide future skill changes.
+The agent may record operational observations for human review only in stages whose active skill explicitly allows records. The `pdf-to-md` stage does not allow operational memory or run records.
 
 ## Repo Scope
 
@@ -46,13 +46,29 @@ Reserved skill slots are named but inactive until a human-approved implementatio
 
 ## Operating Loop
 
+When the user invokes `/mathos agent <path>` or otherwise asks the MathOS agent to process a source path, run the implemented pipeline by default:
+
+```text
+PDF -> Markdown -> Formatting -> Segmentation Stage One
+```
+
+Do not stop after a successful intermediate stage unless the user explicitly requested only that stage, the next stage has no valid input, a stage fails closed, or the next action would replace a source file and requires explicit approval.
+
 For each implemented stage:
 
 1. Select the appropriate repo-local skill or workflow.
 2. Execute the skill task or command.
 3. Monitor execution health.
-4. Summarize stage outputs.
-5. Stop or continue based on operational state.
+4. Read the compact stage output first (stdout JSON for PDF conversion, `result-summary.json` for formatting).
+5. Summarize stage outputs.
+6. Continue to the next implemented stage when the current stage completed successfully and produced valid next-stage inputs.
+7. Stop only at a failure gate, a missing-input gate, or an explicit approval gate.
+
+Pipeline handoffs:
+
+- After `mathos-pdf-to-md` converts one or more PDFs, collect the generated Markdown paths from the command's stdout JSON and invoke `mathos-formatting` on each converted Markdown file.
+- After `mathos-formatting` passes, ask before replacing the original Markdown with the candidate. Run segmentation only after the approved candidate has explicitly replaced the source.
+- If `mathos-formatting` fails, read the single routed `error_artifact`, produce a concise operational diagnosis, and stop unless the active formatting skill defines a safe retry path.
 
 ## Stop Conditions
 
@@ -101,13 +117,16 @@ The summary must include:
 - Stage name.
 - Command, workflow, or skill used.
 - Completion status.
+- Next pipeline action taken or the gate that stopped the pipeline.
 - Output folders and generated files.
 - Counts for processed, generated, failed, skipped, and warning items when available.
 - Failure categories and log references.
-- Location of logs, manifests, temporary outputs, and final artifacts.
+- Location of logs, manifests, temporary outputs, and final artifacts when the active stage writes them. For `pdf-to-md`, report stdout/stderr and final Markdown/image outputs only.
 
 ## Operational Memory
 
-Use `agent-memory/` for run summaries, failure ledgers, artifact indexes, and human notes.
+Do not use `agent-memory/` or run records for `pdf-to-md`.
+
+Other stages may use `agent-memory/` only when their active skill explicitly requires it.
 
 Record execution facts, not content-quality judgments.

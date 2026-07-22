@@ -2,10 +2,9 @@
 """
 DSPy prompt optimization for the mathos-formatting pipeline.
 
-Optimizes the three highest-value prompts in the pipeline:
+Optimizes the active provider prompts in the pipeline:
   - step1: TOC extraction from numbered Markdown
   - step3: Heading processor Python script generation
-  - step6: Content processor Python script generation
 
 Uses DeepSeek API via litellm and supports BootstrapFewShot or MIPROv2
 optimizers with domain-specific structural metrics.
@@ -13,7 +12,6 @@ optimizers with domain-specific structural metrics.
 Usage:
   python dspy_optimize.py --step step1 --trainset training_data.json
   python dspy_optimize.py --step step3 --optimizer mipro --dry-run
-  python dspy_optimize.py --step step6 --output ./optimized
 """
 
 from __future__ import annotations
@@ -108,23 +106,6 @@ class HeadingProcessorGeneration(dspy.Signature):
     )
     python_script: str = dspy.OutputField(
         desc="Complete Python heading processor script with TOC_HEADINGS dict"
-    )
-
-
-class ContentProcessorGeneration(dspy.Signature):
-    """Generate a Python script to clean up Markdown content formatting.
-
-    The input is a sample H1 chapter from the Markdown file. The output must
-    be a complete, directly-runnable Python script using the protect-process-restore
-    pipeline pattern. It must import os, pathlib.Path, and re, and define:
-    get_target_root, protect_blocks, restore_blocks, replace_in_file, and main.
-    """
-
-    chapter_sample: str = dspy.InputField(
-        desc="Sample H1 chapter content from the Markdown file"
-    )
-    python_script: str = dspy.OutputField(
-        desc="Complete Python content processor script"
     )
 
 
@@ -298,57 +279,6 @@ def heading_processor_metric(
     return min(score, 1.0)
 
 
-def content_processor_metric(
-    example: dspy.Example, prediction, trace=None
-) -> float:
-    """
-    Evaluate content processor script quality.
-
-    Scoring (0.0 – 1.0):
-      0.25 — valid Python syntax
-      0.30 — all required functions present (partial credit)
-      0.25 — protect-process-restore pipeline structure
-      0.20 — no dangerous imports
-    """
-    pred_text = getattr(prediction, "python_script", "") or ""
-    if not pred_text.strip():
-        return 0.0
-
-    code = _strip_code_fences(pred_text)
-    score = 0.0
-
-    # Check 1: Valid Python syntax
-    if _check_python_syntax(code):
-        score += 0.25
-
-    # Check 2: Required functions
-    found, total = _check_required_functions(code)
-    score += 0.30 * (found / total)
-
-    # Check 3: Pipeline structure (protect → process → restore)
-    has_protect_call = "protect_blocks" in code
-    has_restore_call = "restore_blocks" in code
-    # Check that replace_in_file calls both protect and restore
-    replace_in_file_match = re.search(
-        r"def\s+replace_in_file\s*\([^)]*\)[\s\S]*?(?=\ndef\s|\Z)",
-        code,
-    )
-    if replace_in_file_match:
-        fn_body = replace_in_file_match.group()
-        if "protect_blocks" in fn_body and "restore_blocks" in fn_body:
-            score += 0.25
-        elif has_protect_call and has_restore_call:
-            score += 0.15
-    elif has_protect_call and has_restore_call:
-        score += 0.10
-
-    # Check 4: No dangerous imports
-    if _check_no_dangerous_imports(code):
-        score += 0.20
-
-    return min(score, 1.0)
-
-
 def _strip_code_fences(text: str) -> str:
     """Strip Markdown code fences from Python code output."""
     text = text.strip()
@@ -377,7 +307,7 @@ def load_training_data(
 
     Args:
         trainset_path: Path to training_data.json
-        step: One of 'step1', 'step3', 'step6'
+        step: One of 'step1', 'step3'
 
     Returns:
         List of dspy.Example with correct input/output field names.
@@ -388,12 +318,10 @@ def load_training_data(
     step_key_map = {
         "step1": "step1_toc_detection",
         "step3": "step3_heading_processor",
-        "step6": "step6_content_processor",
     }
     field_map = {
         "step1": ("markdown_sample", "toc_text"),
         "step3": ("toc_and_headings", "python_script"),
-        "step6": ("chapter_sample", "python_script"),
     }
 
     step_key = step_key_map[step]
@@ -430,11 +358,6 @@ STEP_CONFIG = {
         "metric": heading_processor_metric,
         "module_class": "HeadingProcessorGenerator",
     },
-    "step6": {
-        "signature": ContentProcessorGeneration,
-        "metric": content_processor_metric,
-        "module_class": "ContentProcessorGenerator",
-    },
 }
 
 
@@ -460,7 +383,6 @@ def evaluate_baseline(
     field_map = {
         "step1": "markdown_sample",
         "step3": "toc_and_headings",
-        "step6": "chapter_sample",
     }
     input_field = field_map[step]
 
@@ -487,7 +409,7 @@ def run_optimization(
     Run the full optimization pipeline for a given step.
 
     Args:
-        step: One of 'step1', 'step3', 'step6'
+        step: One of 'step1', 'step3'
         trainset_path: Path to training_data.json
         output_dir: Directory to write optimized prompts and reports
         optimizer_name: 'bootstrap' or 'mipro'
@@ -588,7 +510,6 @@ def _run_dry_validation(
     field_map = {
         "step1": ("markdown_sample", "toc_text"),
         "step3": ("toc_and_headings", "python_script"),
-        "step6": ("chapter_sample", "python_script"),
     }
     _, output_field = field_map[step]
 
@@ -734,12 +655,12 @@ Examples:
   python dspy_optimize.py --step step3 --optimizer mipro
 
   # Custom trainset and output directory
-  python dspy_optimize.py --step step6 --trainset my_data.json --output ./results
+  python dspy_optimize.py --step step3 --trainset my_data.json --output ./results
 """,
     )
     parser.add_argument(
         "--step",
-        choices=["step1", "step3", "step6"],
+        choices=["step1", "step3"],
         required=True,
         help="Which pipeline step to optimize.",
     )

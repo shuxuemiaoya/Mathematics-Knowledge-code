@@ -21,23 +21,14 @@ def _print_json(payload: dict) -> None:
     print(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
-def _self_check_actions(candidate_path: Path, report_path: Path, approve_command: str | None = None) -> list[str]:
+def _self_check_actions(candidate_path: Path, report_path: Path) -> list[str]:
     actions = [
-        f"Run self-check on candidate Markdown: {candidate_path}",
-        f"Use the formatting report for self-check evidence: {report_path}",
-        "If self-check fails, revise the Python artifacts or rerun learn-from-provider with a better prompt/sample.",
+        f"Review candidate Markdown: {candidate_path}",
+        f"Use the formatting report as review evidence: {report_path}",
+        "If the candidate is acceptable, ask for explicit approval before replacing the source Markdown.",
+        "If the candidate is not useful, discard it and rerun with a better prompt/sample.",
     ]
-    if approve_command:
-        actions.append(f"If self-check passes, save the format modification template: {approve_command}")
-    else:
-        actions.append("If self-check passes, run approve with heading_processor.py and content_processor.py to save the format modification template.")
-    actions.append("If not useful, discard the candidate and mathos-formatting work directory.")
     return actions
-
-
-def _artifact_path(args: argparse.Namespace, name: str) -> Path | None:
-    value = getattr(args, name)
-    return Path(value) if value else None
 
 
 def command_inspect(args: argparse.Namespace) -> int:
@@ -58,125 +49,20 @@ def command_inspect(args: argparse.Namespace) -> int:
     return 0
 
 
-def command_apply_approved(args: argparse.Namespace) -> int:
-    result = core.apply_approved_program(Path(args.program_dir), Path(args.markdown))
-    _print_json(
-        {
-            "status": "candidate-written",
-            "candidate_path": str(result.candidate_path),
-            "report_path": str(result.report_path),
-            "summary": result.summary,
-            "warnings": result.warnings,
-            "self_check_required": True,
-            "next_actions": _self_check_actions(result.candidate_path, result.report_path),
-        }
-    )
-    return 0
-
-
-def command_candidate_from_artifacts(args: argparse.Namespace) -> int:
-    heading_script_path = _artifact_path(args, "heading_script")
-    content_script_path = _artifact_path(args, "content_script")
-    title_rewrite_map_path = _artifact_path(args, "title_rewrite_map")
-    plugin_path = _artifact_path(args, "plugin")
-    content_rules_path = _artifact_path(args, "content_rules")
-    opt_path = _artifact_path(args, "heading_optimizations")
-    heading_rules_path = _artifact_path(args, "heading_rules")
-    result = core.run_candidate_from_artifacts(
-        markdown_path=Path(args.markdown),
-        heading_script_path=heading_script_path,
-        content_script_path=content_script_path,
-        title_rewrite_map_path=title_rewrite_map_path,
-        heading_rules_path=heading_rules_path,
-        plugin_path=plugin_path,
-        content_rules_path=content_rules_path,
-        heading_optimizations_path=opt_path,
-    )
-    if heading_script_path and content_script_path:
-        artifact_args = (
-            f"--heading-script {heading_script_path} "
-            f"--content-script {content_script_path} "
-            f"{'--title-rewrite-map ' + str(title_rewrite_map_path) + ' ' if title_rewrite_map_path else ''}"
-        )
-    elif heading_rules_path:
-        artifact_args = (
-            f"--heading-rules {heading_rules_path} "
-            f"{'--content-rules ' + str(content_rules_path) if content_rules_path else '--plugin ' + str(plugin_path)} "
-        )
-    else:
-        artifact_args = ""
-    approve_template = (
-        "python skills/mathos-formatting/scripts/mathos_formatting.py approve "
-        "--approved-root <approved_root> --plugin-id <plugin_id> "
-        f"{artifact_args}"
-        f"--original {Path(args.markdown)} --candidate {result.candidate_path}"
-    )
-    _print_json(
-        {
-            "status": "candidate-written",
-            "candidate_path": str(result.candidate_path),
-            "report_path": str(result.report_path),
-            "summary": result.summary,
-            "warnings": result.warnings,
-            "self_check_required": True,
-            "next_actions": _self_check_actions(result.candidate_path, result.report_path, approve_template),
-        }
-    )
-    return 0
-
-
-def command_approve(args: argparse.Namespace) -> int:
-    heading_script_path = _artifact_path(args, "heading_script")
-    content_script_path = _artifact_path(args, "content_script")
-    title_rewrite_map_path = _artifact_path(args, "title_rewrite_map")
-    heading_rules_path = _artifact_path(args, "heading_rules")
-    heading_rules = None
-    if heading_rules_path is not None:
-        heading_rules = json.loads(heading_rules_path.read_text(encoding="utf-8"))
-    plugin_path = _artifact_path(args, "plugin")
-    content_rules_path = _artifact_path(args, "content_rules")
-    candidate = Path(args.candidate)
-    program_dir = core.save_approved_program(
-        approved_root=Path(args.approved_root),
-        plugin_id=args.plugin_id,
-        heading_script_path=heading_script_path,
-        content_script_path=content_script_path,
-        title_rewrite_map_path=title_rewrite_map_path,
-        heading_rules=heading_rules,
-        plugin_path=plugin_path,
-        content_rules_path=content_rules_path,
-        original_path=Path(args.original),
-        candidate_path=candidate,
-        approving_source_path=Path(args.original),
-        operations_summary=args.summary,
-    )
-    _print_json(
-        {
-            "status": "approved",
-            "program_dir": str(program_dir),
-            "self_check_required": False,
-            "next_actions": [
-                f"Reuse this approved template with apply-approved: {program_dir}",
-                "Keep the approved Python artifacts self-check-only until enough successful runs justify broader automation.",
-            ],
-        }
-    )
-    return 0
-
-
 def command_learn_from_provider(args: argparse.Namespace) -> int:
     settings = provider.load_provider_settings(Path(args.env))
     provider_client = provider.DeepSeekProviderClient(settings)
     heading_prompt = (SCRIPT_DIR.parent / "agents" / "step3_heading_processor_prompt.md").read_text(encoding="utf-8")
-    content_prompt = (SCRIPT_DIR.parent / "agents" / "step6_content_processor_prompt.md").read_text(encoding="utf-8")
     result = core.run_learning_from_provider(
         markdown_path=Path(args.markdown),
         provider_client=provider_client,
         heading_prompt=heading_prompt,
-        content_prompt=content_prompt,
         work_dir=Path(args.work_dir) if args.work_dir else None,
         timeout_seconds=args.timeout_seconds,
+<<<<<<< Updated upstream:skills/mathos-formatting/scripts/mathos_formatting.py
         h1_index=args.h1_index,
+=======
+>>>>>>> Stashed changes:MathOS Agent/skills/mathos-formatting/scripts/mathos_formatting.py
     )
     _print_json(
         {
@@ -188,17 +74,7 @@ def command_learn_from_provider(args: argparse.Namespace) -> int:
             "warnings": result.warnings,
             "errors": result.errors,
             "self_check_required": True,
-            "next_actions": _self_check_actions(
-                result.candidate_path,
-                result.report_path,
-                (
-                    "python skills/mathos-formatting/scripts/mathos_formatting.py approve "
-                    "--approved-root <approved_root> --plugin-id <plugin_id> "
-                    f"--heading-script {result.artifacts.get('heading_script')} "
-                    f"--content-script {result.artifacts.get('content_script')} "
-                    f"--original {Path(args.markdown)} --candidate {result.candidate_path}"
-                ),
-            ),
+            "next_actions": _self_check_actions(result.candidate_path, result.report_path),
         }
     )
     return 0
@@ -208,15 +84,16 @@ def command_run(args: argparse.Namespace) -> int:
     settings = provider.load_provider_settings(Path(args.env))
     provider_client = provider.DeepSeekProviderClient(settings)
     heading_prompt = (SCRIPT_DIR.parent / "agents" / "step3_heading_processor_prompt.md").read_text(encoding="utf-8")
-    content_prompt = (SCRIPT_DIR.parent / "agents" / "step6_content_processor_prompt.md").read_text(encoding="utf-8")
     result = run_automated_formatting(
         markdown_path=Path(args.markdown),
         provider_client=provider_client,
         heading_prompt=heading_prompt,
-        content_prompt=content_prompt,
         work_dir=Path(args.work_dir) if args.work_dir else None,
         timeout_seconds=args.timeout_seconds,
+<<<<<<< Updated upstream:skills/mathos-formatting/scripts/mathos_formatting.py
         h1_index=args.h1_index,
+=======
+>>>>>>> Stashed changes:MathOS Agent/skills/mathos-formatting/scripts/mathos_formatting.py
     )
     _print_json(result.digest)
     return result.exit_code
@@ -230,6 +107,7 @@ def build_parser() -> argparse.ArgumentParser:
     inspect_parser.add_argument("markdown")
     inspect_parser.set_defaults(func=command_inspect)
 
+<<<<<<< Updated upstream:skills/mathos-formatting/scripts/mathos_formatting.py
     apply_parser = subparsers.add_parser("apply-approved", help="Apply an approved program to a fresh candidate backup")
     apply_parser.add_argument("program_dir")
     apply_parser.add_argument("markdown")
@@ -264,11 +142,17 @@ def build_parser() -> argparse.ArgumentParser:
     approve_parser.set_defaults(func=command_approve)
 
     learn_parser = subparsers.add_parser("learn-from-provider", help="Learn heading and content cleanup artifacts through DeepSeek")
+=======
+    learn_parser = subparsers.add_parser("learn-from-provider", help="Learn heading artifacts through Step 5 validation")
+>>>>>>> Stashed changes:MathOS Agent/skills/mathos-formatting/scripts/mathos_formatting.py
     learn_parser.add_argument("markdown")
     learn_parser.add_argument("--env", required=True)
     learn_parser.add_argument("--work-dir")
     learn_parser.add_argument("--timeout-seconds", type=int, default=120)
+<<<<<<< Updated upstream:skills/mathos-formatting/scripts/mathos_formatting.py
     learn_parser.add_argument("--h1-index", type=int, default=0)
+=======
+>>>>>>> Stashed changes:MathOS Agent/skills/mathos-formatting/scripts/mathos_formatting.py
     learn_parser.set_defaults(func=command_learn_from_provider)
 
     run_parser = subparsers.add_parser(
@@ -279,7 +163,10 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--env", required=True)
     run_parser.add_argument("--work-dir")
     run_parser.add_argument("--timeout-seconds", type=int, default=120)
+<<<<<<< Updated upstream:skills/mathos-formatting/scripts/mathos_formatting.py
     run_parser.add_argument("--h1-index", type=int, default=0)
+=======
+>>>>>>> Stashed changes:MathOS Agent/skills/mathos-formatting/scripts/mathos_formatting.py
     run_parser.set_defaults(func=command_run)
     return parser
 

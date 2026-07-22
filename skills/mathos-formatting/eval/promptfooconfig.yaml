@@ -1,5 +1,5 @@
 # Promptfoo evaluation config for mathos-formatting pipeline
-# Evaluates the 3 highest-value prompts: step1, step3_processor, step6
+# Evaluates the active provider prompts: step1 and step3_processor
 #
 # Usage:
 #   cd skills/mathos-formatting/eval
@@ -24,8 +24,6 @@ prompts:
     label: step1_toc_detection
   - id: file://../agents/step3_heading_processor_prompt.md
     label: step3_heading_processor
-  - id: file://../agents/step6_content_processor_prompt.md
-    label: step6_content_processor
 
 # ─── Default test settings ─────────────────────────────────────────────
 defaultTest:
@@ -68,25 +66,6 @@ tests:
         value: "def replace_in_file"
       - type: contains
         value: "def main"
-
-  # ── Step 6: Content Processor ──────────────────────────────────────────
-  - description: "Step 6 – Content processor Python script (book1)"
-    vars:
-      input: file://fixtures/book1/input_step6.md
-    assert:
-      - type: python
-        value: file://assertions/python_artifact_valid.py
-        config:
-          step: step6
-      - type: contains
-        value: "def protect_blocks"
-      - type: contains
-        value: "def restore_blocks"
-      - type: contains
-        value: "def main"
-      # Must not touch H1-H3
-      - type: not-contains
-        value: "# 第一章"
 
   # ── Additional test: Step 3 expected result (bonus) ────────────────────
   # Uncomment when fixtures/book1/input_step3_expected.md is populated

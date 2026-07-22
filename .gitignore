@@ -9,3 +9,4 @@ build/
 *.bak
 mineru_*/
 .worktrees/
+/MathOS Agent/agent-memory

@@ -1,8 +1,4 @@
-"""Core utilities facade for MathOS adaptive Markdown formatting.
-
-Re-exports all stages, managers, and shared elements from separate modules
-to preserve full backward compatibility with CLI entrypoints and tests.
-"""
+"""Core utilities facade for MathOS adaptive Markdown formatting."""
 
 from __future__ import annotations
 
@@ -23,6 +19,4 @@ from step2_heading_extraction import *
 from step3_heading_processing import *
 from step4_toc_removal import *
 from step5_heading_validation import *
-from step6_content_processing import *
-from program_manager import *
 from learning_pipeline import *

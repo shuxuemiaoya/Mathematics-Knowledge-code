@@ -1,7 +1,6 @@
 from __future__ import annotations
 import ast
 import hashlib
-import importlib.util
 import json
 import re
 import shutil
@@ -9,7 +8,6 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from types import ModuleType
 
 @dataclass(frozen=True)
 class Heading:
@@ -58,26 +56,6 @@ class PreservationCounts:
     table_like_lines: int
 
 @dataclass(frozen=True)
-class PluginResult:
-    cleaned_markdown: str
-    summary: list[str]
-    warnings: list[str]
-
-@dataclass(frozen=True)
-class ApprovedApplyResult:
-    candidate_path: Path
-    report_path: Path
-    summary: list[str]
-    warnings: list[str]
-
-@dataclass(frozen=True)
-class CandidateRunResult:
-    candidate_path: Path
-    report_path: Path
-    summary: list[str]
-    warnings: list[str]
-
-@dataclass(frozen=True)
 class LearningRunState:
     source_path: Path
     candidate_path: Path
@@ -88,7 +66,6 @@ class LearningRunState:
     artifacts: dict[str, Path]
     warnings: list[str]
     errors: list[str]
-    approved: bool
     toc_start_line: int | None = None
     toc_end_line: int | None = None
     stage1_validated: bool = False
@@ -107,9 +84,6 @@ class LearningRunResult:
 class FormattingError(RuntimeError):
     """Raised when formatting configuration or execution is unsafe."""
 
-SAFE_IMPORTS = {"re", "math", "typing"}
-UNSAFE_CALL_NAMES = {"open", "exec", "eval", "compile", "__import__", "getattr", "globals", "locals", "vars"}
-UNSAFE_ATTRIBUTE_ROOTS = {"__builtins__", "builtins", "os", "sys", "subprocess", "pathlib", "socket", "requests", "urllib", "http", "shutil"}
 PYTHON_ARTIFACT_ALLOWED_IMPORTS = {"os", "re", "pathlib"}
 PYTHON_ARTIFACT_UNSAFE_IMPORTS = {
     "subprocess", "shutil", "socket", "requests", "urllib", "http", "ftplib", "pathlib2"
@@ -121,67 +95,6 @@ PYTHON_ARTIFACT_UNSAFE_ATTRS = {
     "remove", "unlink", "rename", "rmdir", "removedirs", "system", "popen", "rmtree",
     "move", "copy", "copy2", "copytree", "urlopen", "request",
 }
-
-def _validate_plugin_ast(source: str) -> None:
-    tree = ast.parse(source)
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                root = alias.name.split(".")[0]
-                if root not in SAFE_IMPORTS:
-                    raise FormattingError(f"unsafe import: {alias.name}")
-        elif isinstance(node, ast.ImportFrom):
-            root = (node.module or "").split(".")[0]
-            if root not in SAFE_IMPORTS:
-                raise FormattingError(f"unsafe import: {node.module}")
-        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-            if node.func.id in UNSAFE_CALL_NAMES:
-                raise FormattingError(f"unsafe call: {node.func.id}")
-        elif isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
-            if node.value.id in UNSAFE_ATTRIBUTE_ROOTS:
-                raise FormattingError(f"unsafe attribute access: {node.value.id}.{node.attr}")
-        elif isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name):
-            if node.value.id in UNSAFE_ATTRIBUTE_ROOTS:
-                raise FormattingError(f"unsafe subscript access: {node.value.id}")
-
-def load_safe_plugin(plugin_path: Path) -> ModuleType:
-    source = plugin_path.read_text(encoding="utf-8")
-    _validate_plugin_ast(source)
-    module_name = f"mathos_candidate_{abs(hash(plugin_path.resolve()))}"
-    spec = importlib.util.spec_from_file_location(module_name, plugin_path)
-    if spec is None or spec.loader is None:
-        raise FormattingError(f"cannot load plugin: {plugin_path}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
-    try:
-        spec.loader.exec_module(module)
-        for attr in ["PLUGIN_ID", "PLUGIN_VERSION", "analyze", "clean"]:
-            if not hasattr(module, attr):
-                raise FormattingError(f"plugin missing required attribute: {attr}")
-        probe = module.clean("probe")
-        if not isinstance(probe, str):
-            raise FormattingError("plugin clean() must return a string")
-        analysis = module.analyze("probe")
-        if not isinstance(analysis, dict):
-            raise FormattingError("plugin analyze() must return a dict")
-    except Exception:
-        sys.modules.pop(module_name, None)
-        raise
-    return module
-
-def run_plugin(plugin: ModuleType, markdown: str) -> PluginResult:
-    analysis = plugin.analyze(markdown)
-    if not isinstance(analysis, dict):
-        raise FormattingError("plugin analyze() must return a dict")
-    cleaned = plugin.clean(markdown)
-    if not isinstance(cleaned, str):
-        raise FormattingError("plugin clean() must return a string")
-    summary = analysis.get("summary", [])
-    warnings = analysis.get("warnings", [])
-    return PluginResult(cleaned_markdown=cleaned, summary=summary, warnings=warnings)
-
-def candidate_path_for(original_path: Path) -> Path:
-    return original_path.parent / "mathos-formatting" / f"{original_path.stem}.candidate{original_path.suffix}"
 
 def learning_work_dir_for(markdown_path: Path) -> Path:
     return markdown_path.parent / "mathos-formatting" / markdown_path.stem
@@ -205,7 +118,6 @@ def write_learning_state(work_dir: Path, state: LearningRunState) -> Path:
         "artifacts": _json_path_map(state.artifacts),
         "warnings": state.warnings,
         "errors": state.errors,
-        "approved": state.approved,
         "toc_start_line": state.toc_start_line,
         "toc_end_line": state.toc_end_line,
         "stage1_validated": state.stage1_validated,
@@ -213,22 +125,6 @@ def write_learning_state(work_dir: Path, state: LearningRunState) -> Path:
     state_path = work_dir / "run-state.json"
     state_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return state_path
-
-def create_fresh_candidate(original_path: Path) -> Path:
-    import shutil
-    original_path = original_path.resolve()
-    if not original_path.exists():
-        raise FormattingError(f"source Markdown file does not exist: {original_path}")
-    if original_path.suffix.lower() != ".md":
-        raise FormattingError(f"source file must be Markdown: {original_path}")
-    if not original_path.is_file():
-        raise FormattingError(f"source Markdown file must be a file: {original_path}")
-    candidate_path = candidate_path_for(original_path)
-    candidate_path.parent.mkdir(parents=True, exist_ok=True)
-    if candidate_path.exists():
-        candidate_path.unlink()
-    shutil.copy2(original_path, candidate_path)
-    return candidate_path
 
 def _strip_single_line_ending(text: str) -> tuple[str, bool]:
     if text.endswith("\r\n"):
@@ -538,6 +434,62 @@ def extract_first_20_pages(markdown: str, markdown_path: Path) -> str:
 
 IMAGE_REFERENCE_RE = re.compile(r"!\[[^\]]*\]\([^)]+\)|<img\s+[^>]*src=", re.IGNORECASE)
 DETAILS_OPEN_RE = re.compile(r"^ {0,3}<details(?:\s|>)", re.IGNORECASE)
+IMAGE_TARGET_RE = re.compile(
+    r"!\[[^\]]*\]\(([^)\n]+)\)|<img\s+[^>]*src=[\"']?([^\"'\s>]+)",
+    re.IGNORECASE,
+)
+
+
+def image_targets(markdown: str) -> list[str]:
+    targets: list[str] = []
+    for match in IMAGE_TARGET_RE.finditer(markdown):
+        target = match.group(1) or match.group(2)
+        if target:
+            targets.append(target)
+    return targets
+
+
+def content_preservation_counts(markdown: str) -> PreservationCounts:
+    lines = markdown.splitlines()
+    return PreservationCounts(
+        image_references=sum(1 for line in lines if IMAGE_REFERENCE_RE.search(line)),
+        details_blocks=sum(1 for line in lines if DETAILS_OPEN_RE.match(line.strip())),
+        math_delimiters=markdown.count("$$"),
+        table_like_lines=sum(1 for line in lines if "|" in line),
+    )
+
+
+def preservation_summary(before: PreservationCounts, after: PreservationCounts) -> list[str]:
+    return [
+        f"Preservation images: {before.image_references} -> {after.image_references}",
+        f"Preservation details blocks: {before.details_blocks} -> {after.details_blocks}",
+        f"Preservation math delimiters: {before.math_delimiters} -> {after.math_delimiters}",
+        f"Preservation table-like lines: {before.table_like_lines} -> {after.table_like_lines}",
+    ]
+
+
+def validate_content_preservation(before: PreservationCounts, after: PreservationCounts) -> None:
+    if after.image_references < before.image_references:
+        raise FormattingError(
+            f"content cleaner removed image references ({before.image_references} before, {after.image_references} after)"
+        )
+    if after.math_delimiters != before.math_delimiters:
+        raise FormattingError(
+            f"content cleaner changed math delimiter count ({before.math_delimiters} before, {after.math_delimiters} after)"
+        )
+    if after.table_like_lines < before.table_like_lines:
+        raise FormattingError(
+            f"content cleaner removed table-like lines ({before.table_like_lines} before, {after.table_like_lines} after)"
+        )
+
+
+def validate_image_targets_preserved(before_markdown: str, after_markdown: str) -> None:
+    before_targets = image_targets(before_markdown)
+    after_targets = image_targets(after_markdown)
+    if before_targets != after_targets:
+        raise FormattingError(
+            f"content cleaner changed image targets ({len(before_targets)} before, {len(after_targets)} after)"
+        )
 
 def _is_table_line(line: str) -> bool:
     stripped = line.strip()

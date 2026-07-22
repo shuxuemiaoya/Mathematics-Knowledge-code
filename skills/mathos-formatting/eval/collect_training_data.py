@@ -4,11 +4,10 @@ Collect training data from successful mathos-formatting runs.
 
 Auto-discovers work directories under a search root, filters for
 result-summary.json with status=passed, and extracts input/output pairs
-for the three highest-value pipeline stages:
+for the two highest-value provider-generation stages:
 
   Step 1: toc_detection_sample.md (input) → toc.md (output)
   Step 3: toc_and_headings.md (input) → heading_processor.py (output)
-  Step 6: h1_sample.md (input) → content_processor.py (output)
 
 Usage:
   python collect_training_data.py
@@ -96,15 +95,6 @@ def extract_examples(work_dir: Path) -> dict:
             "output": step3_output,
         }
 
-    # Step 6: Content Processor Generation
-    step6_input = read_text_safe(work_dir / "h1_sample.md")
-    step6_output = read_text_safe(work_dir / "content_processor.py")
-    if step6_input and step6_output:
-        result["steps"]["step6_content_processor"] = {
-            "input": step6_input,
-            "output": step6_output,
-        }
-
     return result
 
 
@@ -140,7 +130,6 @@ def print_summary(examples: list[dict]) -> None:
     step_counts = {
         "step1_toc_detection": 0,
         "step3_heading_processor": 0,
-        "step6_content_processor": 0,
     }
 
     for ex in examples:
@@ -152,7 +141,6 @@ def print_summary(examples: list[dict]) -> None:
     step_labels = {
         "step1_toc_detection": "Step 1 (TOC Detection)",
         "step3_heading_processor": "Step 3 (Heading Processor)",
-        "step6_content_processor": "Step 6 (Content Processor)",
     }
     for key, label in step_labels.items():
         count = step_counts[key]

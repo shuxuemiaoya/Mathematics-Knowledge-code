@@ -63,7 +63,7 @@ def write_review_report(
         "## Content Plugin Summary", "", *[f"- {item}" for item in plugin_summary], "",
         "## Warnings", "", *[f"- {item}" for item in warnings], "",
         "## Diff", "", f"{diff_fence}diff", diff_text, diff_fence, "",
-        "## Next Actions", "", "- approve", "- revise", "- discard", ""
+        "## Next Actions", "", "- review candidate", "- request source replacement", "- discard", ""
     ]
     report_path.write_text("\n".join(report), encoding="utf-8")
     return report_path

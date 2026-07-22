@@ -17,9 +17,7 @@ fixtures/
 │   ├── input_step3_expected.md  ← TOC text for heading expected-result prompt
 │   ├── golden_step3_expected.md ← expected heading list output
 │   ├── input_step5.md     ← heading_check_input.md (validation input)
-│   ├── golden_step5.json  ← expected heading_check_response.json
-│   ├── input_step6.md     ← h1_sample.md (content processor input)
-│   └── golden_step6.py    ← expected content_processor.py (optional golden)
+│   └── golden_step5.json  ← expected heading_check_response.json
 └── book2/
     └── ...
 ```
@@ -36,8 +34,6 @@ fixtures/
 | `golden_step3_expected.md`| `heading_expected_result.md`| Step 3 expect | Expected heading list (# / ## / ### lines) |
 | `input_step5.md`         | `heading_check_input.md`    | Step 5        | TOC + processed headings for validation |
 | `golden_step5.json`      | `heading_check_response.json`| Step 5       | Expected JSON: `{valid, checked_heading_count, errors}` |
-| `input_step6.md`         | `h1_sample.md`              | Step 6        | First H1 section sample for content processor |
-| `golden_step6.py`        | `content_processor.py`      | Step 6        | Expected Python script output (optional) |
 
 ## How to Create Fixtures Manually
 
@@ -49,15 +45,13 @@ fixtures/
    - `heading_expected_result.md` → `golden_step3_expected.md`
    - `heading_check_input.md` → `input_step5.md`
    - `heading_check_response.json` → `golden_step5.json`
-   - `h1_sample.md` → `input_step6.md`
    - `heading_processor.py` → `golden_step3.py`
-   - `content_processor.py` → `golden_step6.py`
 
-3. **Minimum required for the 3 core tests** (step1, step3, step6):
+3. **Minimum required for the core tests**:
    - `input_step1.md`
    - `golden_step1.md`
    - `input_step3.md`
-   - `input_step6.md`
+   - `golden_step3.py`
 
 ## Using the Helper Script
 

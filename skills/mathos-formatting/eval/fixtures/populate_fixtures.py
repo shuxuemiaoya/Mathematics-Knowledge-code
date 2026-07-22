@@ -19,8 +19,6 @@ The mapping:
     heading_expected_result.md  → golden_step3_expected.md
     heading_check_input.md      → input_step5.md
     heading_check_response.json → golden_step5.json
-    h1_sample.md                → input_step6.md
-    content_processor.py        → golden_step6.py
 """
 
 import argparse
@@ -36,8 +34,6 @@ FILE_MAP: dict[str, str] = {
     "heading_expected_result.md":  "golden_step3_expected.md",
     "heading_check_input.md":      "input_step5.md",
     "heading_check_response.json": "golden_step5.json",
-    "h1_sample.md":                "input_step6.md",
-    "content_processor.py":        "golden_step6.py",
 }
 
 

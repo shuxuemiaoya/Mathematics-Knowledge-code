@@ -3,7 +3,6 @@ import importlib.util
 import json
 import re
 import subprocess
-from types import ModuleType
 import sys
 
 import pytest
@@ -12,12 +11,29 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SKILL_ROOT = REPO_ROOT / "skills" / "mathos-formatting"
 CORE_PATH = SKILL_ROOT / "scripts" / "mathos_formatting_core.py"
+PROVIDER_PATH = SKILL_ROOT / "scripts" / "mathos_provider.py"
+LEGACY_CONTENT_RESPONSE = "content_" + "processor_response.py"
 
 core_spec = importlib.util.spec_from_file_location("mathos_formatting_core", CORE_PATH)
 core = importlib.util.module_from_spec(core_spec)
 assert core_spec.loader is not None
 sys.modules["mathos_formatting_core"] = core
 core_spec.loader.exec_module(core)
+
+provider_spec = importlib.util.spec_from_file_location("mathos_provider", PROVIDER_PATH)
+provider = importlib.util.module_from_spec(provider_spec)
+assert provider_spec.loader is not None
+sys.modules["mathos_provider"] = provider
+provider_spec.loader.exec_module(provider)
+
+
+def test_provider_defaults_to_deepseek_v4_flash_when_env_has_only_api_key(tmp_path):
+    env_file = tmp_path / ".env"
+    env_file.write_text("DEEPSEEK_API_KEY=test-key\n", encoding="utf-8")
+
+    settings = provider.load_provider_settings(env_file)
+
+    assert settings.model == "deepseek-v4-flash"
 
 
 def test_current_workflow_uses_one_clearly_named_module_per_step():
@@ -28,7 +44,6 @@ def test_current_workflow_uses_one_clearly_named_module_per_step():
         "step3_heading_processing.py",
         "step4_toc_removal.py",
         "step5_heading_validation.py",
-        "step6_content_processing.py",
     }
     legacy_stage_names = {
         "stage1_workflow.py",
@@ -54,7 +69,6 @@ def test_prompt_sources_use_step_prefixed_filenames():
         "step3_heading_processor_prompt.md",
         "step3_heading_expected_result_prompt.md",
         "step5_heading_validation_prompt.md",
-        "step6_content_processor_prompt.md",
         "legacy_heading_optimization_prompt.md",
     }
     superseded = {
@@ -127,55 +141,6 @@ STAGE1_HEADING_MARKDOWN = """# 目录
 HEADING_EXPECTED_RESULT = """- # 第一章 数列
 - ## 1.1 数列的概念
 """
-
-
-def _plugin(clean_func):
-    plugin = ModuleType("plugin")
-    plugin.PLUGIN_ID = "test"
-    plugin.PLUGIN_VERSION = "1.0.0"
-    plugin.analyze = lambda markdown: {"summary": [], "warnings": []}
-    plugin.clean = clean_func
-    return plugin
-
-
-def _content_rules(rules=None, summary=None, warnings=None):
-    return {
-        "plugin_id": "chapter_inner_markdown_formatter",
-        "plugin_version": "2.0.0",
-        "schema_version": "1.0.0",
-        "stage": "chapter_inner_formatting",
-        "description": "test rules",
-        "safety": {
-            "never_modify_heading_lines": True,
-            "heading_line_pattern": r"^\s*#{1,6}\s+.*$",
-            "never_delete_images": True,
-            "never_rewrite_content": True,
-            "never_infer_answers": True,
-            "never_modify_markdown_tables": True,
-            "preserve_code_blocks": True,
-            "preserve_html_blocks": True,
-            "preserve_math_blocks": True,
-            "preserve_yaml_frontmatter": True,
-        },
-        "execution_contract": {
-            "executor_language": "python",
-            "regex_engine": "python_re",
-            "allowed_regex_flags": ["MULTILINE", "DOTALL", "IGNORECASE"],
-            "default_rule_scope": "non_heading_lines",
-            "restore_protected_blocks_order": "reverse",
-            "regex_replacement_backslash_policy": "use_lambda_replacement_when_replacement_mode_is_literal",
-            "variable_width_lookbehind_allowed": False,
-            "dry_run_required_before_write": True,
-            "report_required": True,
-        },
-        "protected_blocks": [
-            {"id": "fenced_code_block", "name": "code", "type": "block", "pattern": r"```[\s\S]*?```", "flags": []}
-        ],
-        "analyze": {"checks": [{"id": "heading_count", "name": "headings", "type": "count", "pattern": r"^#", "flags": ["MULTILINE"], "message": "headings"}]},
-        "rules": rules or [],
-        "warnings": warnings or [],
-        "summary": summary or ["json rules"],
-    }
 
 
 def _heading_rules():
@@ -328,79 +293,43 @@ def _title_rewrite_source(mapping=None):
     return "TITLE_REWRITE_MAP: dict[str, str] = " + repr(mapping) + "\n"
 
 
-def test_content_cleaner_prompt_forbids_destructive_edits():
-    prompt = (SKILL_ROOT / "agents" / "step6_content_processor_prompt.md").read_text(encoding="utf-8").lower()
-
-    assert "图片" in prompt
-    assert "<details>" in prompt
-    assert "公式" in prompt
-    assert "表格" in prompt
-    assert "禁止" in prompt or "不允许" in prompt
-
-
-
 def test_preservation_gate_rejects_image_removal():
-    plugin = _plugin(lambda markdown: "\n".join(line for line in markdown.splitlines() if not line.startswith("![](")))
+    cleaned = "\n".join(line for line in SAMPLE_MARKDOWN.splitlines() if not line.startswith("![]("))
 
     with pytest.raises(core.FormattingError, match="image"):
-        core.run_content_plugin_protecting_headings(plugin, SAMPLE_MARKDOWN)
-
-
-def test_preservation_gate_allows_details_removal():
-    def clean(markdown: str) -> str:
-        lines = []
-        in_details = False
-        for line in markdown.splitlines():
-            if line.strip().startswith("<details>"):
-                in_details = True
-                continue
-            if in_details:
-                if line.strip().startswith("</details>"):
-                    in_details = False
-                continue
-            lines.append(line)
-        return "\n".join(lines)
-
-    result = core.run_content_plugin_protecting_headings(_plugin(clean), SAMPLE_MARKDOWN)
-
-    assert "<details>" not in result.cleaned_markdown
+        core.validate_content_preservation(
+            core.content_preservation_counts(SAMPLE_MARKDOWN),
+            core.content_preservation_counts(cleaned),
+        )
 
 
 def test_preservation_gate_rejects_math_block_count_change():
-    plugin = _plugin(lambda markdown: markdown.replace("$$", "", 1))
+    cleaned = SAMPLE_MARKDOWN.replace("$$", "", 1)
 
     with pytest.raises(core.FormattingError, match="math"):
-        core.run_content_plugin_protecting_headings(plugin, SAMPLE_MARKDOWN)
+        core.validate_content_preservation(
+            core.content_preservation_counts(SAMPLE_MARKDOWN),
+            core.content_preservation_counts(cleaned),
+        )
 
 
 def test_preservation_gate_rejects_table_line_loss():
-    plugin = _plugin(lambda markdown: "\n".join(line for line in markdown.splitlines() if "|" not in line))
+    cleaned = "\n".join(line for line in SAMPLE_MARKDOWN.splitlines() if "|" not in line)
 
     with pytest.raises(core.FormattingError, match="table"):
-        core.run_content_plugin_protecting_headings(plugin, SAMPLE_MARKDOWN)
+        core.validate_content_preservation(
+            core.content_preservation_counts(SAMPLE_MARKDOWN),
+            core.content_preservation_counts(cleaned),
+        )
 
 
 def test_preservation_gate_allows_blank_line_normalization():
-    plugin = _plugin(lambda markdown: markdown.replace("\n\n\n", "\n\n"))
+    cleaned = SAMPLE_MARKDOWN.replace("\n\n\n", "\n\n")
 
-    result = core.run_content_plugin_protecting_headings(plugin, SAMPLE_MARKDOWN)
-
-    assert result.cleaned_markdown.count("![](") == SAMPLE_MARKDOWN.count("![](")
-    assert result.cleaned_markdown.count("$$") == SAMPLE_MARKDOWN.count("$$")
-
-
-def test_preservation_gate_allows_image_layout_conversion_when_targets_preserved():
-    plugin = _plugin(
-        lambda markdown: markdown.replace(
-            "![](images/a.png)",
-            '<center><img src="images/a.png" style="max-width:100%;"></center>',
-        )
+    core.validate_content_preservation(
+        core.content_preservation_counts(SAMPLE_MARKDOWN),
+        core.content_preservation_counts(cleaned),
     )
-
-    result = core.run_content_plugin_protecting_headings(plugin, SAMPLE_MARKDOWN)
-
-    assert "![](images/a.png)" not in result.cleaned_markdown
-    assert '<img src="images/a.png"' in result.cleaned_markdown
 
 
 def test_stage1_audit_is_validation_only():
@@ -435,16 +364,15 @@ class DestructiveProvider:
             return HEADING_EXPECTED_RESULT
         if "Heading Validation Prompt" in system_prompt:
             return json.dumps({"valid": True, "checked_heading_count": 3, "errors": []})
-        if "Content Cleaner Prompt" in system_prompt:
-            return _batch_processor_source([("![](images/a.png)\n\n", "")])
         raise AssertionError(f"unexpected provider prompt: {system_prompt[:80]}")
 
 
-def test_learning_runtime_rejects_destructive_image_rule(tmp_path):
+def test_learning_never_calls_content_modification_provider(tmp_path):
     markdown = tmp_path / "book.md"
     markdown.write_text(SAMPLE_MARKDOWN, encoding="utf-8")
     work_dir = tmp_path / "mathos-formatting" / "book"
 
+<<<<<<< Updated upstream:tests/test_mathos_formatting_guarded.py
     with pytest.raises(core.FormattingError, match="image targets"):
         core.run_learning_from_provider(
             markdown_path=markdown,
@@ -453,14 +381,28 @@ def test_learning_runtime_rejects_destructive_image_rule(tmp_path):
             content_prompt="# Content Cleaner Prompt",
             work_dir=work_dir,
         )
+=======
+    result = core.run_learning_from_provider(
+        markdown_path=markdown,
+        provider_client=DestructiveProvider(),
+        heading_prompt="# Heading Rules Prompt",
+        work_dir=work_dir,
+    )
+>>>>>>> Stashed changes:MathOS Agent/tests/test_mathos_formatting_guarded.py
 
     candidate_text = (work_dir / "candidate.md").read_text(encoding="utf-8")
-    assert "![](images/a.png)" in candidate_text
-    assert "<details>" in candidate_text
+    assert "正文第一段。" in candidate_text
+    assert not (work_dir / ("step" + "6_llm_response.md")).exists()
+    assert not (work_dir / LEGACY_CONTENT_RESPONSE).exists()
+    assert not (work_dir / ("content_" + "processor.py")).exists()
+    assert result.summary == [
+        "Stage 1 processor preserved line count, heading order, and non-heading content",
+        "DeepSeek heading validation passed for 2 headings",
+    ]
     state = json.loads((work_dir / "run-state.json").read_text(encoding="utf-8"))
-    assert state["status"] == "failed"
-    assert state["stage"] == "step6-content-processing"
-    assert state["errors"]
+    assert state["status"] == "candidate-written"
+    assert state["stage"] == "complete"
+    assert not state["errors"]
 
 
 class SuccessfulMockProvider:
@@ -481,16 +423,7 @@ class SuccessfulMockProvider:
         if "Heading Validation Prompt" in system_prompt:
             count = sum(1 for line in user_payload.splitlines() if re.match(r"^\d+: #{1,6}\s+", line))
             return json.dumps({"valid": True, "checked_heading_count": count, "errors": []})
-        if "Content Cleaner Prompt" in system_prompt:
-            return _batch_processor_source()
         raise AssertionError(f"unexpected provider prompt: {system_prompt[:80]}")
-
-
-class JsonRulesProvider(SuccessfulMockProvider):
-    def chat(self, system_prompt: str, user_payload: str, timeout_seconds: int = 120, response_format: dict | None = None) -> str:
-        if "Content Cleaner Prompt" in system_prompt:
-            return _batch_processor_source([("**粗体**", "粗体")])
-        return super().chat(system_prompt, user_payload, timeout_seconds, response_format)
 
 
 class DemotingChapterProvider(SuccessfulMockProvider):
@@ -527,7 +460,6 @@ def test_learning_fails_closed_when_stage1_demotes_body_chapter(tmp_path):
             markdown_path=markdown,
             provider_client=DemotingChapterProvider(),
             heading_prompt="# Heading Rules Prompt",
-            content_prompt="# Content Cleaner Prompt",
             work_dir=work_dir,
         )
 
@@ -548,7 +480,6 @@ def test_learning_strips_only_toc(tmp_path):
         markdown_path=markdown,
         provider_client=SuccessfulMockProvider(toc_start_line=3, main_text_start_line=8),
         heading_prompt="# Heading Rules Prompt",
-        content_prompt="# Content Cleaner Prompt",
         work_dir=work_dir,
     )
 
@@ -562,39 +493,57 @@ def test_learning_strips_only_toc(tmp_path):
     assert "# 第一章 数列" in candidate_text
 
 
+<<<<<<< Updated upstream:tests/test_mathos_formatting_guarded.py
 def test_learning_stage4_uses_python_processor_not_json_rules(tmp_path):
+=======
+def test_learning_writes_step5_validated_markdown_as_candidate(tmp_path):
+>>>>>>> Stashed changes:MathOS Agent/tests/test_mathos_formatting_guarded.py
     markdown = tmp_path / "book.md"
     markdown.write_text(SAMPLE_MARKDOWN + "\n正文有 **粗体**。\n", encoding="utf-8")
     work_dir = tmp_path / "mathos-formatting" / "book"
 
     result = core.run_learning_from_provider(
         markdown_path=markdown,
-        provider_client=JsonRulesProvider(toc_start_line=3, main_text_start_line=8),
+        provider_client=SuccessfulMockProvider(toc_start_line=3, main_text_start_line=8),
         heading_prompt="# Heading Rules Prompt",
-        content_prompt="# Content Cleaner Prompt",
         work_dir=work_dir,
     )
 
     candidate_text = (work_dir / "candidate.md").read_text(encoding="utf-8")
+<<<<<<< Updated upstream:tests/test_mathos_formatting_guarded.py
     assert "正文有 粗体。" in candidate_text
     assert (work_dir / "heading_processor.py").exists()
     assert (work_dir / "content_processor_response.py").exists()
     assert (work_dir / "content_processor.py").exists()
+=======
+    assert "# 目录" not in candidate_text
+    assert "1.1 数列的概念 …… 2" not in candidate_text
+    assert "#### 数学" in candidate_text
+    assert "正文有 **粗体**。" in candidate_text
+    assert (work_dir / "heading_processor.py").exists()
+    assert not (work_dir / LEGACY_CONTENT_RESPONSE).exists()
+    assert not (work_dir / ("content_" + "processor.py")).exists()
+    assert not (work_dir / ("step" + "6_llm_response.md")).exists()
+>>>>>>> Stashed changes:MathOS Agent/tests/test_mathos_formatting_guarded.py
     assert not (work_dir / "title_rewrite_map.py").exists()
     assert not (work_dir / "content_rules_response.json").exists()
     assert not (work_dir / "content_rules.json").exists()
     assert not (work_dir / "content_cleaner.py").exists()
     assert result.summary == [
+<<<<<<< Updated upstream:tests/test_mathos_formatting_guarded.py
         "content_processor.py applied",
         "Preservation images: 1 -> 1",
         "Preservation details blocks: 1 -> 1",
         "Preservation math delimiters: 2 -> 2",
         "Preservation table-like lines: 3 -> 3",
+=======
+>>>>>>> Stashed changes:MathOS Agent/tests/test_mathos_formatting_guarded.py
         "Stage 1 processor preserved line count, heading order, and non-heading content",
         "DeepSeek heading validation passed for 2 headings",
     ]
 
 
+<<<<<<< Updated upstream:tests/test_mathos_formatting_guarded.py
 def test_json_rule_executor_preserves_headings_and_protected_blocks():
     markdown = """# **标题**
 
@@ -766,28 +715,23 @@ def test_cli_candidate_output_includes_self_check_required_and_next_actions(tmp_
     heading_script.write_text(_batch_processor_source(), encoding="utf-8")
     content_script.write_text(_batch_processor_source([("**加粗**", "加粗")]), encoding="utf-8")
 
+=======
+def test_cli_help_exposes_only_current_public_commands():
+>>>>>>> Stashed changes:MathOS Agent/tests/test_mathos_formatting_guarded.py
     completed = subprocess.run(
-        [
-            sys.executable,
-            str(SKILL_ROOT / "scripts" / "mathos_formatting.py"),
-            "candidate-from-artifacts",
-            str(markdown),
-            "--heading-script",
-            str(heading_script),
-            "--content-script",
-            str(content_script),
-        ],
+        [sys.executable, str(SKILL_ROOT / "scripts" / "mathos_formatting.py"), "--help"],
         check=True,
         capture_output=True,
         text=True,
         encoding="utf-8",
     )
-    payload = json.loads(completed.stdout)
+    help_text = completed.stdout
 
-    assert payload["self_check_required"] is True
-    assert isinstance(payload["next_actions"], list)
-    assert any("self-check passes" in action for action in payload["next_actions"])
-    assert "正文 加粗。" in Path(payload["candidate_path"]).read_text(encoding="utf-8")
+    assert "inspect" in help_text
+    assert "learn-from-provider" in help_text
+    assert "run" in help_text
+    assert ("candidate-from-" + "artifacts") not in help_text
+    assert ("apply-" + "appr" + "oved") not in help_text
 
 
 def test_learning_fallback_when_toc_missing(tmp_path):
@@ -806,7 +750,6 @@ def test_learning_fallback_when_toc_missing(tmp_path):
             markdown_path=markdown,
             provider_client=MissingTocProvider(None, None),
             heading_prompt="# Heading Rules Prompt",
-            content_prompt="# Content Cleaner Prompt",
             work_dir=work_dir,
         )
     state = json.loads((work_dir / "run-state.json").read_text(encoding="utf-8"))
@@ -829,7 +772,6 @@ def test_learning_fallback_when_boundaries_invalid(tmp_path):
             markdown_path=markdown,
             provider_client=DisjointTocProvider(None, None),
             heading_prompt="# Heading Rules Prompt",
-            content_prompt="# Content Cleaner Prompt",
             work_dir=work_dir,
         )
 
@@ -849,120 +791,26 @@ def test_learning_fails_when_toc_text_is_modified(tmp_path):
             markdown_path=markdown,
             provider_client=ModifiedTocProvider(None, None),
             heading_prompt="# Heading Rules Prompt",
-            content_prompt="# Content Cleaner Prompt",
             work_dir=work_dir,
         )
 
 
-def test_content_cleaner_prompt_describes_python_batch_contract():
-    prompt_path = SKILL_ROOT / "agents" / "step6_content_processor_prompt.md"
-    prompt = prompt_path.read_text(encoding="utf-8").lower()
+def test_skill_documents_heading_only_workflow():
+    skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8").lower()
 
-    assert "python" in prompt
-    assert "import os" in prompt
-    assert "from pathlib import path" in prompt
-    assert "import re" in prompt
-    assert "get_target_root" in prompt
-    assert "replace_in_file" in prompt
-    assert "def main" in prompt
-    assert "完整 python 文件" in prompt
-    assert "json" in prompt
-    assert "json。" in prompt or "不要输出 json" in prompt or "禁止输出 json" in prompt
-    assert "plugin_id" not in prompt
-    assert "schema_version" not in prompt
-    assert "execution_contract" not in prompt
-    assert "def clean" not in prompt
-    assert "def analyze" not in prompt
-    assert "main()" in prompt or "def main" in prompt
+    assert "step 5 heading validation" in skill
+    assert "candidate.md" in skill
+    assert ("run-step" + "6-content") not in skill
+    assert ("step" + "6") not in skill
 
 
-def test_stage2_legacy_guard_rejects_heading_changes_but_prompt_allows_whitelist_formatting():
-    with pytest.raises(core.FormattingError, match="heading lines"):
-        core.validate_stage2_heading_preservation(
-            "# 第一章\n\n#### 练习\n\n正文\n",
-            "# 第一章\n\n> [!practice] 练习\n\n正文\n",
-        )
+def test_skill_default_run_contract_is_heading_only():
+    skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8").lower()
 
-    prompt = (SKILL_ROOT / "agents" / "step6_content_processor_prompt.md").read_text(encoding="utf-8").lower()
-    assert "通用 markdown 格式修正 python 代码生成专家" in prompt
-    assert "h1-h3 默认视为结构标题" in prompt
-    assert "不改变图片路径" in prompt
-    assert "apply_image_caption_fixes" in prompt
-    assert "heading lines are immutable" not in prompt
-    assert "preserve every markdown image reference exactly" not in prompt
-
-
-def test_stage2_runtime_protects_and_restores_finalized_headings():
-    markdown = "# 第一章\n\n#### 练习\n\n正文 **加粗**。\n"
-
-    protected, heading_tokens = core.protect_stage2_heading_lines(markdown)
-    assert "# 第一章" not in protected
-    assert "#### 练习" not in protected
-
-    cleaned = protected.replace("**加粗**", "加粗")
-    restored = core.restore_stage2_heading_lines(cleaned, heading_tokens)
-
-    assert restored == "# 第一章\n\n#### 练习\n\n正文 加粗。\n"
-
-    with pytest.raises(core.FormattingError, match="heading token"):
-        core.restore_stage2_heading_lines(cleaned.replace(next(iter(heading_tokens)), ""), heading_tokens)
-
-
-def test_stage2_runtime_owns_all_guarded_content_protection():
-    markdown = """---
-title: **keep**
----
-# 第一章
-
-![](images/a.png)
-
-<details>
-**keep details**
-```mermaid
-graph TD
-```
-</details>
-
-$$
-x ** y
-$$
-
-| **head** | value |
-| --- | --- |
-
-<center><img src="images/b.png" style="max-width:100%;"></center>
-
-> [!example] 方向角为 $45^{\\circ}$
-
-正文 **加粗**。
-"""
-
-    protected, tokens = core.protect_stage2_guarded_content(markdown)
-    assert "# 第一章" in protected
-    assert "![](images/a.png)" in protected
-    assert "<details>" in protected
-    assert "<center>" in protected
-    assert "> [!example]" in protected
-    processed = (
-        protected
-        .replace("**", "")
-        .replace("![](images/a.png)", '<center><img src="images/a.png"></center>')
-        .replace("<details>\n", "")
-        .replace("</details>\n", "")
-    )
-    restored = core.restore_stage2_guarded_content(processed, tokens)
-
-    assert "title: **keep**" in restored
-    assert "# 第一章" in restored
-    assert '<center><img src="images/a.png"></center>' in restored
-    assert "keep details" in restored
-    assert "<details>" not in restored
-    assert "```mermaid\ngraph TD\n```" in restored
-    assert "x ** y" in restored
-    assert "| **head** | value |" in restored
-    assert '<center><img src="images/b.png" style="max-width:100%;"></center>' in restored
-    assert "> [!example] 方向角为 $45^{\\circ}$" in restored
-    assert "正文 加粗。" in restored
+    assert "ordinary formatting run" in skill
+    assert "heading" in skill
+    assert ("run-step" + "6-content") not in skill
+    assert ("concept-" + "extraction") not in skill
 
 
 def test_heading_prompt_forbids_sys_and_uses_builtin_input_for_sandbox_root():
@@ -1034,165 +882,12 @@ def test_python_batch_artifact_rejects_dangerous_or_incomplete_source(source, me
         core.validate_batch_processor_source(source)
 
 
-def test_python_batch_artifact_runs_in_sandbox_without_touching_original(tmp_path):
-    original = tmp_path / "book.md"
-    original.write_text("# 第一章\n\n正文 **加粗**。\n", encoding="utf-8")
-    script = tmp_path / "content_processor.py"
-    script.write_text(_batch_processor_source([("**加粗**", "加粗")]), encoding="utf-8")
-
-    candidate = core.run_candidate_from_artifacts(
-        markdown_path=original,
-        heading_script_path=script,
-        content_script_path=script,
-    )
-
-    assert "正文 加粗。" in candidate.candidate_path.read_text(encoding="utf-8")
-    assert "正文 **加粗**。" in original.read_text(encoding="utf-8")
-
-
-def test_python_batch_artifact_rejects_candidate_too_short(tmp_path):
-    original = tmp_path / "book.md"
-    original.write_text("# 第一章\n\n" + ("正文内容。\n" * 80), encoding="utf-8")
-    heading_script = tmp_path / "heading_processor.py"
-    content_script = tmp_path / "content_processor.py"
-    heading_script.write_text(_batch_processor_source(), encoding="utf-8")
-    content_script.write_text(
-        _batch_processor_source([(("正文内容。\n" * 80), "")]),
-        encoding="utf-8",
-    )
-
-    with pytest.raises(core.FormattingError, match="candidate too short"):
-        core.run_candidate_from_artifacts(
-            markdown_path=original,
-            heading_script_path=heading_script,
-            content_script_path=content_script,
-        )
-
-
 def test_title_rewrite_map_python_source_is_parsed_and_applied():
     source = _title_rewrite_source({"## Review Questions 5": "#### Chapter 5 Review Questions 5"})
     mapping = core.validate_title_rewrite_source(source)
 
     assert mapping == {"## Review Questions 5": "#### Chapter 5 Review Questions 5"}
     assert "#### Chapter 5 Review Questions 5" in core.apply_title_rewrite_map("## Review Questions 5\n", mapping)
-
-
-def test_candidate_from_artifacts_does_not_enrich_headings(tmp_path):
-    markdown = tmp_path / "book.md"
-    markdown.write_text("# 第一章 数列\n\n# 小节\n\n正文\n", encoding="utf-8")
-    heading_script = tmp_path / "heading_processor.py"
-    content_script = tmp_path / "content_processor.py"
-    heading_script.write_text(_batch_processor_source(), encoding="utf-8")
-    content_script.write_text(_batch_processor_source(), encoding="utf-8")
-
-    result = core.run_candidate_from_artifacts(
-        markdown_path=markdown,
-        heading_script_path=heading_script,
-        content_script_path=content_script,
-    )
-    candidate_text = result.candidate_path.read_text(encoding="utf-8")
-    # Enrichment is removed: headings are only modified by provider artifacts.
-    # 小节 should remain as-is (no chapter prefix added by core code).
-    assert "第一章 小节" not in candidate_text
-
-
-def test_apply_approved_program_does_not_enrich_headings(tmp_path):
-    markdown = tmp_path / "book.md"
-    markdown.write_text("# 第一章 数列\n\n# 小节\n\n正文\n", encoding="utf-8")
-    heading_script = tmp_path / "heading_processor.py"
-    content_script = tmp_path / "content_processor.py"
-    heading_script.write_text(_batch_processor_source(), encoding="utf-8")
-    content_script.write_text(_batch_processor_source(), encoding="utf-8")
-
-    candidate = core.run_candidate_from_artifacts(
-        markdown_path=markdown,
-        heading_script_path=heading_script,
-        content_script_path=content_script,
-    )
-
-    approved_root = tmp_path / "approved"
-    program_dir = core.save_approved_program(
-        approved_root=approved_root,
-        plugin_id="test-no-enrich",
-        heading_script_path=heading_script,
-        content_script_path=content_script,
-        original_path=markdown,
-        candidate_path=candidate.candidate_path,
-        approving_source_path=markdown,
-        operations_summary=["test"],
-    )
-
-    applied = core.apply_approved_program(program_dir, markdown)
-    candidate_text = applied.candidate_path.read_text(encoding="utf-8")
-    # Enrichment is removed: no chapter prefix should be added by core code.
-    assert "第一章 小节" not in candidate_text
-
-
-def test_apply_approved_program_strips_toc_conditionally(tmp_path):
-    # original markdown with a TOC
-    original_markdown = "#### 数学\n\n# 目录\n\n# 第一章 数列 …… 1\n\n# 第一章 数列\n\n正文\n"
-    markdown = tmp_path / "book.md"
-    markdown.write_text(original_markdown, encoding="utf-8")
-
-    heading_script = tmp_path / "heading_processor.py"
-    content_script = tmp_path / "content_processor.py"
-    heading_script.write_text(_batch_processor_source([("# 第一章 数列 …… 1", "# 第一章 数列")]), encoding="utf-8")
-    content_script.write_text(_batch_processor_source(), encoding="utf-8")
-
-    # For save_approved_program, we need a candidate.
-    # We strip the TOC manually for the candidate to mimic provider learning.
-    candidate_markdown = "#### 数学\n\n# 第一章 数列\n\n正文\n"
-    candidate_path = tmp_path / "candidate.md"
-    candidate_path.write_text(candidate_markdown, encoding="utf-8")
-
-    approved_root = tmp_path / "approved"
-    program_dir = core.save_approved_program(
-        approved_root=approved_root,
-        plugin_id="test-toc-strip",
-        heading_script_path=heading_script,
-        content_script_path=content_script,
-        original_path=markdown,
-        candidate_path=candidate_path,
-        approving_source_path=markdown,
-        operations_summary=["test"],
-    )
-
-    # Verify that metadata.json has toc_signature = True
-    metadata = json.loads((program_dir / "metadata.json").read_text(encoding="utf-8"))
-    assert metadata["toc_signature"] is True
-
-    # Now apply the approved program to a fresh target (which has a TOC)
-    target_markdown = "#### 数学\n\n# 目录\n\n# 第一章 数列 …… 1\n\n# 第一章 数列\n\n正文\n"
-    target_path = tmp_path / "target.md"
-    target_path.write_text(target_markdown, encoding="utf-8")
-
-    applied = core.apply_approved_program(program_dir, target_path)
-    candidate_text = applied.candidate_path.read_text(encoding="utf-8")
-    assert "#### 数学" in candidate_text
-    assert "# 第一章 数列" in candidate_text
-    assert "# 目录" not in candidate_text
-    assert "…… 1" not in candidate_text
-
-
-def test_run_candidate_from_artifacts_applies_title_rewrite_map(tmp_path):
-    markdown = tmp_path / "book.md"
-    markdown.write_text("# 目录\n\n# 第一章 数列 …… 1\n\n# 第一章 数列\n\n## ϰο4\n", encoding="utf-8")
-    heading_script = tmp_path / "heading_processor.py"
-    content_script = tmp_path / "content_processor.py"
-    title_map = tmp_path / "title_rewrite_map.py"
-    heading_script.write_text(_batch_processor_source(), encoding="utf-8")
-    content_script.write_text(_batch_processor_source(), encoding="utf-8")
-    title_map.write_text(_title_rewrite_source({"## ϰο4": "#### 第一章 数列 复习题 4"}), encoding="utf-8")
-
-    result = core.run_candidate_from_artifacts(
-        markdown_path=markdown,
-        heading_script_path=heading_script,
-        content_script_path=content_script,
-        title_rewrite_map_path=title_map,
-    )
-    candidate_text = result.candidate_path.read_text(encoding="utf-8")
-    assert "#### 第一章 数列 复习题 4" in candidate_text
-    assert "## ϰο4" not in candidate_text
 
 
 def test_apply_heading_rules_handles_latex_backslashes_in_replacement(tmp_path):
@@ -1236,7 +931,6 @@ def test_learning_stage1_input_contains_toc_and_h1(tmp_path):
         markdown_path=markdown,
         provider_client=CapturingProvider(toc_start_line=3, main_text_start_line=8),
         heading_prompt="# Heading Rules Prompt",
-        content_prompt="# Content Cleaner Prompt",
         work_dir=work_dir,
     )
 
@@ -1526,9 +1220,6 @@ class Stage1WorkflowProvider:
                 },
                 ensure_ascii=False,
             )
-        elif "Content Cleaner Prompt" in system_prompt:
-            stage = "content"
-            response = _batch_processor_source()
         else:
             raise AssertionError(f"unexpected provider prompt: {system_prompt[:80]}")
         self.calls.append((stage, user_payload, response_format))
@@ -1546,7 +1237,6 @@ def test_learning_uses_new_stage1_provider_order_and_artifacts(tmp_path):
         markdown_path=markdown,
         provider_client=provider,
         heading_prompt="# Heading Rules Prompt",
-        content_prompt="# Content Cleaner Prompt",
         work_dir=work_dir,
     )
 
@@ -1578,6 +1268,11 @@ def test_learning_uses_new_stage1_provider_order_and_artifacts(tmp_path):
     assert expected_prompt_artifacts <= work_files
     assert superseded_prompt_artifacts.isdisjoint(work_files)
     assert "step3_heading_expected_result_prompt.md" not in work_files
+<<<<<<< Updated upstream:tests/test_mathos_formatting_guarded.py
+=======
+    assert not (work_dir / LEGACY_CONTENT_RESPONSE).exists()
+    assert not (work_dir / ("step" + "6_llm_response.md")).exists()
+>>>>>>> Stashed changes:MathOS Agent/tests/test_mathos_formatting_guarded.py
     assert not (work_dir / "title_rewrite_map.py").exists()
     assert "# 目录" not in result.candidate_path.read_text(encoding="utf-8")
     assert markdown.read_bytes() == original_hash
@@ -1598,7 +1293,6 @@ def test_learning_stops_before_stage2_when_heading_check_rejects(tmp_path):
             markdown_path=markdown,
             provider_client=provider,
             heading_prompt="# Heading Rules Prompt",
-            content_prompt="# Content Cleaner Prompt",
             work_dir=work_dir,
         )
 
@@ -1607,7 +1301,7 @@ def test_learning_stops_before_stage2_when_heading_check_rejects(tmp_path):
         "heading",
         "heading-expected-result",
     ]
-    assert not (work_dir / "content_processor_response.py").exists()
+    assert not (work_dir / LEGACY_CONTENT_RESPONSE).exists()
     state = json.loads((work_dir / "run-state.json").read_text(encoding="utf-8"))
     assert state["stage"] == "step5-heading-validation"
     assert state["status"] == "failed"
@@ -1634,7 +1328,6 @@ def test_automated_run_writes_one_passing_digest_and_keeps_source_unchanged(tmp_
         markdown_path=markdown,
         provider_client=Stage1WorkflowProvider(),
         heading_prompt="# Heading Rules Prompt",
-        content_prompt="# Content Cleaner Prompt",
         work_dir=work_dir,
     )
 
@@ -1646,7 +1339,9 @@ def test_automated_run_writes_one_passing_digest_and_keeps_source_unchanged(tmp_
     assert digest["source_unchanged"] is True
     assert digest["stage1_validated"] is True
     assert digest["preservation_validated"] is True
-    assert digest["safe_to_approve"] is True
+    assert ("step" + "6_content_processed") not in digest
+    assert ("safe_to_" + "appr" + "ove") not in digest
+    assert digest["next_action"] == "review-candidate"
     assert Path(digest["candidate_path"]).exists()
     assert markdown.read_bytes() == original_bytes
 
@@ -1677,7 +1372,6 @@ def test_automated_run_failure_digest_routes_to_exactly_one_error_artifact(tmp_p
         markdown_path=markdown,
         provider_client=InvalidTocProvider(),
         heading_prompt="# Heading Rules Prompt",
-        content_prompt="# Content Cleaner Prompt",
         work_dir=work_dir,
     )
 
@@ -1686,7 +1380,7 @@ def test_automated_run_failure_digest_routes_to_exactly_one_error_artifact(tmp_p
     assert digest["status"] == "failed"
     assert digest["failed_stage"] == "step1-toc-extraction"
     assert Path(digest["error_artifact"]).name == "toc_detection_response.md"
-    assert digest["safe_to_approve"] is False
+    assert ("safe_to_" + "appr" + "ove") not in digest
     assert len(digest["errors"]) == 1
 
 
@@ -1700,7 +1394,6 @@ def test_automated_run_routes_invalid_heading_expected_result_to_new_artifact(tm
         markdown_path=markdown,
         provider_client=InvalidHeadingExpectedResultProvider(),
         heading_prompt="# Heading Rules Prompt",
-        content_prompt="# Content Cleaner Prompt",
         work_dir=work_dir,
     )
 
@@ -1738,7 +1431,6 @@ def test_automated_run_recovers_with_matching_fingerprint(tmp_path):
         markdown_path=markdown,
         provider_client=first_provider,
         heading_prompt="# Heading Rules Prompt",
-        content_prompt="# Content Cleaner Prompt",
         work_dir=work_dir,
     )
     second_provider = Stage1WorkflowProvider()
@@ -1746,7 +1438,6 @@ def test_automated_run_recovers_with_matching_fingerprint(tmp_path):
         markdown_path=markdown,
         provider_client=second_provider,
         heading_prompt="# Heading Rules Prompt",
-        content_prompt="# Content Cleaner Prompt",
         work_dir=work_dir,
     )
 

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
-import dataclasses
 import hashlib
 import json
 import os
@@ -13,7 +12,6 @@ import tempfile
 import time
 import zipfile
 from dataclasses import dataclass, field
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -680,7 +678,7 @@ def is_retryable_failure(failure: dict[str, str]) -> bool:
     return any(marker in message for marker in retryable_markers)
 
 
-def build_run_state(
+def build_conversion_state(
     settings: Settings,
     source_path: Path,
     source_base: Path,
@@ -689,7 +687,6 @@ def build_run_state(
     skipped: list[SkippedPdf],
     results: list[ConversionResult],
     failures: list[dict[str, str]],
-    record_dir: Path,
 ) -> dict[str, Any]:
     retryable_failures = [failure for failure in failures if is_retryable_failure(failure)]
     permanent_failures = [failure for failure in failures if not is_retryable_failure(failure)]
@@ -705,7 +702,6 @@ def build_run_state(
         "source_path": str(source_path),
         "source_base": str(source_base),
         "output_root": str(output_root),
-        "record_dir": str(record_dir),
         "counts": {
             "source_pdfs": pdf_file_count(jobs, skipped),
             "attempted": len(jobs),
@@ -730,161 +726,8 @@ def build_run_state(
         ],
         "retryable_failures": retryable_failures,
         "permanent_failures": permanent_failures,
-        "records": {
-            "manifest": str(record_dir / "manifest.json"),
-            "failure_ledger": str(record_dir / "failure-ledger.json"),
-            "skipped_files": str(record_dir / "skipped-files.json"),
-            "artifact_index": str(record_dir / "artifact-index.md"),
-            "run_summary": str(record_dir / "run-summary.md"),
-            "run_state": str(record_dir / "run-state.json"),
-        },
         "next_command": build_convert_command(source_path, source_base, output_root) if failures else "",
     }
-
-
-def write_run_state(
-    record_dir: Path,
-    settings: Settings,
-    source_path: Path,
-    source_base: Path,
-    output_root: Path,
-    jobs: list[PdfJob],
-    skipped: list[SkippedPdf],
-    results: list[ConversionResult],
-    failures: list[dict[str, str]],
-) -> None:
-    state = build_run_state(
-        settings=settings,
-        source_path=source_path,
-        source_base=source_base,
-        output_root=output_root,
-        jobs=jobs,
-        skipped=skipped,
-        results=results,
-        failures=failures,
-        record_dir=record_dir,
-    )
-    record_dir.mkdir(parents=True, exist_ok=True)
-    (record_dir / "run-state.json").write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-
-
-def write_manifest(
-    manifest_path: Path,
-    settings: Settings,
-    jobs: list[PdfJob],
-    skipped: list[SkippedPdf],
-    results: list[ConversionResult] | None = None,
-    failures: list[dict[str, str]] | None = None,
-) -> None:
-    manifest_path.parent.mkdir(parents=True, exist_ok=True)
-    data = {
-        "settings": masked_settings(settings),
-        "jobs": [
-            {"source_pdf": str(job.source_pdf), "target_md": str(job.target_md)}
-            for job in jobs
-        ],
-        "skipped": [
-            {"source_pdf": str(item.source_pdf), "target_md": str(item.target_md), "reason": item.reason}
-            for item in skipped
-        ],
-        "results": [
-            dataclasses.asdict(result)
-            for result in (results or [])
-        ],
-        "failures": failures or [],
-    }
-    manifest_path.write_text(json.dumps(data, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
-
-
-def run_record_dir(source_dir: Path, records_root: Path = Path("agent-memory/records")) -> Path:
-    slug = re.sub(r"[^A-Za-z0-9_.-]+", "-", source_dir.name).strip("-") or "source"
-    stamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
-    return records_root / f"{stamp}-pdf-to-md-{slug}"
-
-
-def write_run_summary(record_dir: Path, jobs: list[PdfJob], skipped: list[SkippedPdf], results: list[ConversionResult], failures: list[dict[str, str]]) -> None:
-    converted = [result for result in results if result.status == "converted"]
-    summary = f"""# Run Summary
-
-## Stage
-
-- Name: pdf-to-md
-- Skill: skills/mathos-pdf-to-md
-- Command or workflow: MinerU local batch upload API
-
-## Status
-
-- Completion status: {"completed" if not failures else "stopped or partially failed"}
-- Stop reason: {"none" if not failures else "one or more conversions failed"}
-
-## Counts
-
-- Attempted files: {len(jobs)}
-- Converted files: {len(converted)}
-- Failed files: {len(failures)}
-- Skipped files: {len(skipped)}
-- Warning items: 0
-
-## Outputs
-
-- Manifest: `{record_dir / "manifest.json"}`
-- Failure ledger: `{record_dir / "failure-ledger.json"}`
-
-## Boundary Reminder
-
-This summary records execution facts and output inventory. It does not judge content correctness.
-"""
-    (record_dir / "run-summary.md").write_text(summary, encoding="utf-8")
-
-
-def write_failure_ledger(record_dir: Path, failures: list[dict[str, str]]) -> None:
-    data = {
-        "stage": "pdf-to-md",
-        "skill": "skills/mathos-pdf-to-md",
-        "failure_counts": {
-            "conversion_failure": len(failures),
-            "missing_api_key": 0,
-            "api_error": sum(1 for failure in failures if failure.get("category") == "api_error"),
-            "missing_output": sum(1 for failure in failures if failure.get("category") == "missing_output"),
-        },
-        "failed_items": failures,
-        "stopped": bool(failures),
-        "stop_reason": "one or more conversions failed" if failures else "",
-    }
-    (record_dir / "failure-ledger.json").write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-
-
-def write_skipped_files(record_dir: Path, skipped: list[SkippedPdf]) -> None:
-    data = [
-        {"source_pdf": str(item.source_pdf), "target_md": str(item.target_md), "reason": item.reason}
-        for item in skipped
-    ]
-    (record_dir / "skipped-files.json").write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-
-
-def write_artifact_index(record_dir: Path, results: list[ConversionResult]) -> None:
-    lines = [
-        "# Artifact Index",
-        "",
-        "## Outputs",
-        "",
-    ]
-    for result in sorted(results, key=lambda item: str(item.target_md).lower()):
-        lines.append(f"- `{result.target_md}`")
-        for zip_path in result.zip_paths:
-            lines.append(f"  - Zip: `{zip_path}`")
-    lines.extend(
-        [
-            "",
-            "## Run Records",
-            "",
-            f"- Manifest: `{record_dir / 'manifest.json'}`",
-            f"- Failure ledger: `{record_dir / 'failure-ledger.json'}`",
-            f"- Skipped files: `{record_dir / 'skipped-files.json'}`",
-            f"- Run state: `{record_dir / 'run-state.json'}`",
-        ]
-    )
-    (record_dir / "artifact-index.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def resolve_source_and_outputs(args: argparse.Namespace) -> tuple[Path, Path, Path]:
@@ -909,31 +752,29 @@ def run_conversion(args: argparse.Namespace) -> int:
     settings = load_settings(Path(args.env))
     source_path, source_base, output_root = resolve_source_and_outputs(args)
     jobs, skipped = discover_pdf_jobs(source_path, source_base, output_root)
-    record_dir = run_record_dir(source_path)
-    record_dir.mkdir(parents=True, exist_ok=True)
     results: list[ConversionResult] = []
     failures: list[dict[str, str]] = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=settings.max_parallel_tasks) as executor:
-        future_map = {
-            executor.submit(convert_job, job, MineruClient(settings), record_dir): job
-            for job in jobs
-        }
-        for future in concurrent.futures.as_completed(future_map):
-            job = future_map[future]
-            try:
-                results.append(future.result())
-            except Exception as exc:
-                category = "api_error" if isinstance(exc, MineruApiError) else "conversion_failure"
-                failures.append({"source_pdf": str(job.source_pdf), "category": category, "message": str(exc)})
+    with tempfile.TemporaryDirectory(prefix="mathos-pdf-to-md-") as temp_name:
+        artifact_dir = Path(temp_name)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=settings.max_parallel_tasks) as executor:
+            future_map = {
+                executor.submit(convert_job, job, MineruClient(settings), artifact_dir): job
+                for job in jobs
+            }
+            for future in concurrent.futures.as_completed(future_map):
+                job = future_map[future]
+                try:
+                    results.append(future.result())
+                except Exception as exc:
+                    category = "api_error" if isinstance(exc, MineruApiError) else "conversion_failure"
+                    failures.append({"source_pdf": str(job.source_pdf), "category": category, "message": str(exc)})
 
-    write_manifest(record_dir / "manifest.json", settings, jobs, skipped, results, failures)
-    write_failure_ledger(record_dir, failures)
-    write_skipped_files(record_dir, skipped)
-    write_artifact_index(record_dir, results)
-    write_run_summary(record_dir, jobs, skipped, results, failures)
-    write_run_state(record_dir, settings, source_path, source_base, output_root, jobs, skipped, results, failures)
-    print(f"Run records: {record_dir}")
-    print(f"Attempted: {len(jobs)} Converted: {len(results)} Failed: {len(failures)} Skipped: {len(skipped)}")
+    state = build_conversion_state(settings, source_path, source_base, output_root, jobs, skipped, results, failures)
+    print(json.dumps(state, ensure_ascii=False, indent=2, default=str))
+    print(
+        f"Attempted: {len(jobs)} Converted: {len(results)} Failed: {len(failures)} Skipped: {len(skipped)}",
+        file=sys.stderr,
+    )
     return 1 if failures else 0
 
 

@@ -8,11 +8,9 @@ from pathlib import Path
 from learning_pipeline import run_learning_from_provider
 from mathos_common import (
     FormattingError,
+    content_preservation_counts,
     learning_work_dir_for,
     validate_candidate_not_too_short,
-)
-from step6_content_processing import (
-    content_preservation_counts,
     validate_content_preservation,
 )
 
@@ -30,7 +28,6 @@ ERROR_ARTIFACTS = {
     "step3-heading-processing": "heading_processor_response.py",
     "step4-toc-removal": "stage1_heading_report.md",
     "step5-heading-validation": "heading_check_response.json",
-    "step6-content-processing": "content_processor_response.py",
 }
 
 
@@ -41,19 +38,23 @@ def _sha256_bytes(value: bytes) -> str:
 def _execution_fingerprint(
     source_bytes: bytes,
     heading_prompt: str,
-    content_prompt: str,
     provider_client: object,
     timeout_seconds: int,
+<<<<<<< Updated upstream:skills/mathos-formatting/scripts/automation_runner.py
     h1_index: int,
+=======
+>>>>>>> Stashed changes:MathOS Agent/skills/mathos-formatting/scripts/automation_runner.py
 ) -> str:
     payload = {
         "source_sha256": _sha256_bytes(source_bytes),
         "heading_prompt_sha256": _sha256_bytes(heading_prompt.encode("utf-8")),
-        "content_prompt_sha256": _sha256_bytes(content_prompt.encode("utf-8")),
         "provider_base_url": str(getattr(provider_client, "base_url", "")),
         "provider_model": str(getattr(provider_client, "model", "")),
         "timeout_seconds": timeout_seconds,
+<<<<<<< Updated upstream:skills/mathos-formatting/scripts/automation_runner.py
         "h1_index": h1_index,
+=======
+>>>>>>> Stashed changes:MathOS Agent/skills/mathos-formatting/scripts/automation_runner.py
     }
     encoded = json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
     return _sha256_bytes(encoded)
@@ -77,7 +78,7 @@ def _prepare_recovery(work_dir: Path, fingerprint: str) -> bool:
         except (json.JSONDecodeError, OSError):
             resumed = False
     if not resumed:
-        for name in ("heading_processor.py", "content_processor.py"):
+        for name in ("heading_processor.py",):
             artifact = work_dir / name
             if artifact.exists():
                 artifact.unlink()
@@ -112,7 +113,12 @@ def _failure_artifact(work_dir: Path, failed_stage: str) -> Path:
     )
 
 
-def _self_check(source_path: Path, source_bytes: bytes, candidate_path: Path, report_path: Path) -> None:
+def _self_check(
+    source_path: Path,
+    source_bytes: bytes,
+    candidate_path: Path,
+    report_path: Path,
+) -> None:
     if source_path.read_bytes() != source_bytes:
         raise FormattingError("source Markdown changed during automated formatting")
     if not candidate_path.is_file():
@@ -134,10 +140,12 @@ def run_automated_formatting(
     markdown_path: Path,
     provider_client: object,
     heading_prompt: str,
-    content_prompt: str,
     work_dir: Path | None = None,
     timeout_seconds: int = 120,
+<<<<<<< Updated upstream:skills/mathos-formatting/scripts/automation_runner.py
     h1_index: int = 0,
+=======
+>>>>>>> Stashed changes:MathOS Agent/skills/mathos-formatting/scripts/automation_runner.py
 ) -> AutomatedRunResult:
     markdown_path = markdown_path.resolve()
     work_dir = (work_dir or learning_work_dir_for(markdown_path)).resolve()
@@ -149,20 +157,24 @@ def run_automated_formatting(
         fingerprint = _execution_fingerprint(
             source_bytes,
             heading_prompt,
-            content_prompt,
             provider_client,
             timeout_seconds,
+<<<<<<< Updated upstream:skills/mathos-formatting/scripts/automation_runner.py
             h1_index,
+=======
+>>>>>>> Stashed changes:MathOS Agent/skills/mathos-formatting/scripts/automation_runner.py
         )
         resumed = _prepare_recovery(work_dir, fingerprint)
         result = run_learning_from_provider(
             markdown_path=markdown_path,
             provider_client=provider_client,
             heading_prompt=heading_prompt,
-            content_prompt=content_prompt,
             work_dir=work_dir,
             timeout_seconds=timeout_seconds,
+<<<<<<< Updated upstream:skills/mathos-formatting/scripts/automation_runner.py
             h1_index=h1_index,
+=======
+>>>>>>> Stashed changes:MathOS Agent/skills/mathos-formatting/scripts/automation_runner.py
         )
         state = _load_run_state(work_dir)
         if state.get("status") != "candidate-written" or state.get("stage1_validated") is not True:
@@ -178,11 +190,14 @@ def run_automated_formatting(
             "candidate_path": str(result.candidate_path),
             "report_path": str(result.report_path),
             "run_state_path": str(work_dir / "run-state.json"),
+<<<<<<< Updated upstream:skills/mathos-formatting/scripts/automation_runner.py
             "safe_to_approve": True,
+=======
+>>>>>>> Stashed changes:MathOS Agent/skills/mathos-formatting/scripts/automation_runner.py
             "resumed": resumed,
             "warnings": result.warnings,
             "errors": [],
-            "next_action": "approve",
+            "next_action": "review-candidate",
         }
         _write_json(digest_path, digest)
         return AutomatedRunResult(0, digest_path, digest)
@@ -205,7 +220,10 @@ def run_automated_formatting(
             "candidate_path": str(state.get("candidate_path") or work_dir / "candidate.md"),
             "report_path": str(work_dir / "candidate-report.md"),
             "run_state_path": str(work_dir / "run-state.json"),
+<<<<<<< Updated upstream:skills/mathos-formatting/scripts/automation_runner.py
             "safe_to_approve": False,
+=======
+>>>>>>> Stashed changes:MathOS Agent/skills/mathos-formatting/scripts/automation_runner.py
             "resumed": resumed,
             "warnings": state.get("warnings", []),
             "errors": [str(exc)],

@@ -1,45 +1,28 @@
 ---
 name: mathos-formatting
-description: Use for MathOS Markdown formatting when provider-generated Python artifacts must normalize TOC-aligned headings, strip the TOC safely, preserve protected Markdown regions, produce self-check candidates, or save/reuse approved formatting programs without replacing the original source.
+description: Use for MathOS Markdown formatting when Codex needs to normalize TOC-aligned headings, strip the TOC safely, write reviewable candidates, and keep the original source unchanged until explicit replacement approval.
 ---
 
 # MathOS Formatting
 
 ## Overview
 
+<<<<<<< Updated upstream:skills/mathos-formatting/SKILL.md
 This repo-local skill formats MathOS Markdown after conversion and before segmentation. Stage 1 uses DeepSeek to extract an immutable verbatim TOC, generate a sandboxed heading processor, delete the recorded TOC span, and validate the final heading structure. Stage 2 then applies the generated content processor. Candidate-producing commands never replace the original Markdown file.
+=======
+This repo-local skill formats MathOS Markdown after conversion and before segmentation. The workflow extracts an immutable verbatim TOC, generates and runs a sandboxed heading processor, strips the recorded TOC span, validates headings, then writes the validated TOC-free Markdown as the candidate.
+>>>>>>> Stashed changes:MathOS Agent/skills/mathos-formatting/SKILL.md
 
-## When To Use
-
-Use this skill when a MathOS `.md` file needs:
-
-- Structure inspection before formatting.
-- Provider-backed heading normalization according to the TOC.
-- TOC stripping with preface/body preservation.
-- Chapter-inner Markdown cleanup through a generated Python batch processor.
-- A self-check candidate and report before segmentation.
-- An approved reusable formatting program for the same source family.
-- Diagnosis of heading, TOC, protected-region, Python-artifact, or preservation failures.
-
-## When Not To Use
-
-Do not use this skill for:
-
-- PDF or Word conversion.
-- Segmentation or graph building.
-- Mathematical correctness review.
-- Summarization, translation, rewriting, answer generation, or educational-content deletion.
-- Non-Markdown files.
-- Replacing the original Markdown file without explicit user approval for that exact replacement.
-- Editing files under `skills/mathos-formatting/scripts/` during an ordinary formatting run. Script changes require a separate explicit development request.
+This skill does not perform concept extraction, chapter-inner content rewriting, reusable content-template creation, or source replacement.
 
 ## Quick Reference
 
-Run commands from `C:\Mathematics-Knowledge\Mathematics-Knowledge-code`.
+Run commands from `C:\Mathematics-Knowledge\Mathematics-Knowledge-code\MathOS Agent`.
 
 | Task | Command |
 | --- | --- |
 | CLI help | `python skills\mathos-formatting\scripts\mathos_formatting.py --help` |
+<<<<<<< Updated upstream:skills/mathos-formatting/SKILL.md
 | Fully automated run | `python skills\mathos-formatting\scripts\mathos_formatting.py run "<source.md>" --env ..\.env` |
 | Inspect only | `python skills\mathos-formatting\scripts\mathos_formatting.py inspect "<source.md>"` |
 | Learn Python artifacts | `python skills\mathos-formatting\scripts\mathos_formatting.py learn-from-provider "<source.md>" --env ..\.env` |
@@ -82,10 +65,35 @@ Run commands from `C:\Mathematics-Knowledge\Mathematics-Knowledge-code`.
 Compatibility-only behavior is isolated under `legacy_heading_rules.py`, `legacy_title_map.py`, and `legacy_toc_helpers.py`. Shared report generation lives in `reporting.py`.
 
 ## Input And Output Contract
+=======
+| Ordinary formatting run | `python skills\mathos-formatting\scripts\mathos_formatting.py run "<source.md>" --env ..\..\.env` |
+| Inspect only | `python skills\mathos-formatting\scripts\mathos_formatting.py inspect "<source.md>"` |
+| Focused provider diagnosis | `python skills\mathos-formatting\scripts\mathos_formatting.py learn-from-provider "<source.md>" --env ..\..\.env` |
+
+## Workflow SOP
+
+1. Use `run "<source.md>" --env ..\..\.env` for ordinary formatting.
+2. Read only `<work-dir>\result-summary.json` after `run` completes.
+3. If `status` is `failed`, read only the `error_artifact` path named in that digest. Report `failed_stage`, `source_unchanged`, the one-line cause, the error artifact path, and the next safe action.
+4. If `status` is `passed`, report `candidate_path`, `report_path`, and `source_unchanged`.
+5. Do not replace the original Markdown automatically. Ask for explicit user approval before replacing the source with `candidate.md`.
+6. Run segmentation only after the user authorizes replacement and the candidate has actually replaced the source.
+
+## Provider Stages
+
+1. **Step 1 TOC Extraction**: DeepSeek returns unchanged numbered lines from the first-20-page sample. The runtime validates one complete contiguous span and saves those source lines as immutable `toc.md`.
+2. **Step 2 Heading Extraction**: The runtime combines `toc.md` with unprotected body headings in `toc_and_headings.md`.
+3. **Step 3 Heading Processing**: DeepSeek returns `heading_processor.py`, which runs only in a temporary sandbox. A separate call returns `heading_expected_result.md` for comparison evidence.
+4. **Step 4 TOC Removal**: The runtime deletes the original validated TOC line interval. It never searches modified text for new TOC boundaries.
+5. **Step 5 Heading Validation**: DeepSeek validates `heading_check_input.md` as JSON. The runtime also checks heading counts and exact H1-H3 order. Passing Step 5 produces `candidate.md`.
+
+## Runtime Contract
+>>>>>>> Stashed changes:MathOS Agent/skills/mathos-formatting/SKILL.md
 
 Inputs:
 
 - Source path exists, is a file, ends in `.md`, and is UTF-8 Markdown.
+<<<<<<< Updated upstream:skills/mathos-formatting/SKILL.md
 - Provider learning reads secrets from `.env`; never print or persist secret values.
 - Stage 1 heading and Stage 2 content artifacts are Python batch scripts.
 - `heading_expected_result.md` is a validated explanatory artifact. It records the modified TOC, change details, and expected effect, but does not drive candidate mutation or replace Step 5 validation.
@@ -100,10 +108,21 @@ Outputs:
 - Artifact/application runs write a fresh candidate under the source directory's `mathos-formatting` area.
 - Approved programs are written under `skills\mathos-formatting\plugins\approved\<program-id>\`.
 - CLI JSON includes status, candidate path, report path, warnings, `self_check_required`, and `next_actions`.
+=======
+- Provider settings come from `.env`; never print or persist secret values.
+- Heading prompts live under `agents\` and are the only active provider prompt surface.
+
+Outputs:
+
+- `inspect`, `learn-from-provider`, and `run` never modify the original source.
+- Provider runs write `<work-dir>\candidate.md`, `candidate-report.md`, `run-state.json`, and per-step evidence artifacts.
+- Automated `run` additionally writes `result-summary.json` and `automation-checkpoint.json`.
+- `result-summary.json` is the only normal agent-readable digest. It contains final status, candidate/report paths, source mutation status, recovery status, preservation status, and either zero or one `error_artifact`.
+>>>>>>> Stashed changes:MathOS Agent/skills/mathos-formatting/SKILL.md
 
 ## Artifact Layout
 
-Provider learning work directories may include:
+Provider work directories may include:
 
 - `toc_detection_sample.md`
 - `toc_detection_response.md`
@@ -118,10 +137,13 @@ Provider learning work directories may include:
 - `heading_check_prompt.md`
 - `heading_check_input.md`
 - `heading_check_response.json`
+<<<<<<< Updated upstream:skills/mathos-formatting/SKILL.md
 - `h1_sample.md`
 - `content_cleaner_prompt.md`
 - `content_processor_response.py`
 - `content_processor.py`
+=======
+>>>>>>> Stashed changes:MathOS Agent/skills/mathos-formatting/SKILL.md
 - `_python-artifact-sandboxes\`
 - `candidate.md`
 - `candidate-report.md`
@@ -129,6 +151,7 @@ Provider learning work directories may include:
 - `result-summary.json`
 - `automation-checkpoint.json`
 
+<<<<<<< Updated upstream:skills/mathos-formatting/SKILL.md
 ## Automated Run Contract
 
 `run` leaves the source unchanged and returns `0` only when deterministic self-checking passes. It returns nonzero after writing a failure digest when any stage or self-check fails.
@@ -200,119 +223,41 @@ The self-check loop must protect or validate:
 - Never save a reusable program until the candidate passes self-check.
 - Never replace the original source without explicit approval.
 
+=======
+>>>>>>> Stashed changes:MathOS Agent/skills/mathos-formatting/SKILL.md
 ## Failure Handling
 
 Stop and keep artifacts when:
 
 - Source is missing, non-Markdown, or unreadable.
-- Provider output is invalid Python for the heading or content processor.
+- Provider output is invalid Python for the heading processor.
 - TOC output is modified, incomplete, disjoint, ambiguous, or includes unrelated text.
 - Heading validation JSON is invalid, false, reports errors, or has a count mismatch.
 - Heading validation errors contain self-negating text such as `not an error` or the Chinese literal `不是错误`; treat the provider response as internally contradictory and fail closed.
-- Python artifact is missing required imports or functions.
-- Python artifact contains dangerous imports or calls.
+- Python heading artifacts contain dangerous imports or calls.
 - Stage 1 validation rejects TOC hierarchy or non-TOC H1-H3 headings.
 - TOC stripping would remove preface or body content.
-- Candidate becomes too short or preservation counts drop.
-- Display math, code fence, YAML, table, image, details, or heading preservation fails.
-- Approved-program saving is attempted before self-check passes.
+- Heading-only self-check detects source mutation, candidate loss, missing headings, or protected-count regressions.
 - Original replacement is attempted without explicit user approval.
 
-Do not weaken validation, silently retry with looser rules, or patch runtime scripts during a formatting run.
+Do not weaken validation, silently retry with looser rules, or patch runtime scripts during an ordinary formatting run.
+
+## Critical Rules
+
+- Fail closed on deletion risk.
+- Generated heading scripts run only in temporary sandbox directories.
+- Never execute generated Python against the original Markdown directory.
+- H1-H3 are reserved for TOC-derived structure; non-TOC headings must be H4-H6.
+- No heading may receive invented parent or chapter context.
+- Never replace the original source without explicit user approval.
 
 ## Validation
 
-Before calling the work successful, run:
+Before calling formatter changes successful, run:
 
 ```powershell
 python skills\mathos-formatting\scripts\mathos_formatting.py --help
+python skills\mathos-formatting\scripts\mathos_formatting.py run --help
 python -m pytest tests\test_mathos_formatting_guarded.py -q
-rg "content_rules.json|heading_rules.json|heading_optimizations.json" skills\mathos-formatting tests
+git diff --check
 ```
-
-The final `rg` should show only explicit legacy compatibility references.
-
-Required validation coverage:
-
-- Accidental TOC deletion is caught.
-- Heading level judgment is checked against TOC-derived structure.
-- Display math, code fences, YAML frontmatter, and tables are protected.
-- Invalid heading-check JSON is rejected before Stage 2.
-- Invalid provider Python is rejected for heading and content processors.
-- Candidate-too-short or content-loss output fails closed.
-- Original file cannot be replaced without explicit user approval.
-- Dangerous Python artifacts are rejected, including `os.remove`, `subprocess`, arbitrary write `open`, network imports/calls, and missing required functions.
-- Generated scripts only affect sandbox candidate copies.
-- Provider learning produces no late title-map artifact.
-- Legacy approved programs still apply through the compatibility branch.
-
-## Review And Approval Workflow
-
-Manual review is not the acceptance gate. Candidate-producing commands set `self_check_required: true`; the agent must complete the skill self-check loop:
-
-1. Read `run-state.json`, `candidate.md`, and the report.
-2. Confirm the original file was not modified.
-3. Verify immutable TOC evidence, stored boundaries, and the passing heading-check response.
-4. Verify preservation counts and protected-region behavior.
-5. Confirm candidate length is plausible.
-6. If all checks pass, save the approved program.
-7. Ask separately before replacing the original source with the candidate.
-8. **Save Generalized Formatting Templates**: If the approved program is intended to serve as a general formatting specification for a book family (e.g., textbook-family-v1), clean the plugin directory after `approve` completes. Go to `skills/mathos-formatting/plugins/approved/<program-id>` and manually delete the book-specific `heading_processor.py` and sample comparison files (`sample_before.md`, `sample_after.md`). Keep only the generalized Stage 2 `content_processor.py`, `metadata.json`, and `approval.md`.
-
-## Reuse Approved Programs
-
-Use `apply-approved` only for sources from the same self-check-passing family.
-
-Reuse behavior:
-
-- Directory deletion and heading adjustment stages cannot be reused; only the Stage 2 content processor (`content_processor.py`) can be reused.
-- For other books in the same family, you cannot directly apply the entire program using `apply-approved`. You must run TOC extraction, heading processing, and heading validation individually for each book, but you can reuse the approved `content_processor.py` during `learn-from-provider` (or by manually compiling candidates from artifacts).
-- **Generalized Template Pruning**: When creating a family-wide general formatting template, manually prune the plugin folder to remove all book-specific files (e.g., `heading_processor.py`) and comparison samples, leaving only `content_processor.py`, `metadata.json`, and `approval.md`.
-- Prefer `heading_processor.py` and `content_processor.py`.
-- Apply `title_rewrite_map.py` when present.
-- Fall back to legacy JSON or legacy `content_cleaner.py` only when no Python artifacts exist.
-- Create a fresh candidate and report.
-- Leave the original source untouched until explicit replacement approval.
-
-## Examples
-
-Learn:
-
-```powershell
-python skills\mathos-formatting\scripts\mathos_formatting.py learn-from-provider "C:\path\book.md" --env "C:\Mathematics-Knowledge\.env" --work-dir "C:\path\mathos-formatting\book"
-```
-
-Rebuild from Python artifacts:
-
-```powershell
-python skills\mathos-formatting\scripts\mathos_formatting.py candidate-from-artifacts "C:\path\book.md" --heading-script "C:\path\mathos-formatting\book\heading_processor.py" --content-script "C:\path\mathos-formatting\book\content_processor.py" --title-rewrite-map "C:\path\mathos-formatting\book\title_rewrite_map.py"
-```
-
-Approve:
-
-```powershell
-python skills\mathos-formatting\scripts\mathos_formatting.py approve --approved-root skills\mathos-formatting\plugins\approved --plugin-id "textbook-family-v1" --heading-script "C:\path\mathos-formatting\book\heading_processor.py" --content-script "C:\path\mathos-formatting\book\content_processor.py" --title-rewrite-map "C:\path\mathos-formatting\book\title_rewrite_map.py" --original "C:\path\book.md" --candidate "C:\path\mathos-formatting\book\candidate.md" --summary "self-check passed"
-```
-
-Reuse:
-
-```powershell
-python skills\mathos-formatting\scripts\mathos_formatting.py apply-approved "skills\mathos-formatting\plugins\approved\textbook-family-v1" "C:\path\next-book.md"
-```
-
-## Main Problems With The Original Skill
-
-- It read like a README rather than an operating procedure.
-- It made JSON rules the main path even after prompts moved to Python output.
-- It under-specified sandbox execution and generated-code safety.
-- It did not clearly separate self-check approval from source replacement.
-- It hid high-risk cases such as TOC over-stripping, heading misclassification, protected-region mutation, short candidates, and unsafe generated code.
-
-## Improvements To best_skill
-
-- Uses precise frontmatter and SOP sections.
-- Documents Python artifacts as the official main path.
-- Keeps Stage 2 JSON scoped to TOC line detection only.
-- Gives exact CLI commands for learning, candidate rebuild, approval, and reuse.
-- Defines input/output contracts, artifact layout, protected regions, critical rules, failure handling, validation, approval, and reuse.
-- Marks old JSON programs as legacy compatibility only.

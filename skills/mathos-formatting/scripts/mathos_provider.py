@@ -44,7 +44,7 @@ def load_provider_settings(env_path: Path) -> ProviderSettings:
     return ProviderSettings(
         api_key=api_key,
         base_url=values.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com").rstrip("/"),
-        model=values.get("DEEPSEEK_MODEL", "deepseek-v4-pro"),
+        model=values.get("DEEPSEEK_MODEL", "deepseek-v4-flash"),
     )
 
 
