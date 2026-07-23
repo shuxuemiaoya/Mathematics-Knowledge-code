@@ -1,0 +1,3 @@
+MathOS repo-local skill.
+
+This skill is part of the local Mathematics-Knowledge operator workspace. Review and replace this placeholder before distributing outside the local repository.

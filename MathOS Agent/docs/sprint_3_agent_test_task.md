@@ -1,0 +1,13 @@
+- [x] Task 1: Cleanup Existing Output Directory
+- [x] Task 2: Run PDF-to-MD Conversion (`pdf-to-md`)
+- [x] Task 3: Apply Adaptive Markdown Formatting (`mathos-formatting`)
+    - [x] Run DeepSeek formatting learning for High School Book 2
+    - [x] Run DeepSeek formatting learning for Grade 7 Book
+    - [x] Overwrite original MD files with candidate formatted contents
+    - [x] Cleanup temp work directories
+- [x] Task 4: Run Deterministic Segmentation (`segmentation-stage1`)
+    - [x] Segment High School Book 2
+    - [x] Segment Grade 7 Book
+- [x] Task 5: Document Results and Optimization Recommendations
+    - [x] Create execution flowchart
+    - [x] Analyze results and formulate recommendations

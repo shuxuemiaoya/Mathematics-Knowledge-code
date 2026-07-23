@@ -1,0 +1,3 @@
+MathOS adaptive Markdown formatting skill.
+
+This skill may call a configured LLM provider to generate heading artifacts. Provider secrets must not be logged, printed, or saved.
