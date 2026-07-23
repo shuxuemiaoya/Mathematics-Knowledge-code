@@ -1,13 +1,13 @@
 ---
 name: render-exam-latex-pdfs
-description: Convert a validated reformatted Markdown exam paper and its inline worked-solution edition into separate LaTeX documents and visually polished PDFs using distinct paper and solutions templates. Use for the final Exam Paper Organizer publishing stage, or when Codex must render `ExamPaper（题解整合版）.md` and `ExamPaper（题解整合版）（解析版）.md` as Chinese-capable `.tex` and `.pdf` artifacts with Pandoc, XeLaTeX, source preservation, and page-by-page visual QA.
+description: Convert validated reformatted and inline-solution Markdown editions into separate LaTeX documents and visually polished PDFs using distinct templates. Use as the strict final Exam Paper Organizer stage only after reformatting, solution supplementation, image cleaning, and the organizer barrier audit pass, or as an explicitly requested standalone renderer with Pandoc, XeLaTeX, source preservation, and page-by-page visual QA.
 ---
 
 # Render Exam LaTeX PDFs
 
 Publish two source-preserving editions with purpose-built templates:
 
-- the validated reformatted paper uses `assets/exam-paper-template.tex`;
+- the validated reformatted paper uses `assets/期末试卷最简版.tex`;
 - the worked-solution edition uses `assets/exam-solutions-template.tex`.
 
 Generate both `.tex` and `.pdf` files. Treat PDF rendering and visual inspection as required parts of completion.
@@ -23,12 +23,21 @@ For the default two-edition run, resolve these exact sibling inputs:
 
 Use the reformatted candidate as the paper edition rather than the untouched `ExamPaper.md`; it is the validated, LaTeX-oriented source. Allow explicit `--paper` and `--solutions` overrides when the user supplies different paths.
 
-In the full organizer pipeline, run this skill only after Reformatted Exam Paper and Supplement Exam Solutions both succeed. Allow an explicitly requested paper-only or solutions-only standalone run.
+In the full organizer pipeline, run this skill only after Reformatted Exam Paper, Supplement Exam Solutions, and Batch Clean Images reach terminal successful states and the organizer's pre-publish audit passes. Allow an explicitly requested paper-only or solutions-only standalone run outside the organizer.
+
+## Organizer prerequisite evidence
+
+Distinguish organizer mode from an explicitly requested standalone render.
+
+- **Organizer mode:** Require the controller-provided `<folder>\tmp\organizer\<run-id>\pipeline-state.json`. Read it before the renderer preflight and require `eligible_to_render: true` for the selected paper. Verify that it records successful reformatting and solution supplementation, `image_replacement_status: "completed"`, `image_quality_status: "unverified"` or `"passed"`, completed image counts and failed paths, a complete in-place replacement mapping for every referenced raster asset, and a passed pre-publish audit. Stop at a prerequisite-evidence gate if the manifest is missing, stale, incomplete, or false.
+- **Standalone mode:** Do not invent or require organizer state when the user explicitly invokes this skill outside `exam-paper-organizer`. Report that image-cleaning and organizer-barrier guarantees were not applied.
+
+Do not treat the existence of derived Markdown, `.tex`, or `.pdf` files as proof that organizer prerequisites passed.
 
 ## Render
 
 1. Resolve the skill directory and input folder absolutely.
-2. Record SHA-256 hashes for every selected Markdown source.
+2. Record SHA-256 hashes for every selected Markdown source. In organizer mode, also verify the final derived Markdown hashes recorded by the pipeline-state manifest.
 3. Run a non-writing preflight:
 
    ```powershell
@@ -43,7 +52,7 @@ In the full organizer pipeline, run this skill only after Reformatted Exam Paper
    python <skill-dir>\scripts\render_exam_pdfs.py <folder>
    ```
 
-   Use `--edition paper` or `--edition solutions` only when the user requests one edition. Use `--overwrite` only with explicit permission when a target `.tex` or `.pdf` already exists.
+   Use `--edition paper` or `--edition solutions` only when the user requests one edition. Use `--overwrite` without a new prompt only for provisional outputs created earlier in the same current publishing attempt; require explicit permission for outputs that predate the current task.
 6. Read the script's stdout JSON. Treat a nonzero exit or an edition status other than `completed` as a failed publishing stage.
 7. Confirm the Markdown source hashes are unchanged.
 
@@ -59,7 +68,7 @@ For each selected Markdown source, write:
 <output-dir>\logs\<source-stem>.xelatex.log
 ```
 
-Do not create backups. Do not overwrite an existing output without explicit permission. Preserve image targets and resolve them through Pandoc's resource path rather than rewriting source Markdown links.
+Do not create backups. Do not overwrite an output that predates the current task without explicit permission. Preserve final Markdown image targets. In organizer mode, accept controller-created rendering-only Markdown copies whose image links point to proven cleaned PNGs; never rewrite the final derived Markdown editions.
 
 ## Template rules
 
@@ -72,12 +81,25 @@ Do not create backups. Do not overwrite an existing output without explicit perm
 - Convert marked `exam-solution` blocks into the template's breakable `examSolutionBox` environment through the same filter.
 - Fix layout defects in the templates, filter, or renderer. Do not rewrite mathematical or question content merely to make a page fit.
 
+## Reference-matching profile
+
+When the user supplies an original Markdown paper together with a finished reference PDF, treat the PDF as the visual source of truth and iterate in standalone paper mode.
+
+- Compare every reference page with the same generated page, including title hierarchy, section starts, question grouping, image scale, page density, answer-booklet breaks, watermark restraint, and footer counters.
+- Preserve a combined source containing both the question paper and its trailing answer key. Detect the repeated paper title and `数学参考答案`, reset the page counter, and publish independent `4 + 4`-style paper/answer footer counts when the reference uses separate booklets.
+- Resolve URL-encoded, space-containing, and folder-prefixed Markdown image targets against the Markdown directory, the supplied folder, and their `images` directories. Rewrite only the generated LaTeX image targets to absolute normalized paths; never modify the Markdown source.
+- Treat a standalone diagram immediately following a numbered item as belonging to that final question. Keep it proportionate on the right where space permits; for illustrated multiple-choice questions, switch to the narrow figure-choice measure so options cannot extend beneath the diagram.
+- Choose four-column, two-column, or one-column answer choices according to their rendered length. Use one line per option for long choices.
+- Normalize unsupported Unicode mathematical relation glyphs in generated LaTeX and preserve their mathematical meaning.
+- For the common 19-question reference-answer profile, score markers may act as controlled page-break anchors only when all answer headings 15 through 19 are detected. Do not apply those reference breaks to a different paper structure.
+- Reject a candidate with a different page count from the reference unless the source content itself differs. Continue until every generated page is visually clean and the booklet split matches.
+
 ## Visual QA
 
 After every meaningful template or rendering change:
 
 1. Run `pdfinfo` on each PDF and require a positive page count.
-2. Render every PDF page to PNG with Poppler under `<folder>\tmp\pdfs\<edition>`:
+2. Remove previews from the previous iteration of the same run, then render every PDF page to PNG with Poppler under `<folder>\tmp\organizer\<run-id>\pdfs\<edition>`:
 
    ```powershell
    pdftoppm -png -r 144 <input.pdf> <preview-prefix>
@@ -92,7 +114,11 @@ After every meaningful template or rendering change:
    - solution boxes split cleanly across pages and never obscure content;
    - there are no blank accidental pages, black squares, raw HTML comments, placeholders, or tool tokens.
 4. Correct every visible defect and rerun the affected edition until the latest page inspection is clean.
-5. Remove temporary preview PNGs after verification unless the user asks to keep them.
+5. Record the final PDF hash and the exact inspected page numbers so stale previews cannot satisfy QA for a newer build.
+6. In organizer mode, update the manifest only after inspecting the final build:
+   - clean pages: set the selected render status and `image_quality_status` to `passed`; set `publishing_complete: true` only when all selected editions passed;
+   - visible image or layout defect: set the selected render status to `failed_visual_qa`, set `image_quality_status: failed`, retain the outputs as provisional, and record the exact page and asset.
+7. Remove temporary preview PNGs after verification unless the user asks to keep them.
 
 Do not report successful completion based only on Pandoc or XeLaTeX exit codes.
 
@@ -106,5 +132,7 @@ Return:
 - page counts and file sizes;
 - Pandoc and XeLaTeX status;
 - visual-QA status and any corrected defects;
+- organizer pipeline-state manifest and barrier status, or an explicit standalone-mode declaration;
+- final PDF hashes and exact page ranges inspected;
 - any missing input, dependency, output-exists, compilation, image, font, or visual-quality gate;
 - confirmation that every selected Markdown source retained its original SHA-256 hash.

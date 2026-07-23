@@ -1,0 +1,190 @@
+\documentclass[UTF8,11pt,a4paper]{ctexart}
+
+\usepackage[top=1.35cm,bottom=1.35cm,left=1.7cm,right=1.7cm,footskip=0.78cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{wrapfig}
+\usepackage{xcolor}
+\usepackage{calc}
+\usepackage{longtable,array,tabularx}
+\usepackage{enumitem}
+\usepackage{eso-pic}
+\usepackage{lastpage,refcount}
+\usepackage{hyperref}
+
+\definecolor{ExamInk}{HTML}{111111}
+\definecolor{ExamMuted}{HTML}{4B5563}
+\definecolor{ExamWatermark}{HTML}{FAFAFA}
+
+\hypersetup{hidelinks,pdfborder={0 0 0}}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.18em}
+\setlength{\emergencystretch}{3em}
+\renewcommand{\arraystretch}{1.12}
+\linespread{1.14}
+\setcounter{secnumdepth}{0}
+
+\setlist[enumerate,1]{
+  label=\arabic*.,
+  leftmargin=2.15em,
+  labelsep=0.55em,
+  itemsep=0.46em,
+  topsep=0.32em,
+  parsep=0.08em,
+  partopsep=0pt
+}
+\setlist[enumerate,2]{leftmargin=2.1em,itemsep=0.2em,topsep=0.2em}
+
+\providecommand{\toprule}{\hline}
+\providecommand{\midrule}{\hline}
+\providecommand{\bottomrule}{\hline}
+\providecommand{\real}[1]{#1}
+
+\ctexset{
+  section={format=\centering\heiti\bfseries\fontsize{16pt}{22pt}\selectfont,beforeskip=0.7em,afterskip=0.55em},
+  subsection={format=\heiti\bfseries\fontsize{12.5pt}{18pt}\selectfont,beforeskip=0.7em,afterskip=0.35em},
+  subsubsection={format=\heiti\bfseries\normalsize,beforeskip=0.55em,afterskip=0.25em}
+}
+
+\newif\ifExamAnswers
+\ExamAnswersfalse
+\newcounter{ExamPaperPageCount}
+
+\newcommand{\ExamMainTitle}[1]{%
+  \begin{center}
+    {\heiti\bfseries\fontsize{16pt}{23pt}\selectfont #1\par}
+  \end{center}
+  \vspace{0.15em}%
+}
+\newcommand{\ExamSubjectTitle}[1]{%
+  \begin{center}
+    {\heiti\bfseries\fontsize{22pt}{28pt}\selectfont #1\par}
+  \end{center}
+  \vspace{0.45em}%
+}
+\newcommand{\ExamAnswerMainTitle}[1]{%
+  \vspace*{0.65cm}%
+  \begin{center}
+    {\heiti\bfseries\fontsize{15pt}{22pt}\selectfont #1\par}
+  \end{center}
+  \vspace{0.1em}%
+}
+\newcommand{\ExamAnswerSubjectTitle}[1]{%
+  \begin{center}
+    {\heiti\bfseries\fontsize{19pt}{26pt}\selectfont #1\par}
+  \end{center}
+  \vspace{0.7em}%
+}
+
+\newcommand{\beginExamAnswers}{%
+  \setcounter{ExamPaperPageCount}{\value{page}}%
+  \addtocounter{ExamPaperPageCount}{-2}%
+  \refstepcounter{ExamPaperPageCount}%
+  \label{ExamPaperPageTotal}%
+  \clearpage
+  \global\ExamAnswerstrue
+  \setcounter{page}{1}%
+  \fontsize{10.5pt}{21pt}\selectfont
+  \setlength{\parskip}{0.24em}%
+  \setlength{\emergencystretch}{6em}%
+  \AddToShipoutPictureBG*{\ExamPageOverlay}%
+}
+\newcommand{\ExamQuestionPageBreak}{\clearpage\useExamPageStyle}
+\newcommand{\ExamAnswerPageBreak}{\clearpage\useExamPageStyle}
+
+\newcommand{\ExamFooterText}{%
+  \ifExamAnswers
+    第\ \thepage\ 页\quad（共\ \getpagerefnumber{LastPage}\ 页）%
+  \else
+    数学试卷\quad 第\ \thepage\ 页（共\ \getrefnumber{ExamPaperPageTotal}\ 页）%
+  \fi
+}
+\newcommand{\ExamPageOverlay}{%
+  \AtPageCenter{%
+    \makebox(0,0){\rotatebox{42}{\textcolor{ExamWatermark}{\heiti\bfseries\fontsize{48pt}{54pt}\selectfont 数学试卷}}}}%
+  \AtPageLowerLeft{%
+    \raisebox{0.62cm}[0pt][0pt]{\hspace*{1.7cm}%
+      \makebox[\dimexpr\paperwidth-3.4cm\relax][c]{\small\color{ExamMuted}\ExamFooterText}}}%
+}
+\AddToShipoutPictureBG{\ExamPageOverlay}
+\pagestyle{empty}
+\makeatletter
+\let\ps@plain\ps@empty
+\makeatother
+\newcommand{\useExamPageStyle}{\AddToShipoutPictureBG*{\ExamPageOverlay}}
+
+\newcommand{\ExamChoicesFour}[4]{%
+  \par\smallskip\noindent
+  \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}
+    #1 & #2 & #3 & #4
+  \end{tabularx}\par\smallskip
+}
+\newcommand{\ExamChoicesTwo}[4]{%
+  \par\smallskip\noindent
+  \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}
+    #1 & #2 \\
+    #3 & #4
+  \end{tabularx}\par\smallskip
+}
+\newcommand{\ExamChoicesOne}[4]{%
+  \par\smallskip\noindent #1\par
+  \noindent #2\par
+  \noindent #3\par
+  \noindent #4\par\smallskip
+}
+\newcommand{\ExamChoicesFigure}[4]{%
+  \par\smallskip\noindent
+  \begin{minipage}[t]{0.70\linewidth}
+    \noindent #1\par
+    \noindent #2\par
+    \noindent #3\par
+    \noindent #4
+  \end{minipage}\par\smallskip
+}
+\newcommand{\ExamScore}[1]{%
+  \unskip\allowbreak\hfill\makebox[0.26\linewidth][r]{\dotfill\ #1\ 分}\par
+}
+
+\newenvironment{examSolutionBox}{%
+  \par\smallskip\begingroup
+  \setlength{\leftskip}{0.5em}\setlength{\rightskip}{0.5em}%
+  \noindent\heiti\bfseries 解析\par\smallskip\normalfont
+}{%
+  \par\endgroup\smallskip
+}
+
+\makeatletter
+\def\maxwidth{\linewidth}
+\def\maxheight{0.12\textheight}
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+\providecommand{\pandocbounded}[1]{%
+  \begin{wrapfigure}{r}{0.25\textwidth}
+    \vspace{-1.15em}\centering #1\vspace{-1.0em}
+  \end{wrapfigure}%
+}
+\makeatother
+
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+
+$if(highlighting-macros)$
+$highlighting-macros$
+$endif$
+$for(header-includes)$
+$header-includes$
+$endfor$
+
+\begin{document}
+\color{ExamInk}
+
+$for(include-before)$
+$include-before$
+$endfor$
+
+$body$
+
+$for(include-after)$
+$include-after$
+$endfor$
+
+\end{document}

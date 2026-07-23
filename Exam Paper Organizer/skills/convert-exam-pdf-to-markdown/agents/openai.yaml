@@ -1,0 +1,4 @@
+interface:
+  display_name: "Convert Exam PDF to Markdown"
+  short_description: "Convert ordered exam PDFs to Markdown with forced OCR"
+  default_prompt: "Use $convert-exam-pdf-to-markdown to convert the ordered exam PDF into Markdown with MinerU forced OCR."

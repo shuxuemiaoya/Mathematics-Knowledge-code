@@ -1,0 +1,4 @@
+interface:
+  display_name: "Order Exam Images to PDF"
+  short_description: "Infer exam page order and build one verified PDF"
+  default_prompt: "Use $order-exam-images-to-pdf to infer the correct reading order of these exam images and merge them into one verified PDF."

@@ -1,4 +1,4 @@
 interface:
   display_name: "Exam Paper Organizer"
-  short_description: "Batch-organize papers, solutions, images, and PDFs"
-  default_prompt: "Use $exam-paper-organizer to organize every exam paper in this folder, clean its images, add worked solutions, and publish polished paper and solutions PDFs."
+  short_description: "Run or resume a gated exam-paper workflow"
+  default_prompt: "Use $exam-paper-organizer to run or safely resume the complete exam workflow, including backed-up in-place image cleaning that preserves Markdown image paths."

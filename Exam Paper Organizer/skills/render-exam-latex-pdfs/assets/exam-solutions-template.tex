@@ -4,6 +4,7 @@
 \usepackage{amsmath,amssymb}
 \usepackage{graphicx}
 \usepackage{xcolor}
+\usepackage{calc}
 \usepackage{longtable,array}
 \usepackage{eso-pic}
 \usepackage{hyperref}
@@ -35,6 +36,7 @@
 \providecommand{\toprule}{\hline}
 \providecommand{\midrule}{\hline}
 \providecommand{\bottomrule}{\hline}
+\providecommand{\real}[1]{#1}
 
 \ctexset{
   section={format=\Large\bfseries\color{SolutionBlue},beforeskip=1.4em,afterskip=0.8em},
@@ -62,6 +64,20 @@
 \let\ps@plain\ps@empty
 \makeatother
 \newcommand{\useExamPageStyle}{\AddToShipoutPictureFG*{\SolutionPageOverlay}}
+\newcommand{\ExamMainTitle}[1]{%
+  \begin{center}
+    {\LARGE\bfseries\color{SolutionBlue}#1\par}
+  \end{center}
+  \vspace{0.35em}%
+}
+\newcommand{\ExamAnswerSubjectTitle}[1]{%
+  \begin{center}
+    {\LARGE\bfseries\color{SolutionTeal}#1\par}
+  \end{center}
+  \vspace{0.65em}%
+}
+\newcommand{\ExamQuestionPageBreak}{\clearpage\useExamPageStyle}
+\newcommand{\beginExamAnswers}{\color{SolutionInk}\useExamPageStyle}
 
 \newenvironment{examSolutionBox}{%
   \par\medskip\begingroup
@@ -93,15 +109,6 @@ $endfor$
 
 \begin{document}
 \color{SolutionInk}
-
-$if(title)$
-\begin{center}
-  {\LARGE\bfseries\color{SolutionBlue}$title$\par}
-  \vspace{0.35em}
-  {\color{SolutionTeal}\rule{0.32\textwidth}{1.4pt}}
-\end{center}
-\vspace{0.85em}
-$endif$
 
 $for(include-before)$
 $include-before$

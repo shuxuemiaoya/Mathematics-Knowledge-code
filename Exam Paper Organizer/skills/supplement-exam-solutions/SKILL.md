@@ -14,11 +14,13 @@ Create a complete inline worked-solution edition as a new sibling Markdown file 
    - an answer attachment explicitly supplied or named by the user;
    - an answer section embedded in the exam paper;
    - one unambiguous answer or solution file in the same folder whose name clearly matches the paper.
+   - in organizer mode, also read `pipeline-state.json` before classifying provenance; an embedded section produced by `answer_source_kind: "generated_bootstrap"` is generated material, not an authoritative supplied source.
 3. If several possible answer files exist, do not guess. Ask the user which file is authoritative.
 4. Build a question inventory and map answers by section plus question ID. When numbering restarts, also compare the stem text; never map by position alone.
 5. Treat the selected answer source as authoritative. Preserve its final answers and usable solution text. Do not silently correct or replace them.
    - If a long-form question already has a detailed solution, copy that solution directly into `**Detailed explanation:**` and add only the necessary concise `**Analysis:**`.
    - Do not paraphrase, expand, renumber, re-derive, or add an alternative approach to a complete supplied long-form solution unless the user explicitly requests it.
+   - Exception: classify an organizer `generated_bootstrap` answer source as `gpt-5.6-sol`-generated provenance. Reuse its complete material when valid, generate only missing components, and count it under fully generated solutions rather than sourced solutions.
 6. Use `gpt-5.6-sol` for every missing component:
    - If no answer source exists, generate the answer, analysis, detailed explanation, and alternative approaches for every question.
    - If the source gives only a letter, value, or short conclusion, preserve that result and generate the missing analysis and explanation around it.
@@ -74,6 +76,7 @@ Use these markers so reruns can replace a block instead of duplicating it. Keep 
   ```
 
 - Use the paper's language for all inserted text.
+- Localize every inserted label, not only the prose. For a Chinese paper use `**答案：**`, `**分析：**`, `**详细解析：**`, `**其他解法：**`, and `**注意：**` as applicable; do not emit English `Answer`, `Analysis`, `Detailed explanation`, `Alternative approach`, or `Caution` labels.
 - Use the exact visible question ID in each marker. Prefix it with a section identifier when numbering restarts, such as `II-1`.
 - For a question written as a Markdown list item, indent every inserted line to remain inside that list item. For heading-based questions, keep the block unindented.
 - For multipart questions, keep one outer block and label the answer and derivation for each subpart clearly.
@@ -133,11 +136,13 @@ Confirm all of the following:
 - Every inventoried question has exactly one solution block directly below it.
 - The source file hash is unchanged, and the output is a separate sibling whose stem ends with exactly one `（解析版）`.
 - Every solution block contains an answer, analysis, and detailed explanation.
+- Every inserted label is in the paper's language; Chinese papers contain no English solution labels.
 - Every authoritative final answer still matches its source.
 - Every complete supplied long-form solution is copied directly rather than rewritten, with only necessary analysis added.
 - Every generated answer is attributable to `gpt-5.6-sol` rather than an unapproved fallback.
 - Removing only the marked solution blocks from the derived file reproduces the complete source file.
 - No marker, placeholder, question, image link, formula, or answer-source mapping is left incomplete.
 - Detailed explanations do not use routine numbered lists excessively, and short-answer blocks do not contain forced line breaks without a logical or readability reason.
+- Temporary generated answer fragments or normalized helper copies are kept under a run-scoped temporary directory and are removed after insertion; none remain beside the final paper.
 
 Report the unchanged source path, the new output path, and counts for total questions, fully sourced solutions, sourced answers with generated explanations, fully generated solutions, unresolved questions, and answer conflicts.

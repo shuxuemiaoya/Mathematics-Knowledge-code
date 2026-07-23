@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import urllib.parse
 from pathlib import Path
 from typing import Any
 
@@ -65,6 +66,141 @@ def write_log(path: Path, command: list[str], output: str) -> None:
     path.write_text(f"COMMAND\n{rendered_command}\n\nOUTPUT\n{output}", encoding="utf-8")
 
 
+def resolve_latex_image_paths(tex_output: Path, resource_paths: list[Path]) -> dict[str, Any]:
+    text = tex_output.read_text(encoding="utf-8")
+    pattern = re.compile(r"(\\includegraphics(?:\[[^\]]*\])?\{)([^{}]+)(\})")
+    resolved: list[dict[str, str]] = []
+    unresolved: list[str] = []
+
+    search_roots: list[Path] = []
+    for root in resource_paths:
+        for candidate_root in (root, root / "images"):
+            resolved_root = candidate_root.resolve()
+            if resolved_root not in search_roots:
+                search_roots.append(resolved_root)
+
+    def replace(match: re.Match[str]) -> str:
+        raw_target = match.group(2)
+        if re.match(r"^[A-Za-z][A-Za-z0-9+.-]*://", raw_target) or raw_target.startswith("data:"):
+            return match.group(0)
+
+        decoded_target = urllib.parse.unquote(raw_target)
+        target_path = Path(decoded_target)
+        candidates = [target_path] if target_path.is_absolute() else [root / target_path for root in search_roots]
+        for candidate in candidates:
+            if candidate.is_file():
+                absolute_target = candidate.resolve().as_posix()
+                resolved.append({"source": raw_target, "resolved": absolute_target})
+                return f"{match.group(1)}{absolute_target}{match.group(3)}"
+
+        unresolved.append(raw_target)
+        return match.group(0)
+
+    rewritten = pattern.sub(replace, text)
+    if rewritten != text:
+        tex_output.write_text(rewritten, encoding="utf-8")
+
+    return {
+        "resolved": resolved,
+        "unresolved": sorted(set(unresolved)),
+        "search_roots": [str(root) for root in search_roots],
+    }
+
+
+def apply_answer_booklet_layout(tex_output: Path) -> dict[str, int]:
+    text = tex_output.read_text(encoding="utf-8")
+    marker = "\\beginExamAnswers"
+    marker_index = text.find(marker)
+    if marker_index < 0:
+        return {
+            "score_breaks": 0,
+            "question_breaks": 0,
+            "subpart_breaks": 0,
+            "reference_page_breaks": 0,
+            "answer_separators": 0,
+        }
+
+    head = text[:marker_index]
+    tail = text[marker_index:]
+    answer_separators = tail.count("\u3000")
+    tail = tail.replace("\u3000", "\\quad{}")
+
+    tail, score_breaks = re.subn(
+        r"\\ldots\\ldots\s*(\d+)\s*分",
+        lambda match: f"\\ExamScore{{{match.group(1)}}}",
+        tail,
+    )
+    tail, question_breaks = re.subn(
+        r"(?<!\d)(1[5-9])\.（\s*(\d+)\s*分\s*）",
+        lambda match: (
+            "\n\\par\\medskip\\noindent"
+            f"\\textbf{{{match.group(1)}.（{match.group(2)} 分）}}\\par\n"
+        ),
+        tail,
+    )
+    tail, fullwidth_subparts = re.subn(
+        r"（([123])）",
+        lambda match: f"\n\\par\\smallskip\\noindent（{match.group(1)}）",
+        tail,
+    )
+    tail, ascii_subparts = re.subn(
+        r"(?<![A-Za-z0-9\\'])\(([123])\)",
+        lambda match: f"\n\\par\\smallskip\\noindent（{match.group(1)}）",
+        tail,
+    )
+
+    reference_page_breaks = 0
+    question_headings = list(
+        re.finditer(r"\\textbf\{(1[5-9])\.（\d+ 分）\}\\par", tail)
+    )
+    if [match.group(1) for match in question_headings] == ["15", "16", "17", "18", "19"]:
+        break_after_score = {"16": "6", "18": "4", "19": "6"}
+        for index in range(len(question_headings) - 1, -1, -1):
+            match = question_headings[index]
+            question_number = match.group(1)
+            score = break_after_score.get(question_number)
+            if score is None:
+                continue
+            section_end = (
+                question_headings[index + 1].start()
+                if index + 1 < len(question_headings)
+                else len(tail)
+            )
+            section = tail[match.start():section_end]
+            score_marker = f"\\ExamScore{{{score}}}"
+            marker_index = section.find(score_marker)
+            if marker_index < 0:
+                continue
+            insertion = match.start() + marker_index + len(score_marker)
+            tail = tail[:insertion] + "\n\\ExamAnswerPageBreak\n" + tail[insertion:]
+            reference_page_breaks += 1
+
+    tex_output.write_text(head + tail, encoding="utf-8")
+    return {
+        "score_breaks": score_breaks,
+        "question_breaks": question_breaks,
+        "subpart_breaks": fullwidth_subparts + ascii_subparts,
+        "reference_page_breaks": reference_page_breaks,
+        "answer_separators": answer_separators,
+    }
+
+
+def normalize_unicode_math_symbols(tex_output: Path) -> dict[str, int]:
+    text = tex_output.read_text(encoding="utf-8")
+    replacements = {
+        "⊥": r"\(\perp\)",
+        "△": r"\(\triangle\)",
+        "π": r"\(\pi\)",
+        "⊂": r"\(\subset\)",
+    }
+    counts: dict[str, int] = {}
+    for symbol, latex in replacements.items():
+        counts[symbol] = text.count(symbol)
+        text = text.replace(symbol, latex)
+    tex_output.write_text(text, encoding="utf-8")
+    return counts
+
+
 def pandoc_to_latex(
     pandoc: str,
     source: Path,
@@ -74,7 +210,7 @@ def pandoc_to_latex(
     folder: Path,
     log_dir: Path,
 ) -> dict[str, Any]:
-    resource_paths = [source.parent, folder]
+    resource_paths = [source.parent, folder, source.parent.parent]
     images = folder / "images"
     if images.is_dir():
         resource_paths.append(images)
@@ -99,10 +235,19 @@ def pandoc_to_latex(
         raise RenderError(f"Pandoc failed for {source}; see {log_path}")
     if not tex_output.is_file() or tex_output.stat().st_size == 0:
         raise RenderError(f"Pandoc reported success but did not create LaTeX output: {tex_output}")
+    image_resolution = resolve_latex_image_paths(tex_output, resource_paths)
+    if image_resolution["unresolved"]:
+        missing = "; ".join(image_resolution["unresolved"])
+        raise RenderError(f"Unresolved local image targets in generated LaTeX: {missing}")
+    unicode_math = normalize_unicode_math_symbols(tex_output)
+    answer_layout = apply_answer_booklet_layout(tex_output)
     return {
         "command": command,
         "returncode": result.returncode,
         "log": str(log_path) if log_path.exists() else None,
+        "image_resolution": image_resolution,
+        "unicode_math": unicode_math,
+        "answer_layout": answer_layout,
     }
 
 
@@ -251,6 +396,10 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8")
     args = parse_args()
     summary: dict[str, Any] = {
         "stage": "render-exam-latex-pdfs",
@@ -268,7 +417,7 @@ def main() -> int:
         assets_dir = skill_dir / "assets"
         lua_filter = skill_dir / "scripts" / "exam_layout.lua"
         templates = {
-            "paper": assets_dir / "exam-paper-template.tex",
+            "paper": assets_dir / "期末试卷最简版.tex",
             "solutions": assets_dir / "exam-solutions-template.tex",
         }
         sources = {
