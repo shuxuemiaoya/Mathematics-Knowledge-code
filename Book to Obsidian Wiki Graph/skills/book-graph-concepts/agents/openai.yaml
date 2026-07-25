@@ -1,0 +1,4 @@
+interface:
+  display_name: "Book Graph Concepts"
+  short_description: "Extract source-supported concept notes"
+  default_prompt: "Use $book-graph-concepts to extract and link formal concepts from the book."

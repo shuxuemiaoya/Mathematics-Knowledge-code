@@ -62,7 +62,7 @@ Each skill's `SKILL.md` is authoritative for its stage. Do not weaken, reconstru
 9. For each source paper, run `reformat-exam-markdown` and validate its reformatted candidate.
 10. Run `supplement-exam-solutions` only after that paper's reformatting stage succeeds. Pass the reformatted candidate, never the original source paper.
 11. Run `render-exam-latex-pdfs` only after that paper's reformatted and solutions editions both succeed.
-12. Apply the paper template to the reformatted edition and the solutions template to the inline worked-solution edition.
+12. Apply the user-selected paired template style to both editions, using its independent paper and solutions assets; keep the renderer's `minimal` default when no style is requested.
 13. Render and inspect every generated PDF page. Do not treat compilation alone as successful publishing.
 14. Preserve successful independent and per-paper outputs when another branch or paper fails.
 15. Return one compact combined summary.
@@ -114,7 +114,7 @@ Report:
 - all generated paths grouped by source paper;
 - processed, generated, failed, skipped, warning, unresolved, and conflict counts when available;
 - failed image paths and any input, output-exists, model, approval, compilation, or validation gate;
-- the paper and solutions templates, `.tex`, `.pdf`, logs, page counts, and visual-QA results;
+- the selected template-style ID and display name, paper and solutions templates, `.tex`, `.pdf`, logs, page counts, and visual-QA results;
 - the Batch Clean Images backup folder, in-place replacement mappings and hashes, `image_replacement_status`, and `image_quality_status`;
 - `eligible_to_render`, final visual-QA status, and `publishing_complete` as separate decisions;
 - confirmation that every exam-page image and source Markdown file remained unchanged, every original Markdown attachment image exists in the mandatory backup, successful cleaned images replaced their sources at the same paths, and no Markdown image destination changed.

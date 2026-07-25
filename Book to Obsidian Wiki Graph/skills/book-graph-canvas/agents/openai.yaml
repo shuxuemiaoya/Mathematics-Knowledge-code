@@ -1,0 +1,4 @@
+interface:
+  display_name: "Book Graph Canvas"
+  short_description: "Build the mathematical logic canvas"
+  default_prompt: "Use $book-graph-canvas to plan and compile the book knowledge canvas."

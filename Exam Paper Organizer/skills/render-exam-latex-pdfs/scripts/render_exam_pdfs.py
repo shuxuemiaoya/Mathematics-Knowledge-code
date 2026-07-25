@@ -17,6 +17,34 @@ from typing import Any
 DEFAULT_PAPER = "ExamPaper（题解整合版）.md"
 DEFAULT_SOLUTIONS = "ExamPaper（题解整合版）（解析版）.md"
 
+TEMPLATE_STYLES: dict[str, dict[str, str]] = {
+    "minimal": {
+        "label": "期末试卷最简版",
+        "paper": "期末试卷最简版.tex",
+        "solutions": "exam-solutions-template.tex",
+    },
+    "math-magic": {
+        "label": "数学妙呀",
+        "paper": "math-magic-paper.tex",
+        "solutions": "math-magic-solutions.tex",
+    },
+    "chinese-standard": {
+        "label": "中式标准试卷",
+        "paper": "chinese-standard-paper.tex",
+        "solutions": "chinese-standard-solutions.tex",
+    },
+    "classic-academic": {
+        "label": "经典学术考试",
+        "paper": "classic-academic-paper.tex",
+        "solutions": "classic-academic-solutions.tex",
+    },
+    "ib-markscheme": {
+        "label": "IB 评分框架",
+        "paper": "ib-markscheme-paper.tex",
+        "solutions": "ib-markscheme-solutions.tex",
+    },
+}
+
 
 class RenderError(RuntimeError):
     pass
@@ -317,6 +345,7 @@ def build_edition(
     label: str,
     source: Path,
     template: Path,
+    template_style: str,
     lua_filter: Path,
     folder: Path,
     output_dir: Path,
@@ -362,6 +391,7 @@ def build_edition(
         "source_sha256_before": original_hash,
         "source_sha256_after": final_hash,
         "source_unchanged": True,
+        "template_style": template_style,
         "template": str(template),
         "tex": str(tex_output),
         "pdf": str(pdf_output),
@@ -388,6 +418,15 @@ def parse_args() -> argparse.Namespace:
         choices=("both", "paper", "solutions"),
         default="both",
         help="Render both editions by default, or one explicitly selected edition.",
+    )
+    parser.add_argument(
+        "--template-style",
+        choices=tuple(TEMPLATE_STYLES),
+        default="minimal",
+        help=(
+            "Paired paper/solutions visual style. "
+            "Choices: " + ", ".join(TEMPLATE_STYLES) + "."
+        ),
     )
     parser.add_argument("--output-dir", help="Output directory; defaults to <folder>/latex-output.")
     parser.add_argument("--check", action="store_true", help="Validate inputs and dependencies without writing files.")
@@ -416,9 +455,10 @@ def main() -> int:
         skill_dir = Path(__file__).resolve().parents[1]
         assets_dir = skill_dir / "assets"
         lua_filter = skill_dir / "scripts" / "exam_layout.lua"
+        style = TEMPLATE_STYLES[args.template_style]
         templates = {
-            "paper": assets_dir / "期末试卷最简版.tex",
-            "solutions": assets_dir / "exam-solutions-template.tex",
+            "paper": assets_dir / style["paper"],
+            "solutions": assets_dir / style["solutions"],
         }
         sources = {
             "paper": resolve_path(args.paper, folder, DEFAULT_PAPER),
@@ -458,6 +498,7 @@ def main() -> int:
                     "edition": label,
                     "source": str(source),
                     "source_sha256": sha256(source),
+                    "template_style": args.template_style,
                     "template": str(templates[label]),
                     "tex": str(tex_output),
                     "pdf": str(pdf_output),
@@ -469,6 +510,10 @@ def main() -> int:
             {
                 "folder": str(folder),
                 "output_dir": str(output_dir),
+                "template_style": {
+                    "id": args.template_style,
+                    "label": style["label"],
+                },
                 "tools": {"pandoc": pandoc, "xelatex": xelatex, "pdfinfo": pdfinfo},
                 "planned": planned,
                 "existing_outputs": conflicts,
@@ -494,6 +539,7 @@ def main() -> int:
                     label,
                     sources[label],
                     templates[label],
+                    args.template_style,
                     lua_filter,
                     folder,
                     output_dir,
@@ -510,6 +556,7 @@ def main() -> int:
                         "edition": label,
                         "status": "failed",
                         "source": str(sources[label]),
+                        "template_style": args.template_style,
                         "template": str(templates[label]),
                         "error": str(exc),
                     }

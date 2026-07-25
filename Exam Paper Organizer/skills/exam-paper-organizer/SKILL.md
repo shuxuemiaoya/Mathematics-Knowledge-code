@@ -62,6 +62,7 @@ Treat an explicit continuation of the same organizer task, or a user-supplied ru
 - **Reformat only:** After ordering and conversion are terminal, run Reformatted Exam Paper on every source paper in the frozen inventory.
 - **Solutions requested:** For each source paper, run Reformatted Exam Paper first unless its reformatted candidate was successfully produced and validated earlier in the current task. Then run Supplement Exam Solutions on that paper's reformatted candidate.
 - **LaTeX/PDF requested:** Run all missing prerequisite Markdown and image-cleaning phases first. Publish only after the global barrier passes, unless the user explicitly invokes `render-exam-latex-pdfs` as a standalone skill outside this organizer.
+- **Template style requested:** Preserve the exact renderer style ID selected by the user and pass it to every publishing worker. Use the renderer's `minimal` default only when the user gives no style preference.
 
 Do not make image cleaning a prerequisite for Reformatted Exam Paper or Supplement Exam Solutions. Make it a prerequisite for the organizer's Render Exam LaTeX PDFs phase.
 
@@ -210,10 +211,11 @@ Run this stage only after the global publishing barrier passes. Invoke `render-e
 ```powershell
 python <skill-dir>\scripts\render_exam_pdfs.py <folder> `
   --paper <folder>\<source-stem>（题解整合版）.md `
-  --solutions <folder>\<source-stem>（题解整合版）（解析版）.md
+  --solutions <folder>\<source-stem>（题解整合版）（解析版）.md `
+  --template-style <style-id>
 ```
 
-Apply the paper template to the reformatted edition and the solutions template to the inline worked-solution edition. Require both `.tex` and `.pdf` outputs unless the user explicitly selected one edition.
+Apply the selected style's paper template to the reformatted edition and its structurally independent solutions template to the inline worked-solution edition. Omit `--template-style` only to accept the renderer's `minimal` default. Require both `.tex` and `.pdf` outputs unless the user explicitly selected one edition.
 
 Pass the validated final Markdown editions directly to the renderer. Batch Clean Images preserves every raster image destination by replacing the referenced file in place, so do not create rendering-only Markdown copies and do not rewrite image paths. Block publishing if a referenced path is missing, its original is absent from the batch backup, or that image appears in the cleaning failure list.
 
@@ -250,7 +252,7 @@ Return one compact organizer summary containing:
 - the global publishing-barrier decision, original-image backup folder, and in-place replacement mapping used by each published paper;
 - `image_replacement_status`, `image_quality_status`, `eligible_to_render`, and `publishing_complete` as separate decisions;
 - the structural counts, unresolved items, answer-source provenance, conflicts, and question coverage reported by the two document skills;
-- the paper and solutions template mapping, `.tex` and `.pdf` paths, page counts, build logs, and visual-QA status reported by the publishing skill;
+- the selected template-style ID and display name, paper and solutions template mapping, `.tex` and `.pdf` paths, page counts, build logs, and visual-QA status reported by the publishing skill;
 - any existing-output, missing-input, missing-skill, model-availability, or validation gate that stopped a stage;
 - every pre-publish defect found and corrected, plus any remaining blocker;
 - confirmation that every exam-page image and resolved source paper remained unchanged, every original Markdown attachment image was preserved in the reported backup folder, successful cleaned images replaced their sources at the same paths, and no Markdown image destination changed.

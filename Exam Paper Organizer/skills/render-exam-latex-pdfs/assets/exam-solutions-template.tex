@@ -3,9 +3,11 @@
 \usepackage[margin=2.15cm,headheight=16pt,headsep=0.7cm,footskip=1.15cm]{geometry}
 \usepackage{amsmath,amssymb}
 \usepackage{graphicx}
+\usepackage{wrapfig}
 \usepackage{xcolor}
 \usepackage{calc}
-\usepackage{longtable,array}
+\usepackage{longtable,array,tabularx}
+\usepackage{enumitem}
 \usepackage{eso-pic}
 \usepackage{hyperref}
 
@@ -30,9 +32,8 @@
 \linespread{1.2}
 \setcounter{secnumdepth}{0}
 
-\setlength{\leftmargini}{2.4em}
-\setlength{\leftmarginii}{2.15em}
-\renewcommand{\labelenumi}{\arabic{enumi}.}
+\setlist[enumerate,1]{label=\arabic*.,leftmargin=2.4em,labelsep=0.55em,itemsep=0.7em,topsep=0.4em}
+\setlist[enumerate,2]{leftmargin=2.15em,itemsep=0.25em,topsep=0.2em}
 \providecommand{\toprule}{\hline}
 \providecommand{\midrule}{\hline}
 \providecommand{\bottomrule}{\hline}
@@ -70,6 +71,18 @@
   \end{center}
   \vspace{0.35em}%
 }
+\newcommand{\ExamSubjectTitle}[1]{%
+  \begin{center}
+    {\LARGE\bfseries\color{SolutionTeal}#1\par}
+  \end{center}
+  \vspace{0.55em}%
+}
+\newcommand{\ExamAnswerMainTitle}[1]{%
+  \begin{center}
+    {\LARGE\bfseries\color{SolutionBlue}#1\par}
+  \end{center}
+  \vspace{0.35em}%
+}
 \newcommand{\ExamAnswerSubjectTitle}[1]{%
   \begin{center}
     {\LARGE\bfseries\color{SolutionTeal}#1\par}
@@ -77,7 +90,40 @@
   \vspace{0.65em}%
 }
 \newcommand{\ExamQuestionPageBreak}{\clearpage\useExamPageStyle}
-\newcommand{\beginExamAnswers}{\color{SolutionInk}\useExamPageStyle}
+\newcommand{\ExamAnswerPageBreak}{\clearpage\useExamPageStyle}
+\newcommand{\beginExamAnswers}{\clearpage\color{SolutionInk}\useExamPageStyle}
+
+\newcommand{\ExamChoicesFour}[4]{%
+  \par\smallskip\noindent
+  \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}
+    #1 & #2 & #3 & #4
+  \end{tabularx}\par\smallskip
+}
+\newcommand{\ExamChoicesTwo}[4]{%
+  \par\smallskip\noindent
+  \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}
+    #1 & #2 \\
+    #3 & #4
+  \end{tabularx}\par\smallskip
+}
+\newcommand{\ExamChoicesOne}[4]{%
+  \par\smallskip\noindent #1\par
+  \noindent #2\par
+  \noindent #3\par
+  \noindent #4\par\smallskip
+}
+\newcommand{\ExamChoicesFigure}[4]{%
+  \par\smallskip\noindent
+  \begin{minipage}[t]{0.70\linewidth}
+    \noindent #1\par
+    \noindent #2\par
+    \noindent #3\par
+    \noindent #4
+  \end{minipage}\par\smallskip
+}
+\newcommand{\ExamScore}[1]{%
+  \unskip\allowbreak\hfill\makebox[0.24\linewidth][r]{\textcolor{SolutionTeal}{\dotfill\ #1\ 分}}\par
+}
 
 \newenvironment{examSolutionBox}{%
   \par\medskip\begingroup
@@ -91,10 +137,14 @@
 }
 
 \makeatletter
-\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
-\def\maxheight{\ifdim\Gin@nat@height>0.8\textheight 0.8\textheight\else\Gin@nat@height\fi}
+\def\maxwidth{\linewidth}
+\def\maxheight{0.16\textheight}
 \setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
-\providecommand{\pandocbounded}[1]{#1}
+\providecommand{\pandocbounded}[1]{%
+  \begin{wrapfigure}{r}{0.25\textwidth}
+    \vspace{-1.0em}\centering #1\vspace{-0.8em}
+  \end{wrapfigure}%
+}
 \makeatother
 
 \providecommand{\tightlist}{%

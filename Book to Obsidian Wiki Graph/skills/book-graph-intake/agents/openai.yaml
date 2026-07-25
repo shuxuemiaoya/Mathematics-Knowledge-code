@@ -1,0 +1,4 @@
+interface:
+  display_name: "Book Graph Intake"
+  short_description: "Profile a book for graph conversion"
+  default_prompt: "Use $book-graph-intake to inspect a source book and create its conversion profile."

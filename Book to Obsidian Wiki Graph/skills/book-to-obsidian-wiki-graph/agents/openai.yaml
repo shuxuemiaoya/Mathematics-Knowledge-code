@@ -1,0 +1,4 @@
+interface:
+  display_name: "Book to Obsidian Wiki Graph"
+  short_description: "Convert books into Obsidian Wiki knowledge graphs"
+  default_prompt: "Use the standalone $book-to-obsidian-wiki-graph agent to convert this book into a validated Obsidian Wiki-style knowledge graph with reviewed semantic splits, standardized functional callouts, and strict final audit."

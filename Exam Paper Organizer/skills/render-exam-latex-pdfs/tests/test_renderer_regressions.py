@@ -67,16 +67,38 @@ class RendererTransformRegressionTests(unittest.TestCase):
         self.assertIn(image.resolve().as_posix(), rendered)
 
     def test_templates_keep_pandoc_table_and_title_helpers(self) -> None:
-        paper = (SKILL_DIR / "assets" / "期末试卷最简版.tex").read_text(encoding="utf-8")
-        solutions = (SKILL_DIR / "assets" / "exam-solutions-template.tex").read_text(
-            encoding="utf-8"
+        required_commands = (
+            "\\usepackage{calc}",
+            "\\providecommand{\\real}[1]{#1}",
+            "\\providecommand{\\toprule}",
+            "\\newcommand{\\ExamMainTitle}",
+            "\\newcommand{\\ExamSubjectTitle}",
+            "\\newcommand{\\ExamAnswerMainTitle}",
+            "\\newcommand{\\ExamAnswerSubjectTitle}",
+            "\\newcommand{\\beginExamAnswers}",
+            "\\newcommand{\\ExamChoicesFour}",
+            "\\newcommand{\\ExamChoicesTwo}",
+            "\\newcommand{\\ExamChoicesOne}",
+            "\\newcommand{\\ExamChoicesFigure}",
+            "\\newcommand{\\ExamScore}",
+            "\\newenvironment{examSolutionBox}",
         )
-        for template in (paper, solutions):
-            self.assertIn("\\usepackage{calc}", template)
-            self.assertIn("\\providecommand{\\real}[1]{#1}", template)
-            self.assertIn("\\providecommand{\\toprule}", template)
-            self.assertIn("\\newcommand{\\ExamMainTitle}", template)
-            self.assertIn("\\newcommand{\\beginExamAnswers}", template)
+        for style_id, style in MODULE.TEMPLATE_STYLES.items():
+            for edition in ("paper", "solutions"):
+                template_path = SKILL_DIR / "assets" / style[edition]
+                self.assertTrue(template_path.is_file(), msg=f"{style_id}:{edition}")
+                template = template_path.read_text(encoding="utf-8")
+                for command in required_commands:
+                    self.assertIn(command, template, msg=f"{style_id}:{edition}:{command}")
+
+    def test_template_style_catalog_has_distinct_pairs(self) -> None:
+        pairs = {
+            (style["paper"], style["solutions"])
+            for style in MODULE.TEMPLATE_STYLES.values()
+        }
+        self.assertEqual(len(pairs), len(MODULE.TEMPLATE_STYLES))
+        for style in MODULE.TEMPLATE_STYLES.values():
+            self.assertNotEqual(style["paper"], style["solutions"])
 
 
 @unittest.skipUnless(
@@ -160,6 +182,7 @@ title: Fixture Title
 
             paper_tex = Path(summary["editions"][0]["tex"]).read_text(encoding="utf-8")
             self.assertEqual(paper_tex.count("Fixture Title"), 1)
+            self.assertIn("\\ExamSubjectTitle{数学}", paper_tex)
 
 
 if __name__ == "__main__":

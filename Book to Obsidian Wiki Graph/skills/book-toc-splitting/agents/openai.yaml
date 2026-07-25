@@ -1,0 +1,4 @@
+interface:
+  display_name: "Book TOC Splitting"
+  short_description: "Split books by TOC with parent links"
+  default_prompt: "Use $book-toc-splitting to review every H4-H6 content heading, split all numbered textbook subsections and section exercises, then split by the TOC with parent links."

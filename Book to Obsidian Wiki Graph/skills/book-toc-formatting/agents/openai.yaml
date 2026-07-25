@@ -1,0 +1,4 @@
+interface:
+  display_name: "Book TOC Formatting"
+  short_description: "Align headings to the book TOC"
+  default_prompt: "Use $book-toc-formatting to align this book Markdown heading hierarchy with its TOC."

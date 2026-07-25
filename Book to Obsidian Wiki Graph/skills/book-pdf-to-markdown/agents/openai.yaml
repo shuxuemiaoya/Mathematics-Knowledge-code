@@ -1,0 +1,4 @@
+interface:
+  display_name: "Book PDF to Markdown"
+  short_description: "Convert book PDFs with forced OCR"
+  default_prompt: "Use $book-pdf-to-markdown to convert this book PDF into source Markdown and assets."

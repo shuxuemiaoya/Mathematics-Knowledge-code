@@ -1,0 +1,147 @@
+\documentclass[UTF8,11pt,a4paper]{ctexart}
+
+\usepackage[top=1.8cm,bottom=1.65cm,left=1.9cm,right=1.9cm,headsep=0.55cm,footskip=0.9cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{wrapfig}
+\usepackage{xcolor}
+\usepackage{calc}
+\usepackage{longtable,array,tabularx}
+\usepackage{enumitem}
+\usepackage{eso-pic}
+\usepackage{lastpage}
+\usepackage{hyperref}
+
+\definecolor{ClassicNavy}{HTML}{203A5F}
+\definecolor{ClassicInk}{HTML}{1D2530}
+\definecolor{ClassicMuted}{HTML}{697482}
+\definecolor{ClassicRule}{HTML}{9AA5B1}
+\definecolor{ClassicPanel}{HTML}{F4F6F8}
+
+\hypersetup{hidelinks,pdfborder={0 0 0}}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.3em}
+\setlength{\emergencystretch}{4em}
+\renewcommand{\arraystretch}{1.2}
+\linespread{1.16}
+\setcounter{secnumdepth}{0}
+\setlist[enumerate,1]{label=\arabic*.,leftmargin=2.25em,labelsep=0.56em,itemsep=0.62em,topsep=0.4em}
+\setlist[enumerate,2]{leftmargin=2.15em,itemsep=0.25em,topsep=0.22em}
+
+\providecommand{\toprule}{\hline}
+\providecommand{\midrule}{\hline}
+\providecommand{\bottomrule}{\hline}
+\providecommand{\real}[1]{#1}
+
+\ctexset{
+  section={format=\centering\heiti\bfseries\fontsize{17pt}{24pt}\selectfont\color{ClassicNavy},beforeskip=0.7em,afterskip=0.55em},
+  subsection={format=\heiti\bfseries\fontsize{12.5pt}{19pt}\selectfont\color{ClassicNavy},beforeskip=0.8em,afterskip=0.36em},
+  subsubsection={format=\heiti\bfseries\normalsize\color{ClassicInk},beforeskip=0.62em,afterskip=0.28em}
+}
+
+\newcommand{\ClassicPageFrame}{%
+  \AtPageUpperLeft{\raisebox{-1.08cm}{\hspace*{1.9cm}\makebox[\dimexpr\paperwidth-3.8cm\relax][l]{\small\bfseries\color{ClassicNavy}FINAL EXAMINATION}}}%
+  \AtPageUpperLeft{\raisebox{-1.08cm}{\hspace*{1.9cm}\makebox[\dimexpr\paperwidth-3.8cm\relax][r]{\small\color{ClassicMuted}Mathematics}}}%
+  \AtPageUpperLeft{\raisebox{-1.28cm}{\hspace*{1.9cm}\textcolor{ClassicRule}{\rule{\dimexpr\paperwidth-3.8cm\relax}{0.65pt}}}}%
+  \AtPageLowerLeft{\raisebox{0.78cm}{\hspace*{1.9cm}\makebox[\dimexpr\paperwidth-3.8cm\relax][l]{\small\color{ClassicMuted}请在规定区域内作答}}}%
+  \AtPageLowerLeft{\raisebox{0.78cm}{\hspace*{1.9cm}\makebox[\dimexpr\paperwidth-3.8cm\relax][r]{\small\color{ClassicMuted}Page \thepage\ of \pageref{LastPage}}}}%
+}
+\AddToShipoutPictureFG{\ClassicPageFrame}
+\pagestyle{empty}
+\makeatletter
+\let\ps@plain\ps@empty
+\makeatother
+\newcommand{\useExamPageStyle}{\AddToShipoutPictureFG*{\ClassicPageFrame}}
+
+\newcommand{\ExamMainTitle}[1]{%
+  \begin{center}{\heiti\bfseries\fontsize{18pt}{25pt}\selectfont\color{ClassicNavy} #1\par}\end{center}
+  \vspace{0.16em}%
+}
+\newcommand{\ExamSubjectTitle}[1]{%
+  \begin{center}{\heiti\bfseries\fontsize{20pt}{27pt}\selectfont #1\par}\end{center}
+  \vspace{0.25em}\noindent\textcolor{ClassicNavy}{\rule{\linewidth}{1.1pt}}\par
+  \vspace{0.35em}\noindent
+  \colorbox{ClassicPanel}{\parbox{\dimexpr\linewidth-2\fboxsep\relax}{姓名：\underline{\hspace{3.2cm}}\hfill 班级：\underline{\hspace{2.2cm}}\hfill 学号：\underline{\hspace{2.8cm}}}}\par
+  \vspace{0.42em}%
+}
+\newcommand{\ExamAnswerMainTitle}[1]{%
+  \begin{center}{\heiti\bfseries\fontsize{17pt}{24pt}\selectfont\color{ClassicNavy} #1\par}\end{center}
+  \vspace{0.14em}%
+}
+\newcommand{\ExamAnswerSubjectTitle}[1]{%
+  \begin{center}{\heiti\bfseries\fontsize{19pt}{26pt}\selectfont #1\par}\end{center}
+  \vspace{0.3em}\noindent\textcolor{ClassicNavy}{\rule{\linewidth}{0.9pt}}\vspace{0.25em}%
+}
+\newcommand{\beginExamAnswers}{\clearpage\useExamPageStyle}
+\newcommand{\ExamQuestionPageBreak}{\clearpage\useExamPageStyle}
+\newcommand{\ExamAnswerPageBreak}{\clearpage\useExamPageStyle}
+
+\newcommand{\ExamChoicesFour}[4]{%
+  \par\smallskip\noindent
+  \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}
+    #1 & #2 & #3 & #4
+  \end{tabularx}\par\smallskip
+}
+\newcommand{\ExamChoicesTwo}[4]{%
+  \par\smallskip\noindent
+  \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}
+    #1 & #2 \\ #3 & #4
+  \end{tabularx}\par\smallskip
+}
+\newcommand{\ExamChoicesOne}[4]{%
+  \par\smallskip\noindent #1\par\noindent #2\par\noindent #3\par\noindent #4\par\smallskip
+}
+\newcommand{\ExamChoicesFigure}[4]{%
+  \par\smallskip\noindent
+  \begin{minipage}[t]{0.69\linewidth}
+    \noindent #1\par\noindent #2\par\noindent #3\par\noindent #4
+  \end{minipage}\par\smallskip
+}
+\newcommand{\ExamScore}[1]{%
+  \unskip\allowbreak\hfill\fcolorbox{ClassicRule}{white}{\small #1\ 分}\par
+}
+
+\newenvironment{examSolutionBox}{%
+  \par\smallskip\begingroup
+  \setlength{\leftskip}{0.7em}\setlength{\rightskip}{0.6em}%
+  \noindent\textcolor{ClassicNavy}{\heiti\bfseries Solution / 解析}\par
+  \smallskip\noindent\textcolor{ClassicRule}{\rule{\dimexpr\linewidth-\leftskip-\rightskip\relax}{0.55pt}}\par
+  \smallskip
+}{%
+  \par\endgroup\smallskip
+}
+
+\makeatletter
+\def\maxwidth{\linewidth}
+\def\maxheight{0.16\textheight}
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+\providecommand{\pandocbounded}[1]{%
+  \begin{wrapfigure}{r}{0.25\textwidth}
+    \vspace{-1.0em}\centering #1\vspace{-0.8em}
+  \end{wrapfigure}%
+}
+\makeatother
+
+\providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+
+$if(highlighting-macros)$
+$highlighting-macros$
+$endif$
+$for(header-includes)$
+$header-includes$
+$endfor$
+
+\begin{document}
+\color{ClassicInk}
+
+$for(include-before)$
+$include-before$
+$endfor$
+
+$body$
+
+$for(include-after)$
+$include-after$
+$endfor$
+
+\end{document}

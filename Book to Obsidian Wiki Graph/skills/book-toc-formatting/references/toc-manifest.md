@@ -1,0 +1,46 @@
+# TOC Manifest Contract
+
+Create `toc-manifest.json` after inspecting the printed table of contents and the converted Markdown.
+
+```json
+{
+  "schema_version": 1,
+  "profile": "C:/.../book-profile.json",
+  "source_sha256": "<frozen PDF or source-book digest>",
+  "input_markdown_sha256": "<raw Markdown digest>",
+  "toc_source_ranges": [
+    {"start_line": 20, "end_line": 85}
+  ],
+  "entries": [
+    {
+      "key": "chapter-1",
+      "title": "第一章 集合与常用逻辑用语",
+      "level": 1,
+      "category": "knowledge",
+      "filename": "第一章 集合与常用逻辑用语.md",
+      "aliases": []
+    },
+    {
+      "key": "lesson-1-1",
+      "title": "1.1 集合的概念",
+      "level": 2,
+      "category": "knowledge",
+      "filename": "1.1 集合的概念.md",
+      "aliases": []
+    }
+  ]
+}
+```
+
+## Entry rules
+
+- Preserve printed TOC order.
+- Use levels `1` through `3` for the hierarchy that should become H1-H3.
+- Give every entry a stable unique key.
+- Use `aliases` only for OCR variants of the same printed title.
+- Record the exact source lines occupied by the printed TOC so those headings are not mistaken for book content.
+- Assign a category for the later split stage.
+- For textbooks, use only `knowledge`, `concept`, and `exercise`.
+- For other books, let the LLM propose categories, then record them in the profile before splitting.
+
+The formatter changes heading depth, not heading text or content. Every content heading absent from this manifest must be demoted below H3.

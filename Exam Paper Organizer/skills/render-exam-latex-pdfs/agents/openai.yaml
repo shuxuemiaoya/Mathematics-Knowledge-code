@@ -1,4 +1,4 @@
 interface:
   display_name: "Render Exam LaTeX PDFs"
-  short_description: "Final gated publishing for exam PDFs"
-  default_prompt: "Use $render-exam-latex-pdfs as the final publishing stage after organizer prerequisites pass, or explicitly as a standalone renderer."
+  short_description: "Publish exam PDFs with selectable LaTeX styles"
+  default_prompt: "Use $render-exam-latex-pdfs to publish the selected exam editions with the requested paired template style after prerequisites pass, or explicitly in standalone mode."

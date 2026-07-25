@@ -323,6 +323,7 @@ function Image(image)
 end
 
 local primary_title = nil
+local primary_subject_seen = false
 local answer_mode = false
 
 local function normalized_title(title)
@@ -330,13 +331,20 @@ local function normalized_title(title)
 end
 
 function Header(header)
+  local title = pandoc.utils.stringify(header.content)
+  local latex_title = inlines_to_latex(header.content)
+
+  if header.level == 2 and primary_title ~= nil and not answer_mode
+    and not primary_subject_seen then
+    primary_subject_seen = true
+    return pandoc.RawBlock("latex", "\\ExamSubjectTitle{" .. latex_title .. "}")
+  end
+
   if header.level ~= 1 then
     return header
   end
 
-  local title = pandoc.utils.stringify(header.content)
   local lowered = title:lower()
-  local latex_title = inlines_to_latex(header.content)
   local is_answer_title = lowered:match("参考答案") or lowered:match("answer key") or lowered:match("reference answers")
 
   if is_answer_title then

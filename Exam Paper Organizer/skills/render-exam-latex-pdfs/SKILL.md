@@ -5,10 +5,12 @@ description: Convert validated reformatted and inline-solution Markdown editions
 
 # Render Exam LaTeX PDFs
 
-Publish two source-preserving editions with purpose-built templates:
+Publish two source-preserving editions with a selectable pair of purpose-built templates:
 
-- the validated reformatted paper uses `assets/期末试卷最简版.tex`;
-- the worked-solution edition uses `assets/exam-solutions-template.tex`.
+- `minimal` is the default and uses `assets/期末试卷最简版.tex` plus `assets/exam-solutions-template.tex`;
+- `math-magic`, `chinese-standard`, `classic-academic`, and `ib-markscheme` select their corresponding independent paper/solutions assets.
+
+Read [references/paper-template-catalog.md](references/paper-template-catalog.md) when the user selects a style, supplies a visual reference, or asks which template to use.
 
 Generate both `.tex` and `.pdf` files. Treat PDF rendering and visual inspection as required parts of completion.
 
@@ -52,6 +54,8 @@ Do not treat the existence of derived Markdown, `.tex`, or `.pdf` files as proof
    python <skill-dir>\scripts\render_exam_pdfs.py <folder>
    ```
 
+   Pass `--template-style <id>` when the user selects a named catalog style. Keep `minimal` when no preference is supplied. For style comparisons, use a distinct `--output-dir` per style.
+
    Use `--edition paper` or `--edition solutions` only when the user requests one edition. Use `--overwrite` without a new prompt only for provisional outputs created earlier in the same current publishing attempt; require explicit permission for outputs that predate the current task.
 6. Read the script's stdout JSON. Treat a nonzero exit or an edition status other than `completed` as a failed publishing stage.
 7. Confirm the Markdown source hashes are unchanged.
@@ -73,9 +77,10 @@ Do not create backups. Do not overwrite an output that predates the current task
 ## Template rules
 
 - Keep the two templates structurally independent; do not render both editions with one template plus a color flag.
+- Treat `--template-style` as a paired selection: apply the style's paper asset to the reformatted edition and its separate solutions asset to the worked-solution edition.
 - Use XeLaTeX and `ctexart` for Chinese and Unicode text.
-- Use the paper template for restrained exam typography, compact spacing, clear section hierarchy, and neutral answer-key presentation.
-- Use the solutions template for a distinct blue-teal visual system, more generous reading spacing, and breakable highlighted solution blocks.
+- Keep every paper asset print-practical, compact, and clearly hierarchical, while honoring the selected style's documented visual identity.
+- Keep every solutions asset visibly distinct from its paired paper asset, with more generous reading spacing and breakable highlighted solution blocks; use blue-teal specifically for the `minimal` pair rather than forcing it onto every style.
 - Preserve Markdown wording, question order, numbering, mathematics, tables, images, and answer content.
 - Convert the reformatter's forced-page-break HTML div to `\clearpage` through `scripts/exam_layout.lua`.
 - Convert marked `exam-solution` blocks into the template's breakable `examSolutionBox` environment through the same filter.
@@ -127,6 +132,7 @@ Do not report successful completion based only on Pandoc or XeLaTeX exit codes.
 Return:
 
 - selected paper and solutions Markdown paths;
+- selected template-style ID and display name;
 - the template used for each edition;
 - generated `.tex`, `.pdf`, and build-log paths;
 - page counts and file sizes;

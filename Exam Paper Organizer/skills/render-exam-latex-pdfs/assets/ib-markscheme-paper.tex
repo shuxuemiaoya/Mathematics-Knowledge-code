@@ -1,0 +1,147 @@
+\documentclass[UTF8,11pt,a4paper]{ctexart}
+
+\usepackage[top=1.85cm,bottom=1.7cm,left=1.85cm,right=1.85cm,headsep=0.55cm,footskip=0.9cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{wrapfig}
+\usepackage{xcolor}
+\usepackage{calc}
+\usepackage{longtable,array,tabularx}
+\usepackage{enumitem}
+\usepackage{eso-pic}
+\usepackage{lastpage}
+\usepackage{hyperref}
+
+\definecolor{IBNavy}{HTML}{17375E}
+\definecolor{IBTeal}{HTML}{008A92}
+\definecolor{IBInk}{HTML}{202A34}
+\definecolor{IBMuted}{HTML}{62717F}
+\definecolor{IBPanel}{HTML}{EDF5F5}
+\definecolor{IBRule}{HTML}{8AB7BA}
+
+\hypersetup{hidelinks,pdfborder={0 0 0}}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.32em}
+\setlength{\emergencystretch}{4em}
+\renewcommand{\arraystretch}{1.2}
+\linespread{1.17}
+\setcounter{secnumdepth}{0}
+\setlist[enumerate,1]{label=\arabic*.,leftmargin=2.32em,labelsep=0.58em,itemsep=0.65em,topsep=0.42em}
+\setlist[enumerate,2]{leftmargin=2.18em,itemsep=0.26em,topsep=0.22em}
+
+\providecommand{\toprule}{\hline}
+\providecommand{\midrule}{\hline}
+\providecommand{\bottomrule}{\hline}
+\providecommand{\real}[1]{#1}
+
+\ctexset{
+  section={format=\centering\heiti\bfseries\fontsize{17pt}{24pt}\selectfont\color{IBNavy},beforeskip=0.72em,afterskip=0.58em},
+  subsection={format=\heiti\bfseries\fontsize{12.5pt}{19pt}\selectfont\color{IBNavy},beforeskip=0.82em,afterskip=0.38em},
+  subsubsection={format=\heiti\bfseries\normalsize\color{IBTeal},beforeskip=0.62em,afterskip=0.28em}
+}
+
+\newcommand{\IBPageFrame}{%
+  \AtPageUpperLeft{\raisebox{-0.72cm}{\hspace*{1.85cm}\textcolor{IBNavy}{\rule{\dimexpr\paperwidth-3.7cm\relax}{4.2pt}}}}%
+  \AtPageUpperLeft{\raisebox{-1.12cm}{\hspace*{1.85cm}\makebox[\dimexpr\paperwidth-3.7cm\relax][l]{\small\bfseries\color{IBNavy}MATHEMATICS · FINAL ASSESSMENT}}}%
+  \AtPageUpperLeft{\raisebox{-1.12cm}{\hspace*{1.85cm}\makebox[\dimexpr\paperwidth-3.7cm\relax][r]{\small\color{IBTeal}Candidate booklet}}}%
+  \AtPageLowerLeft{\raisebox{0.8cm}{\hspace*{1.85cm}\makebox[\dimexpr\paperwidth-3.7cm\relax][l]{\small\color{IBMuted}Show all reasoning. Marks may be awarded for method.}}}%
+  \AtPageLowerLeft{\raisebox{0.8cm}{\hspace*{1.85cm}\makebox[\dimexpr\paperwidth-3.7cm\relax][r]{\small\color{IBMuted}\thepage\ /\ \pageref{LastPage}}}}%
+}
+\AddToShipoutPictureFG{\IBPageFrame}
+\pagestyle{empty}
+\makeatletter
+\let\ps@plain\ps@empty
+\makeatother
+\newcommand{\useExamPageStyle}{\AddToShipoutPictureFG*{\IBPageFrame}}
+
+\newcommand{\ExamMainTitle}[1]{%
+  \begin{center}{\heiti\bfseries\fontsize{18pt}{25pt}\selectfont\color{IBNavy} #1\par}\end{center}
+  \vspace{0.16em}%
+}
+\newcommand{\ExamSubjectTitle}[1]{%
+  \begin{center}{\heiti\bfseries\fontsize{21pt}{28pt}\selectfont #1\par}\end{center}
+  \vspace{0.3em}\noindent
+  \colorbox{IBPanel}{\parbox{\dimexpr\linewidth-2\fboxsep\relax}{\textbf{考生信息}\hfill 姓名：\underline{\hspace{3cm}}\hfill 考号：\underline{\hspace{3cm}}}}\par
+  \vspace{0.45em}%
+}
+\newcommand{\ExamAnswerMainTitle}[1]{%
+  \begin{center}{\heiti\bfseries\fontsize{17pt}{24pt}\selectfont\color{IBNavy} #1\par}\end{center}
+  \vspace{0.14em}%
+}
+\newcommand{\ExamAnswerSubjectTitle}[1]{%
+  \begin{center}{\heiti\bfseries\fontsize{19pt}{26pt}\selectfont\color{IBTeal} #1\par}\end{center}
+  \vspace{0.32em}\noindent\textcolor{IBRule}{\rule{\linewidth}{0.8pt}}\vspace{0.25em}%
+}
+\newcommand{\beginExamAnswers}{\clearpage\useExamPageStyle}
+\newcommand{\ExamQuestionPageBreak}{\clearpage\useExamPageStyle}
+\newcommand{\ExamAnswerPageBreak}{\clearpage\useExamPageStyle}
+
+\newcommand{\ExamChoicesFour}[4]{%
+  \par\smallskip\noindent
+  \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}
+    #1 & #2 & #3 & #4
+  \end{tabularx}\par\smallskip
+}
+\newcommand{\ExamChoicesTwo}[4]{%
+  \par\smallskip\noindent
+  \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}
+    #1 & #2 \\ #3 & #4
+  \end{tabularx}\par\smallskip
+}
+\newcommand{\ExamChoicesOne}[4]{%
+  \par\smallskip\noindent #1\par\noindent #2\par\noindent #3\par\noindent #4\par\smallskip
+}
+\newcommand{\ExamChoicesFigure}[4]{%
+  \par\smallskip\noindent
+  \begin{minipage}[t]{0.68\linewidth}
+    \noindent #1\par\noindent #2\par\noindent #3\par\noindent #4
+  \end{minipage}\par\smallskip
+}
+\newcommand{\ExamScore}[1]{%
+  \unskip\allowbreak\hfill\fcolorbox{IBTeal}{IBPanel}{\bfseries\color{IBNavy}[#1]}\par
+}
+
+\newenvironment{examSolutionBox}{%
+  \par\smallskip\begingroup
+  \setlength{\leftskip}{0.75em}\setlength{\rightskip}{0.65em}%
+  \noindent\textcolor{IBTeal}{\heiti\bfseries MARKSCHEME / 评分说明}\par
+  \smallskip\noindent\textcolor{IBRule}{\rule{\dimexpr\linewidth-\leftskip-\rightskip\relax}{0.65pt}}\par
+  \smallskip
+}{%
+  \par\endgroup\smallskip
+}
+
+\makeatletter
+\def\maxwidth{\linewidth}
+\def\maxheight{0.16\textheight}
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+\providecommand{\pandocbounded}[1]{%
+  \begin{wrapfigure}{r}{0.25\textwidth}
+    \vspace{-1.0em}\centering #1\vspace{-0.8em}
+  \end{wrapfigure}%
+}
+\makeatother
+
+\providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+
+$if(highlighting-macros)$
+$highlighting-macros$
+$endif$
+$for(header-includes)$
+$header-includes$
+$endfor$
+
+\begin{document}
+\color{IBInk}
+
+$for(include-before)$
+$include-before$
+$endfor$
+
+$body$
+
+$for(include-after)$
+$include-after$
+$endfor$
+
+\end{document}

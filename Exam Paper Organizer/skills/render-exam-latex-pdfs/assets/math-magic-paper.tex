@@ -1,0 +1,146 @@
+\documentclass[UTF8,11pt,a4paper]{ctexart}
+
+\usepackage[top=1.45cm,bottom=1.45cm,left=1.72cm,right=1.72cm,footskip=0.8cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{wrapfig}
+\usepackage{xcolor}
+\usepackage{calc}
+\usepackage{longtable,array,tabularx}
+\usepackage{enumitem}
+\usepackage{eso-pic}
+\usepackage{lastpage}
+\usepackage{hyperref}
+
+\definecolor{MagicInk}{HTML}{151515}
+\definecolor{MagicBlue}{HTML}{1559B7}
+\definecolor{MagicRed}{HTML}{D72C2C}
+\definecolor{MagicMuted}{HTML}{727272}
+\definecolor{MagicCrop}{HTML}{A7A7A7}
+
+\hypersetup{hidelinks,pdfborder={0 0 0}}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.18em}
+\setlength{\emergencystretch}{4em}
+\renewcommand{\arraystretch}{1.12}
+\linespread{1.13}
+\setcounter{secnumdepth}{0}
+\setlist[enumerate,1]{label=\arabic*.,leftmargin=2.1em,labelsep=0.5em,itemsep=0.48em,topsep=0.32em}
+\setlist[enumerate,2]{leftmargin=2.05em,itemsep=0.2em,topsep=0.2em}
+
+\providecommand{\toprule}{\hline}
+\providecommand{\midrule}{\hline}
+\providecommand{\bottomrule}{\hline}
+\providecommand{\real}[1]{#1}
+
+\ctexset{
+  section={format=\centering\songti\fontsize{15.5pt}{22pt}\selectfont,beforeskip=0.45em,afterskip=0.42em},
+  subsection={format=\songti\bfseries\fontsize{12pt}{18pt}\selectfont,beforeskip=0.62em,afterskip=0.28em},
+  subsubsection={format=\songti\bfseries\normalsize,beforeskip=0.48em,afterskip=0.22em}
+}
+
+\newif\ifMagicAnswers
+\MagicAnswersfalse
+\newcommand{\MagicCornerMarks}{%
+  \AtPageUpperLeft{\raisebox{-0.48cm}{\hspace*{0.45cm}\textcolor{MagicCrop}{\rule{0.48cm}{0.35pt}\rule[-0.48cm]{0.35pt}{0.48cm}}}}%
+  \AtPageUpperLeft{\raisebox{-0.48cm}{\hspace*{\dimexpr\paperwidth-0.93cm\relax}\textcolor{MagicCrop}{\rule[-0.48cm]{0.35pt}{0.48cm}\rule{0.48cm}{0.35pt}}}}%
+  \AtPageLowerLeft{\raisebox{0.48cm}{\hspace*{0.45cm}\textcolor{MagicCrop}{\rule{0.48cm}{0.35pt}\rule{0.35pt}{0.48cm}}}}%
+  \AtPageLowerLeft{\raisebox{0.48cm}{\hspace*{\dimexpr\paperwidth-0.93cm\relax}\textcolor{MagicCrop}{\rule{0.35pt}{0.48cm}\rule{0.48cm}{0.35pt}}}}%
+  \AtPageLowerLeft{\raisebox{0.72cm}{\hspace*{1.72cm}\makebox[\dimexpr\paperwidth-3.44cm\relax][c]{\small\color{MagicMuted}\thepage/\pageref{LastPage}}}}%
+}
+\AddToShipoutPictureFG{\MagicCornerMarks}
+\pagestyle{empty}
+\makeatletter
+\let\ps@plain\ps@empty
+\makeatother
+\newcommand{\useExamPageStyle}{\AddToShipoutPictureFG*{\MagicCornerMarks}}
+
+\newcommand{\ExamMainTitle}[1]{%
+  \begin{center}{\songti\fontsize{15.5pt}{22pt}\selectfont #1\par}\end{center}
+  \vspace{0.12em}%
+}
+\newcommand{\ExamSubjectTitle}[1]{%
+  \begin{center}{\songti\fontsize{16pt}{23pt}\selectfont #1\par}\end{center}
+  \vspace{0.42em}%
+}
+\newcommand{\ExamAnswerMainTitle}[1]{%
+  \begin{center}{\songti\fontsize{15pt}{21pt}\selectfont\color{MagicBlue} #1\par}\end{center}
+  \vspace{0.15em}%
+}
+\newcommand{\ExamAnswerSubjectTitle}[1]{%
+  \begin{center}{\songti\fontsize{16pt}{23pt}\selectfont\color{MagicBlue} #1\par}\end{center}
+  \vspace{0.55em}%
+}
+\newcommand{\beginExamAnswers}{%
+  \clearpage\global\MagicAnswerstrue\color{MagicBlue}\useExamPageStyle
+}
+\newcommand{\ExamQuestionPageBreak}{\clearpage\useExamPageStyle}
+\newcommand{\ExamAnswerPageBreak}{\clearpage\useExamPageStyle}
+
+\newcommand{\ExamChoicesFour}[4]{%
+  \par\smallskip\noindent
+  \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}
+    #1 & #2 & #3 & #4
+  \end{tabularx}\par\smallskip
+}
+\newcommand{\ExamChoicesTwo}[4]{%
+  \par\smallskip\noindent
+  \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}
+    #1 & #2 \\ #3 & #4
+  \end{tabularx}\par\smallskip
+}
+\newcommand{\ExamChoicesOne}[4]{%
+  \par\smallskip\noindent #1\par\noindent #2\par\noindent #3\par\noindent #4\par\smallskip
+}
+\newcommand{\ExamChoicesFigure}[4]{%
+  \par\smallskip\noindent
+  \begin{minipage}[t]{0.70\linewidth}
+    \noindent #1\par\noindent #2\par\noindent #3\par\noindent #4
+  \end{minipage}\par\smallskip
+}
+\newcommand{\ExamScore}[1]{%
+  \unskip\allowbreak\hfill\makebox[0.24\linewidth][r]{\dotfill\ #1\ 分}\par
+}
+
+\newenvironment{examSolutionBox}{%
+  \par\smallskip\begingroup
+  \color{MagicBlue}\setlength{\leftskip}{0.55em}\setlength{\rightskip}{0.4em}%
+  \noindent{\bfseries【数学妙呀】}\quad
+}{%
+  \par\endgroup\smallskip
+}
+
+\makeatletter
+\def\maxwidth{\linewidth}
+\def\maxheight{0.15\textheight}
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+\providecommand{\pandocbounded}[1]{%
+  \begin{wrapfigure}{r}{0.25\textwidth}
+    \vspace{-1.05em}\centering #1\vspace{-0.85em}
+  \end{wrapfigure}%
+}
+\makeatother
+
+\providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+
+$if(highlighting-macros)$
+$highlighting-macros$
+$endif$
+$for(header-includes)$
+$header-includes$
+$endfor$
+
+\begin{document}
+\color{MagicInk}
+
+$for(include-before)$
+$include-before$
+$endfor$
+
+$body$
+
+$for(include-after)$
+$include-after$
+$endfor$
+
+\end{document}

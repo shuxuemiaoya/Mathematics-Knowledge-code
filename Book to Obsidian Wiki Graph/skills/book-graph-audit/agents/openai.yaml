@@ -1,0 +1,4 @@
+interface:
+  display_name: "Book Graph Audit"
+  short_description: "Audit book notes, assets, and canvas"
+  default_prompt: "Use $book-graph-audit to verify the complete Obsidian book graph."

@@ -1,0 +1,140 @@
+\documentclass[UTF8,11pt,a4paper]{ctexart}
+
+\usepackage[top=1.7cm,bottom=1.5cm,left=2.05cm,right=1.65cm,headsep=0.55cm,footskip=0.8cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{wrapfig}
+\usepackage{xcolor}
+\usepackage{calc}
+\usepackage{longtable,array,tabularx}
+\usepackage{enumitem}
+\usepackage{eso-pic}
+\usepackage{lastpage}
+\usepackage{hyperref}
+
+\definecolor{CNInk}{HTML}{111111}
+\definecolor{CNMuted}{HTML}{555555}
+\definecolor{CNRule}{HTML}{303030}
+\definecolor{CNSeal}{HTML}{888888}
+
+\hypersetup{hidelinks,pdfborder={0 0 0}}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.2em}
+\setlength{\emergencystretch}{4em}
+\renewcommand{\arraystretch}{1.16}
+\linespread{1.16}
+\setcounter{secnumdepth}{0}
+\setlist[enumerate,1]{label=\arabic*.,leftmargin=2.18em,labelsep=0.52em,itemsep=0.52em,topsep=0.36em}
+\setlist[enumerate,2]{leftmargin=2.1em,itemsep=0.22em,topsep=0.2em}
+
+\providecommand{\toprule}{\hline}
+\providecommand{\midrule}{\hline}
+\providecommand{\bottomrule}{\hline}
+\providecommand{\real}[1]{#1}
+
+\ctexset{
+  section={format=\centering\heiti\bfseries\fontsize{17pt}{24pt}\selectfont,beforeskip=0.55em,afterskip=0.48em},
+  subsection={format=\heiti\bfseries\fontsize{12.5pt}{19pt}\selectfont,beforeskip=0.72em,afterskip=0.32em},
+  subsubsection={format=\heiti\bfseries\normalsize,beforeskip=0.55em,afterskip=0.25em}
+}
+
+\newcommand{\CNPageFrame}{%
+  \AtPageUpperLeft{\raisebox{-1.18cm}{\hspace*{2.05cm}\textcolor{CNRule}{\rule{\dimexpr\paperwidth-3.7cm\relax}{0.8pt}}}}%
+  \AtPageUpperLeft{\raisebox{-1.05cm}{\hspace*{2.05cm}\makebox[\dimexpr\paperwidth-3.7cm\relax][l]{\small\heiti 中学数学期末考试}}}%
+  \AtPageLowerLeft{\raisebox{0.72cm}{\hspace*{2.05cm}\makebox[\dimexpr\paperwidth-3.7cm\relax][c]{\small\color{CNMuted}第\ \thepage\ 页\quad 共\ \pageref{LastPage}\ 页}}}%
+  \AtPageCenter{\hspace*{-9.5cm}\rotatebox{90}{\small\color{CNSeal}学校：\underline{\hspace{2.4cm}}\quad 班级：\underline{\hspace{1.6cm}}\quad 姓名：\underline{\hspace{1.8cm}}\quad 考号：\underline{\hspace{2.4cm}}}}%
+}
+\AddToShipoutPictureFG{\CNPageFrame}
+\pagestyle{empty}
+\makeatletter
+\let\ps@plain\ps@empty
+\makeatother
+\newcommand{\useExamPageStyle}{\AddToShipoutPictureFG*{\CNPageFrame}}
+
+\newcommand{\ExamMainTitle}[1]{%
+  \begin{center}{\heiti\bfseries\fontsize{17pt}{24pt}\selectfont #1\par}\end{center}
+  \vspace{0.12em}%
+}
+\newcommand{\ExamSubjectTitle}[1]{%
+  \begin{center}{\heiti\bfseries\fontsize{21pt}{28pt}\selectfont #1\par}\end{center}
+  \vspace{0.48em}\noindent\rule{\linewidth}{0.7pt}\vspace{0.18em}%
+}
+\newcommand{\ExamAnswerMainTitle}[1]{%
+  \begin{center}{\heiti\bfseries\fontsize{16pt}{23pt}\selectfont #1\par}\end{center}
+  \vspace{0.1em}%
+}
+\newcommand{\ExamAnswerSubjectTitle}[1]{%
+  \begin{center}{\heiti\bfseries\fontsize{19pt}{26pt}\selectfont #1\par}\end{center}
+  \vspace{0.45em}\noindent\rule{\linewidth}{0.55pt}\vspace{0.18em}%
+}
+\newcommand{\beginExamAnswers}{\clearpage\useExamPageStyle}
+\newcommand{\ExamQuestionPageBreak}{\clearpage\useExamPageStyle}
+\newcommand{\ExamAnswerPageBreak}{\clearpage\useExamPageStyle}
+
+\newcommand{\ExamChoicesFour}[4]{%
+  \par\smallskip\noindent
+  \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}
+    #1 & #2 & #3 & #4
+  \end{tabularx}\par\smallskip
+}
+\newcommand{\ExamChoicesTwo}[4]{%
+  \par\smallskip\noindent
+  \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}
+    #1 & #2 \\ #3 & #4
+  \end{tabularx}\par\smallskip
+}
+\newcommand{\ExamChoicesOne}[4]{%
+  \par\smallskip\noindent #1\par\noindent #2\par\noindent #3\par\noindent #4\par\smallskip
+}
+\newcommand{\ExamChoicesFigure}[4]{%
+  \par\smallskip\noindent
+  \begin{minipage}[t]{0.69\linewidth}
+    \noindent #1\par\noindent #2\par\noindent #3\par\noindent #4
+  \end{minipage}\par\smallskip
+}
+\newcommand{\ExamScore}[1]{%
+  \unskip\allowbreak\hfill\makebox[0.25\linewidth][r]{\dotfill\ #1\ 分}\par
+}
+
+\newenvironment{examSolutionBox}{%
+  \par\smallskip\begingroup
+  \setlength{\leftskip}{0.6em}\setlength{\rightskip}{0.5em}%
+  \noindent\heiti\bfseries 解析\par\smallskip\normalfont
+}{%
+  \par\endgroup\smallskip
+}
+
+\makeatletter
+\def\maxwidth{\linewidth}
+\def\maxheight{0.15\textheight}
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+\providecommand{\pandocbounded}[1]{%
+  \begin{wrapfigure}{r}{0.25\textwidth}
+    \vspace{-1.05em}\centering #1\vspace{-0.85em}
+  \end{wrapfigure}%
+}
+\makeatother
+
+\providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+
+$if(highlighting-macros)$
+$highlighting-macros$
+$endif$
+$for(header-includes)$
+$header-includes$
+$endfor$
+
+\begin{document}
+\color{CNInk}
+
+$for(include-before)$
+$include-before$
+$endfor$
+
+$body$
+
+$for(include-after)$
+$include-after$
+$endfor$
+
+\end{document}
