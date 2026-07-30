@@ -1,4 +1,4 @@
 interface:
   display_name: "Book Graph Audit"
-  short_description: "Audit book notes, assets, and canvas"
-  default_prompt: "Use $book-graph-audit to verify the complete Obsidian book graph."
+  short_description: "Audit lesson flow Markdown links assets and canvas"
+  default_prompt: "Use $book-graph-audit to verify lesson-flow ownership, callout continuity and semantic scope, source coverage, Markdown structure, links, assets, concepts, and the optional canvas."

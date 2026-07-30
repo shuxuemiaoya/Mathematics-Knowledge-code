@@ -1,4 +1,4 @@
 interface:
   display_name: "Book Graph Markdown"
-  short_description: "Standardize split book Markdown"
-  default_prompt: "Use $book-graph-markdown to standardize every split note, convert all functional textbook blocks and worked examples into valid callouts, and preserve protected content and paths."
+  short_description: "Format lesson-aware Markdown without content loss"
+  default_prompt: "Use $book-graph-markdown to format this reviewed lesson-flow corpus without merging functional blocks, while preserving content, order, links, assets, formulas, and reasoning."

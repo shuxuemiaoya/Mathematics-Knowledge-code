@@ -45,7 +45,10 @@ The inspected live example contained:
 
 It also contained 266 raster images distributed primarily under category-local `images` directories.
 
-The counts above describe the legacy example exactly. The revised standalone pipeline does not reproduce its extra textbook category directories: new textbook runs consolidate content into `知识点`, `概念`, and `习题` only.
+The counts above describe the legacy example exactly. The revised standalone
+pipeline always keeps the core `知识点`, `概念`, and `习题` roles, and preserves
+an additional side-material role only when the printed TOC/source supports it
+and the profile enables it. It does not recreate empty legacy directories.
 
 The book-local canvas contained:
 
@@ -139,12 +142,32 @@ The stable end-to-end process is:
 3. build a manifest from the printed TOC;
 4. align TOC entries to H1-H3 and demote all other headings below H3;
 5. split by the TOC hierarchy and reviewed nested source ranges;
-   reject a TOC-only manifest, split every numbered subsection and section exercise, and record a disposition for every H4-H6 content heading;
+   reject a TOC-only manifest, split every numbered subsection and section
+   exercise, retain unnumbered non-TOC blocks by default, and record a
+   confidence-backed disposition for every H4-H6 content heading;
+   then inspect every long generated knowledge-node body, including numbered
+   H4-H6 subsections, for headerless teaching arcs such as a definition
+   followed by its examples, because many accepted example notes (`集合`,
+   `最大值与最小值`, and similar topics) did not begin at an explicit source
+   heading;
+   within each lesson, split retained prose again at every functional heading
+   or label, exposition/definition cue, worked-example label, and practice
+   heading; never approve one logical block across the next boundary;
 6. retain child links in parent notes at their original source positions;
-7. categorize textbook output into knowledge, concept, and exercise notes;
+   render those navigation links as bullet items, promote independent semantic
+   note entry headings to H3, and disambiguate generic chapter summaries with
+   their chapter title;
+7. categorize textbook output into the three core roles plus only
+   source-supported auxiliary reading, history, method, or tool roles;
 8. extract only formally defined concepts;
+   structure each concept note as H1 title, source backlink, H2 definition,
+   and the complete copied definition;
 9. standardize callouts, formulas, tables, and images without changing protected content;
-   do not pass audit with plain observation/thinking/exploration headings or raw worked-example markers;
+   convert functional labels to continuous quoted callout containers, keep all
+   body lines at the required quote depth, and do not pass audit with residual
+   raw markers, missing quoted bodies, invalid nested callouts, duplicated
+   source labels, or later definitions/examples/practice swallowed by an
+   earlier callout;
 10. validate all note and asset targets;
 11. design and compile an optional domain-based logic canvas;
 12. run a whole-corpus audit.

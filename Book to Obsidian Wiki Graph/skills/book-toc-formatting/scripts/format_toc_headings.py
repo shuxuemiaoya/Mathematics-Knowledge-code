@@ -38,6 +38,7 @@ def sha256_file(path: Path) -> str:
 
 def normalize_title(value: str) -> str:
     normalized = unicodedata.normalize("NFKC", value)
+    normalized = re.sub(r"\\([`*_~])", r"\1", normalized)
     normalized = re.sub(r"[`*_~]", "", normalized)
     normalized = re.sub(r"\s+", "", normalized)
     return normalized.strip()
@@ -120,15 +121,20 @@ def format_headings(
     matched: list[dict[str, Any]] = []
     demoted: list[dict[str, Any]] = []
 
-    for line_number, line in enumerate(lines, start=1):
+    index = 0
+    while index < len(lines):
+        line_number = index + 1
+        line = lines[index]
         fence = FENCE_RE.match(line)
         if fence:
             in_fence = not in_fence
             output.append(line)
+            index += 1
             continue
         match = None if in_fence or line_number in ignored_lines else HEADING_RE.match(line)
         if match is None:
             output.append(line)
+            index += 1
             continue
 
         original_level = len(match.group(1))
@@ -136,13 +142,64 @@ def format_headings(
         normalized = normalize_title(title)
         expected = entries[expected_index] if expected_index < len(entries) else None
 
-        if expected is not None and normalized in entry_titles(expected):
+        # OCR commonly splits one printed TOC heading into two adjacent Markdown
+        # headings, for example "第一章" followed by "集合与常用逻辑用语".
+        # Consolidate only when the two fragments exactly reconstruct the
+        # authoritative printed title; never merge headings heuristically.
+        composite_index = index + 1
+        while composite_index < len(lines) and not lines[composite_index].strip():
+            composite_index += 1
+        composite_line = (
+            lines[composite_index].strip()
+            if composite_index < len(lines)
+            else ""
+        )
+        composite_match = HEADING_RE.match(composite_line)
+        composite_fragment = (
+            composite_match.group(2).strip()
+            if composite_match is not None
+            else composite_line
+        )
+        has_composite_candidate = (
+            expected is not None
+            and normalized != normalize_title(expected["title"])
+            and composite_index < len(lines)
+            and composite_index + 1 not in ignored_lines
+            and bool(composite_fragment)
+        )
+        composite_exact = (
+            has_composite_candidate
+            and normalize_title(title + composite_fragment)
+            == normalize_title(expected["title"])
+        )
+        if composite_exact:
             level = expected["level"]
-            output.append(f"{'#' * level} {title}")
+            output.append(f"{'#' * level} {expected['title']}")
             matched.append(
                 {
                     "key": expected["key"],
-                    "title": title,
+                    "title": expected["title"],
+                    "line": line_number,
+                    "source_lines": [line_number, composite_index + 1],
+                    "old_level": original_level,
+                    "new_level": level,
+                    "composite": True,
+                    "second_fragment_was_heading": composite_match is not None,
+                }
+            )
+            active_toc_level = level
+            expected_index += 1
+            index = composite_index + 1
+            continue
+
+        if expected is not None and normalized in entry_titles(expected):
+            level = expected["level"]
+            output.append(f"{'#' * level} {expected['title']}")
+            matched.append(
+                {
+                    "key": expected["key"],
+                    "title": expected["title"],
+                    "source_title": title,
                     "line": line_number,
                     "old_level": original_level,
                     "new_level": level,
@@ -150,6 +207,7 @@ def format_headings(
             )
             active_toc_level = level
             expected_index += 1
+            index += 1
             continue
 
         later_match = next(
@@ -176,6 +234,7 @@ def format_headings(
                 "new_level": new_level,
             }
         )
+        index += 1
 
     if expected_index != len(entries):
         missing = [entry["title"] for entry in entries[expected_index:]]
@@ -189,6 +248,9 @@ def format_headings(
     report = {
         "toc_entries": len(entries),
         "matched_toc_headings": len(matched),
+        "composite_toc_headings": sum(
+            1 for item in matched if item.get("composite")
+        ),
         "demoted_non_toc_headings": len(demoted),
         "matched": matched,
         "demoted": demoted,
@@ -269,7 +331,7 @@ def main(argv: list[str] | None = None) -> int:
         result = {
             "schema_version": 1,
             "stage": "book-toc-formatting",
-            "status": "completed",
+            "status": "passed",
             "profile": manifest.get("profile"),
             "source_sha256": manifest.get("source_sha256"),
             "input_markdown": str(source),

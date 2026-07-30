@@ -38,7 +38,8 @@ class GraphAuditTests(unittest.TestCase):
             encoding="utf-8",
         )
         (book / "术语" / "集合.md").write_text(
-            "把研究对象组成的总体叫做集合。\n",
+            "# 集合\n\n来源：[集合](../主题/集合.md)\n\n"
+            "## 定义\n\n把研究对象组成的总体叫做集合。\n",
             encoding="utf-8",
         )
         profile_path = root / "book-profile.json"
@@ -66,7 +67,10 @@ class GraphAuditTests(unittest.TestCase):
                 },
             ],
             "links": {"markdown_only": True},
-            "formatting": {"blank_before_top_level_callout": True},
+            "formatting": {
+                "blank_before_top_level_callout": True,
+                "callout_body_mode": "quoted-body",
+            },
             "canvas": {
                 "enabled": False,
                 "node_colors": {},
@@ -162,6 +166,62 @@ class GraphAuditTests(unittest.TestCase):
             self.assertIn("missing-markdown-link", codes)
             self.assertIn("orphan-concept", codes)
 
+    def test_latex_interval_condition_is_not_a_markdown_link(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            items = self.make_profiled_book(Path(temporary))
+            source, vault, book, profile, coverage, _ = items
+            (book / "主题" / "集合.md").write_text(
+                "# 集合\n\n"
+                r"在区间 $\left[-\frac{\pi}{2},\frac{\pi}{2}\right]"
+                r"(k \in \mathbf{Z})$ 上递增。"
+                "\n",
+                encoding="utf-8",
+            )
+            report = audit_tool.audit_book(
+                book.resolve(),
+                vault.resolve(),
+                source=source.resolve(),
+                profile_path=profile.resolve(),
+                coverage_manifest=coverage.resolve(),
+                stage="split",
+            )
+            codes = {item["code"] for item in report["errors"]}
+            self.assertNotIn("missing-markdown-link", codes)
+            self.assertEqual(report["counts"]["standard_links"], 1)
+
+    def test_display_math_before_interval_does_not_confuse_inline_scan(self) -> None:
+        text = (
+            "$$\ny=x^2\n$$\n"
+            r"在 $\left[-\pi,\pi\right](k \in \mathbf{Z})$ 上。"
+        )
+        matches = audit_tool.matches_outside_math(
+            audit_tool.MARKDOWN_LINK_RE, text
+        )
+        self.assertEqual(matches, [])
+
+    def test_markdown_link_with_inline_math_still_resolves(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            items = self.make_profiled_book(Path(temporary))
+            source, vault, book, profile, coverage, _ = items
+            target = book / "主题" / "4.1.1 $n$ 次方根.md"
+            target.write_text("# 4.1.1\n", encoding="utf-8")
+            (book / "主题" / "集合.md").write_text(
+                "# 集合\n\n"
+                "[4.1.1 $n$ 次方根](4.1.1%20$n$%20次方根.md)\n",
+                encoding="utf-8",
+            )
+            report = audit_tool.audit_book(
+                book.resolve(),
+                vault.resolve(),
+                source=source.resolve(),
+                profile_path=profile.resolve(),
+                coverage_manifest=coverage.resolve(),
+                stage="split",
+            )
+            codes = {item["code"] for item in report["errors"]}
+            self.assertNotIn("missing-markdown-link", codes)
+            self.assertEqual(report["counts"]["standard_links"], 2)
+
     def test_rejects_unstandardized_functional_blocks(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             items = self.make_profiled_book(Path(temporary))
@@ -184,6 +244,418 @@ class GraphAuditTests(unittest.TestCase):
             self.assertEqual(
                 report["counts"]["unstandardized_functional_blocks"], 2
             )
+
+    def test_rejects_plain_standalone_functional_label(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            items = self.make_profiled_book(Path(temporary))
+            source, vault, book, profile, coverage, concepts = items
+            (book / "主题" / "集合.md").write_text(
+                "# 集合\n\n思考\n\n问题。\n\n"
+                "把研究对象组成的总体叫做[集合](../术语/集合.md)。\n",
+                encoding="utf-8",
+            )
+            report = audit_tool.audit_book(
+                book.resolve(),
+                vault.resolve(),
+                source=source.resolve(),
+                profile_path=profile.resolve(),
+                coverage_manifest=coverage.resolve(),
+                concept_manifest=concepts.resolve(),
+                stage="formatting",
+            )
+            codes = {item["code"] for item in report["errors"]}
+            self.assertIn("unstandardized-functional-blocks", codes)
+            self.assertEqual(
+                report["counts"]["unstandardized_functional_blocks"], 1
+            )
+
+    def test_example_cross_reference_is_not_a_residual_worked_example(self) -> None:
+        self.assertFalse(
+            audit_tool.is_unstandardized_worked_example(
+                "例 1 中命题（1）给出了一个充分条件。"
+            )
+        )
+        self.assertFalse(
+            audit_tool.is_unstandardized_worked_example(
+                "例7的结果还可以表示为："
+            )
+        )
+        self.assertTrue(
+            audit_tool.is_unstandardized_worked_example("例 1 求方程的解。")
+        )
+
+    def test_split_gate_allows_raw_blocks_without_concept_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            items = self.make_profiled_book(Path(temporary))
+            source, vault, book, profile, coverage, _ = items
+            (book / "主题" / "集合.md").write_text(
+                "# 集合\n\n#### 思考\n\n问题。\n",
+                encoding="utf-8",
+            )
+            report = audit_tool.audit_book(
+                book.resolve(),
+                vault.resolve(),
+                source=source.resolve(),
+                profile_path=profile.resolve(),
+                coverage_manifest=coverage.resolve(),
+                stage="split",
+            )
+            self.assertEqual(report["status"], "passed", report["errors"])
+            self.assertEqual(report["stage"], "split")
+
+    def test_quoted_body_callout_accepts_continuous_lesson_body(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            items = self.make_profiled_book(Path(temporary))
+            source, vault, book, profile, coverage, concepts = items
+            (book / "主题" / "集合.md").write_text(
+                "# 集合\n\n> [!question] 思考\n> 这段正文属于完整容器。\n\n"
+                "把研究对象组成的总体叫做[集合](../术语/集合.md)。\n",
+                encoding="utf-8",
+            )
+            report = audit_tool.audit_book(
+                book.resolve(),
+                vault.resolve(),
+                source=source.resolve(),
+                profile_path=profile.resolve(),
+                coverage_manifest=coverage.resolve(),
+                concept_manifest=concepts.resolve(),
+                stage="formatting",
+            )
+            self.assertEqual(report["status"], "passed", report["errors"])
+            self.assertEqual(report["counts"]["callout_body_violations"], 0)
+
+    def test_quoted_body_callout_rejects_unquoted_lesson_body(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            items = self.make_profiled_book(Path(temporary))
+            source, vault, book, profile, coverage, concepts = items
+            (book / "主题" / "集合.md").write_text(
+                "# 集合\n\n> [!question] 思考\n\n这段正文错误地落在容器外。\n\n"
+                "把研究对象组成的总体叫做[集合](../术语/集合.md)。\n",
+                encoding="utf-8",
+            )
+            report = audit_tool.audit_book(
+                book.resolve(),
+                vault.resolve(),
+                source=source.resolve(),
+                profile_path=profile.resolve(),
+                coverage_manifest=coverage.resolve(),
+                concept_manifest=concepts.resolve(),
+                stage="formatting",
+            )
+            codes = {item["code"] for item in report["errors"]}
+            self.assertIn("callout-body-discontinuous", codes)
+            self.assertEqual(report["counts"]["callout_body_violations"], 1)
+
+    def test_nested_callout_requires_quoted_body(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            items = self.make_profiled_book(Path(temporary))
+            source, vault, book, profile, coverage, concepts = items
+            (book / "主题" / "集合.md").write_text(
+                "# 集合\n\n> [!example]- 例 1\n> 题干。\n>\n"
+                "> > [!success]- 解\n解答错误地落在嵌套容器外。\n\n"
+                "把研究对象组成的总体叫做[集合](../术语/集合.md)。\n",
+                encoding="utf-8",
+            )
+            report = audit_tool.audit_book(
+                book.resolve(),
+                vault.resolve(),
+                source=source.resolve(),
+                profile_path=profile.resolve(),
+                coverage_manifest=coverage.resolve(),
+                concept_manifest=concepts.resolve(),
+                stage="formatting",
+            )
+            reasons = {
+                item.get("reason")
+                for item in report["errors"]
+                if item["code"] == "callout-body-discontinuous"
+            }
+            self.assertIn("missing-nested-quoted-body", reasons)
+
+    def test_callout_semantic_scope_rejects_swallowed_lesson_blocks(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            items = self.make_profiled_book(Path(temporary))
+            source, vault, book, profile, coverage, concepts = items
+            (book / "主题" / "集合.md").write_text(
+                "# 集合\n\n"
+                "> [!info] 情景引入\n"
+                "> 开场问题。\n"
+                ">\n"
+                "> #### 观察\n"
+                "> 观察集合。\n"
+                ">\n"
+                "> 一般地，把研究对象组成的总体叫做[集合](../术语/集合.md)。\n\n"
+                "> [!question] 思考\n"
+                "> 思考\n"
+                "> 例 1 写出所有子集。\n"
+                ">\n"
+                "> > [!success]- 解\n"
+                "> > 逐一列举。\n"
+                "> > 例2 判断包含关系。\n"
+                "> > #### 练习\n"
+                "> > 1. 完成判断。\n",
+                encoding="utf-8",
+            )
+
+            report = audit_tool.audit_book(
+                book.resolve(),
+                vault.resolve(),
+                source=source.resolve(),
+                profile_path=profile.resolve(),
+                coverage_manifest=coverage.resolve(),
+                concept_manifest=concepts.resolve(),
+                stage="formatting",
+            )
+
+            semantic = [
+                item
+                for item in report["errors"]
+                if item["code"] == "callout-semantic-scope"
+            ]
+            reasons = {item["reason"] for item in semantic}
+            self.assertIn("functional-heading-inside-callout", reasons)
+            self.assertIn("formal-definition-inside-situation-callout", reasons)
+            self.assertIn("duplicate-functional-label-inside-callout", reasons)
+            self.assertIn("worked-example-inside-non-example-callout", reasons)
+            self.assertIn("practice-inside-callout", reasons)
+            self.assertGreaterEqual(
+                report["counts"]["callout_semantic_scope_violations"],
+                5,
+            )
+
+    def test_content_consistency_flags_ocr_omissions_and_flat_reasoning(self) -> None:
+        text = (
+            "# 指数函数的概念\n\n"
+            "一般地，函数 $y=a^x (a>0$，且 $a\\ne1$ 叫做指数函数。\n\n"
+            "> [!example]- 例2 求下列函数的定义域：（1）$y=2^x$\n"
+            ">\n"
+            "> > [!success]- 解\n"
+            "> > （1）定义域为 $R$；（2）定义域为 $R$。\n\n"
+            "> [!info] 问题 1\n"
+            "> 观察函数。\n"
+            "> 分析：比较定义域。\n"
+        )
+        issues = audit_tool.content_consistency_issues(Path("知识点/样例.md"), text)
+        reasons = {item["reason"] for item in issues}
+        self.assertIn("unbalanced-parentheses-in-formal-definition", reasons)
+        self.assertIn("solution-subpart-missing-from-example-stem", reasons)
+        self.assertIn("reasoning-label-not-nested", reasons)
+
+    def test_content_consistency_reads_all_stem_subparts_on_one_line(self) -> None:
+        text = (
+            "> [!example]- 例 1 求值：\n"
+            "> （1）$a$；（2）$b$；（3）$c$；（4）$d$。\n"
+            ">\n"
+            "> > [!success]- 解\n"
+            "> > （1）1；（2）2；（3）3；（4）4。\n"
+        )
+
+        issues = audit_tool.content_consistency_issues(Path("知识点/样例.md"), text)
+
+        self.assertNotIn(
+            "solution-subpart-missing-from-example-stem",
+            {item["reason"] for item in issues},
+        )
+
+    def test_content_consistency_allows_numbered_proof_steps_for_single_stem(self) -> None:
+        text = (
+            "> [!example]- 例 1 证明命题成立。\n"
+            ">\n"
+            "> > [!success]- 证明\n"
+            "> > （1）充分性：由条件可得结论。\n"
+            "> > （2）必要性：由结论可得条件。\n"
+        )
+
+        issues = audit_tool.content_consistency_issues(Path("知识点/样例.md"), text)
+
+        self.assertNotIn(
+            "solution-subpart-missing-from-example-stem",
+            {item["reason"] for item in issues},
+        )
+
+    def test_content_consistency_ignores_function_arguments_as_subparts(self) -> None:
+        text = (
+            "> [!example]- 例 2 （1）比较两个模型。\n"
+            ">\n"
+            "> > [!success]- 解\n"
+            "> > （1）当 $x=0$ 时比较。\n"
+            "> > （2）计算 $g(14)$ 与 $h(10000)$。\n"
+        )
+
+        issues = audit_tool.content_consistency_issues(Path("知识点/样例.md"), text)
+        issue = next(
+            item
+            for item in issues
+            if item["reason"] == "solution-subpart-missing-from-example-stem"
+        )
+
+        self.assertEqual(issue["missing_subparts"], [2])
+
+    def test_formatting_gate_rejects_ocr_damage_and_plain_running_header(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            items = self.make_profiled_book(Path(temporary))
+            source, vault, book, profile, coverage, concepts = items
+            (book / "主题" / "集合.md").write_text(
+                "# 集合\n\n"
+                "第二章 一元二次函数、方程和不等式\n\n"
+                "$$x^2-1 2x+2 0<0$$\n\n"
+                "<table><tr><td>根</td><td>\\(x_1=2$</td></tr></table>\n\n"
+                "把研究对象组成的总体叫做[集合](../术语/集合.md)。\n",
+                encoding="utf-8",
+            )
+
+            report = audit_tool.audit_book(
+                book.resolve(),
+                vault.resolve(),
+                source=source.resolve(),
+                profile_path=profile.resolve(),
+                coverage_manifest=coverage.resolve(),
+                concept_manifest=concepts.resolve(),
+                stage="formatting",
+            )
+
+            codes = {item["code"] for item in report["errors"]}
+            self.assertIn("plain-running-chapter-headers", codes)
+            self.assertIn("suspicious-ocr-spaced-digits-in-math", codes)
+            self.assertIn("malformed-html-table-content", codes)
+            self.assertEqual(report["counts"]["plain_running_headers"], 1)
+            self.assertEqual(
+                report["counts"]["suspicious_ocr_math_fragments"], 2
+            )
+            self.assertEqual(report["counts"]["malformed_table_blocks"], 1)
+
+    def test_split_gate_defers_ocr_content_quality_checks(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            items = self.make_profiled_book(Path(temporary))
+            source, vault, book, profile, coverage, _ = items
+            (book / "主题" / "集合.md").write_text(
+                "# 集合\n\n"
+                "216 第五章 三角函数\n\n"
+                "$$x=1 2$$\n\n"
+                "<table><tr><td>\\(x$</td></tr></table>\n",
+                encoding="utf-8",
+            )
+
+            report = audit_tool.audit_book(
+                book.resolve(),
+                vault.resolve(),
+                source=source.resolve(),
+                profile_path=profile.resolve(),
+                coverage_manifest=coverage.resolve(),
+                stage="split",
+            )
+
+            codes = {item["code"] for item in report["errors"]}
+            self.assertNotIn("plain-running-chapter-headers", codes)
+            self.assertNotIn("suspicious-ocr-spaced-digits-in-math", codes)
+            self.assertNotIn("malformed-html-table-content", codes)
+
+    def test_new_textbook_profile_requires_lesson_flow_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            items = self.make_profiled_book(Path(temporary))
+            source, vault, book, profile_path, coverage, _ = items
+            profile = json.loads(profile_path.read_text(encoding="utf-8"))
+            profile["book"]["kind"] = "mathematics-textbook"
+            profile["decomposition"] = {
+                "require_lesson_flow_manifest": True
+            }
+            profile_path.write_text(
+                json.dumps(profile, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            report = audit_tool.audit_book(
+                book.resolve(),
+                vault.resolve(),
+                source=source.resolve(),
+                profile_path=profile_path.resolve(),
+                coverage_manifest=coverage.resolve(),
+                stage="split",
+            )
+            codes = {item["code"] for item in report["errors"]}
+            self.assertIn("lesson-flow-manifest-not-provided", codes)
+
+    def test_concepts_gate_requires_concept_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            items = self.make_profiled_book(Path(temporary))
+            source, vault, book, profile, coverage, _ = items
+            report = audit_tool.audit_book(
+                book.resolve(),
+                vault.resolve(),
+                source=source.resolve(),
+                profile_path=profile.resolve(),
+                coverage_manifest=coverage.resolve(),
+                stage="concepts",
+            )
+            codes = {item["code"] for item in report["errors"]}
+            self.assertIn("concept-manifest-not-provided", codes)
+
+    def test_rejects_malformed_entry_heading_and_concept_structure(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            items = self.make_profiled_book(Path(temporary))
+            source, vault, book, profile, coverage, concepts = items
+            (book / "主题" / "集合.md").write_text(
+                "x## 集合\n\n把研究对象组成的总体叫做[集合](../术语/集合.md)。\n",
+                encoding="utf-8",
+            )
+            (book / "术语" / "集合.md").write_text(
+                "把研究对象组成的总体叫做集合。\n",
+                encoding="utf-8",
+            )
+            report = audit_tool.audit_book(
+                book.resolve(),
+                vault.resolve(),
+                source=source.resolve(),
+                profile_path=profile.resolve(),
+                coverage_manifest=coverage.resolve(),
+                concept_manifest=concepts.resolve(),
+                stage="concepts",
+            )
+            codes = {item["code"] for item in report["errors"]}
+            self.assertIn("invalid-note-entry-heading", codes)
+            self.assertIn("malformed-concept-note-structure", codes)
+
+    def test_vault_root_note_mode_requires_leading_slash(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            items = self.make_profiled_book(Path(temporary))
+            source, vault, book, profile_path, coverage, _ = items
+            profile = json.loads(profile_path.read_text(encoding="utf-8"))
+            profile["links"]["note_mode"] = "vault-root"
+            profile_path.write_text(
+                json.dumps(profile, ensure_ascii=False), encoding="utf-8"
+            )
+            report = audit_tool.audit_book(
+                book.resolve(),
+                vault.resolve(),
+                source=source.resolve(),
+                profile_path=profile_path.resolve(),
+                coverage_manifest=coverage.resolve(),
+                stage="split",
+            )
+            codes = {item["code"] for item in report["errors"]}
+            self.assertIn("non-vault-root-note-link", codes)
+
+    def test_final_gate_requires_profile_enabled_canvas(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            items = self.make_profiled_book(Path(temporary))
+            source, vault, book, profile_path, coverage, concepts = items
+            profile = json.loads(profile_path.read_text(encoding="utf-8"))
+            profile["canvas"]["enabled"] = True
+            profile_path.write_text(
+                json.dumps(profile, ensure_ascii=False), encoding="utf-8"
+            )
+            report = audit_tool.audit_book(
+                book.resolve(),
+                vault.resolve(),
+                source=source.resolve(),
+                profile_path=profile_path.resolve(),
+                coverage_manifest=coverage.resolve(),
+                concept_manifest=concepts.resolve(),
+                stage="final",
+            )
+            codes = {item["code"] for item in report["errors"]}
+            self.assertIn("required-canvas-missing", codes)
 
 
 if __name__ == "__main__":

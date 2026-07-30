@@ -12,10 +12,19 @@ Make the printed TOC the only authority for H1-H3. Do not perform concept extrac
 Read `references/toc-manifest.md`.
 
 1. Inspect the actual printed TOC pages and raw Markdown.
-2. Record TOC entries in printed order with authoritative levels 1-3.
-3. Record OCR aliases only when they represent the same printed title.
-4. Record the raw-Markdown line ranges occupied by the printed TOC.
-5. Freeze the raw Markdown digest.
+2. Generate a reviewable draft instead of transcribing the printed TOC:
+
+```powershell
+python .\skills\book-toc-formatting\scripts\plan_toc_manifest.py `
+  "<staging>\<book>.raw.md" `
+  "<staging>\book-profile.json" `
+  "<staging>\toc-manifest.json"
+```
+
+3. Review the reported source range, printed order, levels, categories, wrapped
+   entries, filenames, and aliases against the actual printed TOC.
+4. Add or remove OCR aliases only when they represent the same printed title.
+5. Use `--toc-range START:END` only when automatic range detection is wrong.
 
 ## Format
 
@@ -32,13 +41,19 @@ Apply these rules:
 
 - A content heading present in the TOC receives its TOC level.
 - A content heading absent from the TOC is automatically demoted to H4-H6.
-- Preserve heading text; change only the `#` depth.
+- Emit the authoritative printed-TOC title for every match. OCR aliases are
+  matching aids and must not survive as output H1-H3 text.
+- When two adjacent OCR heading fragments exactly reconstruct one authoritative
+  TOC title, consolidate them into the printed title and record both source
+  lines in the report.
 - Ignore headings inside fenced code and the recorded printed-TOC ranges.
 - Match every TOC entry exactly once and in printed order.
 - Leave the raw Markdown unchanged.
 
 ## Gate And Automatic Handoff
 
-Require a completed report, matching profile/source/input hashes, all TOC entries matched, and no non-TOC H1-H3 headings.
+Require a completed report, matching profile/source/input hashes, all TOC
+entries matched, every composite title backed by an exact authoritative-title
+match, and no non-TOC H1-H3 headings.
 
 On success, immediately invoke `book-toc-splitting`. Do not introduce the old MathOS formatting approval gate.

@@ -15,6 +15,17 @@ from pathlib import Path
 from typing import Any
 
 
+LESSON_FLOW_SCRIPT_DIRECTORY = (
+    Path(__file__).resolve().parents[2]
+    / "book-toc-splitting"
+    / "scripts"
+)
+if str(LESSON_FLOW_SCRIPT_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(LESSON_FLOW_SCRIPT_DIRECTORY))
+
+from lesson_flow_manifest import validate as validate_lesson_flow
+
+
 MARKDOWN_LINK_RE = re.compile(
     r"(?<!!)\[([^\]]+)\]\(((?:[^()]|\([^()]*\))*)\)"
 )
@@ -26,20 +37,68 @@ HTML_IMAGE_RE = re.compile(
 )
 WIKILINK_RE = re.compile(r"(?<!!)\[\[([^\]]+)\]\]")
 FENCE_RE = re.compile(r"^```.*?^```[ \t]*$", re.MULTILINE | re.DOTALL)
+DISPLAY_MATH_RE = re.compile(r"(?<!\\)\$\$.*?(?<!\\)\$\$", re.DOTALL)
+INLINE_MATH_RE = re.compile(
+    r"(?<!\\)\$(?!\$).*?(?<!\\)\$",
+    re.DOTALL,
+)
 EXTERNAL_SCHEME_RE = re.compile(r"^[a-z][a-z0-9+.-]*:", re.IGNORECASE)
 CALLOUT_RE = re.compile(r"^>\s*\[!([^\]]+)\]")
+TOP_CALLOUT_DETAIL_RE = re.compile(
+    r"^>\s*\[!([^\]]+)\][+-]?\s*(.*?)\s*$"
+)
 TOP_LEVEL_CALLOUT_PREFIX_RE = re.compile(r"^>\s*\[!")
+NESTED_CALLOUT_RE = re.compile(r"^>\s+>\s*\[!([^\]]+)\]")
+NESTED_CALLOUT_DETAIL_RE = re.compile(
+    r"^>\s+>\s*\[!([^\]]+)\][+-]?\s*(.*?)\s*$"
+)
+NESTED_CALLOUT_PREFIX_RE = re.compile(r"^>\s+>\s*\[!")
+EXAMPLE_CALLOUT_WITH_STEM_RE = re.compile(
+    r"^>\s*\[!example\][+-]?\s+例(?:题)?\s*\d+\s+\S"
+)
+SUBPART_RE = re.compile(r"(?<![A-Za-z0-9_])[（(]([1-9]\d*)[）)]")
+FORMAL_DEFINITION_CUE_RE = re.compile(r"(?:叫做|称为|定义为|称之为)")
+COMPARISON_CONDITION_RE = re.compile(
+    r"(?:[<>]|\\(?:ne|neq|le|leq|ge|geq|lt|gt)\b)"
+)
+TOP_REASONING_LABEL_RE = re.compile(
+    r"^>\s+(?:\*\*)?(?:分析|思路|点拨|解|证明|解析|解答)"
+    r"(?:\s*[：:])"
+)
 FUNCTIONAL_HEADING_RE = re.compile(
     r"^#{4,6}\s+"
     r"(?:观察|思考|探究|问题|实验|尝试|讨论|情景引入|分析|提示|"
     r"解答?|证明|归纳|结论|小结|注意|警告|定理|性质)"
     r"(?:\s|[：:，。]|$)"
 )
-WORKED_EXAMPLE_RE = re.compile(r"^例\s*\d+(?:\s|[：:，。]|$)")
+PLAIN_FUNCTIONAL_LABEL_RE = re.compile(
+    r"^(?:思考|观察|讨论|交流|尝试|想一想|议一议|观察·思考|尝试·交流|"
+    r"思考·交流|回顾·反思|探究|实验|做一做|观察与猜想|操作与思考|"
+    r"操作·交流|情景引入|情境引入|引入|引导|注意|易错|特别注意|"
+    r"背景|旁注|补充材料|联系|区别|归纳|总结|小结|方法|规律|结论|"
+    r"性质|定理|公理|法则)$"
+)
+WORKED_EXAMPLE_RE = re.compile(r"^(例(?:题)?\s*\d+)\s*(.*)$")
+PRACTICE_BOUNDARY_RE = re.compile(
+    r"^(?:#{4,6}\s+)?(?:练习|习题\s*\d+(?:\.\d+)*)(?:\s|$)"
+)
+FORMAL_DEFINITION_SCOPE_RE = re.compile(
+    r"(?:叫做|定义为|称之为|记作|规定[：:]?|"
+    r"(?:就)?称(?!性)[^，。；]{0,40}(?:为|是))"
+)
+ENTRY_HEADING_RE = re.compile(r"^#{1,3}\s+\S")
+ORNAMENT_HEADING_RE = re.compile(r"^#{4,6}\s+[●•·\s]+$")
+RUNNING_PUBLISHER_HEADING_RE = re.compile(r"^#{4,6}\s+人民教育出版社\s*$")
+PLAIN_RUNNING_CHAPTER_RE = re.compile(
+    r"^(?:\d{1,3}\s+)?第[〇零一二三四五六七八九十百\d]+章\s+\S.*$"
+)
+SPACED_DIGITS_RE = re.compile(r"(?<![\d.])\d(?:[ \t]+\d)+(?![\d.])")
+HTML_TABLE_RE = re.compile(r"<table\b.*?</table\s*>", re.IGNORECASE | re.DOTALL)
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"}
 ALLOWED_NODE_TYPES = {"group", "text", "file", "link"}
 DEFAULT_NODE_COLORS = {None, "1", "2", "3", "4", "5", "6", "#c800ff"}
 DEFAULT_EDGE_COLORS = {None, "2", "4", "5", "6"}
+AUDIT_STAGES = ("split", "concepts", "formatting", "pre-canvas", "final")
 
 
 def sha256_file(path: Path) -> str:
@@ -52,6 +111,29 @@ def sha256_file(path: Path) -> str:
 
 def remove_fenced_code(text: str) -> str:
     return FENCE_RE.sub("", text)
+
+
+def matches_outside_math(
+    pattern: re.Pattern[str], text: str
+) -> list[re.Match[str]]:
+    """Return syntax matches not wholly contained in one TeX span."""
+
+    display_spans = [match.span() for match in DISPLAY_MATH_RE.finditer(text)]
+    inline_scan = list(text)
+    for start, end in display_spans:
+        inline_scan[start:end] = " " * (end - start)
+    inline_spans = [
+        match.span() for match in INLINE_MATH_RE.finditer("".join(inline_scan))
+    ]
+    spans = display_spans + inline_spans
+    return [
+        match
+        for match in pattern.finditer(text)
+        if not any(
+            start <= match.start() and match.end() <= end
+            for start, end in spans
+        )
+    ]
 
 
 def category(path: Path, book_root: Path) -> str:
@@ -97,11 +179,29 @@ def target_exists(path: Path) -> bool:
     return False
 
 
+def is_unstandardized_worked_example(line: str) -> bool:
+    match = WORKED_EXAMPLE_RE.match(line)
+    if match is None:
+        return False
+    suffix = match.group(2).lstrip()
+    return not suffix.startswith(
+        ("中", "的", "给出", "所述", "所得", "证明用到")
+    )
+
+
 def validate_callouts(
-    path: Path, text: str, require_blank: bool = True
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    path: Path,
+    text: str,
+    require_blank: bool = True,
+    body_mode: str | None = None,
+) -> tuple[
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+]:
     malformed: list[dict[str, Any]] = []
     missing_blank: list[dict[str, Any]] = []
+    body_violations: list[dict[str, Any]] = []
     lines = text.splitlines()
     for index, line in enumerate(lines):
         if not TOP_LEVEL_CALLOUT_PREFIX_RE.match(line):
@@ -123,7 +223,406 @@ def validate_callouts(
                     "previous": lines[index - 1][:200],
                 }
             )
-    return malformed, missing_blank
+        if body_mode != "quoted-body":
+            continue
+
+        if index + 1 >= len(lines) or not lines[index + 1].startswith(">"):
+            body_violations.append(
+                {
+                    "file": str(path),
+                    "line": index + 1,
+                    "text": line[:200],
+                    "reason": "missing-quoted-body",
+                }
+            )
+            continue
+
+        end = index + 1
+        top_body_seen = bool(EXAMPLE_CALLOUT_WITH_STEM_RE.match(line))
+        while end < len(lines) and lines[end].startswith(">"):
+            current = lines[end]
+            if NESTED_CALLOUT_PREFIX_RE.match(current):
+                if not NESTED_CALLOUT_RE.match(current):
+                    body_violations.append(
+                        {
+                            "file": str(path),
+                            "line": end + 1,
+                            "text": current[:200],
+                            "reason": "malformed-nested-callout",
+                        }
+                    )
+                if (
+                    end + 1 >= len(lines)
+                    or not lines[end + 1].startswith("> >")
+                    or NESTED_CALLOUT_PREFIX_RE.match(lines[end + 1])
+                ):
+                    body_violations.append(
+                        {
+                            "file": str(path),
+                            "line": end + 1,
+                            "text": current[:200],
+                            "reason": "missing-nested-quoted-body",
+                        }
+                    )
+            elif current.startswith("> >"):
+                if not any(
+                    NESTED_CALLOUT_PREFIX_RE.match(lines[position])
+                    for position in range(index + 1, end)
+                ):
+                    body_violations.append(
+                        {
+                            "file": str(path),
+                            "line": end + 1,
+                            "text": current[:200],
+                            "reason": "nested-body-without-nested-marker",
+                        }
+                    )
+            elif current.strip() != ">":
+                top_body_seen = True
+            end += 1
+
+        if "[!example]" in line and not top_body_seen:
+            body_violations.append(
+                {
+                    "file": str(path),
+                    "line": index + 1,
+                    "text": line[:200],
+                    "reason": "example-stem-not-in-parent-callout",
+                }
+            )
+    if body_mode == "quoted-body":
+        for index, line in enumerate(lines):
+            if not NESTED_CALLOUT_PREFIX_RE.match(line):
+                continue
+            start = index - 1
+            while start >= 0 and lines[start].startswith(">"):
+                if TOP_LEVEL_CALLOUT_PREFIX_RE.match(lines[start]):
+                    break
+                start -= 1
+            if start < 0 or not TOP_LEVEL_CALLOUT_PREFIX_RE.match(lines[start]):
+                body_violations.append(
+                    {
+                        "file": str(path),
+                        "line": index + 1,
+                        "text": line[:200],
+                        "reason": "nested-callout-without-parent",
+                    }
+                )
+    return malformed, missing_blank, body_violations
+
+
+def strip_quote_prefix(line: str) -> tuple[int, str]:
+    """Return Obsidian quote depth and the unquoted line body."""
+
+    depth = 0
+    remainder = line
+    while remainder.startswith(">"):
+        depth += 1
+        remainder = remainder[1:]
+        if remainder.startswith(" "):
+            remainder = remainder[1:]
+    return depth, remainder
+
+
+def callout_semantic_scope_issues(
+    path: Path,
+    text: str,
+) -> list[dict[str, Any]]:
+    """Reject functional blocks swallowed by an unrelated callout container."""
+
+    issues: list[dict[str, Any]] = []
+    active_type: str | None = None
+    active_title = ""
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        top = TOP_CALLOUT_DETAIL_RE.match(line)
+        if top:
+            active_type = top.group(1).casefold()
+            active_title = top.group(2).strip()
+            continue
+        if not line.startswith(">"):
+            active_type = None
+            active_title = ""
+            continue
+        if active_type is None:
+            continue
+
+        depth, body = strip_quote_prefix(line)
+        stripped = body.strip()
+        if not stripped:
+            continue
+        nested = NESTED_CALLOUT_DETAIL_RE.match(line)
+        if nested:
+            nested_type = nested.group(1).casefold()
+            if nested_type == "example":
+                issues.append(
+                    {
+                        "file": str(path),
+                        "line": index + 1,
+                        "text": line[:200],
+                        "reason": "worked-example-inside-non-example-callout",
+                        "parent_callout": active_type,
+                        "quote_depth": depth,
+                    }
+                )
+            continue
+
+        heading_text = stripped
+        heading = re.match(r"^#{4,6}\s+(.+?)\s*$", stripped)
+        if heading:
+            heading_text = heading.group(1).strip()
+            if re.fullmatch(r"[●•·\s]+", heading_text):
+                issues.append(
+                    {
+                        "file": str(path),
+                        "line": index + 1,
+                        "text": line[:200],
+                        "reason": "artifact-heading-inside-callout",
+                        "parent_callout": active_type,
+                        "quote_depth": depth,
+                    }
+                )
+                continue
+            if PRACTICE_BOUNDARY_RE.match(stripped):
+                issues.append(
+                    {
+                        "file": str(path),
+                        "line": index + 1,
+                        "text": line[:200],
+                        "reason": "practice-inside-callout",
+                        "parent_callout": active_type,
+                        "quote_depth": depth,
+                    }
+                )
+                continue
+            if FUNCTIONAL_HEADING_RE.match(stripped):
+                issues.append(
+                    {
+                        "file": str(path),
+                        "line": index + 1,
+                        "text": line[:200],
+                        "reason": "functional-heading-inside-callout",
+                        "parent_callout": active_type,
+                        "quote_depth": depth,
+                    }
+                )
+                continue
+
+        if PRACTICE_BOUNDARY_RE.match(heading_text):
+            issues.append(
+                {
+                    "file": str(path),
+                    "line": index + 1,
+                    "text": line[:200],
+                    "reason": "practice-inside-callout",
+                    "parent_callout": active_type,
+                    "quote_depth": depth,
+                }
+            )
+            continue
+        example = WORKED_EXAMPLE_RE.match(heading_text)
+        if example and is_unstandardized_worked_example(heading_text):
+            issues.append(
+                {
+                    "file": str(path),
+                    "line": index + 1,
+                    "text": line[:200],
+                    "reason": (
+                        "worked-example-inside-example-callout"
+                        if active_type == "example"
+                        else "worked-example-inside-non-example-callout"
+                    ),
+                    "parent_callout": active_type,
+                    "quote_depth": depth,
+                }
+            )
+            continue
+        if PLAIN_FUNCTIONAL_LABEL_RE.match(heading_text):
+            reason = "functional-label-inside-callout"
+            if re.sub(r"\s+", "", heading_text) == re.sub(
+                r"\s+", "", active_title
+            ):
+                reason = "duplicate-functional-label-inside-callout"
+            issues.append(
+                {
+                    "file": str(path),
+                    "line": index + 1,
+                    "text": line[:200],
+                    "reason": reason,
+                    "parent_callout": active_type,
+                    "quote_depth": depth,
+                }
+            )
+            continue
+        if (
+            active_type == "info"
+            and any(label in active_title for label in ("情景引入", "情境引入"))
+            and FORMAL_DEFINITION_SCOPE_RE.search(heading_text)
+        ):
+            issues.append(
+                {
+                    "file": str(path),
+                    "line": index + 1,
+                    "text": line[:200],
+                    "reason": "formal-definition-inside-situation-callout",
+                    "parent_callout": active_type,
+                    "quote_depth": depth,
+                }
+            )
+    return issues
+
+
+def content_consistency_issues(
+    path: Path,
+    text: str,
+) -> list[dict[str, Any]]:
+    """Find source-completeness defects that presentation checks cannot prove."""
+
+    issues: list[dict[str, Any]] = []
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        plain = re.sub(r"^(?:>\s*)+", "", line).strip()
+        if FORMAL_DEFINITION_CUE_RE.search(plain):
+            math_fragments = [
+                match.group(0)
+                for match in DISPLAY_MATH_RE.finditer(plain)
+            ]
+            masked = list(plain)
+            for match in DISPLAY_MATH_RE.finditer(plain):
+                masked[match.start() : match.end()] = " " * (
+                    match.end() - match.start()
+                )
+            math_fragments.extend(
+                match.group(0)
+                for match in INLINE_MATH_RE.finditer("".join(masked))
+            )
+            if any(
+                COMPARISON_CONDITION_RE.search(fragment)
+                and fragment.count("(") != fragment.count(")")
+                for fragment in math_fragments
+            ):
+                issues.append(
+                    {
+                        "file": str(path),
+                        "line": index + 1,
+                        "reason": "unbalanced-parentheses-in-formal-definition",
+                        "text": plain[:200],
+                    }
+                )
+
+        if not re.match(r"^>\s*\[!example\]", line):
+            continue
+        end = index + 1
+        while end < len(lines) and lines[end].startswith(">"):
+            end += 1
+        block = lines[index:end]
+        parent_text: list[str] = [line]
+        solution_text: list[str] = []
+        in_solution = False
+        for block_line in block[1:]:
+            if re.match(
+                r"^>\s+>\s*\[!(?:success)\][+-]?\s+"
+                r"(?:解|证明|解析|解答)\b",
+                block_line,
+            ):
+                in_solution = True
+                continue
+            if re.match(r"^>\s+>\s*\[!", block_line):
+                in_solution = False
+                continue
+            if block_line.startswith("> >"):
+                if in_solution:
+                    solution_text.append(block_line)
+            else:
+                parent_text.append(block_line)
+        parent_parts = {int(item) for item in SUBPART_RE.findall("\n".join(parent_text))}
+        solution_parts = {
+            int(item) for item in SUBPART_RE.findall("\n".join(solution_text))
+        }
+        # Numbered solution steps can be a proof structure even when the
+        # example stem is a single task. Only claim source loss when the stem
+        # itself establishes a numbered-subpart contract.
+        missing = sorted(solution_parts - parent_parts) if parent_parts else []
+        if missing:
+            issues.append(
+                {
+                    "file": str(path),
+                    "line": index + 1,
+                    "reason": "solution-subpart-missing-from-example-stem",
+                    "missing_subparts": missing,
+                    "text": line[:200],
+                }
+            )
+
+    for index, line in enumerate(lines):
+        if not TOP_LEVEL_CALLOUT_PREFIX_RE.match(line):
+            continue
+        end = index + 1
+        while end < len(lines) and lines[end].startswith(">"):
+            candidate = lines[end]
+            if TOP_REASONING_LABEL_RE.match(candidate):
+                issues.append(
+                    {
+                        "file": str(path),
+                        "line": end + 1,
+                        "reason": "reasoning-label-not-nested",
+                        "text": candidate[:200],
+                    }
+                )
+            end += 1
+    return issues
+
+
+def suspicious_ocr_math(text: str) -> list[dict[str, Any]]:
+    """Find digit groups that OCR split inside TeX spans, such as ``1 2``."""
+
+    display_spans = [match.span() for match in DISPLAY_MATH_RE.finditer(text)]
+    inline_scan = list(text)
+    for start, end in display_spans:
+        inline_scan[start:end] = " " * (end - start)
+    math_matches = list(DISPLAY_MATH_RE.finditer(text))
+    math_matches.extend(INLINE_MATH_RE.finditer("".join(inline_scan)))
+    findings: list[dict[str, Any]] = []
+    for math_match in math_matches:
+        raw = text[math_match.start() : math_match.end()]
+        for digit_match in SPACED_DIGITS_RE.finditer(raw):
+            absolute = math_match.start() + digit_match.start()
+            findings.append(
+                {
+                    "line": text.count("\n", 0, absolute) + 1,
+                    "text": digit_match.group(0),
+                }
+            )
+    return findings
+
+
+def malformed_html_tables(text: str) -> list[dict[str, Any]]:
+    """Find table blocks with broken tags, TeX delimiters, or braces."""
+
+    findings: list[dict[str, Any]] = []
+    for match in HTML_TABLE_RE.finditer(text):
+        block = match.group(0)
+        reasons: list[str] = []
+        for tag in ("table", "tr", "td", "th"):
+            opened = len(re.findall(rf"<{tag}\b", block, re.IGNORECASE))
+            closed = len(re.findall(rf"</{tag}\s*>", block, re.IGNORECASE))
+            if opened != closed:
+                reasons.append(f"unbalanced-{tag}-tags")
+        if block.count(r"\(") != block.count(r"\)"):
+            reasons.append("unbalanced-inline-tex-parentheses")
+        if block.count(r"\[") != block.count(r"\]"):
+            reasons.append("unbalanced-display-tex-brackets")
+        if block.count("{") != block.count("}"):
+            reasons.append("unbalanced-tex-braces")
+        if reasons:
+            findings.append(
+                {
+                    "line": text.count("\n", 0, match.start()) + 1,
+                    "reasons": reasons,
+                    "text": re.sub(r"\s+", " ", block)[:240],
+                }
+            )
+    return findings
 
 
 def audit_coverage(
@@ -559,15 +1058,27 @@ def audit_book(
     require_canvas: bool = False,
     coverage_manifest: Path | None = None,
     concept_manifest: Path | None = None,
+    lesson_flow_manifest: Path | None = None,
     profile_path: Path | None = None,
+    stage: str = "pre-canvas",
 ) -> dict[str, Any]:
+    if stage not in AUDIT_STAGES:
+        raise ValueError(f"unsupported audit stage: {stage}")
+
     errors: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
     profile: dict[str, Any] | None = None
+    profile_canvas_enabled: bool | None = None
     concept_directory = "概念"
     require_callout_blank = True
+    callout_body_mode = "quoted-body"
+    note_mode: str | None = None
     allowed_node_colors = DEFAULT_NODE_COLORS
     allowed_edge_colors = DEFAULT_EDGE_COLORS
+    require_concepts = stage in {"concepts", "formatting", "pre-canvas", "final"}
+    require_standardized_markdown = stage in {"formatting", "pre-canvas", "final"}
+    require_lesson_flow = False
+    lesson_flow_summary: dict[str, Any] | None = None
 
     if profile_path is not None:
         profile, profile_errors = load_profile(profile_path)
@@ -612,34 +1123,89 @@ def audit_book(
                 if isinstance(raw_source, str) and raw_source:
                     source = Path(raw_source).resolve()
             links = profile.get("links", {})
+            note_mode = links.get("note_mode")
             if links.get("markdown_only") is False:
                 allow_wikilinks = True
             require_callout_blank = profile.get("formatting", {}).get(
                 "blank_before_top_level_callout", True
             )
+            callout_body_mode = profile.get("formatting", {}).get(
+                "callout_body_mode", "quoted-body"
+            )
+            if callout_body_mode != "quoted-body":
+                errors.append(
+                    {
+                        "code": "invalid-callout-body-mode",
+                        "value": callout_body_mode,
+                    }
+                )
             concept_config = profile_category(profile, "concept")
             if concept_config and concept_config.get("enabled", True):
                 concept_directory = str(concept_config.get("directory", "概念"))
             elif concept_config and not concept_config.get("enabled", True):
                 concept_directory = ""
             canvas_profile = profile.get("canvas", {})
+            profile_canvas_enabled = bool(canvas_profile.get("enabled", False))
             node_palette = canvas_profile.get("node_colors")
             edge_palette = canvas_profile.get("edge_colors")
             if isinstance(node_palette, dict):
                 allowed_node_colors = {None, *node_palette.values()}
             if isinstance(edge_palette, dict):
                 allowed_edge_colors = {None, *edge_palette.values()}
-            if require_canvas and not canvas_profile.get("enabled", False):
-                errors.append({"code": "canvas-required-but-profile-disabled"})
+            decomposition = profile.get("decomposition", {})
+            require_lesson_flow = bool(
+                isinstance(decomposition, dict)
+                and decomposition.get("require_lesson_flow_manifest", False)
+                and "textbook"
+                in str(profile.get("book", {}).get("kind", "")).casefold()
+            )
+    if require_lesson_flow:
+        if lesson_flow_manifest is None:
+            errors.append({"code": "lesson-flow-manifest-not-provided"})
+        elif profile_path is None:
+            errors.append({"code": "lesson-flow-profile-not-provided"})
+        else:
+            try:
+                lesson_flow_payload = json.loads(
+                    lesson_flow_manifest.read_text(encoding="utf-8-sig")
+                )
+                lesson_flow_summary = validate_lesson_flow(
+                    lesson_flow_payload,
+                    formatted_markdown=Path(
+                        lesson_flow_payload["formatted_markdown"]
+                    ).resolve(),
+                    split_manifest_path=Path(
+                        lesson_flow_payload["split_manifest"]
+                    ).resolve(),
+                    profile_path=profile_path.resolve(),
+                )
+                lesson_flow_summary["path"] = str(
+                    lesson_flow_manifest.resolve()
+                )
+            except Exception as exc:
+                errors.append(
+                    {
+                        "code": "lesson-flow-manifest-invalid",
+                        "detail": f"{type(exc).__name__}: {exc}",
+                    }
+                )
+    if stage == "final" and profile_canvas_enabled is not False:
+        require_canvas = True
+    if require_canvas and profile_canvas_enabled is False:
+        errors.append({"code": "canvas-required-but-profile-disabled"})
 
     if not book_root.is_dir():
         return {
+            "schema_version": 1,
+            "stage": stage,
             "status": "failed",
             "errors": [{"code": "book-root-missing", "path": str(book_root)}],
             "warnings": [],
         }
     if not vault_root.is_dir():
         return {
+            "schema_version": 1,
+            "stage": stage,
             "status": "failed",
             "errors": [{"code": "vault-root-missing", "path": str(vault_root)}],
             "warnings": [],
@@ -700,7 +1266,7 @@ def audit_book(
         book_root=book_root,
     )
     errors.extend(concept_manifest_errors)
-    if concept_directory and concept_manifest is None:
+    if concept_directory and concept_manifest is None and require_concepts:
         if profile_path is not None:
             errors.append({"code": "concept-manifest-not-provided"})
         else:
@@ -729,10 +1295,20 @@ def audit_book(
     missing_images = 0
     malformed_callouts = 0
     callouts_without_blank = 0
+    callout_body_violations = 0
+    callout_semantic_scope_violations = 0
     callouts = 0
     unstandardized_functional_blocks = 0
     empty_notes = 0
     empty_concepts = 0
+    invalid_entry_headings = 0
+    malformed_concept_notes = 0
+    non_vault_root_note_links = 0
+    residual_artifact_headings = 0
+    plain_running_headers = 0
+    suspicious_ocr_math_fragments = 0
+    malformed_table_blocks = 0
+    content_consistency_violations = 0
 
     for path in markdown_files:
         source_category = category(path, book_root)
@@ -746,8 +1322,25 @@ def audit_book(
                     "path": str(path.relative_to(book_root)),
                 }
             )
+        first_nonblank = next(
+            (line.strip() for line in text.splitlines() if line.strip()),
+            "",
+        )
+        is_concept = bool(concept_directory and source_category == concept_directory)
+        if not is_concept and not ENTRY_HEADING_RE.match(first_nonblank):
+            invalid_entry_headings += 1
+            errors.append(
+                {
+                    "code": "invalid-note-entry-heading",
+                    "path": str(path.relative_to(book_root)),
+                    "first_line": first_nonblank[:200],
+                }
+            )
         sanitized = remove_fenced_code(text)
-        found_wikilinks = WIKILINK_RE.findall(sanitized)
+        found_wikilinks = [
+            match.group(1)
+            for match in matches_outside_math(WIKILINK_RE, sanitized)
+        ]
         wikilinks += len(found_wikilinks)
         if found_wikilinks and not allow_wikilinks:
             errors.append(
@@ -759,28 +1352,47 @@ def audit_book(
                 }
             )
 
-        malformed, no_blank = validate_callouts(
+        malformed, no_blank, body_scope = validate_callouts(
             path.relative_to(book_root),
             text,
             require_blank=require_callout_blank,
+            body_mode=(
+                callout_body_mode if require_standardized_markdown else None
+            ),
         )
         malformed_callouts += len(malformed)
         callouts_without_blank += len(no_blank)
+        callout_body_violations += len(body_scope)
         for item in malformed:
             errors.append({"code": "malformed-callout", **item})
         for item in no_blank:
             errors.append({"code": "callout-missing-blank-line", **item})
+        for item in body_scope:
+            errors.append({"code": "callout-body-discontinuous", **item})
         callouts += sum(
             1 for line in text.splitlines() if CALLOUT_RE.match(line)
         )
 
-        if profile_path is not None and source_category != concept_directory:
+        if (
+            require_standardized_markdown
+            and profile_path is not None
+            and source_category != concept_directory
+        ):
+            semantic_scope = callout_semantic_scope_issues(
+                path.relative_to(book_root),
+                text,
+            )
+            callout_semantic_scope_violations += len(semantic_scope)
+            for item in semantic_scope:
+                errors.append({"code": "callout-semantic-scope", **item})
+
             candidates: list[dict[str, Any]] = []
             for index, line in enumerate(text.splitlines(), start=1):
                 stripped = line.strip()
                 if (
                     FUNCTIONAL_HEADING_RE.match(stripped)
-                    or WORKED_EXAMPLE_RE.match(stripped)
+                    or PLAIN_FUNCTIONAL_LABEL_RE.match(stripped)
+                    or is_unstandardized_worked_example(stripped)
                 ):
                     candidates.append(
                         {"line": index, "text": stripped[:160]}
@@ -795,13 +1407,94 @@ def audit_book(
                         "samples": candidates[:20],
                     }
                 )
+            artifact_candidates: list[dict[str, Any]] = []
+            for index, line in enumerate(text.splitlines(), start=1):
+                stripped = line.strip()
+                if ORNAMENT_HEADING_RE.match(stripped) or (
+                    source_category != "<root>"
+                    and RUNNING_PUBLISHER_HEADING_RE.match(stripped)
+                ):
+                    artifact_candidates.append(
+                        {"line": index, "text": stripped[:160]}
+                    )
+            if artifact_candidates:
+                residual_artifact_headings += len(artifact_candidates)
+                errors.append(
+                    {
+                        "code": "residual-artifact-headings",
+                        "path": str(path.relative_to(book_root)),
+                        "count": len(artifact_candidates),
+                        "samples": artifact_candidates[:20],
+                    }
+                )
+            running_candidates = [
+                {"line": index, "text": line.strip()[:160]}
+                for index, line in enumerate(text.splitlines(), start=1)
+                if PLAIN_RUNNING_CHAPTER_RE.match(line.strip())
+            ]
+            if running_candidates:
+                plain_running_headers += len(running_candidates)
+                errors.append(
+                    {
+                        "code": "plain-running-chapter-headers",
+                        "path": str(path.relative_to(book_root)),
+                        "count": len(running_candidates),
+                        "samples": running_candidates[:20],
+                    }
+                )
+            ocr_math_candidates = suspicious_ocr_math(sanitized)
+            if ocr_math_candidates:
+                suspicious_ocr_math_fragments += len(ocr_math_candidates)
+                errors.append(
+                    {
+                        "code": "suspicious-ocr-spaced-digits-in-math",
+                        "path": str(path.relative_to(book_root)),
+                        "count": len(ocr_math_candidates),
+                        "samples": ocr_math_candidates[:20],
+                    }
+                )
+            table_candidates = malformed_html_tables(sanitized)
+            if table_candidates:
+                malformed_table_blocks += len(table_candidates)
+                errors.append(
+                    {
+                        "code": "malformed-html-table-content",
+                        "path": str(path.relative_to(book_root)),
+                        "count": len(table_candidates),
+                        "samples": table_candidates[:20],
+                    }
+                )
+            consistency_candidates = content_consistency_issues(
+                path.relative_to(book_root),
+                text,
+            )
+            if consistency_candidates:
+                content_consistency_violations += len(consistency_candidates)
+                errors.append(
+                    {
+                        "code": "content-consistency-review-required",
+                        "path": str(path.relative_to(book_root)),
+                        "count": len(consistency_candidates),
+                        "samples": consistency_candidates[:20],
+                    }
+                )
 
-        for _, href in MARKDOWN_LINK_RE.findall(sanitized):
+        for link_match in matches_outside_math(MARKDOWN_LINK_RE, sanitized):
+            href = link_match.group(2)
             standard_links += 1
             target = resolve_href(href, path, vault_root)
             if target is None:
                 transitions[f"{source_category}-><external-url>"] += 1
                 continue
+            if note_mode == "vault-root" and not href.strip().startswith(("/", "\\")):
+                non_vault_root_note_links += 1
+                errors.append(
+                    {
+                        "code": "non-vault-root-note-link",
+                        "source": str(path.relative_to(book_root)),
+                        "href": href,
+                    }
+                )
             transitions[f"{source_category}->{category(target, book_root)}"] += 1
             if not target_exists(target):
                 missing_markdown_links += 1
@@ -840,8 +1533,23 @@ def audit_book(
                     }
                 )
 
-    for concept in concept_files:
+    for concept in concept_files if require_concepts else []:
         text = concept.read_text(encoding="utf-8-sig").strip()
+        lines = text.splitlines()
+        first_nonblank = next((line.strip() for line in lines if line.strip()), "")
+        has_definition_heading = any(
+            line.strip() == "## 定义" for line in lines
+        )
+        if first_nonblank != f"# {concept.stem}" or not has_definition_heading:
+            malformed_concept_notes += 1
+            errors.append(
+                {
+                    "code": "malformed-concept-note-structure",
+                    "path": str(concept.relative_to(book_root)),
+                    "expected_title": f"# {concept.stem}",
+                    "has_definition_heading": has_definition_heading,
+                }
+            )
         semantic_text = MARKDOWN_LINK_RE.sub("", remove_fenced_code(text))
         semantic_text = re.sub(r"^#{1,6}\s+.*$", "", semantic_text, flags=re.MULTILINE)
         semantic_text = re.sub(r"\s+", "", semantic_text)
@@ -875,7 +1583,8 @@ def audit_book(
             }
         )
 
-    canvas_paths = sorted(book_root.glob("*.canvas"))
+    audit_canvas_files = stage in {"pre-canvas", "final"} or require_canvas
+    canvas_paths = sorted(book_root.glob("*.canvas")) if audit_canvas_files else []
     if require_canvas and not canvas_paths:
         errors.append({"code": "required-canvas-missing"})
     if len(canvas_paths) > 1:
@@ -900,13 +1609,17 @@ def audit_book(
         warnings.extend(canvas_warnings)
 
     report = {
+        "schema_version": 1,
+        "stage": stage,
         "status": "passed" if not errors else "failed",
         "book_root": str(book_root),
         "vault_root": str(vault_root),
         "source": source_summary,
         "profile": str(profile_path) if profile_path else None,
+        "source_sha256": expected_source_sha256,
         "coverage": coverage_summary,
         "concept_manifest": concept_summary,
+        "lesson_flow": lesson_flow_summary,
         "counts": {
             "markdown_files": len(markdown_files),
             "category_files": dict(sorted(category_files.items())),
@@ -919,8 +1632,22 @@ def audit_book(
             "missing_images": missing_images,
             "empty_notes": empty_notes,
             "empty_concepts": empty_concepts,
+            "invalid_entry_headings": invalid_entry_headings,
+            "malformed_concept_notes": malformed_concept_notes,
+            "non_vault_root_note_links": non_vault_root_note_links,
+            "residual_artifact_headings": residual_artifact_headings,
+            "plain_running_headers": plain_running_headers,
+            "suspicious_ocr_math_fragments": suspicious_ocr_math_fragments,
+            "malformed_table_blocks": malformed_table_blocks,
+            "content_consistency_violations": (
+                content_consistency_violations
+            ),
             "malformed_callouts": malformed_callouts,
             "callouts_without_blank": callouts_without_blank,
+            "callout_body_violations": callout_body_violations,
+            "callout_semantic_scope_violations": (
+                callout_semantic_scope_violations
+            ),
             "callouts": callouts,
             "unstandardized_functional_blocks": (
                 unstandardized_functional_blocks
@@ -945,9 +1672,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--expected-source-sha256")
     parser.add_argument("--allow-wikilinks", action="store_true")
     parser.add_argument("--require-canvas", action="store_true")
+    parser.add_argument(
+        "--stage",
+        choices=AUDIT_STAGES,
+        default="pre-canvas",
+        help=(
+            "Run a progressive split, concepts, formatting, pre-canvas, "
+            "or final gate."
+        ),
+    )
     parser.add_argument("--profile", type=Path)
     parser.add_argument("--coverage-manifest", type=Path)
     parser.add_argument("--concept-manifest", type=Path)
+    parser.add_argument("--lesson-flow-manifest", type=Path)
     parser.add_argument("--json-out", type=Path)
     return parser.parse_args(argv)
 
@@ -968,7 +1705,13 @@ def main(argv: list[str] | None = None) -> int:
             concept_manifest=(
                 args.concept_manifest.resolve() if args.concept_manifest else None
             ),
+            lesson_flow_manifest=(
+                args.lesson_flow_manifest.resolve()
+                if args.lesson_flow_manifest
+                else None
+            ),
             profile_path=args.profile.resolve() if args.profile else None,
+            stage=args.stage,
         )
         output = json.dumps(report, ensure_ascii=False, indent=2)
         print(output)
@@ -978,6 +1721,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if report["status"] == "passed" else 1
     except Exception as exc:
         report = {
+            "schema_version": 1,
+            "stage": args.stage,
             "status": "failed",
             "errors": [
                 {

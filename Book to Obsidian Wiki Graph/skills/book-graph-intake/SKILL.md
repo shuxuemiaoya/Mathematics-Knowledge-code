@@ -42,10 +42,31 @@ python scripts\make_book_profile.py create "<source>" `
   --edition "<edition>" `
   --book-kind "<kind>" `
   --staging-root "<staging_root>" `
+  --reference-corpus "<approved_reference_book_root>" `
+  --reference-scope "style-only|same-book-content-and-style" `
   --output "<staging_root>\book-profile.json"
 ```
 
-For textbooks, retain exactly `知识点`, `概念`, and `习题`; keep the generated vault-root note and asset modes unless the user explicitly chooses another policy. For other books, inspect the content and let the LLM replace the initial `content` role with useful semantic categories before validation. Adapt link, formatting, asset, or canvas policies through the same profile.
+When the user names an approved output corpus as the desired style, freeze it
+in the profile with `--reference-corpus`. Use `style-only` for a different
+book and `same-book-content-and-style` only for the same title and edition.
+Never silently substitute another old run or treat the reference as cached
+conversion output.
+
+For textbooks, always retain `知识点`, `概念`, and `习题`. Inspect the printed
+TOC and enable only source-supported side-material roles by repeating
+`--textbook-aux-role reading|history|method|tool`; these map to `趣味阅读`,
+`数学历史`, `思维或方法`, and `工具`. Do not enable a role merely to reproduce an
+empty legacy directory. Keep the generated vault-root note and asset modes
+unless the user explicitly chooses another policy. For other books, inspect
+the content and let the LLM replace the initial `content` role with useful
+semantic categories before validation. Adapt link, formatting, asset, or
+canvas policies through the same profile.
+
+For new textbook profiles, keep
+`decomposition.require_lesson_flow_manifest: true`. This makes the complete
+lesson-flow review a required split-stage artifact and prevents later stages
+from substituting keyword-based logical grouping.
 
 ```powershell
 python scripts\make_book_profile.py validate "<staging_root>\book-profile.json"
@@ -57,9 +78,13 @@ Handoff only when:
 
 - profile validation passes;
 - source digest matches the inventory;
+- the profile file still resides in its frozen `paths.staging_root` and the
+  source/vault paths exist; reject a moved or copied run instead of rebasing it;
 - `book_root` is inside `vault_root`;
 - replacement intent is unambiguous;
 - enabled category roles have unique directories;
+- every enabled textbook auxiliary role is evidenced by the source or printed TOC;
+- a configured reference path and tree digest still match the approved corpus;
 - staging is outside the final book tree.
 
 Return the absolute profile path and source digest. Downstream stages must reject mismatches.

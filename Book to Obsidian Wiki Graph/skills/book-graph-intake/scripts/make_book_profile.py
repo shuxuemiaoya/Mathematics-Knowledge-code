@@ -24,11 +24,39 @@ TEXTBOOK_CATEGORIES = [
     {"role": "concept", "directory": "概念", "enabled": True, "flat": True},
     {"role": "exercise", "directory": "习题", "enabled": True, "flat": False},
 ]
+TEXTBOOK_AUXILIARY_CATEGORIES = {
+    "reading": {
+        "role": "reading",
+        "directory": "趣味阅读",
+        "enabled": True,
+        "flat": False,
+    },
+    "history": {
+        "role": "history",
+        "directory": "数学历史",
+        "enabled": True,
+        "flat": False,
+    },
+    "method": {
+        "role": "method",
+        "directory": "思维或方法",
+        "enabled": True,
+        "flat": False,
+    },
+    "tool": {
+        "role": "tool",
+        "directory": "工具",
+        "enabled": True,
+        "flat": False,
+    },
+}
 GENERAL_CATEGORIES = [
     {"role": "content", "directory": "内容", "enabled": True, "flat": False},
 ]
 NOTE_LINK_MODES = {"relative", "vault-root"}
 BACKUP_POLICIES = {"none", "task-scoped"}
+CALLOUT_BODY_MODES = {"quoted-body"}
+REFERENCE_SCOPES = {"style-only", "same-book-content-and-style"}
 
 
 def _vault_relative(book_root: Path, vault_root: Path) -> str:
@@ -49,6 +77,9 @@ def create_profile(
     language: str = "zh-CN",
     book_kind: str = "mathematics-textbook",
     staging_root: Path | None = None,
+    textbook_aux_roles: list[str] | None = None,
+    reference_corpus: Path | None = None,
+    reference_scope: str = "style-only",
 ) -> dict[str, Any]:
     source = source.resolve()
     vault_root = vault_root.resolve()
@@ -65,6 +96,26 @@ def create_profile(
             / "book-to-obsidian-wiki-graph"
             / book_root.name
         )
+    is_textbook = "textbook" in book_kind.casefold()
+    auxiliary_roles = list(dict.fromkeys(textbook_aux_roles or []))
+    unknown_auxiliary_roles = sorted(
+        set(auxiliary_roles) - set(TEXTBOOK_AUXILIARY_CATEGORIES)
+    )
+    if unknown_auxiliary_roles:
+        raise ValueError(
+            "unsupported textbook auxiliary roles: "
+            + ", ".join(unknown_auxiliary_roles)
+        )
+    if auxiliary_roles and not is_textbook:
+        raise ValueError("textbook auxiliary roles require a textbook book kind")
+    categories = [
+        dict(item)
+        for item in (TEXTBOOK_CATEGORIES if is_textbook else GENERAL_CATEGORIES)
+    ]
+    categories.extend(
+        dict(TEXTBOOK_AUXILIARY_CATEGORIES[role])
+        for role in auxiliary_roles
+    )
 
     profile: dict[str, Any] = {
         "schema_version": 1,
@@ -84,14 +135,7 @@ def create_profile(
             "book_root": str(book_root),
             "staging_root": str(staging_root.resolve()),
         },
-        "categories": [
-            dict(item)
-            for item in (
-                TEXTBOOK_CATEGORIES
-                if "textbook" in book_kind.casefold()
-                else GENERAL_CATEGORIES
-            )
-        ],
+        "categories": categories,
         "links": {
             "note_mode": (
                 "vault-root"
@@ -106,9 +150,13 @@ def create_profile(
         },
         "formatting": {
             "blank_before_top_level_callout": True,
+            "callout_body_mode": "quoted-body",
             "callouts": {
                 "lead_in": "info",
                 "question": "question",
+                "observe": "question",
+                "think": "question",
+                "explore": "question",
                 "example": "example",
                 "hint": "tip",
                 "solution": "success",
@@ -121,6 +169,10 @@ def create_profile(
             "preserve_source_order": True,
             "preserve_complete_source_blocks": True,
             "lesson_entry_is_ordered_index": True,
+            "require_lesson_flow_manifest": True,
+            "non_toc_split_default": "retain",
+            "semantic_split_confidence_threshold": 0.9,
+            "max_retained_teaching_block_nonblank_lines": 40,
         },
         "canvas": {
             "enabled": True,
@@ -142,6 +194,21 @@ def create_profile(
         },
         "workspace": {"backup_policy": "none"},
     }
+    if reference_corpus is not None:
+        reference_corpus = reference_corpus.resolve()
+        reference_inventory = inspect_source(reference_corpus)
+        if reference_inventory.get("kind") != "directory":
+            raise ValueError("reference_corpus must be a directory")
+        if reference_scope not in REFERENCE_SCOPES:
+            raise ValueError(
+                "reference_scope must be style-only or "
+                "same-book-content-and-style"
+            )
+        profile["reference"] = {
+            "path": str(reference_corpus),
+            "sha256": reference_inventory["tree_sha256"],
+            "scope": reference_scope,
+        }
     errors = profile_errors(profile)
     if errors:
         raise ValueError("; ".join(errors))
@@ -210,15 +277,37 @@ def profile_errors(profile: Any) -> list[str]:
                 directories.add(directory)
                 enabled_categories[role] = directory
     if "textbook" in str(book.get("kind", "")).casefold():
-        expected_textbook_categories = {
+        required_textbook_categories = {
             "knowledge": "知识点",
             "concept": "概念",
             "exercise": "习题",
         }
-        if enabled_categories != expected_textbook_categories:
+        allowed_textbook_categories = {
+            **required_textbook_categories,
+            **{
+                role: str(item["directory"])
+                for role, item in TEXTBOOK_AUXILIARY_CATEGORIES.items()
+            },
+        }
+        missing_or_changed = {
+            role: directory
+            for role, directory in required_textbook_categories.items()
+            if enabled_categories.get(role) != directory
+        }
+        unsupported_or_changed = {
+            role: directory
+            for role, directory in enabled_categories.items()
+            if allowed_textbook_categories.get(role) != directory
+        }
+        if missing_or_changed:
             errors.append(
-                "textbook categories must be exactly knowledge/知识点, "
+                "textbook categories must include knowledge/知识点, "
                 "concept/概念, and exercise/习题"
+            )
+        if unsupported_or_changed:
+            errors.append(
+                "textbook auxiliary categories must use the supported "
+                "role/directory mappings"
             )
 
     links = profile.get("links", {})
@@ -228,9 +317,109 @@ def profile_errors(profile: Any) -> list[str]:
     if not isinstance(links.get("markdown_only"), bool):
         errors.append("links.markdown_only must be boolean")
 
+    formatting = profile.get("formatting", {})
+    if not isinstance(formatting, dict):
+        errors.append("formatting must be an object")
+    elif formatting.get("callout_body_mode", "quoted-body") not in CALLOUT_BODY_MODES:
+        errors.append(
+            "formatting.callout_body_mode must be quoted-body"
+        )
+
+    decomposition = profile.get("decomposition", {})
+    if not isinstance(decomposition, dict):
+        errors.append("decomposition must be an object")
+    else:
+        if not isinstance(
+            decomposition.get("require_lesson_flow_manifest", True),
+            bool,
+        ):
+            errors.append(
+                "decomposition.require_lesson_flow_manifest must be boolean"
+            )
+        if decomposition.get("non_toc_split_default", "retain") != "retain":
+            errors.append("decomposition.non_toc_split_default must be retain")
+        threshold = decomposition.get("semantic_split_confidence_threshold", 0.9)
+        if (
+            isinstance(threshold, bool)
+            or not isinstance(threshold, (int, float))
+            or not 0 <= threshold <= 1
+        ):
+            errors.append(
+                "decomposition.semantic_split_confidence_threshold must be between 0 and 1"
+            )
+        max_retained = decomposition.get(
+            "max_retained_teaching_block_nonblank_lines",
+            40,
+        )
+        if (
+            isinstance(max_retained, bool)
+            or not isinstance(max_retained, int)
+            or max_retained < 1
+        ):
+            errors.append(
+                "decomposition.max_retained_teaching_block_nonblank_lines "
+                "must be a positive integer"
+            )
+
+    reference = profile.get("reference")
+    if reference is not None:
+        if not isinstance(reference, dict):
+            errors.append("reference must be an object")
+        else:
+            if not str(reference.get("path", "")).strip():
+                errors.append("reference.path is required")
+            reference_hash = str(reference.get("sha256", ""))
+            if len(reference_hash) != 64 or any(
+                char not in "0123456789abcdef" for char in reference_hash
+            ):
+                errors.append(
+                    "reference.sha256 must be a lowercase SHA-256 digest"
+                )
+            if reference.get("scope") not in REFERENCE_SCOPES:
+                errors.append(
+                    "reference.scope must be style-only or "
+                    "same-book-content-and-style"
+                )
+
     workspace = profile.get("workspace", {})
     if workspace.get("backup_policy") not in BACKUP_POLICIES:
         errors.append("workspace.backup_policy must be none or task-scoped")
+    return errors
+
+
+def profile_location_errors(profile: dict[str, Any], profile_path: Path) -> list[str]:
+    """Validate live identity facts that are inappropriate during creation."""
+
+    errors: list[str] = []
+    source_path = Path(str(profile.get("source", {}).get("path", ""))).resolve()
+    if not source_path.exists():
+        errors.append(f"source.path does not exist: {source_path}")
+    vault_root = Path(
+        str(profile.get("paths", {}).get("vault_root", ""))
+    ).resolve()
+    if not vault_root.is_dir():
+        errors.append(f"paths.vault_root is not a directory: {vault_root}")
+    staging_root = Path(
+        str(profile.get("paths", {}).get("staging_root", ""))
+    ).resolve()
+    if profile_path.resolve().parent != staging_root:
+        errors.append(
+            "profile file is outside paths.staging_root; the run may have "
+            "been moved or copied"
+        )
+    reference = profile.get("reference")
+    if isinstance(reference, dict):
+        reference_path = Path(str(reference.get("path", ""))).resolve()
+        if not reference_path.is_dir():
+            errors.append(
+                f"reference.path is not a directory: {reference_path}"
+            )
+        else:
+            reference_inventory = inspect_source(reference_path)
+            if reference_inventory.get("tree_sha256") != reference.get("sha256"):
+                errors.append(
+                    "reference.sha256 does not match the current reference corpus"
+                )
     return errors
 
 
@@ -260,7 +449,23 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     create.add_argument("--edition", default="")
     create.add_argument("--language", default="zh-CN")
     create.add_argument("--book-kind", default="mathematics-textbook")
+    create.add_argument(
+        "--textbook-aux-role",
+        action="append",
+        choices=sorted(TEXTBOOK_AUXILIARY_CATEGORIES),
+        default=[],
+        help=(
+            "Enable a source-supported textbook side-material role; repeat for "
+            "reading, history, method, or tool."
+        ),
+    )
     create.add_argument("--staging-root", type=Path)
+    create.add_argument("--reference-corpus", type=Path)
+    create.add_argument(
+        "--reference-scope",
+        choices=sorted(REFERENCE_SCOPES),
+        default="style-only",
+    )
     create.add_argument("--output", type=Path, required=True)
     create.add_argument("--overwrite", action="store_true")
     validate = subparsers.add_parser("validate")
@@ -281,6 +486,9 @@ def main(argv: list[str] | None = None) -> int:
                 language=args.language,
                 book_kind=args.book_kind,
                 staging_root=args.staging_root,
+                textbook_aux_roles=args.textbook_aux_role,
+                reference_corpus=args.reference_corpus,
+                reference_scope=args.reference_scope,
             )
             write_json_atomic(args.output.resolve(), profile, args.overwrite)
             result = {
@@ -291,6 +499,8 @@ def main(argv: list[str] | None = None) -> int:
         else:
             profile = json.loads(args.profile.read_text(encoding="utf-8"))
             errors = profile_errors(profile)
+            if not errors:
+                errors.extend(profile_location_errors(profile, args.profile))
             result = {
                 "status": "passed" if not errors else "failed",
                 "profile": str(args.profile.resolve()),

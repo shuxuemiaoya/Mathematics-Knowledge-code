@@ -12,7 +12,7 @@ Own concept extraction only. Do not standardize general Markdown, redesign split
 Require a valid profile, matching coverage manifest, and completed TOC split. Read `references/concept-extraction.md`, derived from:
 
 ```text
-C:\Mathematics-Knowledge\Mathematics-Knowledge-code\Exam Paper Organizer\skills\概念提取与Markdown排版美化.md
+C:\Users\Oven\OneDrive\桌面\新建文件夹 (3)\概念提取与Markdown排版美化.md
 ```
 
 If the profile disables concepts, record the stage as skipped.
@@ -32,8 +32,70 @@ Process each non-concept note independently:
 9. Leave later repetitions unchanged.
 10. Record accepted and rejected candidates in `concept-manifest.json`.
 
+Every generated concept note uses the stable example structure:
+
+```markdown
+# 概念名
+
+来源：[来源页](/课本/.../知识点/来源页.md)
+
+## 定义
+
+完整定义正文
+```
+
+When extraction decisions have been reviewed, record their exact source range,
+anchor text, and linked term in a per-book candidate JSON, then run
+`scripts/apply_concept_candidates.py`. This deterministically copies the
+definition, creates the flat concept note, writes the source backlink, replaces
+only the reviewed defining occurrence, and writes the manifest. Do not use the
+script to decide which terms qualify as concepts. If a defining term is inside
+LaTeX, retain it in the source and reject the candidate unless another complete,
+linkable defining occurrence exists.
+
+When a human-reviewed concept directory from the same edition is available,
+use it only as a reviewed term list to reduce rediscovery:
+
+```powershell
+python .\skills\book-graph-concepts\scripts\plan_concept_candidates.py `
+  "<book_root>" `
+  "<reviewed_same_edition_concept_directory>" `
+  "<staging>\concept-candidates.json"
+```
+
+Review the resulting source ranges against the current split notes. Do not copy
+old concept bodies, accept an unmatched term, or treat the planner's
+`review_required` result as approval. Pass `--reject-term "<name>"` for a term
+whose located current-source occurrence is only an example, label, or
+incomplete definition; the rejection remains explicit in the candidate JSON.
+The planner recognizes formal variants such as `称…是`, `就说`, and
+`判断为`, including parallel terms in one definition sentence, but every
+located candidate still requires review.
+When one term has several matches, rank direct naming evidence such as
+`叫做集合`, `称为子集`, or `定义为...` ahead of a generic noun merely
+following `我们说`, `就说`, or `并且说`. Source-path order must not decide
+between those evidence classes.
+Also rank a general construction beginning with `一般地`, `通常`, or a
+domain-and-condition statement ahead of an earlier concrete worked example.
+For a concept whose name ends in `公式`, require its reviewed definition range
+to contain an actual TeX equation; a naming sentence with only a symbol
+reference is incomplete.
+
+The planner writes `status: review_required` and `reviewed: false`. Before
+materialization, review every exact range, resolve all `review_flags`, set each
+accepted item to `reviewed: true`, and set the payload status to `approved`.
+`apply_concept_candidates.py` must reject an unapproved payload.
+
 Compute the link path from the profile and source-note location. The root-note form is `[概念名](概念/概念名.md)`; categorized notes must use its resolving relative or vault-root equivalent.
+
+Assign confidence to extraction decisions. Route low-confidence, ambiguous,
+unresolved, or conflicting candidates through the coordinator review queue.
+Do not complete this stage while a routed item is undecided.
 
 ## Gate
 
-Require every accepted concept file to contain the complete definition and a valid source link, every definition occurrence link to resolve, each concept to be linked at most once per source file, and every rejected candidate to remain unmaterialized. Then invoke `book-graph-markdown`.
+Require every accepted concept file to contain the complete definition and a
+valid source link, every definition occurrence link to resolve, each concept to
+be linked at most once per source file, and every rejected candidate to remain
+unmaterialized. Require `book-graph-audit --stage concepts` to pass, then invoke
+`book-graph-markdown`.

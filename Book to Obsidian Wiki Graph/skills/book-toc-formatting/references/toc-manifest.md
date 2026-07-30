@@ -2,6 +2,11 @@
 
 Create `toc-manifest.json` after inspecting the printed table of contents and the converted Markdown.
 
+Use `scripts/plan_toc_manifest.py` to create the first draft. Its
+`review_required` result is intentional: automatic extraction removes
+transcription work, but the printed TOC remains authoritative and must be
+checked before formatting.
+
 ```json
 {
   "schema_version": 1,
@@ -37,10 +42,17 @@ Create `toc-manifest.json` after inspecting the printed table of contents and th
 - Preserve printed TOC order.
 - Use levels `1` through `3` for the hierarchy that should become H1-H3.
 - Give every entry a stable unique key.
-- Use `aliases` only for OCR variants of the same printed title.
+- Use `aliases` only for OCR variants of the same printed title. After a match,
+  emit the canonical `title`, never the alias text from the OCR body.
 - Record the exact source lines occupied by the printed TOC so those headings are not mistaken for book content.
 - Assign a category for the later split stage.
-- For textbooks, use only `knowledge`, `concept`, and `exercise`.
+- Assign book-wide standalone indexes and glossaries to category `root`.
+- For textbooks, use the three required core roles plus only the
+  source-supported auxiliary roles enabled in the profile.
 - For other books, let the LLM propose categories, then record them in the profile before splitting.
 
-The formatter changes heading depth, not heading text or content. Every content heading absent from this manifest must be demoted below H3.
+The formatter changes heading depth and canonicalizes matched H1-H3 text to the
+printed TOC title without rewriting body content. For an adjacent pair of OCR
+heading fragments whose normalized concatenation exactly equals the
+authoritative title, consolidate the pair and record both source lines. Every
+content heading absent from this manifest must be demoted below H3.

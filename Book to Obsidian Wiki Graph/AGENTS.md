@@ -6,11 +6,11 @@ This directory is a standalone multi-skill agent. It does not use MathOS Agent f
 
 | Skill | Ownership |
 | --- | --- |
-| `book-to-obsidian-wiki-graph` | sequence, handoffs, and completion |
+| `book-to-obsidian-wiki-graph` | sequence, strict handoffs, same-run recovery, review queues, note workplans, telemetry, and completion |
 | `book-graph-intake` | source inventory and per-book profile |
 | `book-pdf-to-markdown` | forced-OCR book PDF conversion |
 | `book-toc-formatting` | TOC-authoritative H1-H3 and automatic demotion |
-| `book-toc-splitting` | TOC hierarchy, categorized notes, and parent links |
+| `book-toc-splitting` | TOC hierarchy, lesson-flow review, categorized notes, and parent links |
 | `book-graph-concepts` | formal definitions and concept links |
 | `book-graph-markdown` | post-split Markdown standardization |
 | `book-graph-audit` | pre-canvas and final validation |
@@ -24,9 +24,13 @@ Each stage skill is authoritative for its own rules. Do not copy its implementat
 source and profile
   -> book PDF conversion when needed
   -> TOC heading formatting
-  -> TOC splitting immediately
+  -> split-manifest and lesson-flow review
+  -> TOC splitting immediately after both pass
+  -> split audit
   -> concept extraction
+  -> concept audit
   -> Markdown standardization
+  -> formatting audit
   -> pre-canvas audit
   -> optional canvas
   -> final audit
@@ -42,12 +46,18 @@ Do not insert `mathos-pdf-to-md`, `mathos-formatting`, or `mathos-segmentation`.
 - `toc-manifest.json`
 - TOC-formatted Markdown and `toc-format-report.json`
 - `split-manifest.json`
+- `lesson-flow-manifest.json` for new textbook profiles
 - categorized notes and `coverage-manifest.json`
 - `concept-manifest.json`
 - audit reports
+- `pipeline-state.json`, optional `review-queue.json`, `note-workplan.json`, and `note-results.json`
 - optional `graph-manifest.json` and `.canvas`
 
 Every machine-readable handoff carries the same absolute profile path and frozen source digest. Markdown-derived stages also carry their immediate input digest.
+
+The coordinator runtime validates these interfaces before stage completion.
+Resume is limited to the current conversion state: never reuse or cache output
+from another book or an older run.
 
 ## TOC Rules
 
@@ -56,16 +66,38 @@ Every machine-readable handoff carries the same absolute profile path and frozen
 - Match every TOC entry once and in printed order.
 - Continue directly from a passed formatting report into splitting.
 - Use the TOC as the parent hierarchy; allow reviewed nested semantic ranges within each TOC section.
-- Reject a TOC-only textbook manifest: review every H4-H6 heading, split all numbered subsections and section exercises, and record reasons for retained headings.
+- Reject a TOC-only textbook manifest: review every H4-H6 heading with
+  confidence, split all numbered subsections and section exercises, retain
+  unnumbered non-TOC blocks by default, and require an explicit independent
+  teaching arc for any exception.
+- Review the complete content of every long generated knowledge node,
+  including H2-H3 lessons and H4-H6 numbered subsections. The review must find
+  independent teaching arcs even when their source range has no explicit
+  heading; a deterministic heading inventory is only the draft.
+- Review every numbered lesson and numbered in-lesson subsection as contiguous
+  source-ordered logical blocks before splitting. Resolve every automatic
+  lesson-flow finding. Keep situation introductions and transitions in the
+  lesson entry, move independent topics to child notes, route exercises
+  intentionally, and give every retained worked example its own logical
+  block. Treat functional headings or labels, worked-example labels, formal
+  definition/exposition cues, and practice headings as hard boundaries: one
+  reviewed block may not cross the next boundary.
+- Reject lesson entries that contain only links or that retain an oversized
+  independent teaching block. Require the same passed lesson-flow manifest in
+  splitting, Markdown standardization, and progressive audits.
 - Replace each moved child range with a resolving Markdown link at that same source position in the parent.
 
 ## Categories
 
-For textbooks, enable only:
+For textbooks, always enable:
 
 - `knowledge` → `知识点`;
 - `concept` → `概念`;
 - `exercise` → `习题`.
+
+Enable `reading` → `趣味阅读`, `history` → `数学历史`, `method` →
+`思维或方法`, or `tool` → `工具` only when supported by the printed TOC/source
+and recorded in the profile. Never create empty auxiliary directories.
 
 For non-textbooks, inspect the book and let the LLM propose useful categories. Record them in `book-profile.json` before splitting.
 
@@ -76,8 +108,17 @@ For non-textbooks, inspect the book and let the LLM propose useful categories. R
 - Preserve complete content, source order, formulas, tables, links, images, examples, proofs, and exercises.
 - For textbooks, default note links to vault-root form and materialize image links from `links.asset_mode`.
 - Do not let pre-canvas audit pass while functional headings or raw worked-example markers remain unstandardized.
+- For textbook callouts, use quoted-body containers. Every body line, formula,
+  image, HTML row, caption, and blank line inside a callout must retain its
+  `>` prefix. Example analysis and solutions use nested `> >` callouts.
+- Reconstruct callout ownership during formatting audit. Reject a situation or
+  question callout that swallows a new functional heading, formal definition,
+  worked example, or practice block; reject a second example or practice block
+  nested under an earlier example solution.
 - Never infer replacement of an existing target.
 - Under a no-backup policy, use staging and atomic writes rather than backup directories.
+- Route low-confidence or ambiguous decisions to a blocking review queue.
+- Parallelize only independent notes from a frozen workplan with one owner per note and output path.
 - Require the final applicable audit to pass before completion.
 
 ## Global Discovery

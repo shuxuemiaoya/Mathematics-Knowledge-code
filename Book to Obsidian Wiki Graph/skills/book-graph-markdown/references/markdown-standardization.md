@@ -1,72 +1,71 @@
-# Markdown Standardization Prompt Contract
+# Markdown standardization contract
 
-This reference isolates Task 2 from the supplied `概念提取与Markdown排版美化.md` prompt.
+Canonical source:
 
-## Global invariants
-
-1. Content completeness has priority.
-2. Prefer meaningful multi-image layout before single-image centering.
-3. Never change H1-H3 text/order, table data, hyperlink destinations, image destinations, formula numbering, or source meaning.
-4. Do not extract concepts in this stage.
-
-## Paragraphs, blank lines, and lists
-
-- Keep a blank line around headings, display formulas, image blocks, and tables.
-- Compress three or more consecutive blank lines to one blank line.
-- Avoid excessive blank lines inside one question.
-- Keep stems, images, options, answers, and explanations adjacent.
-- Use one numbering style per list level.
-- Indent nested lists and do not split a continuous list into unrelated paragraphs.
-
-Use one consistent choice style within a file:
-
-```markdown
-A. 选项一  
-B. 选项二  
-C. 选项三  
-D. 选项四
+```text
+C:\Users\Oven\OneDrive\桌面\新建文件夹 (3)\概念提取与Markdown排版美化.md
 ```
 
-or:
+This reference operationalizes Task 2 of the user-supplied contract. If this
+file and the canonical source disagree, the canonical source wins.
 
-```markdown
-(A) 选项一  (B) 选项二  (C) 选项三  (D) 选项四
-```
+For new textbook profiles, treat the passed lesson-flow manifest as the
+authority for teaching-block ownership and order. Formatting may express those
+blocks but must not merge, move, or reclassify them from keyword matches. A
+functional heading/label, exposition or definition cue, worked-example label,
+or practice heading that begins a reviewed block also terminates the preceding
+block.
 
-## Formulas
+## Protected content
 
-- Prefer inline formulas by default.
-- Use display formulas for important standalone conclusions.
-- Preserve original circled or other formula numbers such as `①②③④`.
-- Never convert formula numbers into footnotes.
+Preserve content and source order. Never change H1-H3 headings, table data,
+link destinations, image paths, formula numbering, or intermediate reasoning.
+Keep a real blank line around headings, formulas, images, tables, and callouts.
+Compress runs of three or more blank lines. Keep each question's stem, images,
+choices, answer, and explanation adjacent.
 
-## Callouts
+## Callout eligibility
 
-Convert only functionally appropriate H4-H6 columns and worked examples. Do not convert ordinary questions or exercises.
+Convert only functionally appropriate H4-H6 textbook columns and worked
+examples. Ordinary questions, ordinary exercises, and continuous exposition
+remain ordinary Markdown. Decide by function, not keyword alone; leave an
+ambiguous block unchanged.
 
 | Function | Callout |
 | --- | --- |
 | observation, thinking, discussion, question | `> [!question]` |
-| exploration, experiment, operation | `> [!question]` |
-| introduction or context | `> [!info]` |
+| exploration, experiment, discovering a rule | `> [!question]` |
+| introduction, guidance, situational context | `> [!info]` |
 | worked example | `> [!example]-` |
-| example analysis or hint | `> > [!tip]-` |
-| example solution or proof | `> > [!success]-` |
-| warning or restriction | `> [!warning]` |
-| background or aside | `> [!tip]` |
-| comparison or analogy | `> [!note]` |
-| summary, rule, method, conclusion | `> [!summary]` |
-| unextracted theorem, axiom, or property | `> [!summary]` |
+| analysis, approach, hint inside an example | `> > [!tip]-` |
+| solution, proof, explanation inside an example | `> > [!success]-` |
+| warning, error-prone condition, special note | `> [!warning]` |
+| background, marginal note, supplementary material | `> [!tip]` |
+| analogy, comparison, auxiliary explanation | `> [!note]` |
+| summary, induction, method, rule, core conclusion | `> [!summary]` |
+| unextracted theorem, axiom, property, core knowledge | `> [!summary]` |
 
-Judge function before keywords. If function is unclear, keep ordinary Markdown.
+Every top-level callout is a complete container. Every body line, formula,
+image, HTML line, table line, caption, and intentional blank line begins with
+`>`. A blank line inside a callout is represented by a line containing `>`.
+Do not emit a marker followed by unquoted body text.
 
-Require a real blank line before every top-level callout.
+Emit the functional label once. If the source block begins with the same
+`思考`, `观察`, `情景引入`, or equivalent label used in the callout marker,
+remove that presentation-only duplicate from the body. Never place a later
+functional heading, formal definition, worked-example label, or practice
+heading inside the preceding callout.
 
-Use an example structure:
+## Worked examples
+
+The whole example, including its stem, belongs inside one collapsed
+`example` callout. When the stem begins on the example-label line, keep the
+one-line stem on the marker line to match the approved textbook exemplar.
+Analysis/approach/hint and solution/proof/explanation are
+collapsed depth-two callouts:
 
 ```markdown
-> [!example]- 例题 1
-> 题干内容
+> [!example]- 例题 1 题干内容
 >
 > > [!tip]- 分析
 > > 分析内容
@@ -75,70 +74,29 @@ Use an example structure:
 > > 解答内容
 ```
 
-Rules:
+`> >` may appear only inside a top-level callout. Every nested body line,
+formula, image, HTML line, table line, and intentional blank line uses `> >`.
 
-- Put the complete example stem inside the parent example callout.
-- Put analysis/hints and solutions/proofs in separate nested callouts.
-- Prefix every nested line, formula, image, HTML line, and blank line with `> >`.
-- Never use `> >` without a parent callout.
-- Outside examples, nest only when a clear question/exploration is followed by its answer, derivation, rule, or conclusion.
+For non-example material, use a nested callout only when the source forms a
+clear paired structure such as question/exploration/observation/attempt
+followed by its answer, derivation, rule, or conclusion. A conclusion keyword
+by itself does not justify nesting.
 
-## Images
+An approved style reference is evidence for marker compactness and nested
+reasoning form, but never permission to copy a broken or discontinuous
+callout. Every emitted body remains continuously quoted.
 
-- Never change image filenames, folder names, or path strings.
-- Use `<img src="原路径"/>` when changing only the embedding form.
-- Put related subfigures, transformations, comparisons, consecutive figures, or images sharing one figure number side by side.
-- Preserve subfigure labels such as `(1)`, `(2)`, `甲`, `乙`, `①`, and `②`.
-- Keep captions and figure numbers immediately after their image.
-- Keep images and captions inside their owning callout.
+## Other presentation rules
 
-For a standalone image:
-
-```markdown
-<div align="center">
-  <img src="原路径" width="55%" />
-  <br />
-  图号或题注
-</div>
-```
-
-## Tables
-
-- Use Markdown tables for simple data.
-- Use HTML tables for merged cells, images, multiline formulas, layouts Markdown cannot render, or aligned multi-image rows.
-- Preserve all table data.
-- Keep a table indented with its owning list item, question, or callout.
-
-## Reasoning, proofs, and solutions
-
-- Remove unnecessary blank lines while keeping the process compact.
-- Preserve every condition, intermediate conclusion, reason, and inference.
-- Never replace a proof or solution with only its conclusion.
-- Keep analysis, solution, proof, explanation, and conclusion distinguishable.
-- Use nested callouts for those parts only when they belong to an example.
-
-## Footnotes
-
-Convert visible footnote markers:
-
-```markdown
-《九章算术》①
-```
-
-to:
-
-```markdown
-《九章算术》[^1]
-```
-
-and convert the matching bottom note:
-
-```markdown
-①《九章算术》
-```
-
-to:
-
-```markdown
-[^1]: 《九章算术》
-```
+- Prefer inline formulas; use display formulas for important conclusions.
+- Preserve circled formula numbers exactly.
+- Keep analysis, solution, proof, explanation, and conclusion distinct; remove
+  unnecessary blank lines inside a reasoning chain without deleting steps.
+- Prefer meaningful multi-image layouts before centering a single image.
+- Preserve image filenames, folders, and paths. Keep captions immediately
+  after their image and keep callout-owned images/captions inside the callout.
+- Use Markdown tables for simple data and HTML tables for merged cells,
+  embedded images, multiline formulas, or layouts Markdown cannot represent.
+  A callout-owned table stays inside the callout.
+- Convert real footnote markers and definitions to Markdown footnotes without
+  confusing formula numbering with footnotes.

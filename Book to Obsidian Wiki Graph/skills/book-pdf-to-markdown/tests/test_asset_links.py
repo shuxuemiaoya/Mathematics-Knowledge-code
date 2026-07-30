@@ -34,6 +34,27 @@ class AssetLinkTests(unittest.TestCase):
         twice = MODULE.rewrite_asset_links(once, "测试（图片整理版）")
         self.assertEqual(twice, once)
 
+    def test_rewrites_html_image_source(self) -> None:
+        markdown = '<table><tr><td><img src="images/figure.jpg"/></td></tr></table>'
+        self.assertEqual(
+            MODULE.rewrite_asset_links(markdown, "示例书/part-001"),
+            (
+                '<table><tr><td><img '
+                'src="images/示例书/part-001/figure.jpg"/></td></tr></table>'
+            ),
+        )
+
+    def test_reports_missing_html_image_source(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_name:
+            unresolved = MODULE.unresolved_staged_asset_links(
+                '<img src="images/示例书/part-001/missing.jpg"/>',
+                "示例书/part-001",
+                Path(temp_name),
+            )
+        self.assertEqual(
+            unresolved, ["images/示例书/part-001/missing.jpg"]
+        )
+
     def test_reports_missing_staged_asset(self) -> None:
         with tempfile.TemporaryDirectory() as temp_name:
             unresolved = MODULE.unresolved_staged_asset_links(

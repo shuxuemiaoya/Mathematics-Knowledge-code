@@ -50,6 +50,93 @@ class TocHeadingTests(unittest.TestCase):
         with self.assertRaises(MODULE.TocFormattingError):
             MODULE.format_headings(source, self.manifest())
 
+    def test_consolidates_adjacent_ocr_heading_fragments(self) -> None:
+        manifest = {
+            "schema_version": 1,
+            "toc_source_ranges": [],
+            "entries": [
+                {
+                    "key": "chapter",
+                    "title": "第一章 集合与常用逻辑用语",
+                    "level": 1,
+                    "aliases": ["第一章"],
+                }
+            ],
+        }
+        source = "# 第一章\n\n## 集合与常用逻辑用语\n\n正文。\n"
+        candidate, report = MODULE.format_headings(source, manifest)
+        self.assertIn("# 第一章 集合与常用逻辑用语\n", candidate)
+        self.assertNotIn("#### 集合与常用逻辑用语", candidate)
+        self.assertEqual(report["matched_toc_headings"], 1)
+        self.assertEqual(report["composite_toc_headings"], 1)
+        self.assertEqual(report["matched"][0]["source_lines"], [1, 3])
+
+    def test_replaces_matching_alias_with_authoritative_toc_title(self) -> None:
+        manifest = {
+            "schema_version": 1,
+            "toc_source_ranges": [],
+            "entries": [
+                {
+                    "key": "chapter",
+                    "title": "第二章 一元二次函数、方程和不等式",
+                    "level": 1,
+                    "aliases": ["一元二次函数、方程和不等式"],
+                }
+            ],
+        }
+        candidate, report = MODULE.format_headings(
+            "# 一元二次函数、方程和不等式\n", manifest
+        )
+        self.assertEqual(candidate, "# 第二章 一元二次函数、方程和不等式\n")
+        self.assertEqual(
+            report["matched"][0]["source_title"],
+            "一元二次函数、方程和不等式",
+        )
+
+    def test_composite_match_ignores_escaped_markdown_emphasis(self) -> None:
+        manifest = {
+            "schema_version": 1,
+            "toc_source_ranges": [],
+            "entries": [
+                {
+                    "key": "reading",
+                    "title": "文献阅读与数学写作* 函数的形成与发展",
+                    "level": 2,
+                }
+            ],
+        }
+        candidate, report = MODULE.format_headings(
+            "## 文献阅读与数学写作\\*\n\n## 函数的形成与发展\n",
+            manifest,
+        )
+        self.assertEqual(
+            candidate,
+            "## 文献阅读与数学写作* 函数的形成与发展\n",
+        )
+        self.assertEqual(report["composite_toc_headings"], 1)
+
+    def test_consolidates_heading_with_exact_plain_text_fragment(self) -> None:
+        manifest = {
+            "schema_version": 1,
+            "toc_source_ranges": [],
+            "entries": [
+                {
+                    "key": "discovery",
+                    "title": "探究与发现 函数的周期",
+                    "level": 2,
+                }
+            ],
+        }
+        candidate, report = MODULE.format_headings(
+            "## 探究与发现\n\n函数的周期\n\n正文。\n",
+            manifest,
+        )
+        self.assertEqual(
+            candidate,
+            "## 探究与发现 函数的周期\n\n正文。\n",
+        )
+        self.assertFalse(report["matched"][0]["second_fragment_was_heading"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -32,6 +32,10 @@ BATCH_SIZE = 50
 ACTIVE_STATES = {"waiting-file", "pending", "running", "converting"}
 TERMINAL_STATES = {"done", "failed"}
 IMAGE_LINK_RE = re.compile(r"(!\[[^\]]*\]\()([^)]+)(\))")
+HTML_IMAGE_LINK_RE = re.compile(
+    r"""(<img\b[^>]*?\bsrc=["'])([^"']+)(["'])""",
+    re.IGNORECASE,
+)
 
 
 class ConversionError(RuntimeError):
@@ -468,7 +472,8 @@ def rewrite_asset_links(markdown: str, namespace: str) -> str:
         normalized_relative = relative.as_posix()
         return f"{prefix}images/{normalized_namespace}/{normalized_relative}{suffix}"
 
-    return IMAGE_LINK_RE.sub(replace, markdown)
+    rewritten = IMAGE_LINK_RE.sub(replace, markdown)
+    return HTML_IMAGE_LINK_RE.sub(replace, rewritten)
 
 
 def unresolved_staged_asset_links(
@@ -477,15 +482,16 @@ def unresolved_staged_asset_links(
     staged_asset_root: Path,
 ) -> list[str]:
     unresolved: list[str] = []
-    for match in IMAGE_LINK_RE.finditer(markdown):
-        destination = match.group(2)
-        clean_destination = destination.strip().strip("<>")
-        parsed = urlparse(clean_destination)
-        if parsed.scheme or clean_destination.startswith("#"):
-            continue
-        relative = markdown_asset_relative_path(destination, namespace)
-        if relative is None or not (staged_asset_root / relative).is_file():
-            unresolved.append(clean_destination)
+    for pattern in (IMAGE_LINK_RE, HTML_IMAGE_LINK_RE):
+        for match in pattern.finditer(markdown):
+            destination = match.group(2)
+            clean_destination = destination.strip().strip("<>")
+            parsed = urlparse(clean_destination)
+            if parsed.scheme or clean_destination.startswith("#"):
+                continue
+            relative = markdown_asset_relative_path(destination, namespace)
+            if relative is None or not (staged_asset_root / relative).is_file():
+                unresolved.append(clean_destination)
     return unresolved
 
 

@@ -17,6 +17,14 @@ from pathlib import Path
 from typing import Any
 
 
+SCRIPT_DIRECTORY = Path(__file__).resolve().parent
+if str(SCRIPT_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIRECTORY))
+
+from lesson_flow_manifest import functional_boundary
+from lesson_flow_manifest import validate as validate_lesson_flow
+
+
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
         _stream.reconfigure(encoding="utf-8")
@@ -27,8 +35,12 @@ HTML_IMAGE_RE = re.compile(r"""<img\b[^>]*\bsrc=["']([^"']+)["']""", re.I)
 EXTERNAL_RE = re.compile(r"^[a-z][a-z0-9+.-]*:", re.I)
 INVALID_FILENAME_RE = re.compile(r'[<>:"/\\|?*]')
 CONTENT_HEADING_RE = re.compile(r"^(#{4,6})\s+(.+?)\s*$")
+ANY_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 NUMBERED_SUBSECTION_RE = re.compile(r"^\d+(?:\.\d+){2,}\s+\S")
 SECTION_EXERCISE_RE = re.compile(r"^习题\s*\d+(?:\.\d+)+(?:\s|$)")
+TEXTBOOK_CORE_ROLES = {"knowledge", "concept", "exercise"}
+TEXTBOOK_AUXILIARY_ROLES = {"reading", "history", "method", "tool"}
+DEFAULT_CONTENT_REVIEW_MIN_LINES = 24
 
 
 class SplitError(ValueError):
@@ -89,10 +101,18 @@ def load_nodes(
     book_kind = str(profile.get("book", {}).get("kind", "")).casefold()
     allowed = set(categories)
     if "textbook" in book_kind:
-        allowed &= {"knowledge", "concept", "exercise"}
-        if set(categories) - {"knowledge", "concept", "exercise"}:
+        missing_core = TEXTBOOK_CORE_ROLES - set(categories)
+        unsupported = set(categories) - (
+            TEXTBOOK_CORE_ROLES | TEXTBOOK_AUXILIARY_ROLES
+        )
+        if missing_core:
             raise SplitError(
-                "Textbook profiles may enable only knowledge, concept, and exercise"
+                "Textbook profiles must enable knowledge, concept, and exercise"
+            )
+        if unsupported:
+            raise SplitError(
+                "Textbook profile has unsupported categories: "
+                + ", ".join(sorted(unsupported))
             )
 
     nodes: dict[str, SplitNode] = {}
@@ -211,10 +231,47 @@ def note_link(
             href = child_target.relative_to(vault_root).as_posix()
         except ValueError as exc:
             raise SplitError("Split target lies outside the configured vault") from exc
+        href = "/" + href
     else:
         href = os.path.relpath(child_target, parent_target.parent).replace("\\", "/")
     href = encode_path(href, bool(links.get("encode_spaces", False)))
-    return f"[{child.title}]({href})"
+    return f"- [{child.title}]({href})"
+
+
+def normalize_entry_heading(text: str, node: SplitNode, book_title: str) -> str:
+    """Give every generated note one valid H1-H3 entry heading.
+
+    TOC formatting intentionally demotes non-TOC headings to H4-H6. Once a
+    reviewed range becomes an independent note, its entry heading is promoted
+    to H3, matching the textbook example's chapter/lesson/subsection grammar.
+    """
+
+    if node.parent_key is None:
+        expected = f"# {book_title}".strip()
+        if not text.startswith(expected):
+            return expected + ("\n\n" + text if text else "")
+        return text
+
+    lines = text.splitlines()
+    first_index = next(
+        (index for index, line in enumerate(lines) if line.strip()),
+        None,
+    )
+    if first_index is None:
+        raise SplitError(f"Rendered note {node.key!r} is empty")
+    match = ANY_HEADING_RE.match(lines[first_index])
+    if match is None:
+        if node.toc_key is None:
+            return f"### {node.title}\n\n{text}"
+        raise SplitError(
+            f"Rendered note {node.key!r} must begin with an H1-H3 heading"
+        )
+    level = len(match.group(1))
+    if level >= 4:
+        lines[first_index] = f"### {node.title}"
+    elif match.group(2).strip() != node.title:
+        lines[first_index] = f"{'#' * level} {node.title}"
+    return "\n".join(lines)
 
 
 def line_exclusions(toc_manifest: dict[str, Any]) -> set[int]:
@@ -248,6 +305,22 @@ def validate_semantic_review(
     book_kind = str(profile.get("book", {}).get("kind", "")).casefold()
     if "textbook" not in book_kind:
         return
+    decomposition = profile.get("decomposition", {})
+    if not isinstance(decomposition, dict):
+        raise SplitError("Profile decomposition must be an object")
+    if decomposition.get("non_toc_split_default", "retain") != "retain":
+        raise SplitError("Textbook non-TOC split default must be retain")
+    confidence_threshold = decomposition.get(
+        "semantic_split_confidence_threshold", 0.9
+    )
+    if (
+        isinstance(confidence_threshold, bool)
+        or not isinstance(confidence_threshold, (int, float))
+        or not 0 <= confidence_threshold <= 1
+    ):
+        raise SplitError(
+            "semantic_split_confidence_threshold must be between 0 and 1"
+        )
 
     candidates: dict[int, str] = {}
     for line_number, line in enumerate(lines, start=1):
@@ -271,6 +344,7 @@ def validate_semantic_review(
         line_number = item.get("line")
         title = item.get("title")
         decision = item.get("decision")
+        confidence = item.get("confidence")
         if not isinstance(line_number, int) or line_number not in candidates:
             raise SplitError(
                 f"semantic_review heading {index} references no H4-H6 content heading"
@@ -287,6 +361,19 @@ def validate_semantic_review(
         if decision not in {"split", "retain"}:
             raise SplitError(
                 f"semantic_review heading at line {line_number} needs decision split or retain"
+            )
+        if (
+            isinstance(confidence, bool)
+            or not isinstance(confidence, (int, float))
+            or not 0 <= confidence <= 1
+        ):
+            raise SplitError(
+                f"semantic_review heading at line {line_number} needs confidence between 0 and 1"
+            )
+        if confidence < confidence_threshold and item.get("reviewed") is not True:
+            raise SplitError(
+                f"Low-confidence semantic heading {title!r} at line {line_number} "
+                "must be routed through review and marked reviewed"
             )
         reviewed[line_number] = item
 
@@ -320,6 +407,18 @@ def validate_semantic_review(
                 )
             continue
 
+        if must_split_category is None:
+            if not str(item.get("reason", "")).strip():
+                raise SplitError(
+                    f"Non-TOC split heading {title!r} at line {line_number} "
+                    "needs a specific independence reason"
+                )
+            if item.get("independent_teaching_arc") is not True:
+                raise SplitError(
+                    f"Non-TOC split heading {title!r} at line {line_number} "
+                    "must explicitly confirm independent_teaching_arc"
+                )
+
         node_key = item.get("node_key")
         node = nodes.get(node_key) if isinstance(node_key, str) else None
         if node is None:
@@ -335,6 +434,209 @@ def validate_semantic_review(
                 f"Semantic node {node.key!r} must use category {must_split_category!r}"
             )
 
+    minimum_lines = decomposition.get(
+        "content_review_min_nonblank_lines",
+        DEFAULT_CONTENT_REVIEW_MIN_LINES,
+    )
+    if (
+        isinstance(minimum_lines, bool)
+        or not isinstance(minimum_lines, int)
+        or minimum_lines < 1
+    ):
+        raise SplitError(
+            "content_review_min_nonblank_lines must be a positive integer"
+        )
+
+    section_candidates: dict[str, SplitNode] = {}
+    for node in nodes.values():
+        if node.category != "knowledge":
+            continue
+        source_heading = ANY_HEADING_RE.match(lines[node.start_line - 1])
+        if source_heading is None:
+            continue
+        heading_level = len(source_heading.group(1))
+        if node.toc_key is not None and heading_level not in {2, 3}:
+            continue
+        if node.toc_key is None and heading_level not in {4, 5, 6}:
+            continue
+        nonblank = sum(
+            1
+            for line in lines[node.start_line - 1 : node.end_line]
+            if line.strip()
+        )
+        if nonblank >= minimum_lines:
+            section_candidates[node.key] = node
+
+    raw_sections = review.get("sections")
+    if section_candidates and not isinstance(raw_sections, list):
+        raise SplitError(
+            "Textbook split manifest needs semantic_review.sections for "
+            "content-level review of long teaching nodes"
+        )
+    if raw_sections is None:
+        raw_sections = []
+    if not isinstance(raw_sections, list):
+        raise SplitError("semantic_review.sections must be an array")
+
+    reviewed_sections: set[str] = set()
+    for index, item in enumerate(raw_sections):
+        if not isinstance(item, dict):
+            raise SplitError(f"semantic_review section {index} must be an object")
+        node_key = item.get("node_key")
+        node = section_candidates.get(node_key) if isinstance(node_key, str) else None
+        if node is None:
+            raise SplitError(
+                f"semantic_review section {index} references no reviewable teaching node"
+            )
+        if node_key in reviewed_sections:
+            raise SplitError(f"semantic_review duplicates section {node_key!r}")
+        if (
+            item.get("title") != node.title
+            or item.get("start_line") != node.start_line
+            or item.get("end_line") != node.end_line
+        ):
+            raise SplitError(
+                f"semantic_review section {node_key!r} does not match its node"
+            )
+        decision = item.get("decision")
+        if decision not in {"split", "retain"}:
+            raise SplitError(
+                f"Content section {node.title!r} needs a reviewed split or retain decision"
+            )
+        confidence = item.get("confidence")
+        if (
+            isinstance(confidence, bool)
+            or not isinstance(confidence, (int, float))
+            or not 0 <= confidence <= 1
+        ):
+            raise SplitError(
+                f"Content section {node.title!r} needs confidence between 0 and 1"
+            )
+        if confidence < confidence_threshold and item.get("reviewed") is not True:
+            raise SplitError(
+                f"Low-confidence content section {node.title!r} must be routed "
+                "through review and marked reviewed"
+            )
+        if item.get("reviewed_entire_section") is not True:
+            raise SplitError(
+                f"Content section {node.title!r} must confirm reviewed_entire_section"
+            )
+        if not str(item.get("reason", "")).strip():
+            raise SplitError(
+                f"Content section {node.title!r} needs a specific decision reason"
+            )
+        direct_children = {
+            child.key
+            for child in nodes.values()
+            if child.parent_key == node.key
+        }
+        if decision == "split":
+            child_keys = item.get("child_node_keys")
+            if not isinstance(child_keys, list) or not child_keys:
+                raise SplitError(
+                    f"Split content section {node.title!r} needs child_node_keys"
+                )
+            if set(child_keys) - direct_children:
+                raise SplitError(
+                    f"Content section {node.title!r} names children that are not "
+                    "direct split nodes"
+                )
+        elif direct_children:
+            raise SplitError(
+                f"Retained content section {node.title!r} already has direct child nodes"
+            )
+        reviewed_sections.add(node_key)
+
+    missing_sections = sorted(set(section_candidates) - reviewed_sections)
+    if missing_sections:
+        samples = ", ".join(
+            section_candidates[key].title for key in missing_sections[:12]
+        )
+        raise SplitError(
+            f"semantic_review.sections omits {len(missing_sections)} long "
+            f"teaching sections: {samples}"
+        )
+
+    heading_split_nodes = {
+        str(item.get("node_key"))
+        for item in raw_headings
+        if isinstance(item, dict) and item.get("decision") == "split"
+    }
+    synthetic_nodes = {
+        node.key: node
+        for node in nodes.values()
+        if node.parent_key is not None
+        and node.toc_key is None
+        and node.key not in heading_split_nodes
+    }
+    raw_ranges = review.get("ranges")
+    if synthetic_nodes and not isinstance(raw_ranges, list):
+        raise SplitError(
+            "Textbook split manifest needs semantic_review.ranges for "
+            "headerless semantic child ranges"
+        )
+    if raw_ranges is None:
+        raw_ranges = []
+    if not isinstance(raw_ranges, list):
+        raise SplitError("semantic_review.ranges must be an array")
+    reviewed_ranges: set[str] = set()
+    for index, item in enumerate(raw_ranges):
+        if not isinstance(item, dict):
+            raise SplitError(f"semantic_review range {index} must be an object")
+        node_key = item.get("node_key")
+        node = synthetic_nodes.get(node_key) if isinstance(node_key, str) else None
+        if node is None:
+            raise SplitError(
+                f"semantic_review range {index} references no headerless semantic node"
+            )
+        if node_key in reviewed_ranges:
+            raise SplitError(f"semantic_review duplicates range {node_key!r}")
+        if (
+            item.get("title") != node.title
+            or item.get("start_line") != node.start_line
+            or item.get("end_line") != node.end_line
+        ):
+            raise SplitError(
+                f"semantic_review range {node_key!r} does not match its node"
+            )
+        confidence = item.get("confidence")
+        if (
+            isinstance(confidence, bool)
+            or not isinstance(confidence, (int, float))
+            or not 0 <= confidence <= 1
+        ):
+            raise SplitError(
+                f"Semantic range {node.title!r} needs confidence between 0 and 1"
+            )
+        if confidence < confidence_threshold and item.get("reviewed") is not True:
+            raise SplitError(
+                f"Low-confidence semantic range {node.title!r} must be routed "
+                "through review and marked reviewed"
+            )
+        if item.get("decision") != "split":
+            raise SplitError(
+                f"Semantic range {node.title!r} must record decision split"
+            )
+        if item.get("independent_teaching_arc") is not True:
+            raise SplitError(
+                f"Semantic range {node.title!r} must confirm independent_teaching_arc"
+            )
+        if not str(item.get("reason", "")).strip():
+            raise SplitError(
+                f"Semantic range {node.title!r} needs a specific independence reason"
+            )
+        reviewed_ranges.add(node_key)
+
+    missing_ranges = sorted(set(synthetic_nodes) - reviewed_ranges)
+    if missing_ranges:
+        samples = ", ".join(
+            synthetic_nodes[key].title for key in missing_ranges[:12]
+        )
+        raise SplitError(
+            f"semantic_review.ranges omits {len(missing_ranges)} headerless "
+            f"semantic nodes: {samples}"
+        )
+
 
 def render_node(
     node: SplitNode,
@@ -346,7 +648,27 @@ def render_node(
     categories: dict[str, str],
     links: dict[str, Any],
     book_title: str,
+    lesson_flow: dict[str, Any] | None = None,
 ) -> str:
+    if lesson_flow is not None:
+        rendered = render_lesson_flow_node(
+            node,
+            nodes,
+            lines,
+            excluded,
+            output_root,
+            vault_root,
+            categories,
+            links,
+            lesson_flow,
+        )
+        text = normalize_entry_heading(
+            "\n".join(rendered).strip(),
+            node,
+            book_title,
+        )
+        return text + "\n"
+
     children = sorted(
         (item for item in nodes.values() if item.parent_key == node.key),
         key=lambda item: item.start_line,
@@ -372,12 +694,170 @@ def render_node(
         if line_number not in excluded:
             rendered.append(lines[line_number - 1])
 
-    text = "\n".join(rendered).strip()
-    if node.category == "root":
-        expected = f"# {book_title}".strip()
-        if not text.startswith(expected):
-            text = expected + ("\n\n" + text if text else "")
+    text = normalize_entry_heading(
+        "\n".join(rendered).strip(),
+        node,
+        book_title,
+    )
     return text + "\n"
+
+
+def source_range_lines(
+    lines: list[str],
+    excluded: set[int],
+    start_line: int,
+    end_line: int,
+) -> list[str]:
+    return [
+        lines[line_number - 1]
+        for line_number in range(start_line, end_line + 1)
+        if line_number not in excluded
+    ]
+
+
+def quote_callout(
+    body: list[str],
+    *,
+    marker: str,
+    title: str,
+) -> list[str]:
+    while body and not body[0].strip():
+        body.pop(0)
+    while body and not body[-1].strip():
+        body.pop()
+    if not body:
+        return []
+    first_nonblank = next((line for line in body if line.strip()), "")
+    if first_nonblank.startswith("> [!"):
+        return body
+    heading = ANY_HEADING_RE.match(first_nonblank)
+    if heading and len(heading.group(1)) >= 4:
+        first_index = body.index(first_nonblank)
+        body.pop(first_index)
+        while body and not body[0].strip():
+            body.pop(0)
+    elif re.sub(r"\s+", "", first_nonblank) == re.sub(r"\s+", "", title):
+        first_index = body.index(first_nonblank)
+        body.pop(first_index)
+        while body and not body[0].strip():
+            body.pop(0)
+    if not body:
+        return []
+    rendered = [f"> [!{marker}] {title}"]
+    rendered.extend(">" if not line else f"> {line}" for line in body)
+    return rendered
+
+
+def render_retained_flow_block(
+    role: str,
+    block_lines: list[str],
+) -> list[str]:
+    first_nonblank = next((line.strip() for line in block_lines if line.strip()), "")
+    detected = functional_boundary(first_nonblank)
+
+    if role == "entry-context":
+        first_index = next(
+            (index for index, line in enumerate(block_lines) if line.strip()),
+            None,
+        )
+        if first_index is None:
+            return block_lines
+        heading = ANY_HEADING_RE.match(block_lines[first_index])
+        if heading is None or len(heading.group(1)) > 3:
+            return quote_callout(
+                block_lines,
+                marker="info",
+                title="情景引入",
+            )
+        prefix = block_lines[: first_index + 1]
+        body = block_lines[first_index + 1 :]
+        callout = quote_callout(body, marker="info", title="情景引入")
+        return prefix + ([""] if callout else []) + callout
+    if role == "context":
+        title = (
+            detected[1]
+            if detected is not None and detected[0] == "context"
+            else "情景引入"
+        )
+        return quote_callout(
+            block_lines,
+            marker="info",
+            title=title,
+        )
+    if role == "transition":
+        return quote_callout(block_lines, marker="info", title="过渡")
+    if role == "question":
+        title = (
+            detected[1]
+            if detected is not None and detected[0] == "question"
+            else "思考"
+        )
+        return quote_callout(block_lines, marker="question", title=title)
+    if role == "analysis":
+        return quote_callout(block_lines, marker="success", title="分析")
+    return block_lines
+
+
+def render_lesson_flow_node(
+    node: SplitNode,
+    nodes: dict[str, SplitNode],
+    lines: list[str],
+    excluded: set[int],
+    output_root: Path,
+    vault_root: Path,
+    categories: dict[str, str],
+    links: dict[str, Any],
+    lesson_flow: dict[str, Any],
+) -> list[str]:
+    rendered: list[str] = []
+
+    def append_block(block_lines: list[str]) -> None:
+        while block_lines and not block_lines[0].strip():
+            block_lines.pop(0)
+        while block_lines and not block_lines[-1].strip():
+            block_lines.pop()
+        if not block_lines:
+            return
+        if rendered and rendered[-1].strip():
+            rendered.append("")
+        rendered.extend(block_lines)
+
+    for block in lesson_flow["blocks"]:
+        if block["ownership"] == "move-child":
+            child = nodes[str(block["child_node_key"])]
+            append_block(
+                [
+                    note_link(
+                        child,
+                        node,
+                        output_root,
+                        vault_root,
+                        categories,
+                        links,
+                    )
+                ]
+            )
+            continue
+        block_lines = source_range_lines(
+            lines,
+            excluded,
+            int(block["start_line"]),
+            int(block["end_line"]),
+        )
+        append_block(
+            render_retained_flow_block(str(block["role"]), block_lines)
+        )
+    return rendered
+
+
+def validate_lesson_flow_presence(
+    profile: dict[str, Any],
+    lesson_flow_manifest: dict[str, Any] | None,
+) -> None:
+    if lesson_flow_required(profile) and lesson_flow_manifest is None:
+        raise SplitError(
+            "Textbook splitting requires a validated lesson-flow manifest"
+        )
 
 
 def local_asset_hrefs(markdown: str) -> list[str]:
@@ -404,14 +884,37 @@ def materialize_assets(
             continue
         source = (source_parent / relative).resolve()
         if not source.is_file():
-            raise SplitError(f"Referenced source asset is missing: {source}")
-        destination = (target_parent / relative).resolve()
+            # MinerU sometimes leaves HTML table images as images/<hash>
+            # while split-part assets are stored below a namespaced tree.
+            # Recover only an unambiguous hash/basename match.
+            asset_root = source_parent / "images"
+            matches = (
+                sorted(asset_root.rglob(relative.name))
+                if asset_root.is_dir() and relative.name
+                else []
+            )
+            matches = [item.resolve() for item in matches if item.is_file()]
+            if len(matches) != 1:
+                raise SplitError(
+                    f"Referenced source asset is missing or ambiguous: {source}"
+                )
+            source = matches[0]
+        output_relative = (
+            Path("images") / relative.name
+            if relative.parts and relative.parts[0].casefold() == "images"
+            else relative
+        )
+        destination = (target_parent / output_relative).resolve()
         destination.parent.mkdir(parents=True, exist_ok=True)
+        if destination.exists() and sha256_file(destination) != sha256_file(source):
+            raise SplitError(
+                f"Flattened asset basename collision: {destination.name}"
+            )
         if not destination.exists():
             shutil.copy2(source, destination)
             copied += 1
         if links.get("asset_mode") == "vault-root":
-            final_destination = (final_parent / relative).resolve()
+            final_destination = (final_parent / output_relative).resolve()
             try:
                 vault_relative = final_destination.relative_to(vault_root).as_posix()
             except ValueError as exc:
@@ -444,7 +947,9 @@ def write_split(
     toc_manifest: dict[str, Any],
     split_manifest: dict[str, Any],
     output_root: Path,
+    lesson_flow_manifest: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    validate_lesson_flow_presence(profile, lesson_flow_manifest)
     markdown = source.read_text(encoding="utf-8-sig")
     lines = markdown.splitlines()
     toc_keys = {
@@ -461,6 +966,15 @@ def write_split(
         split_manifest, nodes, lines, excluded, profile
     )
     book_title = str(profile.get("book", {}).get("title", root.title))
+    lesson_flow_by_node = {
+        str(lesson["node_key"]): lesson
+        for lesson in (
+            lesson_flow_manifest.get("lessons", [])
+            if isinstance(lesson_flow_manifest, dict)
+            else []
+        )
+        if isinstance(lesson, dict) and isinstance(lesson.get("node_key"), str)
+    }
 
     if output_root.exists():
         raise FileExistsError(
@@ -488,6 +1002,7 @@ def write_split(
                 categories,
                 links,
                 book_title,
+                lesson_flow=lesson_flow_by_node.get(node.key),
             )
             destination = target_path(node, temporary, categories)
             destination.parent.mkdir(parents=True, exist_ok=True)
@@ -564,12 +1079,23 @@ def validate_identity(
         raise SplitError("Formatted Markdown hash does not match split manifest")
 
 
+def lesson_flow_required(profile: dict[str, Any]) -> bool:
+    book_kind = str(profile.get("book", {}).get("kind", "")).casefold()
+    decomposition = profile.get("decomposition", {})
+    return bool(
+        "textbook" in book_kind
+        and isinstance(decomposition, dict)
+        and decomposition.get("require_lesson_flow_manifest", False)
+    )
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("formatted_markdown", type=Path)
     parser.add_argument("toc_manifest", type=Path)
     parser.add_argument("split_manifest", type=Path)
     parser.add_argument("--profile", type=Path, required=True)
+    parser.add_argument("--lesson-flow-manifest", type=Path)
     parser.add_argument("--output-root", type=Path)
     return parser.parse_args(argv)
 
@@ -591,13 +1117,39 @@ def main(argv: list[str] | None = None) -> int:
         validate_identity(
             profile_path, profile, toc_manifest, split_manifest, source
         )
+        lesson_flow_path = (
+            args.lesson_flow_manifest.resolve()
+            if args.lesson_flow_manifest
+            else None
+        )
+        lesson_flow_summary = None
+        lesson_flow_payload = None
+        if lesson_flow_required(profile):
+            if lesson_flow_path is None or not lesson_flow_path.is_file():
+                raise SplitError(
+                    "Textbook splitting requires --lesson-flow-manifest"
+                )
+            lesson_flow_payload = json.loads(
+                lesson_flow_path.read_text(encoding="utf-8-sig")
+            )
+            lesson_flow_summary = validate_lesson_flow(
+                lesson_flow_payload,
+                formatted_markdown=source,
+                split_manifest_path=args.split_manifest.resolve(),
+                profile_path=profile_path,
+            )
         output_root = (
             args.output_root.resolve()
             if args.output_root
             else Path(profile["paths"]["book_root"]).resolve()
         )
         summary = write_split(
-            source, profile, toc_manifest, split_manifest, output_root
+            source,
+            profile,
+            toc_manifest,
+            split_manifest,
+            output_root,
+            lesson_flow_manifest=lesson_flow_payload,
         )
         result = {
             "schema_version": 1,
@@ -607,6 +1159,10 @@ def main(argv: list[str] | None = None) -> int:
             "source_sha256": profile["source"]["sha256"],
             "input_markdown": str(source),
             "output_root": str(output_root),
+            "lesson_flow_manifest": (
+                str(lesson_flow_path) if lesson_flow_path else None
+            ),
+            "lesson_flow": lesson_flow_summary,
             **summary,
         }
         print(json.dumps(result, ensure_ascii=False, indent=2))

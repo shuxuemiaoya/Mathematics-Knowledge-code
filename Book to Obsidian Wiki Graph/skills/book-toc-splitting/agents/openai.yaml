@@ -1,4 +1,4 @@
 interface:
   display_name: "Book TOC Splitting"
-  short_description: "Split books by TOC with parent links"
-  default_prompt: "Use $book-toc-splitting to review every H4-H6 content heading, split all numbered textbook subsections and section exercises, then split by the TOC with parent links."
+  short_description: "Plan lesson flow and split textbook notes safely"
+  default_prompt: "Use $book-toc-splitting to review each lesson teaching flow, enforce hard boundaries at functional labels, definitions, every worked example, and practice, preserve introductions and transitions, and split independent topics into validated notes."
