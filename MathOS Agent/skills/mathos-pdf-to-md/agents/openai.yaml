@@ -1,7 +1,0 @@
-interface:
-  display_name: "MathOS PDF to Markdown"
-  short_description: "Convert PDF folders through MinerU"
-  default_prompt: "Use $mathos-pdf-to-md to convert a PDF directory into mirrored Markdown with MinerU."
-
-policy:
-  allow_implicit_invocation: true

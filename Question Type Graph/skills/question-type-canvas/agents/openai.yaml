@@ -1,0 +1,4 @@
+interface:
+  display_name: "Question Type Canvas"
+  short_description: "Compile structural question type canvases"
+  default_prompt: "Use $question-type-canvas to compile a validated structural Canvas from reviewed graph manifests."

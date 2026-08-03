@@ -64,6 +64,23 @@ class ConceptCandidatePlanningTests(unittest.TestCase):
             {"零点"},
         )
 
+    def test_does_not_match_term_inside_longer_chinese_word(self) -> None:
+        terms = ["圆的标准方程"]
+        line = "我们称方程⑥是椭圆的方程，这个方程叫做椭圆的标准方程。"
+
+        self.assertEqual(MODULE.candidate_terms_for_line(line, terms), set())
+
+    def test_matches_described_object_name_after_internal_commas(self) -> None:
+        terms = ["圆的标准方程"]
+        line = (
+            "我们把方程(1)称为圆心为 A(a,b)，半径为 r 的圆的标准方程。"
+        )
+
+        self.assertEqual(
+            MODULE.candidate_terms_for_line(line, terms),
+            {"圆的标准方程"},
+        )
+
     def test_keeps_explicit_alternative_term(self) -> None:
         terms = ["非负整数集", "自然数集"]
         line = "全体非负整数组成的集合称为非负整数集（或自然数集）。"
@@ -114,6 +131,49 @@ class ConceptCandidatePlanningTests(unittest.TestCase):
             MODULE.candidate_terms_for_line(line, terms),
             {"反函数"},
         )
+
+    def test_matches_canonical_owner_term_with_inserted_math_variable(self) -> None:
+        terms = ["平面的法向量"]
+        line = (
+            "取直线的方向向量 $a$，"
+            "我们称向量 $a$ 为平面 $\\alpha$ 的法向量。"
+        )
+
+        self.assertEqual(
+            MODULE.candidate_terms_for_line(line, terms),
+            {"平面的法向量"},
+        )
+        self.assertEqual(
+            MODULE.definition_surface(line, "平面的法向量"),
+            "平面 $\\alpha$ 的法向量",
+        )
+
+    def test_planner_preserves_variable_bearing_source_link_text(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            book = root / "book"
+            reviewed = root / "reviewed"
+            (book / "知识点").mkdir(parents=True)
+            reviewed.mkdir()
+            (reviewed / "对象的特征量.md").write_text("", encoding="utf-8")
+            (book / "知识点" / "表示.md").write_text(
+                "# 表示\n\n"
+                "我们称数值 $m$ 为对象 $A$ 的特征量。\n",
+                encoding="utf-8",
+            )
+
+            payload = MODULE.plan_candidates(book, reviewed)
+            candidate = payload["concepts"][0]
+
+            self.assertEqual(candidate["name"], "对象的特征量")
+            self.assertEqual(
+                candidate["anchor_text"],
+                "对象 $A$ 的特征量",
+            )
+            self.assertEqual(
+                candidate["link_text"],
+                "对象 $A$ 的特征量",
+            )
 
     def test_recognizes_parallel_definition_terms(self) -> None:
         terms = ["充分条件", "必要条件"]
@@ -230,6 +290,29 @@ class ConceptCandidatePlanningTests(unittest.TestCase):
 
             self.assertEqual(candidate["confidence"], "low")
             self.assertFalse(candidate["reviewed"])
+            self.assertIn(
+                "formula-definition-has-no-equation",
+                candidate["review_flags"],
+            )
+
+    def test_equation_without_actual_equation_is_flagged_for_review(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            book = root / "book"
+            reviewed = root / "reviewed"
+            (book / "知识点").mkdir(parents=True)
+            reviewed.mkdir()
+            (reviewed / "函数方程.md").write_text("", encoding="utf-8")
+            (book / "知识点" / "关系.md").write_text(
+                "# 关系\n\n"
+                "我们把上面的关系叫做函数方程。\n",
+                encoding="utf-8",
+            )
+
+            payload = MODULE.plan_candidates(book, reviewed)
+            candidate = payload["concepts"][0]
+
+            self.assertEqual(candidate["confidence"], "low")
             self.assertIn(
                 "formula-definition-has-no-equation",
                 candidate["review_flags"],

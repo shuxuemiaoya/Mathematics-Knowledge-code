@@ -77,7 +77,7 @@ PRACTICE_BOUNDARY_RE = re.compile(
 )
 FORMAL_DEFINITION_SCOPE_RE = re.compile(
     r"(?:叫做|定义为|称之为|记作|规定[：:]?|"
-    r"(?:就)?称(?!性)[^，。；]{0,40}(?:为|是))"
+    r"(?<!对)(?:就)?称(?!性)[^，。；]{0,40}(?:为|是))"
 )
 
 
@@ -268,11 +268,12 @@ def callout_structure_issues(relative: str, text: str) -> list[dict[str, Any]]:
             if normalize_title(heading_text) == normalize_title(active_title):
                 reason = "duplicate-functional-label-inside-callout"
         elif (
-            active_type == "info"
-            and any(label in active_title for label in ("情景引入", "情境引入"))
+            active_type in {"info", "question"}
             and FORMAL_DEFINITION_SCOPE_RE.search(heading_text)
         ):
-            reason = "formal-definition-inside-situation-callout"
+            reason = (
+                "formal-definition-inside-question-or-situation-callout"
+            )
         else:
             reason = ""
         if reason:

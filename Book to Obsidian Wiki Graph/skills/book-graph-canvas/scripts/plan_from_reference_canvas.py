@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -20,6 +21,9 @@ for _stream in (sys.stdout, sys.stderr):
 
 
 LINK_RE = re.compile(r"(?<!!)\[([^\]]+)\]\((.+?\.md)\)")
+WIKILINK_RE = re.compile(
+    r"(?<!!)\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|([^\]]+))?\]\]"
+)
 
 
 def atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -49,6 +53,48 @@ def resolve_link(vault_root: Path, destination: str) -> Path:
     return vault_root / decoded.lstrip("/\\")
 
 
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def group_containment_pairs(
+    nodes: list[dict[str, Any]],
+    id_to_key: dict[str, str],
+) -> list[dict[str, str]]:
+    groups = [
+        node
+        for node in nodes
+        if node.get("type") == "group"
+        and str(node.get("id", "")) in id_to_key
+    ]
+    pairs: list[dict[str, str]] = []
+    for outer in groups:
+        outer_right = float(outer["x"]) + float(outer["width"])
+        outer_bottom = float(outer["y"]) + float(outer["height"])
+        for inner in groups:
+            if inner is outer:
+                continue
+            inner_right = float(inner["x"]) + float(inner["width"])
+            inner_bottom = float(inner["y"]) + float(inner["height"])
+            if (
+                float(outer["x"]) <= float(inner["x"])
+                and float(outer["y"]) <= float(inner["y"])
+                and outer_right >= inner_right
+                and outer_bottom >= inner_bottom
+            ):
+                pairs.append(
+                    {
+                        "outer": id_to_key[str(outer["id"])],
+                        "inner": id_to_key[str(inner["id"])],
+                    }
+                )
+    return sorted(pairs, key=lambda item: (item["outer"], item["inner"]))
+
+
 def plan(
     reference_canvas: Path,
     profile_path: Path,
@@ -73,42 +119,67 @@ def plan(
         str(value) for value in profile["canvas"]["edge_colors"].values()
     )
 
-    kept_nodes: list[dict[str, Any]] = []
-    id_to_key: dict[str, str] = {}
-    linked_target_nodes: dict[str, dict[str, Any]] = {}
-    skipped_nodes: list[dict[str, Any]] = []
-    for index, source in enumerate(canvas.get("nodes", [])):
-        node_type = source.get("type")
-        if node_type not in {"group", "text"}:
-            skipped_nodes.append(
-                {"id": source.get("id"), "reason": f"unsupported type {node_type}"}
-            )
-            continue
-        text = str(source.get("text", "")) if node_type == "text" else ""
-        if node_type == "text" and not text.strip():
-            skipped_nodes.append(
-                {"id": source.get("id"), "reason": "empty reference text card"}
-            )
-            continue
-        missing: list[str] = []
-
-        def rebase_link(match: re.Match[str]) -> str:
-            label, destination = match.group(1), match.group(2)
-            if resolve_link(vault_root, destination).is_file():
-                return match.group(0)
+    def current_destination(label: str, destination: str) -> str | None:
+        decoded = urllib.parse.unquote(destination.split("#", 1)[0])
+        candidate_destination = (
+            decoded
+            if decoded.lower().endswith(".md")
+            else f"{decoded}.md"
+        )
+        candidate = resolve_link(vault_root, candidate_destination)
+        if candidate.is_file():
+            relative = candidate.resolve().relative_to(vault_root).as_posix()
+        else:
             matches = current_by_stem.get(label, [])
             if len(matches) != 1:
                 normalized_label = re.sub(r"\s+", "", label).casefold()
                 matches = current_by_normalized_stem.get(normalized_label, [])
             if len(matches) != 1:
+                return None
+            relative = matches[0].relative_to(vault_root).as_posix()
+        if profile["links"].get("encode_spaces", False):
+            relative = relative.replace(" ", "%20")
+        return relative
+
+    kept_nodes: list[dict[str, Any]] = []
+    id_to_key: dict[str, str] = {}
+    linked_target_nodes: dict[str, dict[str, Any]] = {}
+    skipped_nodes: list[dict[str, Any]] = []
+    for index, source in enumerate(canvas.get("nodes", [])):
+        source_id = str(source.get("id") or f"node-{index}")
+        node_type = source.get("type")
+        if node_type not in {"group", "text"}:
+            skipped_nodes.append(
+                {"id": source_id, "reason": f"unsupported type {node_type}"}
+            )
+            continue
+        text = str(source.get("text", "")) if node_type == "text" else ""
+        if node_type == "text" and not text.strip():
+            skipped_nodes.append(
+                {"id": source_id, "reason": "empty reference text card"}
+            )
+            continue
+        missing: list[str] = []
+
+        def rebase_wikilink(match: re.Match[str]) -> str:
+            destination = match.group(1)
+            label = match.group(2) or Path(destination).name
+            current = current_destination(label, destination)
+            if current is None:
                 missing.append(destination)
                 return match.group(0)
-            relative = matches[0].relative_to(vault_root).as_posix()
-            if profile["links"].get("encode_spaces", False):
-                relative = relative.replace(" ", "%20")
-            return f"[{label}]({relative})"
+            return f"[{label}]({current})"
+
+        def rebase_link(match: re.Match[str]) -> str:
+            label, destination = match.group(1), match.group(2)
+            current = current_destination(label, destination)
+            if current is None:
+                missing.append(destination)
+                return match.group(0)
+            return f"[{label}]({current})"
 
         if node_type == "text":
+            text = WIKILINK_RE.sub(rebase_wikilink, text)
             text = LINK_RE.sub(rebase_link, text)
             # Obsidian's Markdown-link parser can mistake a LaTeX interval
             # followed immediately by ``(k \in ...)`` for a link. A space is
@@ -117,13 +188,14 @@ def plan(
         if missing:
             skipped_nodes.append(
                 {
-                    "id": source.get("id"),
+                    "id": source_id,
+                    "type": node_type,
                     "reason": "unresolved current note link",
                     "links": missing,
+                    "text_preview": text[:240],
                 }
             )
             continue
-        source_id = str(source.get("id") or f"node-{index}")
         key = f"reference-{node_type}-{source_id}"
         id_to_key[source_id] = key
         node: dict[str, Any] = {
@@ -162,7 +234,7 @@ def plan(
                         existing["color"] = node["color"]
                 skipped_nodes.append(
                     {
-                        "id": source.get("id"),
+                        "id": source_id,
                         "reason": "duplicate current note link merged",
                         "link": linked_target,
                     }
@@ -172,12 +244,19 @@ def plan(
         kept_nodes.append(node)
 
     kept_edges: list[dict[str, Any]] = []
-    skipped_edges = 0
+    skipped_edges: list[dict[str, Any]] = []
     for index, source in enumerate(canvas.get("edges", [])):
         from_key = id_to_key.get(str(source.get("fromNode", "")))
         to_key = id_to_key.get(str(source.get("toNode", "")))
         if not from_key or not to_key:
-            skipped_edges += 1
+            skipped_edges.append(
+                {
+                    "id": source.get("id") or f"edge-{index}",
+                    "fromNode": source.get("fromNode"),
+                    "toNode": source.get("toNode"),
+                    "reason": "reference edge has a skipped endpoint",
+                }
+            )
             continue
         edge: dict[str, Any] = {
             "key": f"reference-edge-{source.get('id') or index}",
@@ -198,10 +277,42 @@ def plan(
             edge["color"] = str(color)
         kept_edges.append(edge)
 
+    source_nodes = canvas.get("nodes", [])
+    source_edges = canvas.get("edges", [])
+    retained_node_keys = [node["key"] for node in kept_nodes]
+    retained_edge_keys = [edge["key"] for edge in kept_edges]
+    reference_review = {
+        "schema_version": 1,
+        "scope": "same-book-content-and-style",
+        "reference_canvas": str(reference_canvas),
+        "reference_sha256": sha256_file(reference_canvas),
+        "source_counts": {
+            "nodes": len(source_nodes),
+            "groups": sum(
+                isinstance(node, dict) and node.get("type") == "group"
+                for node in source_nodes
+            ),
+            "edges": len(source_edges),
+        },
+        "retained_node_keys": retained_node_keys,
+        "retained_group_keys": [
+            node["key"] for node in kept_nodes if node["type"] == "group"
+        ],
+        "retained_edge_keys": retained_edge_keys,
+        "group_containment_pairs": group_containment_pairs(
+            source_nodes,
+            id_to_key,
+        ),
+        "skipped_nodes": skipped_nodes,
+        "skipped_edges": skipped_edges,
+        "status": "review_required",
+        "reviewer_confirmed": False,
+    }
     manifest = {
         "version": 1,
         "profile": str(profile_path),
         "source_sha256": profile["source"]["sha256"],
+        "reference_review": reference_review,
         "nodes": kept_nodes,
         "edges": kept_edges,
     }
@@ -209,15 +320,16 @@ def plan(
     return {
         "schema_version": 1,
         "stage": "reference-canvas-planning",
-        "status": "passed",
+        "status": "review_required",
         "manifest": str(output_manifest),
         "nodes": len(kept_nodes),
         "groups": sum(node["type"] == "group" for node in kept_nodes),
         "text_nodes": sum(node["type"] == "text" for node in kept_nodes),
         "edges": len(kept_edges),
         "skipped_nodes": len(skipped_nodes),
-        "skipped_edges": skipped_edges,
+        "skipped_edges": len(skipped_edges),
         "skipped_node_details": skipped_nodes,
+        "skipped_edge_details": skipped_edges,
     }
 
 

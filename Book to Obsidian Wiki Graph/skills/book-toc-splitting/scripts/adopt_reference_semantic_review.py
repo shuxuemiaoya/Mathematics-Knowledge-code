@@ -74,34 +74,73 @@ def is_same_numbered_parent(title: str, parent_title: str) -> bool:
     )
 
 
-def preserve_parent_opening_preview(
-    lines: list[str],
-    parent: dict[str, Any],
-    start_line: int,
-    end_line: int,
-) -> int:
-    first_content = next(
-        (
-            line_number
-            for line_number in range(
-                int(parent["start_line"]) + 1,
-                end_line + 1,
+def load_ambiguity_decisions(
+    report: dict[str, Any],
+    proposal_report: Path,
+    decisions_path: Path | None,
+) -> tuple[dict[str, dict[str, Any]], str | None]:
+    ambiguous_items = [
+        item
+        for item in report.get("suggestions", [])
+        if item.get("status") == "ambiguous"
+    ]
+    ambiguous = {
+        str(item.get("title", "")).strip(): item for item in ambiguous_items
+    }
+    if len(ambiguous) != len(ambiguous_items) or "" in ambiguous:
+        raise AdoptionError(
+            "ambiguous reference proposals need unique non-empty titles"
+        )
+    if not ambiguous:
+        return {}, None
+    if decisions_path is None:
+        raise AdoptionError(
+            "ambiguous reference proposals require --review-decisions"
+        )
+    decisions = json.loads(decisions_path.read_text(encoding="utf-8-sig"))
+    if not isinstance(decisions, dict):
+        raise AdoptionError("ambiguity decisions must be an object")
+    proposal_digest = hashlib.sha256(proposal_report.read_bytes()).hexdigest()
+    if decisions.get("proposal_report_sha256") != proposal_digest:
+        raise AdoptionError(
+            "ambiguity decisions do not match the proposal report digest"
+        )
+    raw = decisions.get("decisions")
+    if not isinstance(raw, list):
+        raise AdoptionError("ambiguity decisions must be an array")
+    reviewed: dict[str, dict[str, Any]] = {}
+    for decision in raw:
+        if not isinstance(decision, dict):
+            raise AdoptionError("every ambiguity decision must be an object")
+        title = str(decision.get("title", "")).strip()
+        action = decision.get("decision")
+        reason = str(decision.get("reason", "")).strip()
+        if title not in ambiguous or title in reviewed:
+            raise AdoptionError(
+                f"ambiguity decisions contain an unknown or duplicate title: {title!r}"
             )
-            if lines[line_number - 1].strip()
-        ),
-        None,
-    )
-    if first_content is None or start_line != first_content:
-        return start_line
-    next_content = next(
-        (
-            line_number
-            for line_number in range(first_content + 1, end_line + 1)
-            if lines[line_number - 1].strip()
-        ),
-        None,
-    )
-    return next_content if next_content is not None else start_line
+        if action not in {"accept", "revise", "reject"}:
+            raise AdoptionError(
+                f"ambiguity decision for {title!r} has invalid action"
+            )
+        if len(reason) < 12:
+            raise AdoptionError(
+                f"ambiguity decision for {title!r} needs a specific reason"
+            )
+        if action == "revise" and not all(
+            isinstance(decision.get(field), int)
+            for field in ("start_line", "end_line")
+        ):
+            raise AdoptionError(
+                f"revised ambiguity decision for {title!r} needs integer bounds"
+            )
+        reviewed[title] = decision
+    if set(reviewed) != set(ambiguous):
+        missing = sorted(set(ambiguous) - set(reviewed))
+        raise AdoptionError(
+            f"ambiguity decisions do not cover every ambiguous proposal: {missing}"
+        )
+    return reviewed, hashlib.sha256(decisions_path.read_bytes()).hexdigest()
 
 
 def adopt(
@@ -111,10 +150,47 @@ def adopt(
     output_manifest: Path,
     minimum_containment: float,
     minimum_matched_characters: int,
+    review_decisions: Path | None = None,
+    reviewer_confirmed: bool = False,
 ) -> dict[str, Any]:
+    if not reviewer_confirmed:
+        raise AdoptionError("reference proposals require reviewer confirmation")
     lines = formatted_markdown.read_text(encoding="utf-8-sig").splitlines()
     manifest = json.loads(split_manifest.read_text(encoding="utf-8-sig"))
     report = json.loads(proposal_report.read_text(encoding="utf-8-sig"))
+    ambiguity_decisions, decisions_digest = load_ambiguity_decisions(
+        report,
+        proposal_report,
+        review_decisions,
+    )
+    if Path(str(report.get("formatted_markdown", ""))).resolve() != formatted_markdown:
+        raise AdoptionError("proposal formatted Markdown does not match")
+    if Path(str(report.get("split_manifest", ""))).resolve() != split_manifest:
+        raise AdoptionError("proposal split manifest does not match")
+    reference = report.get("reference")
+    if not isinstance(reference, dict):
+        reference = {
+            "path": report.get("reference_root"),
+            "sha256": None,
+            "scope": None,
+        }
+    profile_value = manifest.get("profile")
+    if isinstance(profile_value, str) and profile_value:
+        profile = json.loads(
+            Path(profile_value).resolve().read_text(encoding="utf-8-sig")
+        )
+        configured = profile.get("reference")
+        if isinstance(configured, dict):
+            if configured.get("scope") != "same-book-content-and-style":
+                raise AdoptionError(
+                    "reference adoption requires same-book-content-and-style scope"
+                )
+            if Path(str(configured.get("path", ""))).resolve() != Path(
+                str(reference.get("path", ""))
+            ).resolve():
+                raise AdoptionError("proposal reference path does not match profile")
+            if configured.get("sha256") != reference.get("sha256"):
+                raise AdoptionError("proposal reference digest does not match profile")
     nodes: list[dict[str, Any]] = manifest["nodes"]
     node_by_key = {node["key"]: node for node in nodes}
     existing_filenames = {node["filename"].casefold() for node in nodes}
@@ -124,6 +200,23 @@ def adopt(
     rejected: list[dict[str, Any]] = []
     for item in report["suggestions"]:
         reason: str | None = None
+        ambiguity_decision = ambiguity_decisions.get(str(item.get("title", "")))
+        if ambiguity_decision:
+            action = ambiguity_decision["decision"]
+            if action == "reject":
+                rejected.append(
+                    {
+                        "title": str(item.get("title", "")).strip(),
+                        "reason": ambiguity_decision["reason"],
+                    }
+                )
+                continue
+            item = dict(item)
+            item["status"] = "review_candidate"
+            item["review_flags"] = []
+            if action == "revise":
+                item["start_line"] = ambiguity_decision["start_line"]
+                item["end_line"] = ambiguity_decision["end_line"]
         parent = node_by_key.get(item.get("parent_node_key"))
         title = str(item.get("title", "")).strip()
         start_line = item.get("start_line")
@@ -302,13 +395,6 @@ def adopt(
     ranges = manifest["semantic_review"].setdefault("ranges", [])
     added_nodes: list[dict[str, Any]] = []
     for item in sorted(accepted, key=lambda value: value["start_line"]):
-        parent = node_by_key[item["parent_key"]]
-        item["start_line"] = preserve_parent_opening_preview(
-            lines,
-            parent,
-            int(item["start_line"]),
-            int(item["end_line"]),
-        )
         filename = safe_filename(item["title"])
         if filename.casefold() in existing_filenames:
             rejected.append(
@@ -422,6 +508,23 @@ def adopt(
             str(node["key"]),
         ),
     )
+    manifest["semantic_review"]["reference"] = {
+        "status": "passed",
+        "reviewer_confirmed": True,
+        "scope": reference.get("scope"),
+        "path": reference.get("path"),
+        "sha256": reference.get("sha256"),
+        "proposal_report": str(proposal_report),
+        "proposal_report_sha256": hashlib.sha256(
+            proposal_report.read_bytes()
+        ).hexdigest(),
+        "decision_report": str(review_decisions) if review_decisions else None,
+        "decision_report_sha256": decisions_digest,
+        "ambiguous_count": len(ambiguity_decisions),
+        "resolved_ambiguity_count": len(ambiguity_decisions),
+        "added_node_count": len(added_nodes),
+        "rejected_count": len(rejected),
+    }
     atomic_write_json(output_manifest, manifest)
     return {
         "schema_version": 1,
@@ -452,6 +555,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("output_manifest", type=Path)
     parser.add_argument("--minimum-containment", type=float, default=0.55)
     parser.add_argument("--minimum-matched-characters", type=int, default=35)
+    parser.add_argument("--review-decisions", type=Path)
     parser.add_argument("--reviewer-confirmed", action="store_true")
     return parser.parse_args(argv)
 
@@ -469,6 +573,10 @@ def main(argv: list[str] | None = None) -> int:
         args.output_manifest.resolve(),
         args.minimum_containment,
         args.minimum_matched_characters,
+        review_decisions=(
+            args.review_decisions.resolve() if args.review_decisions else None
+        ),
+        reviewer_confirmed=True,
     )
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0

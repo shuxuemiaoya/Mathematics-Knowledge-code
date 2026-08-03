@@ -31,11 +31,21 @@ examples. Ordinary questions, ordinary exercises, and continuous exposition
 remain ordinary Markdown. Decide by function, not keyword alone; leave an
 ambiguous block unchanged.
 
+`情景引入` is a structural concept rather than a literal output title. A new
+node must be introduced by source-derived content, which may be a question, an
+idea, or an ordinary paragraph. Preserve an unlabeled introduction as ordinary
+Markdown and never synthesize `> [!info] 情景引入`. Use an `info` callout only
+when the source itself supplies an explicit introduction or guidance label.
+For a topic child, use the child's own leading source range as the preview
+before its parent link and retain that range in the child. Generic prose
+earlier on the parent page is not a substitute for this child-specific
+introduction.
+
 | Function | Callout |
 | --- | --- |
 | observation, thinking, discussion, question | `> [!question]` |
 | exploration, experiment, discovering a rule | `> [!question]` |
-| introduction, guidance, situational context | `> [!info]` |
+| explicit source-labeled introduction or guidance block | `> [!info]` |
 | worked example | `> [!example]-` |
 | analysis, approach, hint inside an example | `> > [!tip]-` |
 | solution, proof, explanation inside an example | `> > [!success]-` |
@@ -55,6 +65,12 @@ Emit the functional label once. If the source block begins with the same
 remove that presentation-only duplicate from the body. Never place a later
 functional heading, formal definition, worked-example label, or practice
 heading inside the preceding callout.
+
+Close a question or situation callout before ordinary exposition that begins
+with a formal-definition cue such as `一般地`, `我们规定`, `叫做`, or `称为`.
+If an H4-H6 line is an unlabeled sentence or question rather than a functional
+label, remove the presentation-only heading marker and keep the text as an
+ordinary paragraph; do not synthesize a callout label.
 
 ## Worked examples
 

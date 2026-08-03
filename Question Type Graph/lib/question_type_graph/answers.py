@@ -1,0 +1,381 @@
+from __future__ import annotations
+
+import argparse
+import difflib
+import json
+import re
+from pathlib import Path
+from typing import Any
+
+from .common import (
+    ConfigurationError,
+    load_json,
+    load_profile,
+    lexical_signature,
+    rebase_local_links,
+    require_reviewed_adapter,
+    sha256_file,
+    sha256_text,
+    write_json_atomic,
+    write_text_atomic,
+)
+
+
+QUESTION_BODY_RE = re.compile(
+    r"<!-- question-source:start -->\n(.*?)\n<!-- question-source:end -->",
+    re.DOTALL,
+)
+ANSWER_BODY_RE = re.compile(
+    r"\n## 答案与解析\n\n<!-- answer-source:start -->\n.*?\n<!-- answer-source:end -->\n?",
+    re.DOTALL,
+)
+
+
+def source_for_answers(profile: dict[str, Any], adapter: dict[str, Any]) -> tuple[Path, str]:
+    config = adapter.get("answers", {})
+    role = str(config.get("source_role") or ("combined" if profile["answers"]["mode"] == "embedded" else "answers"))
+    values = [source for source in profile["sources"] if source.get("role") == role]
+    if len(values) != 1:
+        raise ConfigurationError(f"Answer source role must resolve once: {role}")
+    markdown = Path(values[0]["markdown_path"]).resolve()
+    if not markdown.is_file():
+        raise ConfigurationError(f"Converted answer Markdown is missing: {markdown}")
+    return markdown, role
+
+
+def in_ignored_range(line: int, ranges: list[dict[str, Any]]) -> bool:
+    return any(int(item["start_line"]) <= line <= int(item["end_line"]) for item in ranges)
+
+
+def parse_answer_blocks(path: Path, adapter: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    config = adapter.get("answers", {})
+    context_rules = [
+        (str(item["key"]), re.compile(str(item["pattern"])))
+        for item in config.get("contexts", [])
+        if item.get("pattern")
+    ]
+    fixed_contexts = {
+        int(item["start_line"]): str(item["key"])
+        for item in config.get("contexts", [])
+        if item.get("start_line") is not None
+    }
+    answer_patterns = [re.compile(str(value)) for value in config.get("answer_patterns", [])]
+    if not answer_patterns:
+        raise ConfigurationError("Adapter answers.answer_patterns is required when answers are enabled")
+    if any("number" not in pattern.groupindex for pattern in answer_patterns):
+        raise ConfigurationError("Every answer pattern requires a named 'number' group")
+    lines = path.read_text(encoding="utf-8-sig").splitlines()
+    region = config.get("region") or {}
+    start_limit = int(region.get("start_line", 1))
+    end_limit = int(region.get("end_line", len(lines)))
+    ignored = config.get("ignore_ranges", [])
+    events: list[dict[str, Any]] = []
+    context: str | None = None
+    review: list[dict[str, Any]] = []
+    strategies = config.get("matching_strategies") or ["hierarchy-number"]
+    needs_context = any(
+        (item if isinstance(item, str) else item.get("name")) == "hierarchy-number"
+        for item in strategies
+    )
+    for line_number in range(start_limit, min(end_limit, len(lines)) + 1):
+        if in_ignored_range(line_number, ignored):
+            continue
+        line = lines[line_number - 1]
+        fixed_context = fixed_contexts.get(line_number)
+        if fixed_context:
+            context = fixed_context
+            events.append({"kind": "context", "line": line_number, "context": context})
+        matched_context = next((key for key, pattern in context_rules if pattern.search(line)), None)
+        if matched_context:
+            context = matched_context
+            events.append({"kind": "context", "line": line_number, "context": context})
+            continue
+        for pattern in answer_patterns:
+            match = pattern.match(line)
+            if match:
+                if context is None and needs_context:
+                    review.append({"kind": "answer-without-context", "line": line_number, "text": line})
+                evidence = {
+                    key: str(value).strip()
+                    for key, value in match.groupdict().items()
+                    if key != "number" and value is not None and str(value).strip()
+                }
+                events.append(
+                    {
+                        "kind": "answer",
+                        "line": line_number,
+                        "context": context,
+                        "number": str(match.group("number")).strip(),
+                        "evidence": evidence,
+                    }
+                )
+                break
+    answers = [event for event in events if event["kind"] == "answer"]
+    for index, answer in enumerate(answers):
+        end = end_limit
+        for event in events:
+            if event["line"] > answer["line"] and event["kind"] in {"answer", "context"}:
+                end = event["line"] - 1
+                break
+        body = "\n".join(lines[answer["line"] - 1:end]).rstrip() + "\n"
+        answer["end_line"] = end
+        answer["body"] = body
+        answer["body_sha256"] = sha256_text(body)
+        answer["id"] = f"{answer.get('context')}:{answer['number']}:{answer['line']}"
+    return answers, review
+
+
+def normalized_stem(text: str) -> str:
+    text = re.sub(r"\s+", "", text)
+    return re.sub(r"[^\w\u4e00-\u9fff]", "", text).casefold()[:240]
+
+
+def build_answer_indexes(answers: list[dict[str, Any]]) -> dict[str, Any]:
+    indexes: dict[str, Any] = {
+        "hierarchy_number": {},
+        "number": {},
+        "evidence": {},
+        "evidence_number": {},
+        "normalized_evidence": {},
+    }
+    for answer in answers:
+        number = str(answer.get("number"))
+        context = str(answer.get("context"))
+        indexes["hierarchy_number"].setdefault((context, number), []).append(answer)
+        indexes["number"].setdefault(number, []).append(answer)
+        for field, raw_value in (answer.get("evidence") or {}).items():
+            value = str(raw_value).strip()
+            indexes["evidence"].setdefault((str(field), value), []).append(answer)
+            indexes["evidence_number"].setdefault((str(field), value, number), []).append(answer)
+            normalized = normalized_stem(value)
+            if normalized:
+                indexes["normalized_evidence"].setdefault((str(field), normalized), []).append(answer)
+    return indexes
+
+
+def strategy_candidates(
+    strategy: str | dict[str, Any],
+    question: dict[str, Any],
+    question_body: str,
+    answers: list[dict[str, Any]],
+    indexes: dict[str, Any] | None = None,
+) -> tuple[str, list[dict[str, Any]]]:
+    config = {"name": strategy} if isinstance(strategy, str) else strategy
+    name = str(config.get("name", "")).strip()
+    question_evidence = question.get("evidence") or {}
+    indexes = indexes or build_answer_indexes(answers)
+    if name == "hierarchy-number":
+        values = list(
+            indexes["hierarchy_number"].get(
+                (str(question.get("context_key")), str(question.get("number"))), []
+            )
+        )
+    elif name in {"explicit-reference", "source-page-number"}:
+        default_field = "reference" if name == "explicit-reference" else "source_page"
+        question_field = str(config.get("question_field", default_field))
+        answer_field = str(config.get("answer_field", default_field))
+        expected = str(question_evidence.get(question_field, "")).strip()
+        key = (answer_field, expected, str(question.get("number")))
+        values = list(
+            indexes["evidence_number"].get(key, [])
+            if name == "source-page-number"
+            else indexes["evidence"].get((answer_field, expected), [])
+        ) if expected else []
+    elif name == "normalized-stem-exact":
+        question_field = str(config.get("question_field", "stem"))
+        answer_field = str(config.get("answer_field", "stem"))
+        expected = normalized_stem(str(question_evidence.get(question_field, "")) or question_body)
+        values = list(indexes["normalized_evidence"].get((answer_field, expected), [])) if expected else []
+    else:
+        raise ConfigurationError(f"Unsupported answer matching strategy: {name}")
+    return name, values
+
+
+def plan_matches(profile_path: Path, adapter_path: Path, content_manifest_path: Path) -> dict[str, Any]:
+    profile = load_profile(profile_path)
+    adapter = require_reviewed_adapter(profile, adapter_path)
+    content = load_json(content_manifest_path)
+    mode = profile.get("answers", {}).get("mode")
+    if mode == "unavailable":
+        return {
+            "schema_version": 1,
+            "stage": "answer-matching",
+            "status": "passed",
+            "profile": profile["_profile_path"],
+            "mode": "unavailable",
+            "matches": [],
+            "review_items": [],
+            "review_summary": {},
+            "review_groups": [],
+        }
+    answer_markdown, role = source_for_answers(profile, adapter)
+    answers, review = parse_answer_blocks(answer_markdown, adapter)
+    indexes = build_answer_indexes(answers)
+    strategies = adapter.get("answers", {}).get("matching_strategies") or ["hierarchy-number"]
+    matches: list[dict[str, Any]] = []
+    for question in content.get("questions", []):
+        question_note = Path(question["output"])
+        question_text = question_note.read_text(encoding="utf-8-sig") if question_note.is_file() else ""
+        body_match = QUESTION_BODY_RE.search(question_text)
+        question_body = body_match.group(1) if body_match else question["title"]
+        evaluated = [
+            strategy_candidates(strategy, question, question_body, answers, indexes)
+            for strategy in strategies
+        ]
+        decisive = [(name, values[0]) for name, values in evaluated if len(values) == 1]
+        conflicts = {answer["id"] for _, answer in decisive}
+        ambiguous = [(name, values) for name, values in evaluated if len(values) > 1]
+        if len(conflicts) > 1:
+            review.append(
+                {
+                    "kind": "conflicting-answer-evidence",
+                    "question_id": question["id"],
+                    "evidence": [{"strategy": name, "answer_id": answer["id"]} for name, answer in decisive],
+                }
+            )
+            continue
+        if decisive and not ambiguous:
+            strategy, answer = decisive[0]
+            matches.append(
+                {
+                    "question_id": question["id"],
+                    "question_path": question["output"],
+                    "answer_id": answer["id"],
+                    "answer_context": answer.get("context"),
+                    "answer_number": answer["number"],
+                    "answer_start_line": answer["line"],
+                    "answer_end_line": answer["end_line"],
+                    "answer_body": answer["body"],
+                    "answer_body_sha256": answer["body_sha256"],
+                    "answer_body_lexical_signature": lexical_signature(answer["body"]),
+                    "strategy": strategy,
+                    "status": "matched",
+                }
+            )
+        else:
+            stem = normalized_stem(question_body)
+            suggestions = []
+            ambiguous_pool = {
+                answer["id"]: answer
+                for _, values in ambiguous
+                for answer in values
+            }
+            candidate_pool = list(ambiguous_pool.values()) or list(
+                indexes["number"].get(str(question.get("number")), [])
+            )
+            for answer in candidate_pool:
+                ratio = difflib.SequenceMatcher(None, stem, normalized_stem(answer["body"])).ratio()
+                if ratio >= 0.35:
+                    suggestions.append({"answer_id": answer["id"], "ratio": round(ratio, 4)})
+            suggestions.sort(key=lambda item: item["ratio"], reverse=True)
+            review.append(
+                {
+                    "kind": "duplicate-answer" if ambiguous else "missing-answer",
+                    "question_id": question["id"],
+                    "context": str(question.get("context_key")),
+                    "number": str(question.get("number")),
+                    "candidate_count": max((len(values) for _, values in evaluated), default=0),
+                    "strategy_results": [{"strategy": name, "candidate_ids": [item["id"] for item in values]} for name, values in evaluated],
+                    "fuzzy_suggestions_not_accepted": suggestions[:5],
+                }
+            )
+    used = {match["answer_id"] for match in matches}
+    for answer in answers:
+        if answer["id"] not in used:
+            review.append({"kind": "unmatched-answer", "answer_id": answer["id"], "context": answer.get("context"), "number": answer["number"]})
+    review_summary: dict[str, int] = {}
+    review_groups: dict[tuple[str, str, str], int] = {}
+    for item in review:
+        kind = str(item.get("kind", "unknown"))
+        review_summary[kind] = review_summary.get(kind, 0) + 1
+        group_key = (kind, str(item.get("context", "")), str(item.get("number", "")))
+        review_groups[group_key] = review_groups.get(group_key, 0) + 1
+    return {
+        "schema_version": 1,
+        "stage": "answer-matching",
+        "status": "review_required" if review else "passed",
+        "profile": profile["_profile_path"],
+        "adapter": str(adapter_path.resolve()),
+        "mode": mode,
+        "answer_source_role": role,
+        "answer_markdown": str(answer_markdown),
+        "answer_markdown_sha256": sha256_file(answer_markdown),
+        "matches": matches,
+        "review_items": review,
+        "review_summary": review_summary,
+        "review_groups": [
+            {"kind": kind, "context": context, "number": number, "count": count}
+            for (kind, context, number), count in sorted(review_groups.items())
+        ],
+    }
+
+
+def apply_matches(profile_path: Path, manifest_path: Path, overwrite: bool) -> dict[str, Any]:
+    profile = load_profile(profile_path)
+    manifest = load_json(manifest_path)
+    if manifest.get("status") != "passed":
+        raise ConfigurationError("Answer match manifest must pass before application")
+    if manifest.get("mode") == "unavailable":
+        result = {"schema_version": 1, "stage": "answer-application", "status": "passed", "profile": profile["_profile_path"], "mode": "unavailable", "applied_count": 0}
+    else:
+        answer_markdown = Path(manifest["answer_markdown"])
+        if sha256_file(answer_markdown) != manifest.get("answer_markdown_sha256"):
+            raise ConfigurationError("Answer Markdown changed after matching")
+        applied = []
+        for match in manifest.get("matches", []):
+            note = Path(match["question_path"])
+            if not note.is_file():
+                raise ConfigurationError(f"Atomic question note is missing: {note}")
+            text = note.read_text(encoding="utf-8-sig")
+            text = ANSWER_BODY_RE.sub("\n", text).rstrip() + "\n"
+            text = re.sub(r"(?m)^answer_status:\s*\S+", "answer_status: matched", text, count=1)
+            answer_body = rebase_local_links(
+                match["answer_body"],
+                answer_markdown,
+                note,
+                [(answer_markdown.parent / "images", Path(profile["paths"]["graph_root"]) / "images")],
+            )
+            block = (
+                "\n## 答案与解析\n\n"
+                "<!-- answer-source:start -->\n"
+                f"{answer_body.rstrip()}\n"
+                "<!-- answer-source:end -->\n"
+            )
+            text = text.rstrip() + "\n" + block
+            write_text_atomic(note, text, overwrite=True)
+            applied.append({"question_id": match["question_id"], "path": str(note), "answer_body_sha256": match["answer_body_sha256"], "note_sha256": sha256_file(note)})
+        result = {"schema_version": 1, "stage": "answer-application", "status": "passed", "profile": profile["_profile_path"], "mode": manifest.get("mode"), "applied_count": len(applied), "questions": applied}
+    output = Path(profile["paths"]["staging_root"]) / "answer-application-report.json"
+    write_json_atomic(output, result, overwrite=overwrite)
+    return result
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Plan or apply authoritative answer matches without fuzzy auto-acceptance.")
+    sub = parser.add_subparsers(dest="command", required=True)
+    plan = sub.add_parser("plan")
+    plan.add_argument("profile", type=Path)
+    plan.add_argument("adapter", type=Path)
+    plan.add_argument("content_manifest", type=Path)
+    plan.add_argument("output", type=Path)
+    plan.add_argument("--overwrite", action="store_true")
+    apply = sub.add_parser("apply")
+    apply.add_argument("profile", type=Path)
+    apply.add_argument("manifest", type=Path)
+    apply.add_argument("--overwrite", action="store_true")
+    args = parser.parse_args(argv)
+    try:
+        if args.command == "plan":
+            result = plan_matches(args.profile, args.adapter, args.content_manifest)
+            write_json_atomic(args.output, result, overwrite=args.overwrite)
+        else:
+            result = apply_matches(args.profile, args.manifest, args.overwrite)
+        print(json.dumps(result, ensure_ascii=False))
+        return 0
+    except Exception as exc:
+        print(json.dumps({"schema_version": 1, "stage": "answer-matching", "status": "failed", "error_type": type(exc).__name__, "message": str(exc)}, ensure_ascii=False))
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

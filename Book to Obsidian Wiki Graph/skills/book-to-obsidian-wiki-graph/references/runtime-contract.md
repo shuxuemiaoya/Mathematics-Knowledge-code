@@ -127,7 +127,7 @@ stages, without discarding earlier valid work.
 - `split-manifest`, `lesson-flow-manifest`, `coverage-manifest`,
   `concept-manifest`;
 - `markdown-report`, `graph-manifest`, `audit-report`,
-  `reference-parity-report`;
+  `reference-parity-report`, `canvas-style-report`;
 - `review-queue`, `note-workplan`, `note-results`;
 - generic `file`, mutable `directory`, and immutable `tree`.
 
@@ -136,6 +136,13 @@ profile path, and the frozen source digest. Status reports must pass. The
 runtime rejects malformed concept entries, duplicate targets or source keys,
 bad coverage states, invalid graph references, unresolved review queues, and
 identity mismatches.
+
+For a same-book reference, split-manifest validation also requires a passed,
+reviewer-confirmed `semantic_review.reference` bound to the profile path/tree
+digest and to an existing proposal report with the recorded SHA-256. Adding or
+changing that reference after splitting is input drift: initialize the revised
+profile and resume from the split draft, not from the prior lesson flow or any
+downstream checkpoint.
 
 Stage completion also requires the artifact set owned by that stage:
 
@@ -147,13 +154,16 @@ Stage completion also requires the artifact set owned by that stage:
 | Concepts | `concept-manifest` when enabled, concepts `audit-report` |
 | Markdown standardization | `markdown-report`, formatting `audit-report` |
 | Pre-canvas audit | pre-canvas `audit-report` |
-| Canvas | `file`, `graph-manifest` |
+| Canvas | `file`, `graph-manifest`, plus `canvas-style-report` when `canvas.style_reference` is configured |
 | Final audit | final `audit-report`, final corpus `tree`, plus `reference-parity-report` when the profile freezes a reference |
 
 Passing a failed report as a generic output does not bypass the gate.
 The reference report must resolve to the exact profile-bound reference path
 and digest. A style or content review status other than `passed` blocks
 completion.
+The Canvas style report must resolve to the exact profile-bound sibling Canvas
+path and digest, and its candidate path/digest must match the declared Canvas
+file output. `style_review_required` blocks Canvas-stage completion.
 `directory` verifies that a shared corpus exists but permits expected downstream
 edits. `tree` records a complete directory digest and is reserved for the final
 corpus snapshot so resume detects post-completion drift.

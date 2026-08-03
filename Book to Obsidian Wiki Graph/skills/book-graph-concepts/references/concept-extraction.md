@@ -11,6 +11,12 @@ This reference isolates Task 1 from the supplied `概念提取与Markdown排版�
 5. Copy the complete definition; never truncate or paraphrase it.
 6. Preserve immediately required notation, formula, and source-supplied annotation.
 7. Record the source and include a resolving Markdown link back to it.
+8. Use the smallest source-derived definition span. Do not absorb an
+   exploration, counterexample, worked example, or practice block simply
+   because it precedes the formal naming sentence.
+9. When required definition material is separated by a teaching block, use
+   reviewed ordered source segments and preserve their source order instead of
+   widening one range across that block.
 
 Definition cues such as `叫做`, `称为`, `称…是`, `就说`, `判断为`,
 `定义为`, `记为`, and `我们把` are candidates, not proof by themselves.
@@ -21,9 +27,19 @@ line order must not promote a generic noun use over a direct definition.
 General definitions beginning with `一般地`, `通常`, or an explicit
 domain-and-condition statement outrank concrete examples such as
 `称函数 f(x)=x² 为偶函数`. A formula concept is incomplete unless the
-reviewed copied range contains its actual equation.
+reviewed copied range contains its actual equation. The same requirement
+applies to a concept whose name ends in `方程`.
 Parallel terms in one formal sentence (for example, sufficient and necessary
 conditions) remain separate review candidates.
+For a canonical reviewed name of the form `X的Y`, a formally defined source
+surface of the form `X $A$ 的Y` is the same review candidate when the inserted
+material is only a mathematical object label. Preserve the full source surface
+as link text; do not rewrite it to the canonical filename.
+
+A reviewed range or segment must not contain a functional callout marker,
+H4-H6 teaching heading, worked-example label, or practice boundary. Such a
+boundary means the candidate range is overbroad and must be narrowed,
+segmented, or rejected.
 
 ## Files
 

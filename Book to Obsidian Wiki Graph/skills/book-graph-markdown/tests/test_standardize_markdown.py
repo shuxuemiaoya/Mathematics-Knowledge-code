@@ -84,6 +84,53 @@ class StandardizeMarkdownTests(unittest.TestCase):
         self.assertIn("> [!info] 问题 1\n> 某地人口增长如下。\n>\n> 观察数据。", output)
         self.assertIn("> [!question] 思考\n> 为什么？", output)
 
+    def test_unlabeled_node_introduction_remains_plain_markdown(self):
+        source = (
+            "## 4.1 指数\n\n"
+            "指数的范围还可以继续拓展。\n\n"
+            "- [下一个节点](下一个节点.md)\n"
+        )
+        output, _ = MODULE.standardize_text(source)
+        self.assertIn("指数的范围还可以继续拓展。", output)
+        self.assertNotIn("[!info]", output)
+        self.assertNotIn("情景引入", output)
+
+    def test_question_callout_ends_before_formal_exposition(self):
+        source = (
+            "#### 思考\n\n"
+            "这些对象有什么共同特征？\n\n"
+            "一般地，如果集合 A 中的元素都属于集合 B，"
+            "就称 A 为 B 的子集。\n"
+        )
+        output, _ = MODULE.standardize_text(source)
+        self.assertIn(
+            "> [!question] 思考\n> 这些对象有什么共同特征？",
+            output,
+        )
+        self.assertIn(
+            "\n\n一般地，如果集合 A 中的元素都属于集合 B，"
+            "就称 A 为 B 的子集。",
+            output,
+        )
+        self.assertNotIn(
+            "> 一般地，如果集合 A 中的元素都属于集合 B",
+            output,
+        )
+
+    def test_unlabeled_question_heading_becomes_ordinary_paragraph(self):
+        source = (
+            "#### 通过上面的学习，你能给出这个概念的定义吗？\n\n"
+            "定义正文。\n"
+        )
+        output, changes = MODULE.standardize_text(source)
+        self.assertIn(
+            "通过上面的学习，你能给出这个概念的定义吗？\n\n定义正文。",
+            output,
+        )
+        self.assertNotIn("#### 通过上面的学习", output)
+        self.assertNotIn("[!question]", output)
+        self.assertEqual(changes["demoted_question_headings"], 1)
+
     def test_context_analysis_is_nested_like_reference_style(self):
         source = (
             "问题 1 观察三个函数。\n\n"

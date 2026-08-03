@@ -1,0 +1,4 @@
+interface:
+  display_name: "Question Type TOC Segmentation"
+  short_description: "Segment books by a reviewed hierarchy"
+  default_prompt: "Use $question-type-toc-segmentation to build and apply a reviewed hierarchy for this supplementary book."

@@ -59,6 +59,13 @@ INLINE_MATH_RE = re.compile(r"(?<!\$)\$(?!\$).*?(?<!\$)\$(?!\$)", re.DOTALL)
 SPACED_DIGITS_RE = re.compile(r"(?<=\d)[ \t]+(?=\d)")
 SPACE_BEFORE_DECIMAL_RE = re.compile(r"(?<=\d)[ \t]+(?=\.[ \t]*\d)")
 SPACE_AFTER_DECIMAL_RE = re.compile(r"(?<=\d\.)[ \t]+(?=\d)")
+EXPOSITION_CUE_RE = re.compile(
+    r"^(?:可以发现|由此可见|综上(?:所述)?|也就是说|一般地[，,]|"
+    r"由上述.{0,40}?(?:可以得到|可得|得到)|我们规定)"
+)
+FORMAL_DEFINITION_CUE_RE = re.compile(
+    r"(?:叫做|称为|定义为|称之为|记作|规定[：:]?)"
+)
 
 
 def marker_for(title: str) -> str | None:
@@ -137,6 +144,21 @@ def is_block_start(line: str) -> bool:
     if context:
         return True
     return plain_marker_for(line) is not None
+
+
+def is_functional_callout_boundary(line: str, marker: str) -> bool:
+    if is_block_start(line):
+        return True
+    if marker not in {"info", "question"}:
+        return False
+    stripped = line.strip()
+    return bool(
+        stripped
+        and (
+            EXPOSITION_CUE_RE.search(stripped)
+            or FORMAL_DEFINITION_CUE_RE.search(stripped)
+        )
+    )
 
 
 def trim_blank_edges(lines: list[str]) -> list[str]:
@@ -322,6 +344,7 @@ def standardize_text(
     output: list[str] = []
     converted_headings = 0
     converted_examples = 0
+    demoted_question_headings = 0
     removed_artifact_headings = 0
     repaired_ocr_math_fragments = 0
     for line in input_lines:
@@ -355,7 +378,10 @@ def standardize_text(
             marker = marker_for(title)
             if marker:
                 end = index + 1
-                while end < len(cleaned) and not is_block_start(cleaned[end]):
+                while end < len(cleaned) and not is_functional_callout_boundary(
+                    cleaned[end],
+                    marker,
+                ):
                     end += 1
                 body = trim_blank_edges(cleaned[index + 1 : end])
                 if body:
@@ -372,11 +398,21 @@ def standardize_text(
                     converted_headings += 1
                     index = end
                     continue
+            if title.rstrip().endswith(("?", "？")):
+                ensure_blank_before(output)
+                output.append(title)
+                output.append("")
+                demoted_question_headings += 1
+                index += 1
+                continue
 
         plain_marker = plain_marker_for(line)
         if plain_marker:
             end = index + 1
-            while end < len(cleaned) and not is_block_start(cleaned[end]):
+            while end < len(cleaned) and not is_functional_callout_boundary(
+                cleaned[end],
+                plain_marker,
+            ):
                 end += 1
             body = trim_blank_edges(cleaned[index + 1 : end])
             if body:
@@ -427,7 +463,10 @@ def standardize_text(
         ):
             label, stem = context.groups()
             end = index + 1
-            while end < len(cleaned) and not is_block_start(cleaned[end]):
+            while end < len(cleaned) and not is_functional_callout_boundary(
+                cleaned[end],
+                "info",
+            ):
                 end += 1
             body = ([stem] if stem else []) + cleaned[index + 1 : end]
             body = trim_blank_edges(body)
@@ -469,6 +508,7 @@ def standardize_text(
     return result, {
         "converted_headings": converted_headings,
         "converted_examples": converted_examples,
+        "demoted_question_headings": demoted_question_headings,
         "removed_artifact_headings": removed_artifact_headings,
         "repaired_ocr_math_fragments": repaired_ocr_math_fragments,
         "compacted_example_stems": compacted_example_stems,

@@ -22,6 +22,7 @@ def load_script(name: str):
 
 
 profile_tool = load_script("make_book_profile")
+style_discovery = load_script("discover_sibling_canvas_style")
 
 
 class BookProfileTests(unittest.TestCase):
@@ -109,6 +110,75 @@ class BookProfileTests(unittest.TestCase):
             self.assertEqual(profile["reference"]["path"], str(reference.resolve()))
             self.assertEqual(profile["reference"]["scope"], "style-only")
             self.assertEqual(len(profile["reference"]["sha256"]), 64)
+
+    def test_freezes_canvas_style_reference_and_detects_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source.md"
+            vault = root / "vault"
+            staging = root / "staging"
+            reference_canvas = root / "reference.canvas"
+            source.write_text("# Example\n", encoding="utf-8")
+            vault.mkdir()
+            staging.mkdir()
+            reference_canvas.write_text(
+                '{"nodes": [], "edges": []}\n', encoding="utf-8"
+            )
+            profile = profile_tool.create_profile(
+                source,
+                vault,
+                vault / "book",
+                "Example",
+                staging_root=staging,
+                canvas_style_reference=reference_canvas,
+            )
+            style_reference = profile["canvas"]["style_reference"]
+            self.assertEqual(style_reference["scope"], "same-series-style")
+            self.assertEqual(
+                style_reference["path"], str(reference_canvas.resolve())
+            )
+            self.assertEqual(profile_tool.profile_errors(profile), [])
+
+            profile_path = staging / "book-profile.json"
+            profile_path.write_text(
+                json.dumps(profile, ensure_ascii=False), encoding="utf-8"
+            )
+            reference_canvas.write_text(
+                '{"nodes": [{"id": "changed"}], "edges": []}\n',
+                encoding="utf-8",
+            )
+            errors = profile_tool.profile_location_errors(profile, profile_path)
+            self.assertTrue(
+                any("current reference canvas" in item for item in errors)
+            )
+
+    def test_discovers_nearest_same_series_sibling_canvas(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            books = Path(temporary) / "课本"
+            target = books / "【人教版】高中选择性必修 第二册数学电子课本"
+            first = books / "【人教版】高中选择性必修 第一册数学电子课本"
+            third = books / "【人教版】高中选择性必修 第三册数学电子课本"
+            wrong = books / "【人教版】高中必修 第一册数学电子课本"
+            for directory in (target, first, third, wrong):
+                directory.mkdir(parents=True)
+                (directory / f"{directory.name}.canvas").write_text(
+                    '{"nodes": [], "edges": []}\n', encoding="utf-8"
+                )
+
+            payload = style_discovery.discover(books, target)
+
+            self.assertEqual(payload["status"], "selected")
+            self.assertEqual(
+                Path(payload["selected"]["path"]).parent,
+                first.resolve(),
+            )
+            self.assertFalse(
+                next(
+                    item
+                    for item in payload["candidates"]
+                    if Path(item["path"]).parent == wrong.resolve()
+                )["eligible"]
+            )
 
     def test_textbook_rejects_unsupported_auxiliary_mapping(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

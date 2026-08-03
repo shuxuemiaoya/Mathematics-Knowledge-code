@@ -24,7 +24,7 @@ Each stage skill is authoritative for its own rules. Do not copy its implementat
 source and profile
   -> book PDF conversion when needed
   -> TOC heading formatting
-  -> split-manifest and lesson-flow review
+  -> split-manifest, same-book reference-range review when configured, and lesson-flow review
   -> TOC splitting immediately after both pass
   -> split audit
   -> concept extraction
@@ -32,7 +32,7 @@ source and profile
   -> Markdown standardization
   -> formatting audit
   -> pre-canvas audit
-  -> optional canvas
+  -> optional canvas and same-series style-parity gate
   -> final audit
 ```
 
@@ -51,7 +51,7 @@ Do not insert `mathos-pdf-to-md`, `mathos-formatting`, or `mathos-segmentation`.
 - `concept-manifest.json`
 - audit reports
 - `pipeline-state.json`, optional `review-queue.json`, `note-workplan.json`, and `note-results.json`
-- optional `graph-manifest.json` and `.canvas`
+- optional `graph-manifest.json`, `.canvas`, and `canvas-style-report.json`
 
 Every machine-readable handoff carries the same absolute profile path and frozen source digest. Markdown-derived stages also carry their immediate input digest.
 
@@ -74,6 +74,11 @@ from another book or an older run.
   including H2-H3 lessons and H4-H6 numbered subsections. The review must find
   independent teaching arcs even when their source range has no explicit
   heading; a deterministic heading inventory is only the draft.
+- When the profile freezes a `same-book-content-and-style` reference, run the
+  reference semantic proposal immediately after the deterministic split draft,
+  review every candidate and ambiguity, and adopt the confirmed ranges before
+  lesson-flow planning. The physical splitter must reject a same-book profile
+  whose split manifest lacks identity-bound reference-review evidence.
 - Review every numbered lesson and numbered in-lesson subsection as contiguous
   source-ordered logical blocks before splitting. Resolve every automatic
   lesson-flow finding. Keep situation introductions and transitions in the
@@ -120,6 +125,18 @@ For non-textbooks, inspect the book and let the LLM propose useful categories. R
 - Route low-confidence or ambiguous decisions to a blocking review queue.
 - Parallelize only independent notes from a frozen workplan with one owner per note and output path.
 - Require the final applicable audit to pass before completion.
+- Before a Canvas-enabled series build, freeze an explicitly named or
+  deterministically discovered same-series sibling Canvas in the profile.
+  When configured, require the identity-bound style report to pass; iterate
+  layout instead of completing with `style_review_required`.
+- When the same-book reference contains a canvas, use its reviewed domain
+  groups and placement as the first canvas plan, rebase only resolving current
+  notes, then add current-only source-supported nodes. Do not replace the
+  reference layout with a chapter-only grid.
+- If a same-book reference is introduced after splitting, invalidate the old
+  split, lesson flow, notes, concepts, formatting, and canvas. Rebind intake and
+  rerun from the deterministic split draft; never treat final parity or canvas
+  comparison as retroactive approval of the old decomposition.
 
 ## Global Discovery
 

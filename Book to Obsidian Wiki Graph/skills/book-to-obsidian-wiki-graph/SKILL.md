@@ -38,16 +38,38 @@ final-result-only behavior. Never treat test checkpoints as cross-book reuse.
 1. Invoke `book-graph-intake` to freeze source identity and create `book-profile.json`.
    If the user names an approved corpus, freeze its path, digest, and scope in
    the profile before any conversion work.
+   If a same-book reference is supplied only after splitting, do not append it
+   to a completed run and continue downstream. Rebind intake identity, invalidate
+   the old split and every dependent artifact, then resume from the deterministic
+   split draft so reference semantic review still precedes lesson flow.
+   For directory or series builds with Canvas enabled, discover the nearest
+   completed same-publisher, same-series sibling Canvas before creating each
+   profile and freeze it as `canvas.style_reference`. Prefer an explicitly
+   named reference. If none exists, let the first completed volume establish
+   the series baseline for later volumes.
 2. For PDF input, invoke `book-pdf-to-markdown`; for Markdown input, register that immutable source directly.
 3. Invoke `book-toc-formatting` to build the TOC manifest, align all TOC headings to H1-H3, and demote every other heading below H3.
 4. Immediately invoke `book-toc-splitting` after a passed formatting report.
+   When `reference.scope` is `same-book-content-and-style`, require the
+   identity-bound reference semantic proposal and reviewer-confirmed adoption
+   before lesson-flow planning. Do not proceed with a manually reviewed
+   split manifest that lacks `semantic_review.reference.status: passed`.
    Require a passed `lesson-flow-manifest.json` before physical textbook
    splitting.
 5. Invoke `book-graph-audit --stage split`; stop on coverage, link, asset, or identity failures.
 6. Invoke `book-graph-concepts`, then require `book-graph-audit --stage concepts`.
 7. Invoke `book-graph-markdown`, then require `book-graph-audit --stage formatting`.
 8. Invoke `book-graph-audit --stage pre-canvas` and require a passed report.
-9. Invoke `book-graph-canvas` only when enabled.
+9. Invoke `book-graph-canvas` only when enabled. For a same-book reference
+   with a canvas—or when the user supplies one during comparison—bind that
+   reference into the profile, plan from the reviewed layout first, review
+   every skipped node/edge, then augment it with resolving current-only notes
+   instead of replacing it with a chapter-only grid. Reject a per-book builder
+   containing literal chapter ranges, fixed concept names, or hand-authored
+   relation lists. When `canvas.style_reference` exists, run the style
+   comparator, revise and rebuild until `canvas-style-report.status: passed`,
+   then provide that report to runtime completion. Canonical Markdown links
+   and valid topology override defects inherited from a legacy reference.
 10. Invoke `book-graph-audit --stage final` for the final gate.
     A configured reference also requires a passed, profile-bound
     `reference-parity-report`; the runtime must not complete without it.
@@ -68,6 +90,18 @@ Never invoke `mathos-pdf-to-md`, `mathos-formatting`, or `mathos-segmentation`.
   semantic-review ledger with confidence, numbered subsection notes, and
   section-exercise notes. Retain unnumbered non-TOC blocks unless a reviewed
   decision confirms a complete independent teaching arc.
+- A same-book reference is active split evidence, not a final-report-only
+  comparator. Run `propose_reference_semantic_review.py`, resolve every
+  candidate or ambiguity against the frozen source, and run
+  `adopt_reference_semantic_review.py --reviewer-confirmed` before generating
+  lesson flow. When ambiguities exist, pass an exhaustive, proposal-digest-bound
+  `--review-decisions` file with an `accept`, `revise`, or `reject` decision and
+  specific reason for each item. The adopted split manifest must carry the
+  frozen reference path/digest, proposal-report digest, and decision-report
+  digest.
+- Treat a newly supplied or changed same-book reference as split-input drift.
+  Never let content parity, Markdown audit, or canvas reconstruction bless a
+  split manifest created before that reference was frozen.
 - Do not equate the H4-H6 ledger with content review. For every long knowledge
   node emitted by the split planner, including numbered H4-H6 subsections,
   inspect the complete body,
@@ -85,12 +119,21 @@ Never invoke `mathos-pdf-to-md`, `mathos-formatting`, or `mathos-segmentation`.
   worked-example labels, and practice headings as hard boundaries. Block any
   reviewed block that crosses the next boundary, as well as link-only lesson
   entries and oversized retained teaching blocks.
+- Treat `情景引入` in the preceding rule as a structural requirement, not a
+  generated title or callout. Every new node link must be introduced by a
+  complete source-derived question, idea, or ordinary paragraph; preserve
+  unlabeled prose as prose. For every topic child, use its own leading source
+  range as the reviewed `parent_preview` and keep that range in the child. Do
+  not let an unrelated or generic lesson-opening paragraph satisfy the link.
 - Keep H1-H3 immutable after TOC formatting.
 - Keep hyperlink and image destinations immutable during post-split standardization.
 - Require Markdown standardization to turn residual functional headings,
   contextual problem introductions, and worked examples into complete quoted
   callout containers. Example analysis and solutions must remain nested inside
-  the owning example callout before pre-audit.
+  the owning example callout before pre-audit. Close question and situation
+  callouts before a following exposition or formal-definition cue. Convert an
+  unlabeled H4-H6 sentence/question display artifact to an ordinary paragraph
+  rather than inventing a functional callout title.
 - Require the formatting audit to reconstruct callout ownership and reject
   swallowed functional headings, duplicated source labels, formal definitions
   inside situation callouts, examples inside non-example callouts, and
@@ -104,11 +147,19 @@ Never invoke `mathos-pdf-to-md`, `mathos-formatting`, or `mathos-segmentation`.
 
 ## Completion
 
-Report source/profile identity, conversion result, TOC matches and demotions, split/category/parent-link counts, coverage, concepts, formatting validation, links/assets, optional canvas counts, audit results, and source integrity.
+Report source/profile identity, conversion result, TOC matches and demotions,
+split/category/parent-link counts, coverage, concepts, formatting validation,
+links/assets, optional Canvas counts and style metrics, audit results, and
+source integrity.
 
 Also report per-stage duration, attempts, failures, and review counts from
 `pipeline-state.json`. Completion requires the final applicable audit to report
 `status: passed`.
+
+When `canvas.style_reference` is configured, completion additionally requires
+an identity-bound `canvas-style-report.json` with `status: passed`. A
+`style_review_required` report means the Canvas must be replanned; it is not a
+warning that may be accepted at handoff.
 
 When the user supplies an intended/reference corpus, completion also requires a
 normalized reference-parity review. Compare architecture rather than raw book

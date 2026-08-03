@@ -18,12 +18,18 @@ from typing import Any
 MARKDOWN_LINK_RE = re.compile(
     r"(?<!!)\[[^\]]+\]\(((?:[^()]|\([^()]*\))*)\)"
 )
+WIKILINK_RE = re.compile(r"(?<!!)\[\[[^\]]+\]\]")
 EXTERNAL_SCHEME_RE = re.compile(r"^[a-z][a-z0-9+.-]*:", re.IGNORECASE)
 NODE_TYPES = {"group", "text"}
 DEFAULT_NODE_COLORS = {None, "1", "2", "3", "4", "5", "6", "#c800ff"}
 DEFAULT_EDGE_COLORS = {None, "2", "4", "5", "6"}
 SIDES = {"top", "right", "bottom", "left"}
 ENDS = {"none", "arrow"}
+REFERENCE_DISPOSITIONS = {
+    "external-to-current-book",
+    "absent-from-current-corpus",
+    "represented-by-current-equivalent",
+}
 
 
 class ManifestError(ValueError):
@@ -32,6 +38,145 @@ class ManifestError(ValueError):
 
 def stable_id(kind: str, key: str) -> str:
     return hashlib.sha256(f"{kind}:{key}".encode("utf-8")).hexdigest()[:16]
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def validate_reference_review(manifest: dict[str, Any]) -> None:
+    review = manifest.get("reference_review")
+    if review is None:
+        return
+    if not isinstance(review, dict) or review.get("schema_version") != 1:
+        raise ManifestError("reference_review must use schema_version 1")
+    if review.get("scope") != "same-book-content-and-style":
+        raise ManifestError("reference_review has unsupported scope")
+    if (
+        review.get("status") != "approved"
+        or review.get("reviewer_confirmed") is not True
+    ):
+        raise ManifestError("reference canvas review is not approved")
+
+    reference_canvas = Path(str(review.get("reference_canvas", ""))).resolve()
+    if not reference_canvas.is_file():
+        raise ManifestError("reference_review canvas does not exist")
+    if sha256_file(reference_canvas) != review.get("reference_sha256"):
+        raise ManifestError("reference_review canvas digest changed")
+    reference = json.loads(reference_canvas.read_text(encoding="utf-8-sig"))
+    source_counts = review.get("source_counts")
+    expected_counts = {
+        "nodes": len(reference.get("nodes", [])),
+        "groups": sum(
+            isinstance(node, dict) and node.get("type") == "group"
+            for node in reference.get("nodes", [])
+        ),
+        "edges": len(reference.get("edges", [])),
+    }
+    if source_counts != expected_counts:
+        raise ManifestError("reference_review source counts are stale")
+
+    nodes_by_key = {
+        node.get("key"): node
+        for node in manifest.get("nodes", [])
+        if isinstance(node, dict) and isinstance(node.get("key"), str)
+    }
+    edges_by_key = {
+        edge.get("key"): edge
+        for edge in manifest.get("edges", [])
+        if isinstance(edge, dict) and isinstance(edge.get("key"), str)
+    }
+    retained_node_keys = review.get("retained_node_keys")
+    retained_group_keys = review.get("retained_group_keys")
+    retained_edge_keys = review.get("retained_edge_keys")
+    if not all(
+        isinstance(value, list)
+        for value in (
+            retained_node_keys,
+            retained_group_keys,
+            retained_edge_keys,
+        )
+    ):
+        raise ManifestError("reference_review retained key lists are invalid")
+    if not set(retained_node_keys).issubset(nodes_by_key):
+        raise ManifestError("manifest removed a retained reference node")
+    if not set(retained_group_keys).issubset(nodes_by_key):
+        raise ManifestError("manifest removed a retained reference group")
+    if any(nodes_by_key[key].get("type") != "group" for key in retained_group_keys):
+        raise ManifestError("a retained reference group changed node type")
+    if not set(retained_edge_keys).issubset(edges_by_key):
+        raise ManifestError("manifest removed a retained reference edge")
+
+    skipped_nodes = review.get("skipped_nodes")
+    skipped_edges = review.get("skipped_edges")
+    decisions = review.get("decisions")
+    if not isinstance(skipped_nodes, list) or not isinstance(skipped_edges, list):
+        raise ManifestError("reference_review skipped item lists are invalid")
+    if not isinstance(decisions, dict):
+        raise ManifestError("reference_review has no skip decisions")
+    node_decision_ids = {
+        str(item.get("id"))
+        for item in decisions.get("skipped_nodes", [])
+        if isinstance(item, dict)
+    }
+    edge_decision_ids = {
+        str(item.get("id"))
+        for item in decisions.get("skipped_edges", [])
+        if isinstance(item, dict)
+    }
+    if node_decision_ids != {str(item.get("id")) for item in skipped_nodes}:
+        raise ManifestError("reference_review node decisions are incomplete")
+    if edge_decision_ids != {str(item.get("id")) for item in skipped_edges}:
+        raise ManifestError("reference_review edge decisions are incomplete")
+    for kind, items, equivalent_keys in (
+        ("node", decisions.get("skipped_nodes", []), set(nodes_by_key)),
+        ("edge", decisions.get("skipped_edges", []), set(edges_by_key)),
+    ):
+        for item in items:
+            disposition = item.get("disposition")
+            reason = item.get("reason")
+            if disposition not in REFERENCE_DISPOSITIONS:
+                raise ManifestError(
+                    f"reference_review {kind} disposition is invalid"
+                )
+            if not isinstance(reason, str) or len(reason.strip()) < 12:
+                raise ManifestError(
+                    f"reference_review {kind} reason is too vague"
+                )
+            if (
+                disposition == "represented-by-current-equivalent"
+                and item.get("equivalent_key") not in equivalent_keys
+            ):
+                raise ManifestError(
+                    f"reference_review {kind} equivalent_key is missing"
+                )
+    if len(retained_node_keys) + len(skipped_nodes) != source_counts["nodes"]:
+        raise ManifestError("reference_review does not account for every node")
+    if len(retained_edge_keys) + len(skipped_edges) != source_counts["edges"]:
+        raise ManifestError("reference_review does not account for every edge")
+
+    for pair in review.get("group_containment_pairs", []):
+        if not isinstance(pair, dict):
+            raise ManifestError("reference group containment pair is invalid")
+        outer = nodes_by_key.get(pair.get("outer"))
+        inner = nodes_by_key.get(pair.get("inner"))
+        if outer is None or inner is None:
+            raise ManifestError("reference group containment endpoint is missing")
+        if not (
+            float(outer["x"]) <= float(inner["x"])
+            and float(outer["y"]) <= float(inner["y"])
+            and float(outer["x"]) + float(outer["width"])
+            >= float(inner["x"]) + float(inner["width"])
+            and float(outer["y"]) + float(outer["height"])
+            >= float(inner["y"]) + float(inner["height"])
+        ):
+            raise ManifestError(
+                "manifest flattened a retained reference group relationship"
+            )
 
 
 def _require_number(value: Any, field: str, key: str) -> int | float:
@@ -104,6 +249,7 @@ def compile_manifest(
     raw_edges = manifest.get("edges")
     if not isinstance(raw_nodes, list) or not isinstance(raw_edges, list):
         raise ManifestError("manifest must contain list fields 'nodes' and 'edges'")
+    validate_reference_review(manifest)
 
     key_to_id: dict[str, str] = {}
     used_ids: set[str] = set()
@@ -155,6 +301,10 @@ def compile_manifest(
             text = raw.get("text")
             if not isinstance(text, str) or not text.strip():
                 raise ManifestError(f"text node {key!r} needs non-empty text")
+            if WIKILINK_RE.search(text):
+                raise ManifestError(
+                    f"text node {key!r} contains a forbidden Wikilink"
+                )
             compiled["text"] = text
         if color is not None:
             compiled["color"] = color
@@ -306,6 +456,25 @@ def load_profile(
     expected_sha256 = profile.get("source", {}).get("sha256")
     if manifest.get("source_sha256") != expected_sha256:
         raise ManifestError("manifest source_sha256 does not match profile")
+
+    reference = profile.get("reference")
+    if (
+        isinstance(reference, dict)
+        and reference.get("scope") == "same-book-content-and-style"
+    ):
+        reference_root = Path(str(reference.get("path", ""))).resolve()
+        reference_canvases = sorted(reference_root.glob("*.canvas"))
+        if reference_canvases:
+            review = manifest.get("reference_review")
+            if not isinstance(review, dict):
+                raise ManifestError(
+                    "same-book reference canvas requires reference_review"
+                )
+            selected = Path(str(review.get("reference_canvas", ""))).resolve()
+            if selected not in [path.resolve() for path in reference_canvases]:
+                raise ManifestError(
+                    "reference_review canvas is not from the profile reference"
+                )
 
     canvas = profile.get("canvas", {})
     configured_nodes = canvas.get("node_colors")

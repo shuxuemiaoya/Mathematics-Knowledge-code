@@ -348,6 +348,33 @@ class ReferenceContentParityTests(unittest.TestCase):
             )
             self.assertEqual(report["status"], "content_review_required")
 
+    def test_question_callout_cannot_swallow_formal_definition(self) -> None:
+        issues = MODULE.callout_structure_issues(
+            "知识点/最大值与最小值.md",
+            (
+                "> [!question] 思考\n"
+                "> 最大值表示什么？\n"
+                ">\n"
+                "> 一般地，如果存在实数 M，就称 M 为函数的最大值。\n"
+            ),
+        )
+        self.assertIn(
+            "formal-definition-inside-question-or-situation-callout",
+            {item["reason"] for item in issues},
+        )
+
+    def test_symmetric_axis_question_is_not_a_formal_definition(self) -> None:
+        issues = MODULE.callout_structure_issues(
+            "知识点/抛物线的离心率.md",
+            (
+                "> [!question] 思考\n"
+                "> 顶点在原点，对称轴是坐标轴，并且经过点 M 的抛物线"
+                "有几条？求出这些抛物线的标准方程。\n"
+            ),
+        )
+
+        self.assertEqual(issues, [])
+
     def test_same_path_functional_topology_mismatch_blocks(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

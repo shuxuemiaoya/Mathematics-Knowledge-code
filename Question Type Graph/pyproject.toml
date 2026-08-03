@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "question-type-graph"
+version = "0.1.0"
+description = "Profile-driven supplementary-book to Obsidian Question Type Graph pipeline"
+requires-python = ">=3.10"
+dependencies = ["pypdf>=5"]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[tool.setuptools]
+package-dir = {"" = "lib"}
+
+[tool.setuptools.packages.find]
+where = ["lib"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -59,6 +59,14 @@ def source_key_by_target(coverage: dict) -> dict[str, str]:
 
 DISPLAY_MATH_RE = re.compile(r"\$\$.*?\$\$", re.DOTALL)
 INLINE_MATH_RE = re.compile(r"(?<!\$)\$(?!\$).*?(?<!\$)\$(?!\$)", re.DOTALL)
+FUNCTIONAL_CALLOUT_RE = re.compile(
+    r"^\s*(?:>\s*)+\[![^\]]+\]",
+)
+TEACHING_HEADING_RE = re.compile(r"^\s*(?:>\s*)*#{4,6}\s+\S")
+WORKED_EXAMPLE_RE = re.compile(r"^\s*(?:>\s*)*例(?:题)?\s*\d+(?:\s|[：:])")
+PRACTICE_BOUNDARY_RE = re.compile(
+    r"^\s*(?:>\s*)*(?:#{4,6}\s+)?(?:练习|习题\s*\d+(?:\.\d+)*)(?:\s|$)"
+)
 
 
 def math_spans(text: str) -> list[tuple[int, int]]:
@@ -73,23 +81,82 @@ def math_spans(text: str) -> list[tuple[int, int]]:
     return display + inline
 
 
-def validate_candidate(candidate: dict, source_lines: list[str]) -> tuple[int, int, str]:
-    start = int(candidate["definition_start_line"])
-    end = int(candidate["definition_end_line"])
-    if start < 1 or end < start or end > len(source_lines):
+def candidate_ranges(candidate: dict) -> list[tuple[int, int]]:
+    raw_segments = candidate.get("definition_segments")
+    if raw_segments is None:
+        return [
+            (
+                int(candidate["definition_start_line"]),
+                int(candidate["definition_end_line"]),
+            )
+        ]
+    if not isinstance(raw_segments, list) or not raw_segments:
         raise ValueError(
-            f"{candidate['name']}: invalid definition lines {start}-{end}"
+            f"{candidate['name']}: definition_segments must be a nonempty list"
         )
-    definition = "\n".join(source_lines[start - 1 : end]).strip()
+    ranges: list[tuple[int, int]] = []
+    for segment in raw_segments:
+        if not isinstance(segment, dict):
+            raise ValueError(
+                f"{candidate['name']}: every definition segment must be an object"
+            )
+        ranges.append((int(segment["start_line"]), int(segment["end_line"])))
+    return ranges
+
+
+def validate_candidate(
+    candidate: dict, source_lines: list[str]
+) -> tuple[list[tuple[int, int]], str]:
+    ranges = candidate_ranges(candidate)
+    previous_end = 0
+    pieces: list[str] = []
+    anchor_segments = 0
+    anchor = candidate["anchor_text"]
+    for start, end in ranges:
+        if start < 1 or end < start or end > len(source_lines):
+            raise ValueError(
+                f"{candidate['name']}: invalid definition lines {start}-{end}"
+            )
+        if start <= previous_end:
+            raise ValueError(
+                f"{candidate['name']}: definition segments must be ordered "
+                "and non-overlapping"
+            )
+        selected_lines = source_lines[start - 1 : end]
+        if any(line.startswith(("# ", "## ", "### ")) for line in selected_lines):
+            raise ValueError(f"{candidate['name']}: definition range includes H1-H3")
+        boundary = next(
+            (
+                line.strip()
+                for line in selected_lines
+                if FUNCTIONAL_CALLOUT_RE.match(line)
+                or TEACHING_HEADING_RE.match(line)
+                or WORKED_EXAMPLE_RE.match(line)
+                or PRACTICE_BOUNDARY_RE.match(line)
+            ),
+            None,
+        )
+        if boundary is not None:
+            raise ValueError(
+                f"{candidate['name']}: definition range crosses teaching "
+                f"boundary: {boundary}"
+            )
+        piece = "\n".join(selected_lines).strip()
+        pieces.append(piece)
+        if anchor in piece:
+            anchor_segments += 1
+        previous_end = end
+
+    definition = "\n\n".join(piece for piece in pieces if piece)
     anchor = candidate["anchor_text"]
     link_text = candidate.get("link_text", candidate["name"])
-    if anchor not in definition:
-        raise ValueError(f"{candidate['name']}: anchor not found in definition range")
+    if anchor_segments != 1:
+        raise ValueError(
+            f"{candidate['name']}: anchor must occur in exactly one definition segment"
+        )
     if link_text not in anchor:
         raise ValueError(f"{candidate['name']}: link text is not inside anchor")
-    if any(line.startswith(("# ", "## ", "### ")) for line in source_lines[start - 1 : end]):
-        raise ValueError(f"{candidate['name']}: definition range includes H1-H3")
-    if candidate["name"].endswith("公式"):
+    if candidate["name"].endswith(("公式", "方程")):
         math_fragments = math_spans(definition)
         if not any(
             "=" in definition[left:right] or r"\equiv" in definition[left:right]
@@ -99,14 +166,20 @@ def validate_candidate(candidate: dict, source_lines: list[str]) -> tuple[int, i
                 f"{candidate['name']}: formula definition has no equation"
             )
     full_source = "\n".join(source_lines)
-    definition_offset = sum(len(line) + 1 for line in source_lines[: start - 1])
-    term_start = definition_offset + definition.find(anchor) + anchor.find(link_text)
+    anchor_start, anchor_end = next(
+        (start, end)
+        for start, end in ranges
+        if anchor in "\n".join(source_lines[start - 1 : end])
+    )
+    anchor_piece = "\n".join(source_lines[anchor_start - 1 : anchor_end])
+    definition_offset = sum(len(line) + 1 for line in source_lines[: anchor_start - 1])
+    term_start = definition_offset + anchor_piece.find(anchor) + anchor.find(link_text)
     term_end = term_start + len(link_text)
     if any(left <= term_start and term_end <= right for left, right in math_spans(full_source)):
         raise ValueError(
             f"{candidate['name']}: defining term is inside math and cannot host a Markdown link"
         )
-    return start, end, definition
+    return ranges, definition
 
 
 def detach_definition_from_source_callout(definition: str) -> str:
@@ -132,13 +205,17 @@ def detach_definition_from_source_callout(definition: str) -> str:
 
 def link_first_defining_occurrence(
     lines: list[str],
-    start: int,
-    end: int,
+    ranges: list[tuple[int, int]],
     *,
     anchor: str,
     link_text: str,
     target: str,
 ) -> None:
+    start, end = next(
+        (start, end)
+        for start, end in ranges
+        if anchor in "\n".join(lines[start - 1 : end])
+    )
     segment = "\n".join(lines[start - 1 : end])
     anchor_offset = segment.find(anchor)
     if anchor_offset < 0:
@@ -184,14 +261,14 @@ def apply_candidates(
         raise ValueError("concept candidate names must be unique")
 
     sources: dict[str, list[str]] = {}
-    validated: list[tuple[dict, int, int, str]] = []
+    validated: list[tuple[dict, list[tuple[int, int]], str]] = []
     for candidate in candidates:
         source_rel = candidate["definition_source"].replace("\\", "/")
         source = book_root / Path(source_rel)
         if source_rel not in sources:
             sources[source_rel] = source.read_text(encoding="utf-8").splitlines()
-        start, end, definition = validate_candidate(candidate, sources[source_rel])
-        validated.append((candidate, start, end, definition))
+        ranges, definition = validate_candidate(candidate, sources[source_rel])
+        validated.append((candidate, ranges, definition))
 
     concept_targets: dict[str, Path] = {
         candidate["name"]: concept_dir / f"{candidate['name']}.md"
@@ -200,7 +277,7 @@ def apply_candidates(
     source_keys = source_key_by_target(coverage)
     manifest_concepts: list[dict] = []
 
-    for candidate, start, end, definition in validated:
+    for candidate, ranges, definition in validated:
         name = candidate["name"]
         source_rel = candidate["definition_source"].replace("\\", "/")
         source_path = book_root / Path(source_rel)
@@ -209,8 +286,7 @@ def apply_candidates(
         concept_link = note_target(profile, concept_path)
         link_first_defining_occurrence(
             sources[source_rel],
-            start,
-            end,
+            ranges,
             anchor=candidate["anchor_text"],
             link_text=candidate.get("link_text", name),
             target=concept_link,
@@ -231,6 +307,10 @@ def apply_candidates(
                 "target": concept_path.relative_to(book_root).as_posix(),
                 "linked_from": [source_rel],
                 "confidence": candidate.get("confidence", "high"),
+                "definition_segments": [
+                    {"start_line": start, "end_line": end}
+                    for start, end in ranges
+                ],
             }
         )
 

@@ -44,9 +44,16 @@ python scripts\audit_obsidian_graph.py "<book_root>" `
 
 Require `status: passed` before canvas work.
 
+For `same-book-content-and-style`, require the lesson-flow-bound split manifest
+to contain the passed, reviewer-confirmed reference semantic review with the
+current reference path, tree digest, and proposal-report digest. A later parity
+report or reference-based canvas cannot substitute for this split-stage gate.
+
 At every gate, require each non-concept note to begin with one valid H1-H3
 entry heading. From the concept gate onward, require every concept note to
-begin with `# <filename stem>` and contain `## 定义`. When
+begin with `# <filename stem>` and contain `## 定义`, and reject a definition
+body that contains a functional callout marker, H4-H6 teaching heading,
+worked-example label, or practice boundary. When
 `links.note_mode` is `vault-root`, require internal Markdown note links to use
 leading-slash vault-root destinations.
 

@@ -20,11 +20,24 @@ for _stream in (sys.stdout, sys.stderr):
 
 
 LESSON_TITLE_RE = re.compile(r"^\d+(?:\.\d+)+\s+\S")
+NUMBERED_SUBSECTION_RE = re.compile(r"^\d+(?:\.\d+){2,}\s+\S")
 CHAPTER_TITLE_RE = re.compile(r"^第[一二三四五六七八九十百\d]+章")
 SUMMARY_TITLE_RE = re.compile(r"(?:小结|复习参考题)")
 CONTENT_HEADING_RE = re.compile(r"^#{4,6}\s+(.+?)\s*$")
+ANY_HEADING_RE = re.compile(r"^#{1,6}\s+(.+?)\s*$")
 EXAMPLE_RE = re.compile(r"^(例(?:题)?\s*\d+)\s*(.*)$")
 PRACTICE_TITLE_RE = re.compile(r"^(?:练习|习题\s*\d+(?:\.\d+)*)(?:\s|$)")
+FIGURE_REFERENCE_RE = re.compile(
+    r"(?:图|fig(?:ure)?\.?)\s*[（(]?\d",
+    re.IGNORECASE,
+)
+TABLE_REFERENCE_RE = re.compile(r"(?:表|table)\s*[（(]?\d", re.IGNORECASE)
+IMAGE_MARKER_RE = re.compile(r"!\[[^\]]*\]\(|<img\b", re.IGNORECASE)
+TABLE_MARKER_RE = re.compile(r"<table\b|^\s*\|.+\|\s*$", re.IGNORECASE | re.MULTILINE)
+MEDIA_CAPTION_RE = re.compile(r"^(?:图|表)\s*\d", re.IGNORECASE)
+SUBFIGURE_LABEL_RE = re.compile(r"^[（(]\s*\d+\s*[）)]$")
+FUNCTIONAL_STANDALONE_RE = re.compile(r"^(?:分析|解|证明)\s*[:：]?$")
+MAX_PARENT_PREVIEW_CHARACTERS = 180
 QUESTION_TITLES = (
     "思考",
     "观察",
@@ -80,6 +93,7 @@ ALLOWED_ROLES = {
     "transition",
     "practice",
     "navigation",
+    "section-heading",
 }
 ALLOWED_OWNERSHIP = {"retain-parent", "move-child"}
 RETAIN_PARENT_ROLES = {
@@ -92,6 +106,7 @@ RETAIN_PARENT_ROLES = {
     "representative-example",
     "transition",
     "navigation",
+    "section-heading",
 }
 CHECK_NAMES = {
     "source_order_preserved",
@@ -209,7 +224,7 @@ def make_block(
             "confidence": 0.0,
         }
     role = "practice" if child.get("category") == "exercise" else "topic"
-    return {
+    block = {
         "id": f"{lesson_key}-block-{index:03d}",
         "role": role,
         "ownership": "move-child",
@@ -220,6 +235,9 @@ def make_block(
         "reason": "Existing direct child range; review its teaching boundary.",
         "confidence": 0.0,
     }
+    if isinstance(child.get("parent_preview"), dict):
+        block["parent_preview"] = child["parent_preview"]
+    return block
 
 
 def is_example_cross_reference(stem: str) -> bool:
@@ -246,6 +264,8 @@ def functional_boundary(line: str) -> tuple[str, str] | None:
         return None
     heading = CONTENT_HEADING_RE.match(stripped)
     title = heading.group(1).strip() if heading else stripped
+    if heading and NUMBERED_SUBSECTION_RE.match(title):
+        return "section-heading", title
     example = EXAMPLE_RE.match(title)
     if example and not is_example_cross_reference(example.group(2)):
         return "worked-example", example.group(1)
@@ -288,6 +308,10 @@ def retained_draft_blocks(
         (line_number, detected)
         for line_number in range(start_line, end_line + 1)
         if (detected := functional_boundary(lines[line_number - 1])) is not None
+        and not (
+            line_number == int(lesson["start_line"])
+            and detected[0] == "section-heading"
+        )
     ]
     for line_number, (role, label) in boundaries:
         has_content_before = any(
@@ -378,6 +402,7 @@ def plan(
         raise LessonFlowError("split manifest profile does not match profile")
     if split_manifest.get("source_sha256") != source_hash:
         raise LessonFlowError("split manifest source identity does not match profile")
+    validate_same_book_reference_review(split_manifest, profile)
     input_hash = sha256_file(formatted_markdown)
     if split_manifest.get("input_markdown_sha256") != input_hash:
         raise LessonFlowError(
@@ -408,7 +433,25 @@ def plan(
                 int(block["end_line"]),
             )
         findings: list[dict[str, Any]] = []
-        if opening_nonblank < 2:
+        first_child_preview = next(
+            (
+                block.get("parent_preview")
+                for block in blocks
+                if block.get("ownership") == "move-child"
+                and lookup[str(block["child_node_key"])].get("category")
+                == "knowledge"
+            ),
+            None,
+        )
+        opening_supplied_by_first_child = (
+            isinstance(first_child_preview, dict)
+            and meaningful_preview(
+                lines,
+                int(first_child_preview.get("start_line", -1)),
+                int(first_child_preview.get("end_line", -1)),
+            )
+        )
+        if opening_nonblank < 2 and not opening_supplied_by_first_child:
             findings.append(
                 {
                     "code": "opening-preview-missing",
@@ -424,6 +467,13 @@ def plan(
                 }
             )
         for block in blocks:
+            if block["role"] == "topic":
+                preview = block.get("parent_preview")
+                child = lookup[str(block["child_node_key"])]
+                if child.get("category") != "knowledge":
+                    continue
+                if not isinstance(preview, dict):
+                    continue
             if block["ownership"] != "retain-parent":
                 continue
             block_nonblank = nonblank_count(
@@ -431,7 +481,15 @@ def plan(
                 int(block["start_line"]),
                 int(block["end_line"]),
             )
-            if block_nonblank > max_retained:
+            if (
+                block["role"]
+                not in {
+                    "practice",
+                    "worked-example",
+                    "representative-example",
+                }
+                and block_nonblank > max_retained
+            ):
                 findings.append(
                     {
                         "code": "retained-block-too-large",
@@ -486,6 +544,94 @@ def nonblank_count(lines: list[str], start_line: int, end_line: int) -> int:
     )
 
 
+def meaningful_preview(
+    lines: list[str],
+    start_line: int,
+    end_line: int,
+) -> bool:
+    ignored = {
+        "情景引入",
+        "情境引入",
+        "问题引入",
+        "引入",
+        "我们知道：",
+        "我们知道:",
+    }
+    content: list[str] = []
+    for line in lines[start_line - 1 : end_line]:
+        text = line.strip()
+        if (
+            not text
+            or CONTENT_HEADING_RE.match(text)
+            or text == "$$"
+            or text in ignored
+            or IMAGE_MARKER_RE.search(text)
+            or TABLE_MARKER_RE.search(text)
+            or MEDIA_CAPTION_RE.match(text)
+            or SUBFIGURE_LABEL_RE.match(text)
+            or FUNCTIONAL_STANDALONE_RE.match(text)
+        ):
+            continue
+        content.append(text)
+    if not content:
+        return False
+    joined = " ".join(content)
+    raw = "\n".join(lines[start_line - 1 : end_line])
+    structurally_complete = (
+        raw.count("$$") % 2 == 0
+        and raw.lower().count("<table") == raw.lower().count("</table>")
+        and raw.count("```") % 2 == 0
+    )
+    return (
+        structurally_complete
+        and len(joined) >= 12
+        and joined.endswith(tuple("。！？.!?；;"))
+    )
+
+
+def preview_is_leading_child_context(
+    lines: list[str],
+    child_start: int,
+    preview_start: int,
+) -> bool:
+    """Require a preview to begin at the child's first substantive source line."""
+
+    if preview_start < child_start:
+        return False
+    for line in lines[child_start - 1 : preview_start - 1]:
+        text = line.strip()
+        if text and not ANY_HEADING_RE.match(text):
+            return False
+    return True
+
+
+def preview_omits_attached_referenced_media(
+    lines: list[str],
+    preview_start: int,
+    preview_end: int,
+    child_end: int,
+) -> bool:
+    """Detect a preview that strands a nearby explicit figure/table reference."""
+
+    preview_text = "\n".join(lines[preview_start - 1 : preview_end])
+    needs_figure = bool(FIGURE_REFERENCE_RE.search(preview_text))
+    needs_table = bool(TABLE_REFERENCE_RE.search(preview_text))
+    if not needs_figure and not needs_table:
+        return False
+    if needs_figure and IMAGE_MARKER_RE.search(preview_text):
+        needs_figure = False
+    if needs_table and TABLE_MARKER_RE.search(preview_text):
+        needs_table = False
+    if not needs_figure and not needs_table:
+        return False
+    lookahead_end = min(child_end, preview_end + 8)
+    lookahead = "\n".join(lines[preview_end:lookahead_end])
+    return bool(
+        (needs_figure and IMAGE_MARKER_RE.search(lookahead))
+        or (needs_table and TABLE_MARKER_RE.search(lookahead))
+    )
+
+
 def require_confidence(value: Any, label: str, threshold: float) -> None:
     if (
         isinstance(value, bool)
@@ -497,6 +643,83 @@ def require_confidence(value: Any, label: str, threshold: float) -> None:
         )
 
 
+def validate_same_book_reference_review(
+    split_manifest: dict[str, Any],
+    profile: dict[str, Any],
+) -> None:
+    configured = profile.get("reference")
+    if not (
+        isinstance(configured, dict)
+        and configured.get("scope") == "same-book-content-and-style"
+    ):
+        return
+    semantic_review = split_manifest.get("semantic_review")
+    reference_review = (
+        semantic_review.get("reference")
+        if isinstance(semantic_review, dict)
+        else None
+    )
+    if not isinstance(reference_review, dict):
+        raise LessonFlowError(
+            "same-book reference requires adopted semantic review before lesson-flow"
+        )
+    if (
+        reference_review.get("status") != "passed"
+        or reference_review.get("reviewer_confirmed") is not True
+    ):
+        raise LessonFlowError(
+            "same-book reference semantic review is not reviewer-confirmed and passed"
+        )
+    if Path(str(reference_review.get("path", ""))).resolve() != Path(
+        str(configured.get("path", ""))
+    ).resolve():
+        raise LessonFlowError(
+            "same-book reference semantic review path does not match profile"
+        )
+    if reference_review.get("sha256") != configured.get("sha256"):
+        raise LessonFlowError(
+            "same-book reference semantic review digest does not match profile"
+        )
+    proposal_path = Path(
+        str(reference_review.get("proposal_report", ""))
+    ).resolve()
+    if not proposal_path.is_file():
+        raise LessonFlowError(
+            "same-book reference semantic proposal report is missing"
+        )
+    if reference_review.get("proposal_report_sha256") != sha256_file(
+        proposal_path
+    ):
+        raise LessonFlowError(
+            "same-book reference semantic proposal report digest does not match"
+        )
+    ambiguous_count = reference_review.get("ambiguous_count", 0)
+    resolved_count = reference_review.get("resolved_ambiguity_count", 0)
+    if (
+        not isinstance(ambiguous_count, int)
+        or isinstance(ambiguous_count, bool)
+        or ambiguous_count < 0
+        or resolved_count != ambiguous_count
+    ):
+        raise LessonFlowError(
+            "same-book reference ambiguities are not completely resolved"
+        )
+    if ambiguous_count:
+        decision_path = Path(
+            str(reference_review.get("decision_report", ""))
+        ).resolve()
+        if not decision_path.is_file():
+            raise LessonFlowError(
+                "same-book reference ambiguity decision report is missing"
+            )
+        if reference_review.get("decision_report_sha256") != sha256_file(
+            decision_path
+        ):
+            raise LessonFlowError(
+                "same-book reference ambiguity decision report digest does not match"
+            )
+
+
 def validate(
     manifest: dict[str, Any],
     *,
@@ -506,6 +729,7 @@ def validate(
 ) -> dict[str, Any]:
     profile = read_json(profile_path)
     split_manifest = read_json(split_manifest_path)
+    validate_same_book_reference_review(split_manifest, profile)
     lookup = node_lookup(split_manifest)
     expected_lessons = {
         node["key"]: node for node in lesson_nodes(split_manifest)
@@ -615,6 +839,9 @@ def validate(
         entry_context_nonblank = 0
         opening_retained_nonblank = 0
         before_first_child = True
+        contextual_preview_since_child = False
+        first_child_preview_nonblank = 0
+        rendered_preview_nonblank = 0
         representative_example_count = 0
         child_keys = {
             child["key"] for child in direct_children(node, lookup)
@@ -688,6 +915,7 @@ def validate(
                     )
             child_key = block.get("child_node_key")
             if ownership == "move-child":
+                is_first_child = before_first_child
                 before_first_child = False
                 child = lookup.get(child_key)
                 if child is None or child_key not in child_keys:
@@ -704,6 +932,10 @@ def validate(
                 if role == "topic" and child.get("category") not in {
                     "knowledge",
                     "concept",
+                    "reading",
+                    "history",
+                    "method",
+                    "tool",
                 }:
                     raise LessonFlowError(
                         f"topic block has wrong child category: {child_key}"
@@ -712,7 +944,81 @@ def validate(
                     raise LessonFlowError(
                         f"practice block has wrong child category: {child_key}"
                     )
+                preview = block.get("parent_preview")
+                expected_preview = child.get("parent_preview")
+                if preview != expected_preview:
+                    raise LessonFlowError(
+                        f"parent preview must match split child metadata: {child_key}"
+                    )
+                allows_parent_preview = (
+                    role == "topic" and child.get("category") == "knowledge"
+                )
+                if isinstance(preview, dict):
+                    if not allows_parent_preview:
+                        raise LessonFlowError(
+                            "non-knowledge child must not carry a parent "
+                            f"preview: {child_key}"
+                        )
+                    preview_start = preview.get("start_line")
+                    preview_end = preview.get("end_line")
+                    preview_role = preview.get("role")
+                    if (
+                        not isinstance(preview_start, int)
+                        or not isinstance(preview_end, int)
+                        or preview_start < int(child["start_line"])
+                        or preview_end < preview_start
+                        or preview_end > int(child["end_line"])
+                        or preview_role
+                        not in {
+                            "context",
+                            "question",
+                            "analysis",
+                            "exposition",
+                            "transition",
+                            "worked-example",
+                        }
+                    ):
+                        raise LessonFlowError(
+                            f"invalid parent preview range for {child_key}"
+                        )
+                    if not meaningful_preview(
+                        lines,
+                        preview_start,
+                        preview_end,
+                    ):
+                        raise LessonFlowError(
+                            f"parent preview is incomplete for {child_key}"
+                        )
+                    preview_text = " ".join(
+                        text.strip()
+                        for text in lines[preview_start - 1 : preview_end]
+                        if text.strip()
+                    )
+                    if len(preview_text) > MAX_PARENT_PREVIEW_CHARACTERS:
+                        raise LessonFlowError(
+                            "parent preview exceeds the concise prompt limit "
+                            f"for {child_key}"
+                        )
+                    if preview_omits_attached_referenced_media(
+                        lines,
+                        preview_start,
+                        preview_end,
+                        int(child["end_line"]),
+                    ):
+                        raise LessonFlowError(
+                            "parent preview strands an attached figure/table "
+                            f"before the child link: {child_key}"
+                        )
+                    preview_nonblank = nonblank_count(
+                        lines,
+                        preview_start,
+                        preview_end,
+                    )
+                    rendered_preview_nonblank += preview_nonblank
+                    if is_first_child:
+                        first_child_preview_nonblank = preview_nonblank
                 moved_children.add(str(child_key))
+                contextual_preview_since_child = False
             else:
                 if child_key is not None:
                     raise LessonFlowError(
@@ -750,6 +1056,11 @@ def validate(
                     if detected is None:
                         continue
                     expected_role, label = detected
+                    if (
+                        expected_role == "section-heading"
+                        and line_number == int(node["start_line"])
+                    ):
+                        continue
                     if line_number != first_nonblank_line:
                         raise LessonFlowError(
                             f"lesson-flow block crosses functional boundary "
@@ -764,6 +1075,18 @@ def validate(
                             f"functional boundary {label!r} at line "
                             f"{line_number}: {node_key}"
                         )
+                if role == "section-heading":
+                    contextual_preview_since_child = meaningful_preview(
+                        lines, start_line, end_line
+                    )
+                elif role in {
+                    "entry-context",
+                    "context",
+                    "question",
+                    "exposition",
+                    "transition",
+                } and meaningful_preview(lines, start_line, end_line):
+                    contextual_preview_since_child = True
         if representative_example_count > 1:
             raise LessonFlowError(
                 f"lesson-flow has more than one representative example: {node_key}"
@@ -779,12 +1102,16 @@ def validate(
                 f"lesson-flow child coverage mismatch for {node_key}; "
                 f"missing={missing}, extra={extra}"
             )
-        if entry_context_nonblank < 2 and opening_retained_nonblank < 2:
+        if (
+            entry_context_nonblank < 2
+            and opening_retained_nonblank < 2
+            and first_child_preview_nonblank < 1
+        ):
             raise LessonFlowError(
                 "lesson entry would begin link-only and has no retained "
                 f"opening preview: {node_key}"
             )
-        if child_keys and retained_nonblank < 2:
+        if child_keys and retained_nonblank + rendered_preview_nonblank < 2:
             raise LessonFlowError(
                 f"lesson entry would be link-only and has no retained preview: "
                 f"{node_key}"

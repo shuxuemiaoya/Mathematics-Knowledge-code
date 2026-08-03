@@ -8,6 +8,7 @@
 4. Link rules
 5. Layout rules
 6. Compilation and validation
+7. Same-series style parity
 
 ## 1. Manifest Schema
 
@@ -170,6 +171,32 @@ Treat the canvas as a knowledge logic map:
 
 The manifest is reviewable semantic planning. Do not use the compiler to invent placement or mathematical relations.
 
+If the profile declares a reviewed same-book reference with scope
+`same-book-content-and-style`, use its canvas as the initial layout contract:
+
+- preserve coherent domain/topic groups and their relative organization;
+- map reference cards to resolving current notes or documented equivalents;
+- review and account for every skipped reference node and edge;
+- add current-only notes near the inherited topic that they support;
+- record any deliberate topology change in the staging review artifact.
+
+Do not replace a reviewed semantic reference layout with an automatically
+generated chapter-only grid.
+
+The reference planner writes `reference_review` with the reference path and
+digest, source totals, retained keys, group-containment pairs, and every
+skipped node/edge. It also converts resolvable reference Wikilinks to standard
+Markdown links. The plan remains `review_required` until every skipped item is
+classified as external, absent from the current corpus, or represented by a
+named current equivalent. Compilation requires reviewer confirmation and
+rejects removal of retained topology.
+
+A user-supplied same-book canvas is active planning evidence even when a stale
+profile omitted it. Bind the containing corpus to the profile before planning.
+Never replace this flow with a generated per-book script containing literal
+chapter names, source-order ranges, fixed note names, coordinates, or
+mathematical relations.
+
 ## 6. Compilation And Validation
 
 Compile:
@@ -191,6 +218,27 @@ The compiler validates:
 - allowed node and edge colors;
 - edge endpoints;
 - Markdown links in node text;
+- no residual Wikilinks after reference-link conversion;
 - output-exists gate.
+- approved reference review, frozen reference digest, complete skipped-item
+  accounting, retained nodes/edges, and retained group containment when a
+  same-book reference canvas is active.
 
 Then run `audit_obsidian_graph.py --require-canvas` for a fresh final check.
+
+## 7. Same-Series Style Parity
+
+When the profile contains `canvas.style_reference`, run
+`compare_canvas_style.py` after every compilation. The report compares
+scale-independent visual grammar:
+
+- groups per text card, cards per group, and maximum/nested group depth;
+- overall vertical-to-horizontal span;
+- labeled-edge, colored-edge, and colored-card ratios;
+- annotation-card use and card-height variation.
+
+Raw node/edge totals, sibling titles, sibling semantic content, and legacy
+Wikilink syntax are deliberately excluded. Different volumes may have
+different sizes; the candidate must still look like it belongs to the same
+series. `style_review_required` is a planning failure: iterate the manifest
+until the identity-bound report passes.

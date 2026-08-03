@@ -1,0 +1,4 @@
+interface:
+  display_name: "Question Type PDF to Markdown"
+  short_description: "Convert supplementary PDFs with forced OCR"
+  default_prompt: "Use $question-type-pdf-to-markdown to convert this registered supplementary-book PDF with forced MinerU OCR."

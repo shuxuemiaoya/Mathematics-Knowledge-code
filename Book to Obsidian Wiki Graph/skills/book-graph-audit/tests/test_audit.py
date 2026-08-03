@@ -414,7 +414,10 @@ class GraphAuditTests(unittest.TestCase):
             ]
             reasons = {item["reason"] for item in semantic}
             self.assertIn("functional-heading-inside-callout", reasons)
-            self.assertIn("formal-definition-inside-situation-callout", reasons)
+            self.assertIn(
+                "formal-definition-inside-question-or-situation-callout",
+                reasons,
+            )
             self.assertIn("duplicate-functional-label-inside-callout", reasons)
             self.assertIn("worked-example-inside-non-example-callout", reasons)
             self.assertIn("practice-inside-callout", reasons)
@@ -422,6 +425,20 @@ class GraphAuditTests(unittest.TestCase):
                 report["counts"]["callout_semantic_scope_violations"],
                 5,
             )
+
+    def test_callout_semantic_scope_allows_symmetric_axis_question(self) -> None:
+        text = (
+            "> [!question] 思考\n"
+            "> 顶点在原点，对称轴是坐标轴，并且经过点 M 的抛物线有几条？"
+            "求出这些抛物线的标准方程。\n"
+        )
+
+        issues = audit_tool.callout_semantic_scope_issues(
+            Path("抛物线的离心率.md"),
+            text,
+        )
+
+        self.assertEqual(issues, [])
 
     def test_content_consistency_flags_ocr_omissions_and_flat_reasoning(self) -> None:
         text = (
@@ -473,6 +490,65 @@ class GraphAuditTests(unittest.TestCase):
             {item["reason"] for item in issues},
         )
 
+    def test_content_consistency_ignores_numbered_method_summary_after_solution(
+        self,
+    ) -> None:
+        text = (
+            "> [!example]- 例 6 求下列距离。\n"
+            "> （1）求点到直线的距离；（2）求直线到平面的距离。\n"
+            ">\n"
+            "> > [!success]- 解\n"
+            "> > （1）距离为 $a$。\n"
+            "> > （2）距离为 $b$。\n"
+            "> > 与平面向量方法类似，可得三步曲：\n"
+            "> > （1）建立向量联系；\n"
+            "> > （2）进行向量运算；\n"
+            "> > （3）翻译成几何结论。\n"
+        )
+
+        issues = audit_tool.content_consistency_issues(Path("知识点/样例.md"), text)
+
+        self.assertNotIn(
+            "solution-subpart-missing-from-example-stem",
+            {item["reason"] for item in issues},
+        )
+
+    def test_content_consistency_ignores_steps_introduced_by_anru_buzhou(self) -> None:
+        text = (
+            "> [!example]- 例 7 作出函数图象。\n"
+            "> （1）求定义域；（2）求导；（3）作图。\n"
+            ">\n"
+            "> > [!success]- 解\n"
+            "> > （1）定义域为 R。\n"
+            "> > （2）导数为 $f'(x)$。\n"
+            "> > （3）图象如图。\n"
+            "> > 通常，可以按如下步骤画出函数图象：\n"
+            "> > （1）确定定义域；（2）求导；（3）列表；（4）描点；（5）连线。\n"
+        )
+
+        issues = audit_tool.content_consistency_issues(Path("知识点/样例.md"), text)
+
+        self.assertNotIn(
+            "solution-subpart-missing-from-example-stem",
+            {item["reason"] for item in issues},
+        )
+
+    def test_content_consistency_ignores_case_classes_after_solution(self) -> None:
+        text = (
+            "> [!example]- 例 8 计算符合条件的序号数。\n"
+            ">\n"
+            "> > [!success]- 解\n"
+            "> > 5 位序号可以分为三类：\n"
+            "> > （1）首位非零；（2）末位非零；（3）其余情形。\n"
+        )
+
+        issues = audit_tool.content_consistency_issues(Path("知识点/样例.md"), text)
+
+        self.assertNotIn(
+            "solution-subpart-missing-from-example-stem",
+            {item["reason"] for item in issues},
+        )
+
     def test_content_consistency_ignores_function_arguments_as_subparts(self) -> None:
         text = (
             "> [!example]- 例 2 （1）比较两个模型。\n"
@@ -490,6 +566,23 @@ class GraphAuditTests(unittest.TestCase):
         )
 
         self.assertEqual(issue["missing_subparts"], [2])
+
+    def test_content_consistency_ignores_derivative_constants_and_percentages(self) -> None:
+        text = (
+            "> [!example]- 例 5 求下列变化率：\n"
+            "> （1）90%；（2）98%。\n"
+            ">\n"
+            "> > [!success]- 解\n"
+            "> > （1）$c'(90)=52.84$。\n"
+            "> > （2）$c'(98)=1321$，且 $(3)'=0$。\n"
+        )
+
+        issues = audit_tool.content_consistency_issues(Path("知识点/样例.md"), text)
+
+        self.assertNotIn(
+            "solution-subpart-missing-from-example-stem",
+            {item["reason"] for item in issues},
+        )
 
     def test_formatting_gate_rejects_ocr_damage_and_plain_running_header(
         self,
@@ -616,6 +709,36 @@ class GraphAuditTests(unittest.TestCase):
             self.assertIn("invalid-note-entry-heading", codes)
             self.assertIn("malformed-concept-note-structure", codes)
 
+    def test_rejects_teaching_boundary_inside_concept_definition(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            items = self.make_profiled_book(Path(temporary))
+            source, vault, book, profile, coverage, concepts = items
+            (book / "术语" / "集合.md").write_text(
+                "# 集合\n\n来源：[集合](../主题/集合.md)\n\n"
+                "## 定义\n\n"
+                "> [!question] 探究\n"
+                "> 哪些对象应当归入总体？\n\n"
+                "把研究对象组成的总体叫做集合。\n",
+                encoding="utf-8",
+            )
+
+            report = audit_tool.audit_book(
+                book.resolve(),
+                vault.resolve(),
+                source=source.resolve(),
+                profile_path=profile.resolve(),
+                coverage_manifest=coverage.resolve(),
+                concept_manifest=concepts.resolve(),
+                stage="concepts",
+            )
+
+            codes = {item["code"] for item in report["errors"]}
+            self.assertIn("concept-definition-crosses-teaching-boundary", codes)
+            self.assertEqual(
+                report["counts"]["concept_definition_boundary_violations"],
+                1,
+            )
+
     def test_vault_root_note_mode_requires_leading_slash(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             items = self.make_profiled_book(Path(temporary))
@@ -656,6 +779,42 @@ class GraphAuditTests(unittest.TestCase):
             )
             codes = {item["code"] for item in report["errors"]}
             self.assertIn("required-canvas-missing", codes)
+
+    def test_canvas_audit_rejects_residual_wikilinks(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            canvas = root / "example.canvas"
+            canvas.write_text(
+                json.dumps(
+                    {
+                        "nodes": [
+                            {
+                                "id": "legacy",
+                                "type": "text",
+                                "text": "[[books/example/topic|Topic]]",
+                                "x": 0,
+                                "y": 0,
+                                "width": 200,
+                                "height": 60,
+                            }
+                        ],
+                        "edges": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            summary, errors, _ = audit_tool.audit_canvas(
+                canvas,
+                root,
+                root,
+            )
+
+            self.assertEqual(summary["wikilinks"], 1)
+            self.assertIn(
+                "canvas-residual-wikilinks",
+                {item["code"] for item in errors},
+            )
 
 
 if __name__ == "__main__":

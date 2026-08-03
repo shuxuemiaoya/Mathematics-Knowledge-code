@@ -21,7 +21,9 @@ for _stream in (sys.stdout, sys.stderr):
 
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 NUMBERED_SUBSECTION_RE = re.compile(r"^\d+(?:\.\d+){2,}\s+\S")
+NUMBER_PREFIX_RE = re.compile(r"^(\d+(?:\.\d+)*)\b")
 SECTION_EXERCISE_RE = re.compile(r"^习题\s*\d+(?:\.\d+)+(?:\s|$)")
+SECTION_EXERCISE_NUMBER_RE = re.compile(r"^习题\s*(\d+(?:\.\d+)+)")
 INVALID_FILENAME_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 DEFAULT_CONTENT_REVIEW_MIN_LINES = 24
 
@@ -272,11 +274,36 @@ def build_manifest(
             key=lambda item: item["end_line"] - item["start_line"],
         )
 
+    def semantic_toc_parent(heading: Heading) -> dict[str, Any]:
+        number_match = NUMBER_PREFIX_RE.match(heading.title)
+        exercise_match = SECTION_EXERCISE_NUMBER_RE.match(heading.title)
+        parent_number: str | None = None
+        if number_match and "." in number_match.group(1):
+            parent_number = number_match.group(1).rsplit(".", 1)[0]
+        elif exercise_match:
+            parent_number = exercise_match.group(1)
+        if parent_number:
+            numbered_candidates = [
+                node
+                for node in toc_nodes_ordered
+                if node["start_line"] <= heading.line <= node["end_line"]
+                and (
+                    match := NUMBER_PREFIX_RE.match(str(node["title"]))
+                )
+                and match.group(1) == parent_number
+            ]
+            if numbered_candidates:
+                return min(
+                    numbered_candidates,
+                    key=lambda item: item["end_line"] - item["start_line"],
+                )
+        return nearest_toc_parent(heading.line)
+
     semantic_headings = [heading for heading in headings if heading.level >= 4]
     split_by_parent: dict[str, list[Heading]] = {}
     reviews: list[dict[str, Any]] = []
     for heading in semantic_headings:
-        parent = nearest_toc_parent(heading.line)
+        parent = semantic_toc_parent(heading)
         category: str | None = None
         if SECTION_EXERCISE_RE.match(heading.title):
             category = "exercise"
@@ -306,15 +333,42 @@ def build_manifest(
                 }
             )
 
+    # A printed H3 side-material entry can appear between numbered H4
+    # subsections. Markdown heading ranges would otherwise make that H3 absorb
+    # the later numbered subsection. Once numeric-prefix routing returns the
+    # subsection to their common lesson parent, trim the intervening TOC node
+    # at the subsection boundary so the siblings remain disjoint.
+    for parent_key, split_headings in split_by_parent.items():
+        for heading in split_headings:
+            for toc_node in toc_nodes_ordered:
+                if (
+                    toc_node.get("parent_key") == parent_key
+                    and int(toc_node["start_line"]) < heading.line
+                    <= int(toc_node["end_line"])
+                ):
+                    toc_node["end_line"] = heading.line - 1
+
     node_lookup = {node["key"]: node for node in nodes}
     review_lookup = {item["line"]: item for item in reviews}
     for parent_key, split_headings in split_by_parent.items():
         parent = node_lookup[parent_key]
         ordered = sorted(split_headings, key=lambda item: item.line)
+        direct_toc_boundaries = sorted(
+            int(node["start_line"])
+            for node in toc_nodes_ordered
+            if node.get("parent_key") == parent_key
+        )
         for index, heading in enumerate(ordered):
+            later_boundaries = [
+                line
+                for line in direct_toc_boundaries
+                if line > heading.line
+            ]
+            if index + 1 < len(ordered):
+                later_boundaries.append(ordered[index + 1].line)
             end_line = (
-                ordered[index + 1].line - 1
-                if index + 1 < len(ordered)
+                min(later_boundaries) - 1
+                if later_boundaries
                 else parent["end_line"]
             )
             category = (

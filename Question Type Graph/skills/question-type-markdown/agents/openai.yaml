@@ -1,0 +1,4 @@
+interface:
+  display_name: "Question Type Markdown"
+  short_description: "Format graph notes without content loss"
+  default_prompt: "Use $question-type-markdown to standardize question-graph Markdown while preserving every source token."

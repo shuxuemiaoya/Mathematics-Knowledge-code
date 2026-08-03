@@ -201,6 +201,89 @@ class ApplyConceptCandidatesTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "has no equation"):
             MODULE.validate_candidate(candidate, lines)
 
+    def test_rejects_definition_range_crossing_a_teaching_boundary(self):
+        candidate = {
+            "name": "函数的一般方程",
+            "definition_start_line": 1,
+            "definition_end_line": 5,
+            "anchor_text": "叫做函数的一般方程",
+            "link_text": "函数的一般方程",
+        }
+        lines = [
+            "$$y=ax+b$$",
+            "",
+            "> [!question] 探究",
+            "> 参数满足什么条件？",
+            "我们把这个方程叫做函数的一般方程。",
+        ]
+
+        with self.assertRaisesRegex(ValueError, "crosses teaching boundary"):
+            MODULE.validate_candidate(candidate, lines)
+
+    def test_accepts_ordered_segments_around_a_teaching_block(self):
+        candidate = {
+            "name": "函数的一般方程",
+            "definition_segments": [
+                {"start_line": 1, "end_line": 1},
+                {"start_line": 5, "end_line": 5},
+            ],
+            "anchor_text": "叫做函数的一般方程",
+            "link_text": "函数的一般方程",
+        }
+        lines = [
+            "$$y=ax+b$$",
+            "",
+            "> [!question] 探究",
+            "> 参数满足什么条件？",
+            "我们把这个方程叫做函数的一般方程。",
+        ]
+
+        ranges, definition = MODULE.validate_candidate(candidate, lines)
+
+        self.assertEqual(ranges, [(1, 1), (5, 5)])
+        self.assertEqual(
+            definition,
+            "$$y=ax+b$$\n\n我们把这个方程叫做函数的一般方程。",
+        )
+
+    def test_links_anchor_in_the_matching_definition_segment(self):
+        lines = [
+            "$$y=ax+b$$",
+            "",
+            "> [!question] 探究",
+            "> 参数满足什么条件？",
+            "我们把这个方程叫做函数的一般方程。",
+        ]
+
+        MODULE.link_first_defining_occurrence(
+            lines,
+            [(1, 1), (5, 5)],
+            anchor="叫做函数的一般方程",
+            link_text="函数的一般方程",
+            target="../概念/函数的一般方程.md",
+        )
+
+        self.assertEqual(
+            lines[4],
+            "我们把这个方程叫做"
+            "[函数的一般方程](../概念/函数的一般方程.md)。",
+        )
+
+    def test_equation_concept_requires_an_equation(self):
+        candidate = {
+            "name": "函数方程",
+            "definition_start_line": 1,
+            "definition_end_line": 1,
+            "anchor_text": "叫做函数方程",
+            "link_text": "函数方程",
+        }
+
+        with self.assertRaisesRegex(ValueError, "has no equation"):
+            MODULE.validate_candidate(
+                candidate,
+                ["我们把上面的关系叫做函数方程。"],
+            )
+
     def test_detaches_definition_copied_from_source_callout(self):
         definition = (
             "> 在数学中，这种图称为Venn图。\n"

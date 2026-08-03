@@ -57,6 +57,7 @@ class SplitNode:
     start_line: int
     end_line: int
     toc_key: str | None
+    parent_preview: dict[str, Any] | None = None
 
 
 def sha256_file(path: Path) -> str:
@@ -150,6 +151,11 @@ def load_nodes(
         target_keys.add(target_key)
         if toc_key is not None and toc_key not in toc_keys:
             raise SplitError(f"Split node {key!r} has unknown toc_key {toc_key!r}")
+        parent_preview = raw.get("parent_preview")
+        if parent_preview is not None and not isinstance(parent_preview, dict):
+            raise SplitError(
+                f"Split node {key!r} parent_preview must be an object"
+            )
         nodes[key] = SplitNode(
             key=key,
             title=title.strip(),
@@ -159,6 +165,7 @@ def load_nodes(
             start_line=start,
             end_line=end,
             toc_key=toc_key,
+            parent_preview=parent_preview,
         )
 
     roots = [node for node in nodes.values() if node.parent_key is None]
@@ -331,6 +338,35 @@ def validate_semantic_review(
             candidates[line_number] = match.group(2).strip()
 
     review = manifest.get("semantic_review")
+    configured_reference = profile.get("reference")
+    if (
+        isinstance(configured_reference, dict)
+        and configured_reference.get("scope") == "same-book-content-and-style"
+    ):
+        reference_review = (
+            review.get("reference") if isinstance(review, dict) else None
+        )
+        if not isinstance(reference_review, dict):
+            raise SplitError(
+                "Same-book reference requires reviewed semantic proposal evidence"
+            )
+        if (
+            reference_review.get("status") != "passed"
+            or reference_review.get("reviewer_confirmed") is not True
+        ):
+            raise SplitError(
+                "Same-book reference semantic proposal review is not passed"
+            )
+        if Path(str(reference_review.get("path", ""))).resolve() != Path(
+            str(configured_reference.get("path", ""))
+        ).resolve():
+            raise SplitError(
+                "Same-book reference semantic proposal path does not match profile"
+            )
+        if reference_review.get("sha256") != configured_reference.get("sha256"):
+            raise SplitError(
+                "Same-book reference semantic proposal digest does not match profile"
+            )
     raw_headings = review.get("headings") if isinstance(review, dict) else None
     if not isinstance(raw_headings, list):
         raise SplitError(
@@ -395,7 +431,13 @@ def validate_semantic_review(
         elif NUMBERED_SUBSECTION_RE.match(title):
             must_split_category = "knowledge"
 
-        if must_split_category and decision != "split":
+        structural_container = (
+            must_split_category == "knowledge"
+            and decision == "retain"
+            and item.get("structural_container") is True
+            and item.get("promote_to_h3") is True
+        )
+        if must_split_category and decision != "split" and not structural_container:
             raise SplitError(
                 f"Textbook heading {title!r} at line {line_number} must be split as {must_split_category}"
             )
@@ -405,6 +447,28 @@ def validate_semantic_review(
                 raise SplitError(
                     f"Retained semantic heading {title!r} at line {line_number} needs a reason"
                 )
+            if structural_container:
+                child_keys = item.get("child_node_keys")
+                if (
+                    not isinstance(child_keys, list)
+                    or not child_keys
+                    or any(not isinstance(key, str) for key in child_keys)
+                ):
+                    raise SplitError(
+                        f"Structural container {title!r} needs at least one "
+                        "promoted child_node_keys"
+                    )
+                promoted = [nodes.get(key) for key in child_keys]
+                if any(child is None for child in promoted):
+                    raise SplitError(
+                        f"Structural container {title!r} names a missing child"
+                    )
+                parent_keys = {child.parent_key for child in promoted if child}
+                if len(parent_keys) != 1:
+                    raise SplitError(
+                        f"Structural container {title!r} children must share "
+                        "one promoted parent"
+                    )
             continue
 
         if must_split_category is None:
@@ -755,46 +819,42 @@ def render_retained_flow_block(
     first_nonblank = next((line.strip() for line in block_lines if line.strip()), "")
     detected = functional_boundary(first_nonblank)
 
+    if role == "section-heading":
+        rendered = list(block_lines)
+        for index, line in enumerate(rendered):
+            heading = CONTENT_HEADING_RE.match(line.strip())
+            if heading and NUMBERED_SUBSECTION_RE.match(heading.group(2)):
+                rendered[index] = f"### {heading.group(2)}"
+                break
+        return rendered
     if role == "entry-context":
-        first_index = next(
-            (index for index, line in enumerate(block_lines) if line.strip()),
-            None,
-        )
-        if first_index is None:
-            return block_lines
-        heading = ANY_HEADING_RE.match(block_lines[first_index])
-        if heading is None or len(heading.group(1)) > 3:
+        return block_lines
+    if role == "context":
+        if detected is not None and detected[0] == "context":
             return quote_callout(
                 block_lines,
                 marker="info",
-                title="情景引入",
+                title=detected[1],
             )
-        prefix = block_lines[: first_index + 1]
-        body = block_lines[first_index + 1 :]
-        callout = quote_callout(body, marker="info", title="情景引入")
-        return prefix + ([""] if callout else []) + callout
-    if role == "context":
-        title = (
-            detected[1]
-            if detected is not None and detected[0] == "context"
-            else "情景引入"
-        )
-        return quote_callout(
-            block_lines,
-            marker="info",
-            title=title,
-        )
+        return block_lines
     if role == "transition":
-        return quote_callout(block_lines, marker="info", title="过渡")
+        return block_lines
     if role == "question":
-        title = (
-            detected[1]
-            if detected is not None and detected[0] == "question"
-            else "思考"
-        )
-        return quote_callout(block_lines, marker="question", title=title)
+        if detected is not None and detected[0] == "question":
+            return quote_callout(
+                block_lines,
+                marker="question",
+                title=detected[1],
+            )
+        return block_lines
     if role == "analysis":
-        return quote_callout(block_lines, marker="success", title="分析")
+        if detected is not None and detected[0] == "analysis":
+            return quote_callout(
+                block_lines,
+                marker="success",
+                title=detected[1],
+            )
+        return block_lines
     return block_lines
 
 
@@ -825,6 +885,20 @@ def render_lesson_flow_node(
     for block in lesson_flow["blocks"]:
         if block["ownership"] == "move-child":
             child = nodes[str(block["child_node_key"])]
+            if child.category == "knowledge" and child.parent_preview is not None:
+                preview = child.parent_preview
+                preview_lines = source_range_lines(
+                    lines,
+                    excluded,
+                    int(preview["start_line"]),
+                    int(preview["end_line"]),
+                )
+                append_block(
+                    render_retained_flow_block(
+                        str(preview["role"]),
+                        preview_lines,
+                    )
+                )
             append_block(
                 [
                     note_link(

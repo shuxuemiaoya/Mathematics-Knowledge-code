@@ -44,6 +44,7 @@ PASS_STATUS_KINDS = {
     "markdown-report",
     "audit-report",
     "reference-parity-report",
+    "canvas-style-report",
 }
 STAGE_AUDIT_NAMES = {
     "toc-splitting": "split",
@@ -280,6 +281,19 @@ ARTIFACT_FIELDS: dict[str, dict[str, type | tuple[type, ...]]] = {
         "reference.sha256": str,
         "blocking_summary": dict,
     },
+    "canvas-style-report": {
+        "schema_version": int,
+        "stage": str,
+        "status": str,
+        "profile": str,
+        "source_sha256": str,
+        "reference.path": str,
+        "reference.sha256": str,
+        "candidate.path": str,
+        "candidate.sha256": str,
+        "metrics": dict,
+        "blocking_differences": list,
+    },
     "review-queue": {
         "schema_version": int,
         "profile": str,
@@ -328,11 +342,93 @@ PROFILE_BOUND_KINDS = {
     "graph-manifest",
     "audit-report",
     "reference-parity-report",
+    "canvas-style-report",
     "review-queue",
     "note-workplan",
     "note-results",
     "pipeline-state",
 }
+
+
+def same_book_reference_review_errors(
+    split_manifest: dict[str, Any],
+    profile: dict[str, Any],
+) -> list[str]:
+    configured = profile.get("reference")
+    if not (
+        isinstance(configured, dict)
+        and configured.get("scope") == "same-book-content-and-style"
+    ):
+        return []
+    errors: list[str] = []
+    semantic_review = split_manifest.get("semantic_review")
+    reference_review = (
+        semantic_review.get("reference")
+        if isinstance(semantic_review, dict)
+        else None
+    )
+    if not isinstance(reference_review, dict):
+        return [
+            "split-manifest: same-book reference requires adopted semantic review"
+        ]
+    if reference_review.get("status") != "passed":
+        errors.append(
+            "split-manifest: same-book reference semantic review must pass"
+        )
+    if reference_review.get("reviewer_confirmed") is not True:
+        errors.append(
+            "split-manifest: same-book reference semantic review needs reviewer confirmation"
+        )
+    try:
+        review_path = Path(str(reference_review.get("path", ""))).resolve()
+        configured_path = Path(str(configured.get("path", ""))).resolve()
+    except (TypeError, ValueError):
+        review_path = configured_path = None
+    if review_path != configured_path:
+        errors.append(
+            "split-manifest: same-book reference semantic review path mismatch"
+        )
+    if reference_review.get("sha256") != configured.get("sha256"):
+        errors.append(
+            "split-manifest: same-book reference semantic review digest mismatch"
+        )
+    proposal = Path(str(reference_review.get("proposal_report", ""))).resolve()
+    if not proposal.is_file():
+        errors.append(
+            "split-manifest: same-book reference semantic proposal report is missing"
+        )
+    elif reference_review.get("proposal_report_sha256") != sha256_file(
+        proposal
+    ):
+        errors.append(
+            "split-manifest: same-book reference semantic proposal digest mismatch"
+        )
+    ambiguous_count = reference_review.get("ambiguous_count", 0)
+    resolved_count = reference_review.get("resolved_ambiguity_count", 0)
+    if (
+        not isinstance(ambiguous_count, int)
+        or isinstance(ambiguous_count, bool)
+        or ambiguous_count < 0
+        or resolved_count != ambiguous_count
+    ):
+        errors.append(
+            "split-manifest: same-book reference ambiguities are not completely resolved"
+        )
+    elif ambiguous_count:
+        decision_report = Path(
+            str(reference_review.get("decision_report", ""))
+        ).resolve()
+        if not decision_report.is_file():
+            errors.append(
+                "split-manifest: same-book reference ambiguity decision report is missing"
+            )
+        elif reference_review.get("decision_report_sha256") != sha256_file(
+            decision_report
+        ):
+            errors.append(
+                "split-manifest: same-book reference ambiguity decision digest mismatch"
+            )
+    return errors
 
 
 def artifact_errors(
@@ -382,6 +478,18 @@ def artifact_errors(
         "failed",
     }:
         errors.append("toc-format-report: status must be passed or failed")
+    if kind == "split-manifest" and expected_profile is not None:
+        try:
+            profile_payload = read_json(expected_profile)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            errors.append(
+                "split-manifest: cannot load expected profile for reference validation "
+                f"({type(exc).__name__})"
+            )
+        else:
+            errors.extend(
+                same_book_reference_review_errors(payload, profile_payload)
+            )
     if kind == "coverage-manifest":
         source_keys: set[str] = set()
         source_orders: set[int] = set()
@@ -462,6 +570,35 @@ def artifact_errors(
         if payload.get("status") == "passed" and not all(invariants.values()):
             errors.append(
                 "markdown-report: passed status requires all invariants"
+            )
+    if kind == "canvas-style-report":
+        if payload.get("stage") != "canvas-style-parity":
+            errors.append(
+                "canvas-style-report: stage must be canvas-style-parity"
+            )
+        if payload.get("status") not in {
+            "passed",
+            "style_review_required",
+            "failed",
+        }:
+            errors.append(
+                "canvas-style-report: status must be passed, "
+                "style_review_required, or failed"
+            )
+        if not is_sha256(nested(payload, "reference.sha256")):
+            errors.append(
+                "canvas-style-report: reference.sha256 must be a lowercase SHA-256 digest"
+            )
+        if not is_sha256(nested(payload, "candidate.sha256")):
+            errors.append(
+                "canvas-style-report: candidate.sha256 must be a lowercase SHA-256 digest"
+            )
+        if (
+            payload.get("status") == "passed"
+            and payload.get("blocking_differences")
+        ):
+            errors.append(
+                "canvas-style-report: passed status requires no blocking differences"
             )
     if kind == "graph-manifest":
         node_keys: set[str] = set()
@@ -615,6 +752,23 @@ def load_profile(path: Path) -> tuple[Path, dict[str, Any]]:
         if inventory_tree_sha256(reference_path) != reference.get("sha256"):
             raise IdentityError(
                 "profile reference hash does not match the current reference corpus"
+            )
+    style_reference = profile.get("canvas", {}).get("style_reference")
+    if style_reference is not None:
+        if not isinstance(style_reference, dict):
+            raise SchemaError("profile Canvas style reference must be an object")
+        if style_reference.get("scope") != "same-series-style":
+            raise SchemaError(
+                "profile Canvas style reference scope must be same-series-style"
+            )
+        style_path = Path(str(style_reference.get("path", ""))).resolve()
+        if not style_path.is_file() or style_path.suffix.casefold() != ".canvas":
+            raise IdentityError(
+                f"profile Canvas style reference does not exist: {style_path}"
+            )
+        if sha256_file(style_path) != style_reference.get("sha256"):
+            raise IdentityError(
+                "profile Canvas style reference hash does not match the current file"
             )
     return resolved, profile
 
@@ -1168,6 +1322,9 @@ def required_output_kinds(
         required.add("lesson-flow-manifest")
     if stage_name == "final-audit" and profile.get("reference"):
         required.add("reference-parity-report")
+    style_reference = profile.get("canvas", {}).get("style_reference")
+    if stage_name == "canvas" and isinstance(style_reference, dict):
+        required.add("canvas-style-report")
     return required
 
 
@@ -1239,6 +1396,36 @@ def complete_stage(
             ):
                 raise IdentityError(
                     "same-book reference scope requires a same-book parity report"
+                )
+        if kind == "canvas-style-report":
+            configured_style = profile.get("canvas", {}).get(
+                "style_reference", {}
+            )
+            if Path(payload["reference"]["path"]).resolve() != Path(
+                configured_style.get("path", "")
+            ).resolve():
+                raise IdentityError(
+                    "canvas style report reference path does not match the profile"
+                )
+            if (
+                payload["reference"]["sha256"]
+                != configured_style.get("sha256")
+            ):
+                raise IdentityError(
+                    "canvas style report reference digest does not match the profile"
+                )
+            candidate_path = Path(payload["candidate"]["path"]).resolve()
+            candidate_outputs = [
+                path.resolve() for output_kind, path in outputs
+                if output_kind == "file"
+            ]
+            if candidate_path not in candidate_outputs:
+                raise IdentityError(
+                    "canvas style report candidate is not the declared Canvas file"
+                )
+            if sha256_file(candidate_path) != payload["candidate"]["sha256"]:
+                raise IdentityError(
+                    "canvas style report candidate digest does not match the Canvas file"
                 )
     expected_audit_stage = STAGE_AUDIT_NAMES.get(stage_name)
     if expected_audit_stage is not None:

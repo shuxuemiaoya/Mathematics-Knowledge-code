@@ -5,6 +5,11 @@ physical splitting. It records the reviewed teaching flow of every numbered
 textbook lesson and numbered in-lesson subsection, whether or not that heading
 appears as an independent printed-TOC entry.
 
+When the profile freezes a same-book reference, the input split manifest must
+already contain its passed, reviewer-confirmed semantic adoption with matching
+reference and proposal-report digests. Planning and validation reject an older
+split created before that reference was bound.
+
 Generate the draft:
 
 ```powershell
@@ -43,6 +48,8 @@ The first block of every numbered lesson or subsection must be
 - `practice`: ordinary lesson practice retained locally or routed to an
   exercise child;
 - `navigation`: an explicit reading-path block retained on the lesson entry.
+- `section-heading`: a reviewed navigation-only numbered subsection heading
+  retained on the lesson entry and promoted from H4-H6 to H3.
 
 Do not use `exposition` as a generic catch-all. It is only for coherent
 explanation that genuinely belongs on the lesson page. If a range contains
@@ -91,6 +98,17 @@ A lesson with child links must retain at least one substantive preview beyond
 its heading. This blocks link-only entry pages such as the failed
 `2.2 基本不等式` output.
 
+A reading, history, exercise, method, tool, concept, or other non-knowledge
+child is represented by its navigation link without a duplicated opening
+preview. A knowledge topic may carry one reviewed `parent_preview` only when
+the source provides a concise question, thought, exploration prompt, or short
+introductory idea of at most 180 characters. Prefer a later concise source
+question over copying earlier definitions, derivations, formulas, images, or
+long exposition. The preview is one complete source line copied verbatim; it
+cannot be rewritten, summarized, shortened, expanded, spliced, or assembled
+from multiple source locations. If no concise prompt exists, use only the
+navigation link.
+
 The opening `entry-context` block itself must contain at least two nonblank
 source lines: the heading and at least one retained preview line. Content that
 belongs to the opening situation cannot be moved wholesale into the first
@@ -102,14 +120,17 @@ This prevents a large independent topic, such as the failed
 `3.1.2 函数的表示法` example cluster, from remaining unreviewed in the entry
 page.
 
-During rendering, retained `entry-context` and `context` become continuous
-`> [!info] 情景引入` callouts. Transitions become continuous
-`> [!info] 过渡` callouts, questions use `> [!question] 思考`, and analysis
-uses `> [!success] 分析`. The splitter inserts a blank line between each
-logical block while keeping every original source line in the same order. If a
-source block begins with the same plain functional label used by its callout
-marker, render that label once in the marker rather than duplicating it in the
-quoted body.
+`情景引入` names a structural requirement, not a literal output component.
+During rendering, retain `entry-context`, unlabeled `context`, transitions,
+unlabeled questions, and unlabeled analysis in their original Markdown form.
+The required introduction before a new node may therefore be a question, an
+idea, or an ordinary paragraph. Create a callout only when the source block
+itself begins with an explicit functional label such as `思考`, `观察`,
+`探究`, or `分析`, and reuse that exact label rather than synthesizing
+`情景引入`, `过渡`, or `思考`. The splitter inserts a blank line between each
+logical block while keeping every original source line in the same order. When
+a source label becomes the callout title, render it once rather than duplicating
+it in the quoted body.
 
 Validate before splitting:
 

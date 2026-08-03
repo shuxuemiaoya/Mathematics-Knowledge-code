@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import difflib
+import hashlib
 import json
 import re
 import sys
@@ -33,6 +34,58 @@ NORMALIZE_RE = re.compile(
     r"""[\s`*_~\\{}$，。；：、,.!?！？;:()（）\[\]<>《》“”"'—–=+|/]+"""
 )
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
+
+
+class ProposalError(ValueError):
+    pass
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def inventory_tree_sha256(path: Path) -> str:
+    aggregate = hashlib.sha256()
+    for item in sorted(candidate for candidate in path.rglob("*") if candidate.is_file()):
+        aggregate.update(item.relative_to(path).as_posix().encode("utf-8"))
+        aggregate.update(b"\0")
+        aggregate.update(sha256_file(item).encode("ascii"))
+        aggregate.update(b"\0")
+    return aggregate.hexdigest()
+
+
+def reference_identity(
+    manifest: dict[str, Any],
+    reference_root: Path,
+) -> tuple[str | None, str | None, dict[str, Any]]:
+    reference_sha256 = inventory_tree_sha256(reference_root)
+    identity: dict[str, Any] = {
+        "path": str(reference_root),
+        "sha256": reference_sha256,
+        "scope": None,
+    }
+    profile_value = manifest.get("profile")
+    if not isinstance(profile_value, str) or not profile_value:
+        return None, None, identity
+    profile_path = Path(profile_value).resolve()
+    profile = json.loads(profile_path.read_text(encoding="utf-8-sig"))
+    configured = profile.get("reference")
+    if not isinstance(configured, dict):
+        return str(profile_path), profile.get("source", {}).get("sha256"), identity
+    if configured.get("scope") != "same-book-content-and-style":
+        raise ProposalError(
+            "reference semantic review requires same-book-content-and-style scope"
+        )
+    if Path(str(configured.get("path", ""))).resolve() != reference_root:
+        raise ProposalError("reference root does not match profile reference.path")
+    if configured.get("sha256") != reference_sha256:
+        raise ProposalError("reference root does not match frozen profile digest")
+    identity["scope"] = configured["scope"]
+    return str(profile_path), profile.get("source", {}).get("sha256"), identity
 
 
 def normalize(text: str) -> str:
@@ -118,6 +171,10 @@ def propose(
 ) -> dict[str, Any]:
     lines = formatted_markdown.read_text(encoding="utf-8-sig").splitlines()
     manifest = json.loads(split_manifest.read_text(encoding="utf-8-sig"))
+    profile_path, source_sha256, reference_metadata = reference_identity(
+        manifest,
+        reference_root,
+    )
     nodes = [
         node
         for node in manifest["nodes"]
@@ -145,9 +202,9 @@ def propose(
         if title_key(path.stem) in existing_titles:
             skipped_existing.append(path.stem)
             continue
-        reference = normalize(path.read_text(encoding="utf-8-sig"))
-        reference_shingles = shingles(reference)
-        if len(reference) < 36 or not reference_shingles:
+        reference_text = normalize(path.read_text(encoding="utf-8-sig"))
+        reference_shingles = shingles(reference_text)
+        if len(reference_text) < 36 or not reference_shingles:
             continue
         ranked: list[tuple[float, dict[str, Any]]] = []
         for document in source_documents:
@@ -179,10 +236,12 @@ def propose(
             key=lambda document: int(document["node"]["end_line"])
             - int(document["node"]["start_line"]),
         )
-        spans = matching_spans(reference, best["text"])
+        spans = matching_spans(reference_text, best["text"])
         matched_character_count = sum(size for _, size in spans)
         matched_reference_ratio = (
-            matched_character_count / len(reference) if reference else 0.0
+            matched_character_count / len(reference_text)
+            if reference_text
+            else 0.0
         )
         if not spans:
             start_line = end_line = None
@@ -233,9 +292,12 @@ def propose(
         "schema_version": 1,
         "stage": "reference-semantic-review-proposal",
         "status": "review_required",
+        "profile": profile_path,
+        "source_sha256": source_sha256,
         "formatted_markdown": str(formatted_markdown),
         "split_manifest": str(split_manifest),
         "reference_root": str(reference_root),
+        "reference": reference_metadata,
         "skipped_existing_titles": skipped_existing,
         "suggestions": suggestions,
     }

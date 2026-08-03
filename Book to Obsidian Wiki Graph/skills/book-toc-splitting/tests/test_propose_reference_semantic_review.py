@@ -105,6 +105,55 @@ class ReferenceSemanticReviewProposalTests(unittest.TestCase):
             )
             self.assertEqual(suggestion["review_flags"], [])
 
+    def test_profile_bound_reference_identity_is_recorded(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            reference_root = root / "reference"
+            reference = reference_root / "知识点"
+            reference.mkdir(parents=True)
+            body = "完整的函数定义、表示方法和例题说明构成一个独立教学主题。\n"
+            (reference / "函数表示方法.md").write_text(body, encoding="utf-8")
+            formatted = root / "formatted.md"
+            formatted.write_text("# 函数的表示法\n\n" + body, encoding="utf-8")
+            profile = root / "book-profile.json"
+            profile.write_text(
+                json.dumps(
+                    {
+                        "source": {"sha256": "b" * 64},
+                        "reference": {
+                            "path": str(reference_root.resolve()),
+                            "sha256": MODULE.inventory_tree_sha256(reference_root),
+                            "scope": "same-book-content-and-style",
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            manifest = self.make_manifest(
+                root,
+                len(formatted.read_text(encoding="utf-8").splitlines()),
+            )
+            payload = json.loads(manifest.read_text(encoding="utf-8"))
+            payload["profile"] = str(profile.resolve())
+            manifest.write_text(
+                json.dumps(payload, ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            report = MODULE.propose(formatted, manifest, reference_root)
+
+            self.assertEqual(report["profile"], str(profile.resolve()))
+            self.assertEqual(report["source_sha256"], "b" * 64)
+            self.assertEqual(
+                report["reference"]["sha256"],
+                MODULE.inventory_tree_sha256(reference_root),
+            )
+            self.assertEqual(
+                report["reference"]["scope"],
+                "same-book-content-and-style",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

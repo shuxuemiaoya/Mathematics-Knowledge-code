@@ -11,7 +11,8 @@ Create one `book-profile.json` in task-scoped staging. It is the only book-speci
 - `links`: note, canvas, and asset link modes.
 - `formatting`: callout policy.
 - `decomposition`: source-order and source-completeness invariants.
-- `canvas`: enabled flag and semantic palette.
+- `canvas`: enabled flag, semantic palette, and optional frozen same-series
+  `style_reference`.
 - `workspace`: backup policy.
 - optional `reference`: approved corpus path, frozen tree SHA-256, and either
   `style-only` or `same-book-content-and-style` scope.
@@ -46,6 +47,11 @@ Create one `book-profile.json` in task-scoped staging. It is the only book-speci
 - Freeze a user-named style corpus at intake. Use it as presentation and
   decomposition evidence, never as reusable conversion output. Reject a run
   when that reference tree changes after profile creation.
+- Freeze a same-series Canvas style reference as
+  `canvas.style_reference: {path, sha256, scope: "same-series-style"}`. Its
+  path must name one existing `.canvas` file and its digest must remain stable.
+  This visual contract is independent of the optional corpus-level
+  `reference`; it controls layout grammar, not sibling content reuse.
 
 ## Handoff invariant
 

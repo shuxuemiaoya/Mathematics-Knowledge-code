@@ -29,6 +29,7 @@ class PipelineRuntimeTests(unittest.TestCase):
         *,
         canvas: bool = False,
         reference_scope: str | None = None,
+        canvas_style_reference: bool = False,
     ) -> tuple[Path, Path, Path, Path]:
         source = root / "source.md"
         source.write_text("# Example\n", encoding="utf-8")
@@ -93,6 +94,16 @@ class PipelineRuntimeTests(unittest.TestCase):
                 "path": str(reference.resolve()),
                 "sha256": MODULE.inventory_tree_sha256(reference),
                 "scope": reference_scope,
+            }
+        if canvas_style_reference:
+            style_canvas = root / "sibling.canvas"
+            style_canvas.write_text(
+                '{"nodes": [], "edges": []}\n', encoding="utf-8"
+            )
+            profile["canvas"]["style_reference"] = {
+                "path": str(style_canvas.resolve()),
+                "sha256": MODULE.sha256_file(style_canvas),
+                "scope": "same-series-style",
             }
         profile_path.write_text(
             json.dumps(profile, ensure_ascii=False), encoding="utf-8"
@@ -341,6 +352,180 @@ class PipelineRuntimeTests(unittest.TestCase):
             )
         self.assertIn("lesson-flow-manifest", required)
         self.assertIn("lesson-flow-manifest", MODULE.PASS_STATUS_KINDS)
+
+    def test_canvas_style_reference_requires_bound_passing_report(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, _, book, profile_path = self.make_profile(
+                root,
+                canvas=True,
+                canvas_style_reference=True,
+            )
+            profile = json.loads(profile_path.read_text(encoding="utf-8"))
+            self.assertIn(
+                "canvas-style-report",
+                MODULE.required_output_kinds("canvas", profile),
+            )
+            candidate = book / "example.canvas"
+            candidate.write_text(
+                '{"nodes": [], "edges": []}\n', encoding="utf-8"
+            )
+            graph_manifest = root / "staging" / "graph-manifest.json"
+            graph_manifest.write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "profile": str(profile_path.resolve()),
+                        "source_sha256": MODULE.sha256_file(source),
+                        "nodes": [],
+                        "edges": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            style_report = root / "staging" / "canvas-style-report.json"
+            report_payload = {
+                "schema_version": 1,
+                "stage": "canvas-style-parity",
+                "status": "passed",
+                "profile": str(profile_path.resolve()),
+                "source_sha256": MODULE.sha256_file(source),
+                "reference": profile["canvas"]["style_reference"],
+                "candidate": {
+                    "path": str(candidate.resolve()),
+                    "sha256": MODULE.sha256_file(candidate),
+                },
+                "metrics": {"reference": {}, "candidate": {}},
+                "blocking_differences": [],
+            }
+            style_report.write_text(
+                json.dumps(report_payload), encoding="utf-8"
+            )
+            state = MODULE.init_state(profile_path)
+            canvas_stage = next(
+                stage for stage in state["stages"] if stage["name"] == "canvas"
+            )
+            canvas_stage["status"] = "running"
+            canvas_stage["started_at"] = MODULE.utc_now()
+
+            completed = MODULE.complete_stage(
+                state,
+                "canvas",
+                [("file", candidate), ("graph-manifest", graph_manifest)],
+                report=("canvas-style-report", style_report),
+            )
+
+            self.assertEqual(completed["status"], "completed")
+
+            report_payload["candidate"]["sha256"] = "b" * 64
+            style_report.write_text(
+                json.dumps(report_payload), encoding="utf-8"
+            )
+            state = MODULE.init_state(profile_path)
+            canvas_stage = next(
+                stage for stage in state["stages"] if stage["name"] == "canvas"
+            )
+            canvas_stage["status"] = "running"
+            canvas_stage["started_at"] = MODULE.utc_now()
+            with self.assertRaisesRegex(
+                MODULE.IdentityError, "candidate digest"
+            ):
+                MODULE.complete_stage(
+                    state,
+                    "canvas",
+                    [("file", candidate), ("graph-manifest", graph_manifest)],
+                    report=("canvas-style-report", style_report),
+                )
+
+            report_payload["candidate"]["sha256"] = MODULE.sha256_file(
+                candidate
+            )
+            report_payload["status"] = "style_review_required"
+            report_payload["blocking_differences"] = [{"code": "layout"}]
+            style_report.write_text(
+                json.dumps(report_payload), encoding="utf-8"
+            )
+            state = MODULE.init_state(profile_path)
+            canvas_stage = next(
+                stage for stage in state["stages"] if stage["name"] == "canvas"
+            )
+            canvas_stage["status"] = "running"
+            canvas_stage["started_at"] = MODULE.utc_now()
+            with self.assertRaisesRegex(
+                MODULE.PipelineError, "report status is not passed"
+            ):
+                MODULE.complete_stage(
+                    state,
+                    "canvas",
+                    [("file", candidate), ("graph-manifest", graph_manifest)],
+                    report=("canvas-style-report", style_report),
+                )
+
+    def test_same_book_reference_rejects_unreviewed_split_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, _, _, profile_path = self.make_profile(
+                root,
+                reference_scope="same-book-content-and-style",
+            )
+            payload = {
+                "schema_version": 1,
+                "profile": str(profile_path.resolve()),
+                "source_sha256": MODULE.sha256_file(source),
+                "input_markdown_sha256": "c" * 64,
+                "semantic_review": {"headings": []},
+                "nodes": [],
+            }
+
+            errors = MODULE.artifact_errors(
+                payload,
+                "split-manifest",
+                expected_profile=profile_path.resolve(),
+                expected_source_sha256=MODULE.sha256_file(source),
+            )
+
+        self.assertTrue(
+            any("requires adopted semantic review" in error for error in errors)
+        )
+
+    def test_same_book_reference_accepts_reviewed_split_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, _, _, profile_path = self.make_profile(
+                root,
+                reference_scope="same-book-content-and-style",
+            )
+            profile = json.loads(profile_path.read_text(encoding="utf-8"))
+            proposal = root / "staging" / "reference-semantic-proposals.json"
+            proposal.write_text('{"status":"review_required"}\n', encoding="utf-8")
+            payload = {
+                "schema_version": 1,
+                "profile": str(profile_path.resolve()),
+                "source_sha256": MODULE.sha256_file(source),
+                "input_markdown_sha256": "c" * 64,
+                "semantic_review": {
+                    "headings": [],
+                    "reference": {
+                        "status": "passed",
+                        "reviewer_confirmed": True,
+                        "scope": "same-book-content-and-style",
+                        "path": profile["reference"]["path"],
+                        "sha256": profile["reference"]["sha256"],
+                        "proposal_report": str(proposal.resolve()),
+                        "proposal_report_sha256": MODULE.sha256_file(proposal),
+                    },
+                },
+                "nodes": [],
+            }
+
+            errors = MODULE.artifact_errors(
+                payload,
+                "split-manifest",
+                expected_profile=profile_path.resolve(),
+                expected_source_sha256=MODULE.sha256_file(source),
+            )
+
+        self.assertEqual(errors, [])
 
     def test_toc_manifest_does_not_require_future_formatted_output(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

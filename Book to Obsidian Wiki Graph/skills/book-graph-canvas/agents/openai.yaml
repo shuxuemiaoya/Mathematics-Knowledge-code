@@ -1,4 +1,4 @@
 interface:
   display_name: "Book Graph Canvas"
-  short_description: "Build the mathematical logic canvas"
-  default_prompt: "Use $book-graph-canvas to plan and compile the book knowledge canvas."
+  short_description: "Build style-consistent mathematical logic canvases"
+  default_prompt: "Use $book-graph-canvas to plan, compile, and style-check this book's knowledge canvas against its frozen same-series reference."

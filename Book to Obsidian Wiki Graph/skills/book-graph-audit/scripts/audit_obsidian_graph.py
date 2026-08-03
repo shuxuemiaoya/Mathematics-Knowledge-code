@@ -56,8 +56,14 @@ NESTED_CALLOUT_PREFIX_RE = re.compile(r"^>\s+>\s*\[!")
 EXAMPLE_CALLOUT_WITH_STEM_RE = re.compile(
     r"^>\s*\[!example\][+-]?\s+例(?:题)?\s*\d+\s+\S"
 )
-SUBPART_RE = re.compile(r"(?<![A-Za-z0-9_])[（(]([1-9]\d*)[）)]")
+SUBPART_RE = re.compile(
+    r"(?:^|[；;：:\n]|例\s*\d+\s*)\s*(?:>\s*)*[（(]([1-9]\d*)[）)]",
+    re.MULTILINE,
+)
 FORMAL_DEFINITION_CUE_RE = re.compile(r"(?:叫做|称为|定义为|称之为)")
+PROCEDURAL_ENUMERATION_CUE_RE = re.compile(
+    r"(?:三步曲|步骤如下|过程如下|可概括为|(?:可|可以)?按如下步骤|分为.{0,12}(?:步|类))"
+)
 COMPARISON_CONDITION_RE = re.compile(
     r"(?:[<>]|\\(?:ne|neq|le|leq|ge|geq|lt|gt)\b)"
 )
@@ -84,7 +90,7 @@ PRACTICE_BOUNDARY_RE = re.compile(
 )
 FORMAL_DEFINITION_SCOPE_RE = re.compile(
     r"(?:叫做|定义为|称之为|记作|规定[：:]?|"
-    r"(?:就)?称(?!性)[^，。；]{0,40}(?:为|是))"
+    r"(?<!对)(?:就)?称(?!性)[^，。；]{0,40}(?:为|是))"
 )
 ENTRY_HEADING_RE = re.compile(r"^#{1,3}\s+\S")
 ORNAMENT_HEADING_RE = re.compile(r"^#{4,6}\s+[●•·\s]+$")
@@ -455,8 +461,7 @@ def callout_semantic_scope_issues(
             )
             continue
         if (
-            active_type == "info"
-            and any(label in active_title for label in ("情景引入", "情境引入"))
+            active_type in {"info", "question"}
             and FORMAL_DEFINITION_SCOPE_RE.search(heading_text)
         ):
             issues.append(
@@ -464,7 +469,9 @@ def callout_semantic_scope_issues(
                     "file": str(path),
                     "line": index + 1,
                     "text": line[:200],
-                    "reason": "formal-definition-inside-situation-callout",
+                    "reason": (
+                        "formal-definition-inside-question-or-situation-callout"
+                    ),
                     "parent_callout": active_type,
                     "quote_depth": depth,
                 }
@@ -536,8 +543,19 @@ def content_consistency_issues(
             else:
                 parent_text.append(block_line)
         parent_parts = {int(item) for item in SUBPART_RE.findall("\n".join(parent_text))}
+        task_solution_text: list[str] = []
+        for solution_line in solution_text:
+            plain_solution_line = re.sub(
+                r"^(?:>\s*)+",
+                "",
+                solution_line,
+            ).strip()
+            if PROCEDURAL_ENUMERATION_CUE_RE.search(plain_solution_line):
+                break
+            task_solution_text.append(solution_line)
         solution_parts = {
-            int(item) for item in SUBPART_RE.findall("\n".join(solution_text))
+            int(item)
+            for item in SUBPART_RE.findall("\n".join(task_solution_text))
         }
         # Numbered solution steps can be a proof structure even when the
         # example stem is a single task. Only claim source loss when the stem
@@ -780,6 +798,7 @@ def audit_canvas(
     node_by_id: dict[str, dict[str, Any]] = {}
     linked_targets: collections.Counter[str] = collections.Counter()
     missing_links = 0
+    canvas_wikilinks = 0
     node_colors: collections.Counter[str] = collections.Counter()
     edge_colors: collections.Counter[str] = collections.Counter()
 
@@ -815,6 +834,17 @@ def audit_canvas(
 
         text = node.get("text", "")
         if isinstance(text, str):
+            node_wikilinks = len(WIKILINK_RE.findall(remove_fenced_code(text)))
+            if node_wikilinks:
+                canvas_wikilinks += node_wikilinks
+                errors.append(
+                    {
+                        "code": "canvas-residual-wikilinks",
+                        "canvas": str(canvas_path),
+                        "node": node_id,
+                        "count": node_wikilinks,
+                    }
+                )
             for _, href in MARKDOWN_LINK_RE.findall(remove_fenced_code(text)):
                 target = resolve_href(href, canvas_path, vault_root)
                 if target is not None:
@@ -912,6 +942,7 @@ def audit_canvas(
         "duplicate_edge_ids": len(duplicate_edge_ids),
         "bad_edge_endpoints": bad_endpoints,
         "missing_links": missing_links,
+        "wikilinks": canvas_wikilinks,
         "node_colors": dict(sorted(node_colors.items())),
         "edge_colors": dict(sorted(edge_colors.items())),
     }
@@ -1303,6 +1334,7 @@ def audit_book(
     empty_concepts = 0
     invalid_entry_headings = 0
     malformed_concept_notes = 0
+    concept_definition_boundary_violations = 0
     non_vault_root_note_links = 0
     residual_artifact_headings = 0
     plain_running_headers = 0
@@ -1550,6 +1582,34 @@ def audit_book(
                     "has_definition_heading": has_definition_heading,
                 }
             )
+        if has_definition_heading:
+            definition_index = next(
+                index
+                for index, line in enumerate(lines)
+                if line.strip() == "## 定义"
+            )
+            for line_number, line in enumerate(
+                lines[definition_index + 1 :],
+                start=definition_index + 2,
+            ):
+                stripped = re.sub(r"^\s*(?:>\s*)+", "", line).strip()
+                if (
+                    TOP_LEVEL_CALLOUT_PREFIX_RE.match(line.lstrip())
+                    or NESTED_CALLOUT_PREFIX_RE.match(line.lstrip())
+                    or re.match(r"^#{4,6}\s+\S", stripped)
+                    or WORKED_EXAMPLE_RE.match(stripped)
+                    or PRACTICE_BOUNDARY_RE.match(stripped)
+                ):
+                    concept_definition_boundary_violations += 1
+                    errors.append(
+                        {
+                            "code": "concept-definition-crosses-teaching-boundary",
+                            "path": str(concept.relative_to(book_root)),
+                            "line": line_number,
+                            "boundary": line.strip(),
+                        }
+                    )
+                    break
         semantic_text = MARKDOWN_LINK_RE.sub("", remove_fenced_code(text))
         semantic_text = re.sub(r"^#{1,6}\s+.*$", "", semantic_text, flags=re.MULTILINE)
         semantic_text = re.sub(r"\s+", "", semantic_text)
@@ -1634,6 +1694,9 @@ def audit_book(
             "empty_concepts": empty_concepts,
             "invalid_entry_headings": invalid_entry_headings,
             "malformed_concept_notes": malformed_concept_notes,
+            "concept_definition_boundary_violations": (
+                concept_definition_boundary_violations
+            ),
             "non_vault_root_note_links": non_vault_root_note_links,
             "residual_artifact_headings": residual_artifact_headings,
             "plain_running_headers": plain_running_headers,

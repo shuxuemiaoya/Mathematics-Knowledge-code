@@ -20,6 +20,19 @@ unnumbered independent teaching arc before running the splitter.
   "source_sha256": "<frozen book digest>",
   "input_markdown_sha256": "<formatted Markdown digest>",
   "semantic_review": {
+    "reference": {
+      "status": "passed",
+      "reviewer_confirmed": true,
+      "scope": "same-book-content-and-style",
+      "path": "C:/.../reference-book",
+      "sha256": "<frozen reference tree digest>",
+      "proposal_report": "C:/.../reference-semantic-proposals.json",
+      "proposal_report_sha256": "<proposal report digest>",
+      "decision_report": "C:/.../reference-ambiguity-decisions.json",
+      "decision_report_sha256": "<decision report digest>",
+      "ambiguous_count": 1,
+      "resolved_ambiguity_count": 1
+    },
     "headings": [
       {
         "line": 230,
@@ -133,15 +146,41 @@ unnumbered independent teaching arc before running the splitter.
   `matched_reference_ratio`. Require at least `0.85` before treating it as a
   review candidate; otherwise retain `incomplete-reference-body-match` and
   inspect the missing tail before approving exact bounds.
+- When the profile reference scope is `same-book-content-and-style`,
+  `semantic_review.reference` is mandatory. Its path and digest must match the
+  profile, and it must record reviewer confirmation plus the exact proposal
+  report digest. Every ambiguous proposal must have exactly one explicit
+  `accept`, `revise`, or `reject` decision with a specific reason; when any
+  ambiguity exists, the decision report and its digest are also mandatory.
+  A final parity comparison does not replace this upstream decomposition
+  review.
 - Route decisions below
   `decomposition.semantic_split_confidence_threshold` through the coordinator
   review queue and mark them `reviewed: true` only after resolution.
-- Numbered textbook subsections (`6.1.1`, `8.4.2`, and so on) are mandatory `knowledge` nodes.
+- Numbered textbook subsections (`6.1.1`, `8.4.2`, and so on) default to
+  `knowledge` nodes. When source review finds that one or more finer topic
+  children leave only a heading, introductions, transitions, and navigation,
+  remove the intermediate node and record the heading as
+  `decision: retain`, `structural_container: true`, `promote_to_h3: true`,
+  with the promoted `child_node_keys`.
 - Section exercises (`习题6.1`, `习题8.4`, and so on) are mandatory `exercise` nodes.
 - Leave introductions, transitions, and ordinary lesson practice in the parent unless intentionally split.
 - The splitter replaces every direct child range with a Markdown link in the parent at that exact source position.
 - Parent navigation links are bullet items. A reviewed H4-H6 range that becomes
   its own note is promoted to an H3 entry heading.
+- A promoted knowledge topic may record one `parent_preview` containing a
+  concise source-derived question, thought, exploration prompt, or short idea
+  of at most 180 characters. Prefer a concise question even when it occurs
+  after preliminary exposition. Store an exact one-line source range and
+  render that line verbatim; never modify, summarize, concatenate, or invent
+  the preview text. Do not copy definitions, derivations, formula
+  sequences, media clusters, worked solutions, or long exposition into the
+  parent. If no concise prompt exists, render only the link. Treat `情景引入` as
+  the purpose of this optional prompt, not as a generated heading or child
+  summary.
+- Reading, history, exercise, method, tool, concept, and other non-knowledge
+  children do not carry `parent_preview`; their parent renders only the
+  navigation link at the original source position.
 - Disambiguate repeated generic chapter children with the chapter name:
   `<章名> 小结` and a chapter-qualified `复习参考题`, including in the filename.
 - Flatten source namespaces such as `images/<book>/part-001/<hash>.jpg` to the

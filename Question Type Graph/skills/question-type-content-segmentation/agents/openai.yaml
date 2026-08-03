@@ -1,0 +1,4 @@
+interface:
+  display_name: "Question Type Content Segmentation"
+  short_description: "Atomize books into typed question notes"
+  default_prompt: "Use $question-type-content-segmentation to split labeled blocks and atomic questions without changing source text."

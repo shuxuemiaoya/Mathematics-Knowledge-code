@@ -1,4 +1,4 @@
 interface:
   display_name: "Book to Obsidian Wiki Graph"
   short_description: "Build validated, resumable Obsidian book graphs"
-  default_prompt: "Use the standalone $book-to-obsidian-wiki-graph agent to convert this book through strict artifact handoffs, hard lesson-function boundaries, callout semantic-scope audits, confidence review queues, progressive audits, same-run recovery, and a final validated Obsidian Wiki-style knowledge graph."
+  default_prompt: "Use the standalone $book-to-obsidian-wiki-graph agent to convert this book through strict artifact handoffs, lesson-flow and callout gates, progressive audits, same-run recovery, and a same-series style-checked Obsidian knowledge canvas."

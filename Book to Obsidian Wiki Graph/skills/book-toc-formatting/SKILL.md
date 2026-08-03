@@ -24,6 +24,9 @@ python .\skills\book-toc-formatting\scripts\plan_toc_manifest.py `
 3. Review the reported source range, printed order, levels, categories, wrapped
    entries, filenames, and aliases against the actual printed TOC.
 4. Add or remove OCR aliases only when they represent the same printed title.
+   If OCR omitted a printed heading while retaining its body, record a reviewed
+   `insertion_line` and specific `insertion_reason` in the identity-bound
+   manifest instead of editing the raw Markdown.
 5. Use `--toc-range START:END` only when automatic range detection is wrong.
 
 ## Format

@@ -53,6 +53,7 @@ def validate_manifest(manifest: Any) -> list[dict[str, Any]]:
     if not isinstance(entries, list) or not entries:
         raise TocFormattingError("TOC manifest needs a non-empty entries array")
     keys: set[str] = set()
+    insertion_lines: set[int] = set()
     validated: list[dict[str, Any]] = []
     for index, entry in enumerate(entries):
         if not isinstance(entry, dict):
@@ -76,6 +77,22 @@ def validate_manifest(manifest: Any) -> list[dict[str, Any]]:
             isinstance(alias, str) for alias in aliases
         ):
             raise TocFormattingError(f"TOC entry {key!r} aliases must be strings")
+        insertion_line = entry.get("insertion_line")
+        if insertion_line is not None:
+            if not isinstance(insertion_line, int) or insertion_line < 1:
+                raise TocFormattingError(
+                    f"TOC entry {key!r} insertion_line must be a positive integer"
+                )
+            if insertion_line in insertion_lines:
+                raise TocFormattingError(
+                    f"Duplicate TOC insertion_line: {insertion_line}"
+                )
+            insertion_lines.add(insertion_line)
+            reason = entry.get("insertion_reason")
+            if not isinstance(reason, str) or not reason.strip():
+                raise TocFormattingError(
+                    f"TOC entry {key!r} needs insertion_reason with insertion_line"
+                )
         validated.append(entry)
     return validated
 
@@ -125,6 +142,29 @@ def format_headings(
     while index < len(lines):
         line_number = index + 1
         line = lines[index]
+        expected = entries[expected_index] if expected_index < len(entries) else None
+        if expected is not None and expected.get("insertion_line") == line_number:
+            if line_number in ignored_lines:
+                raise TocFormattingError(
+                    f"TOC entry {expected['key']!r} insertion_line is inside the printed TOC"
+                )
+            level = expected["level"]
+            output.append(f"{'#' * level} {expected['title']}")
+            output.append("")
+            matched.append(
+                {
+                    "key": expected["key"],
+                    "title": expected["title"],
+                    "line": line_number,
+                    "source_lines": [],
+                    "old_level": None,
+                    "new_level": level,
+                    "inserted_from_printed_toc": True,
+                    "insertion_reason": expected["insertion_reason"],
+                }
+            )
+            active_toc_level = level
+            expected_index += 1
         fence = FENCE_RE.match(line)
         if fence:
             in_fence = not in_fence
@@ -169,8 +209,7 @@ def format_headings(
         )
         composite_exact = (
             has_composite_candidate
-            and normalize_title(title + composite_fragment)
-            == normalize_title(expected["title"])
+            and normalize_title(title + composite_fragment) in entry_titles(expected)
         )
         if composite_exact:
             level = expected["level"]
@@ -250,6 +289,9 @@ def format_headings(
         "matched_toc_headings": len(matched),
         "composite_toc_headings": sum(
             1 for item in matched if item.get("composite")
+        ),
+        "inserted_toc_headings": sum(
+            1 for item in matched if item.get("inserted_from_printed_toc")
         ),
         "demoted_non_toc_headings": len(demoted),
         "matched": matched,

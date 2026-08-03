@@ -55,6 +55,11 @@ def split_balanced(
 ) -> list[dict[str, Any]]:
     if (
         block["ownership"] != "retain-parent"
+        or block["role"] in {
+            "practice",
+            "worked-example",
+            "representative-example",
+        }
         or nonblank_count(lines, block["start_line"], block["end_line"])
         <= maximum
     ):
@@ -78,6 +83,8 @@ def split_balanced(
     first["end_line"] = boundary
     second["id"] = f"{block['id']}-b"
     second["start_line"] = boundary + 1
+    if block["role"] == "entry-context":
+        second["role"] = "exposition"
     first["reason"] = (
         "Reviewer split the long retained explanation at a paragraph boundary."
     )

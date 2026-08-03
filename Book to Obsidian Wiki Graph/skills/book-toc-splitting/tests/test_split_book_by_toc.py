@@ -96,7 +96,7 @@ class TocSplitTests(unittest.TestCase):
         self.assertNotIn("集合正文", lesson)
         self.assertNotIn("练习正文", lesson)
 
-    def test_lesson_flow_renders_continuous_callouts_and_ordered_links(self) -> None:
+    def test_lesson_flow_preserves_plain_introductions_and_ordered_links(self) -> None:
         lines = [
             "## 1.1 集合",
             "为什么需要研究集合？",
@@ -167,19 +167,24 @@ class TocSplitTests(unittest.TestCase):
             rendered,
             (
                 "## 1.1 集合\n"
-                "\n"
-                "> [!info] 情景引入\n"
-                "> 为什么需要研究集合？\n"
+                "为什么需要研究集合？\n"
                 "\n"
                 "- [集合的概念](集合的概念.md)\n"
                 "\n"
-                "> [!info] 过渡\n"
-                "> 接下来研究集合的表示方法。\n"
-                "> 请观察下面的表示。\n"
+                "接下来研究集合的表示方法。\n"
+                "请观察下面的表示。\n"
                 "\n"
                 "- [习题1.1](../习题/习题1.1.md)\n"
             ),
         )
+
+    def test_plain_parent_preview_does_not_invent_a_situation_callout(self) -> None:
+        rendered = MODULE.render_retained_flow_block(
+            "context",
+            ["指数的范围还可以继续拓展。"],
+        )
+        self.assertEqual(rendered, ["指数的范围还可以继续拓展。"])
+        self.assertNotIn("情景引入", "\n".join(rendered))
 
     def test_plain_question_label_is_not_duplicated_inside_callout(self) -> None:
         rendered = MODULE.render_retained_flow_block(
@@ -535,6 +540,31 @@ class TocSplitTests(unittest.TestCase):
             ):
                 MODULE.validate_semantic_review(
                     {}, nodes, lines, set(), profile
+                )
+
+    def test_same_book_reference_requires_semantic_proposal_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            profile = self.profile(root)
+            reference = root / "reference"
+            reference.mkdir()
+            profile["reference"] = {
+                "path": str(reference.resolve()),
+                "sha256": "a" * 64,
+                "scope": "same-book-content-and-style",
+            }
+            manifest = {"semantic_review": {"headings": []}}
+
+            with self.assertRaisesRegex(
+                MODULE.SplitError,
+                "reviewed semantic proposal evidence",
+            ):
+                MODULE.validate_semantic_review(
+                    manifest,
+                    {},
+                    ["# 第一章"],
+                    set(),
+                    profile,
                 )
 
     def test_numbered_subsection_and_section_exercise_must_split(self) -> None:

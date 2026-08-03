@@ -64,6 +64,37 @@ def reviewed_terms(directory: Path) -> list[str]:
     return terms
 
 
+def reviewed_term_matches(text: str, term: str) -> list[re.Match[str]]:
+    """Match a canonical `X的Y` term even when source inserts a math variable."""
+
+    alternatives = [re.escape(term)]
+    if term.count("的") == 1:
+        owner, property_name = term.split("的", 1)
+        if owner and property_name:
+            inserted_variable = (
+                r"(?:\s{2,}|\s*[A-Za-zΑ-Ωα-ω]"
+                r"[A-Za-z0-9_Α-Ωα-ω]*\s*)"
+            )
+            alternatives.append(
+                re.escape(owner)
+                + inserted_variable
+                + r"的\s*"
+                + re.escape(property_name)
+            )
+    return list(re.finditer("(?:" + "|".join(alternatives) + ")", text))
+
+
+def definition_surface(text: str, term: str) -> str:
+    masked = mask_math(text)
+    matches = reviewed_term_matches(masked, term)
+    if not matches:
+        raise ConceptPlanningError(
+            f"selected reviewed term has no source surface: {term}"
+        )
+    selected = matches[-1]
+    return text[selected.start() : selected.end()]
+
+
 def candidate_terms_for_line(text: str, terms: list[str]) -> set[str]:
     masked = mask_math(text)
     found: set[str] = set()
@@ -91,9 +122,49 @@ def candidate_terms_for_line(text: str, terms: list[str]) -> set[str]:
         tail = masked[tail_start:tail_end]
         occurrences: list[tuple[int, int, str]] = []
         for term in terms:
-            offset = tail.find(term)
-            if offset >= 0:
-                occurrences.append((offset, -len(term), term))
+            matches = [
+                match
+                for match in reviewed_term_matches(tail, term)
+                if not (
+                    "的" in term
+                    and match.start() > 0
+                    and re.fullmatch(
+                        r"[\u3400-\u9fff]+", tail[: match.start()]
+                    )
+                )
+            ]
+            if matches:
+                selected_match = matches[-1]
+                occurrences.append(
+                    (
+                        selected_match.start(),
+                        -(selected_match.end() - selected_match.start()),
+                        term,
+                    )
+                    )
+        if not occurrences and cue.group(0) in DIRECT_NAMING_CUE_RE.pattern:
+            sentence_positions = [
+                position
+                for marker in ("。", "．", ".", "；", ";")
+                if (position := masked.find(marker, tail_start)) >= 0
+            ]
+            extended_end = min(sentence_positions or [len(masked)])
+            extended_tail = masked[tail_start:extended_end]
+            for term in terms:
+                if "的" not in term:
+                    continue
+                for match in reviewed_term_matches(extended_tail, term):
+                    prefix = extended_tail[: match.start()].rstrip()
+                    if prefix.endswith("的"):
+                        occurrences.append(
+                            (
+                                match.start(),
+                                -(match.end() - match.start()),
+                                term,
+                            )
+                        )
+            if occurrences:
+                tail = extended_tail
         if not occurrences:
             continue
         occurrences = [
@@ -137,7 +208,7 @@ def candidate_terms_for_line(text: str, terms: list[str]) -> set[str]:
         )
         sentence = masked[cue.end() : sentence_end]
         for term in terms:
-            if term in found or term not in sentence:
+            if term in found or not reviewed_term_matches(sentence, term):
                 continue
             if any(term in existing and len(existing) > len(term) for existing in found):
                 continue
@@ -158,7 +229,7 @@ def definition_evidence_priority(text: str, term: str) -> int:
 
     masked = mask_math(text)
     term_positions = [
-        match.start() for match in re.finditer(re.escape(term), masked)
+        match.start() for match in reviewed_term_matches(masked, term)
     ]
     if not term_positions:
         return 3
@@ -253,16 +324,19 @@ def plan_candidates(
             for term in candidate_terms_for_line(text, terms):
                 start, end = definition_range(lines, line_number)
                 definition_text = "\n".join(lines[start - 1 : end])
+                surface = definition_surface(text, term)
                 review_flags: list[str] = []
-                if term.endswith("公式") and not has_math_equation(definition_text):
+                if term.endswith(("公式", "方程")) and not has_math_equation(
+                    definition_text
+                ):
                     review_flags.append("formula-definition-has-no-equation")
                 hits[term].append(
                     {
                         "definition_source": source.relative_to(book_root).as_posix(),
                         "definition_start_line": start,
                         "definition_end_line": end,
-                        "anchor_text": term,
-                        "link_text": term,
+                        "anchor_text": surface,
+                        "link_text": surface,
                         "confidence": "low" if review_flags else "high",
                         "reviewed": False,
                         "review_flags": review_flags,

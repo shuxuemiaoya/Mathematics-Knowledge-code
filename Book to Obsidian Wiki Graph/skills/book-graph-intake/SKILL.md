@@ -23,6 +23,10 @@ Keep these artifacts in the profile's task-scoped staging directory, not in the 
 3. Inspect the target. Classify it as new, resumable, auditable, or blocked by ambiguous replacement intent.
 4. For a PDF, inspect representative page types and the printed TOC.
 5. Record a stable source digest and never mutate the source.
+6. When Canvas is enabled, inspect immediate sibling book directories for an
+   existing same-publisher, same-series `.canvas`. Prefer a user-named Canvas;
+   otherwise use the deterministic discovery result. The first completed book
+   in a series may establish the baseline when no sibling Canvas exists.
 
 Run the inventory:
 
@@ -31,6 +35,14 @@ python scripts\inventory_book.py "<source>" --book-root "<book_root>"
 ```
 
 Save its stdout as `source-inventory.json`.
+
+Discover a same-series visual reference without reading old conversion staging:
+
+```powershell
+python scripts\discover_sibling_canvas_style.py `
+  "<books_root>" "<book_root>" `
+  --output "<staging_root>\canvas-style-discovery.json"
+```
 
 ## Create The Profile
 
@@ -44,6 +56,7 @@ python scripts\make_book_profile.py create "<source>" `
   --staging-root "<staging_root>" `
   --reference-corpus "<approved_reference_book_root>" `
   --reference-scope "style-only|same-book-content-and-style" `
+  --canvas-style-reference "<approved_same_series_sibling.canvas>" `
   --output "<staging_root>\book-profile.json"
 ```
 
@@ -52,6 +65,12 @@ in the profile with `--reference-corpus`. Use `style-only` for a different
 book and `same-book-content-and-style` only for the same title and edition.
 Never silently substitute another old run or treat the reference as cached
 conversion output.
+
+`--canvas-style-reference` is narrower than `--reference-corpus`: it freezes
+only a same-series visual contract under `canvas.style_reference`. It does not
+authorize copying sibling content, legacy link syntax, or invalid graph
+structure. Omit it only when discovery reports `not_found` and no Canvas has
+yet been completed for the series.
 
 For textbooks, always retain `知识点`, `概念`, and `习题`. Inspect the printed
 TOC and enable only source-supported side-material roles by repeating
@@ -85,6 +104,8 @@ Handoff only when:
 - enabled category roles have unique directories;
 - every enabled textbook auxiliary role is evidenced by the source or printed TOC;
 - a configured reference path and tree digest still match the approved corpus;
+- a configured Canvas style-reference path and file digest still match the
+  approved sibling Canvas;
 - staging is outside the final book tree.
 
 Return the absolute profile path and source digest. Downstream stages must reject mismatches.

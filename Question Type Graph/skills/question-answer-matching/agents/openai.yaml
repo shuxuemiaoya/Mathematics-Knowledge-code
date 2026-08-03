@@ -1,0 +1,4 @@
+interface:
+  display_name: "Question Answer Matching"
+  short_description: "Match questions to authoritative answers"
+  default_prompt: "Use $question-answer-matching to bind atomic questions to source-exact authoritative answer blocks."

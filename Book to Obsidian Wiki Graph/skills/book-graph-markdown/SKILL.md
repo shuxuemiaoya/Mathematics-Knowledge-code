@@ -34,20 +34,31 @@ Process every generated note in source order:
    labels into complete, continuous callout containers. Prefix every body
    line, formula, image, HTML line, table line, and intentional blank line
    with the callout's required `>` depth.
-5. Keep ordinary questions and exercises outside callouts.
-6. Preserve complete analysis, solution, proof, and reasoning chains.
+5. Treat `情景引入` as a structural concept, not a fixed title or mandatory
+   callout. Before a new node link, preserve the source question, idea, or
+   ordinary paragraph that introduces it. Keep unlabeled introductions,
+   ordinary questions, and exercises outside callouts; never synthesize
+   `[!info] 情景引入`.
+6. Use the topic child's leading source range as its parent preview and keep
+   that range in the child note too. Generic earlier prose cannot replace a
+   child-specific introduction.
+7. Close a question or situation callout before the next formal-definition or
+   exposition cue. If an H4-H6 line is itself an unlabeled sentence or
+   question, remove the display heading marker and retain it as an ordinary
+   paragraph; do not infer a `思考` callout.
+8. Preserve complete analysis, solution, proof, and reasoning chains.
    In a contextual problem or question callout, nest an explicit
    `分析/思路/点拨` or `解/证明/解析/解答` block when it forms the matching
    response; do not flatten it into the parent body.
-7. Prefer meaningful multi-image rows before centering single images.
-8. Preserve every link and image destination byte-for-byte.
-9. Normalize tables and footnotes without changing their data or meaning.
-10. Remove OCR-only ornament headings such as `#### ● ●` and categorized-page
+9. Prefer meaningful multi-image rows before centering single images.
+10. Preserve every link and image destination byte-for-byte.
+11. Normalize tables and footnotes without changing their data or meaning.
+12. Remove OCR-only ornament headings such as `#### ● ●` and categorized-page
    running publisher headings. Keep meaningful publication text in the root
    front matter.
-11. Do not treat prose references such as `例 1 中...` or `例7的结果...` as
+13. Do not treat prose references such as `例 1 中...` or `例7的结果...` as
     new worked-example markers.
-12. Render a source functional label once. When the reviewed block already
+14. Render a source functional label once. When the reviewed block already
     supplies `思考`, `观察`, or a similar label as its callout title, do not
     repeat that label as the first quoted body line.
 
@@ -63,6 +74,15 @@ blocks at depth two, normalizes blank runs, verifies protected destinations
 and content structure before publication, and writes the required per-file
 report. Review any residual blocks reported by the formatting audit instead of
 broadening its conversion patterns speculatively.
+
+If the formatting audit blocks on source incompleteness that requires the
+frozen source or approved same-edition reference to resolve, record each
+reviewed exact replacement, insertion, or whole-line repair in a per-book JSON
+artifact. Apply it with `scripts/apply_reviewed_content_repairs.py
+--reviewer-confirmed`; the script must verify the profile/source identity,
+require exactly one target match, write atomically without backups, and emit a
+hash-backed report. Never hide a source repair inside the general presentation
+pass.
 
 ## Report
 

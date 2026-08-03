@@ -1,3 +1,0 @@
-Copyright (c) 2026 MathOS contributors.
-
-This local skill is provided for use inside the Mathematics-Knowledge workspace.

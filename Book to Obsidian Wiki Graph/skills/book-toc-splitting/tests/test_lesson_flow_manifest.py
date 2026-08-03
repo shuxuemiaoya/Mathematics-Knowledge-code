@@ -19,6 +19,58 @@ SPEC.loader.exec_module(MODULE)
 
 
 class LessonFlowManifestTests(unittest.TestCase):
+    def test_detects_preview_that_strands_an_attached_figure(self) -> None:
+        lines = [
+            "如图 2 所示，移动点会形成一条曲线。",
+            "",
+            "![](images/diagram.png)",
+            "图 2",
+            "这个现象说明了曲线的基本特征。",
+        ]
+
+        self.assertTrue(
+            MODULE.preview_omits_attached_referenced_media(
+                lines,
+                1,
+                1,
+                5,
+            )
+        )
+        self.assertFalse(
+            MODULE.preview_omits_attached_referenced_media(
+                lines,
+                1,
+                5,
+                5,
+            )
+        )
+
+    def test_does_not_require_media_when_source_has_none_nearby(self) -> None:
+        lines = [
+            "由图 2 的结论可知该性质成立。",
+            "",
+            "下面继续讨论另一个条件。",
+        ]
+
+        self.assertFalse(
+            MODULE.preview_omits_attached_referenced_media(
+                lines,
+                1,
+                1,
+                3,
+            )
+        )
+
+    def test_media_caption_does_not_make_complete_preview_look_fragmentary(self) -> None:
+        lines = [
+            "例2 如图 1.2-3，证明两条直线垂直。",
+            "![](images/figure.jpg)",
+            "分析过程完整说明了证明思路。",
+            "图1.2-3",
+        ]
+
+        self.assertTrue(MODULE.meaningful_preview(lines, 1, 4))
+
     def fixture(
         self,
         root: Path,
@@ -35,7 +87,7 @@ class LessonFlowManifestTests(unittest.TestCase):
                 "## 1.1 集合的概念\n"
                 "为什么需要集合？\n"
                 "#### 集合\n"
-                "集合正文。\n"
+                "集合正文说明了集合的基本含义。\n"
                 "承上启下的过渡。\n"
                 "继续说明。\n"
                 "#### 习题1.1\n"
@@ -114,6 +166,20 @@ class LessonFlowManifestTests(unittest.TestCase):
                             "start_line": topic_start,
                             "end_line": topic_end,
                             "toc_key": None,
+                            "parent_preview": (
+                                None
+                                if link_only
+                                else {
+                                    "start_line": 5,
+                                    "end_line": 6,
+                                    "role": "exposition",
+                                    "title": "集合",
+                                    "reason": (
+                                        "The leading child text introduces "
+                                        "the topic before its parent link."
+                                    ),
+                                }
+                            ),
                         },
                         {
                             "key": "exercise",
@@ -175,6 +241,90 @@ class LessonFlowManifestTests(unittest.TestCase):
             [],
         )
 
+    def test_long_worked_example_is_exempt_from_retained_size_finding(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            formatted = root / "formatted.md"
+            profile = root / "book-profile.json"
+            split = root / "split-manifest.json"
+            formatted.write_text(
+                (
+                    "# 第一章\n"
+                    "## 1.1 示例\n"
+                    "本节研究一个完整例题。\n"
+                    "#### 例1\n"
+                    "题目条件。\n"
+                    "分析过程。\n"
+                    "完整解答。\n"
+                    "结论。\n"
+                ),
+                encoding="utf-8",
+            )
+            profile.write_text(
+                json.dumps(
+                    {
+                        "book": {"title": "示例教材", "kind": "textbook"},
+                        "source": {"sha256": "a" * 64},
+                        "decomposition": {
+                            "semantic_split_confidence_threshold": 0.9,
+                            "max_retained_teaching_block_nonblank_lines": 2,
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            split.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "profile": str(profile.resolve()),
+                        "source_sha256": "a" * 64,
+                        "input_markdown_sha256": MODULE.sha256_file(formatted),
+                        "semantic_review": {
+                            "headings": [],
+                            "sections": [],
+                            "ranges": [],
+                        },
+                        "nodes": [
+                            {
+                                "key": "book",
+                                "title": "示例教材",
+                                "parent_key": None,
+                                "category": "root",
+                                "filename": "示例教材.md",
+                                "start_line": 1,
+                                "end_line": 8,
+                                "toc_key": None,
+                            },
+                            {
+                                "key": "lesson",
+                                "title": "1.1 示例",
+                                "parent_key": "book",
+                                "category": "knowledge",
+                                "filename": "1.1 示例.md",
+                                "start_line": 2,
+                                "end_line": 8,
+                                "toc_key": "lesson",
+                            },
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            payload = MODULE.plan(formatted, split, profile)
+            findings = payload["lessons"][0]["draft_findings"]
+
+        self.assertFalse(
+            any(
+                finding.get("code") == "retained-block-too-large"
+                and finding.get("range") == [4, 8]
+                for finding in findings
+            )
+        )
+
     def test_plan_reports_missing_opening_preview(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             formatted, split, profile = self.fixture(
@@ -186,6 +336,63 @@ class LessonFlowManifestTests(unittest.TestCase):
             payload["lessons"][0]["draft_findings"][0]["code"],
             "opening-preview-missing",
         )
+
+    def test_same_book_reference_blocks_lesson_flow_before_adoption(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            formatted, split, profile = self.fixture(Path(temporary))
+            profile_payload = json.loads(profile.read_text(encoding="utf-8"))
+            profile_payload["reference"] = {
+                "path": str((Path(temporary) / "reference").resolve()),
+                "sha256": "b" * 64,
+                "scope": "same-book-content-and-style",
+            }
+            profile.write_text(
+                json.dumps(profile_payload, ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                MODULE.LessonFlowError,
+                "requires adopted semantic review",
+            ):
+                MODULE.plan(formatted, split, profile)
+
+    def test_same_book_reference_accepts_identity_bound_adoption(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            formatted, split, profile = self.fixture(root)
+            reference = root / "reference"
+            reference.mkdir()
+            proposal = root / "reference-semantic-proposals.json"
+            proposal.write_text('{"status":"review_required"}\n', encoding="utf-8")
+            profile_payload = json.loads(profile.read_text(encoding="utf-8"))
+            profile_payload["reference"] = {
+                "path": str(reference.resolve()),
+                "sha256": "b" * 64,
+                "scope": "same-book-content-and-style",
+            }
+            profile.write_text(
+                json.dumps(profile_payload, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            split_payload = json.loads(split.read_text(encoding="utf-8"))
+            split_payload["semantic_review"]["reference"] = {
+                "status": "passed",
+                "reviewer_confirmed": True,
+                "scope": "same-book-content-and-style",
+                "path": str(reference.resolve()),
+                "sha256": "b" * 64,
+                "proposal_report": str(proposal.resolve()),
+                "proposal_report_sha256": MODULE.sha256_file(proposal),
+            }
+            split.write_text(
+                json.dumps(split_payload, ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            payload = MODULE.plan(formatted, split, profile)
+
+        self.assertEqual(payload["status"], "review_required")
 
     def test_includes_numbered_non_toc_teaching_subsection(self) -> None:
         split_manifest = {
@@ -259,7 +466,10 @@ class LessonFlowManifestTests(unittest.TestCase):
             lesson["blocks"][0]["role"] = "entry-context"
             lesson["blocks"][1]["role"] = "topic"
             lesson["blocks"][2]["role"] = "practice"
-            with self.assertRaisesRegex(MODULE.LessonFlowError, "link-only"):
+            with self.assertRaisesRegex(
+                MODULE.LessonFlowError,
+            "lesson entry would begin link-only",
+            ):
                 MODULE.validate(
                     payload,
                     formatted_markdown=formatted,

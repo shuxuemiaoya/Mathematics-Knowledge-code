@@ -1,4 +1,4 @@
 interface:
   display_name: "Book Graph Intake"
-  short_description: "Freeze source output and lesson-flow policies per book"
-  default_prompt: "Use $book-graph-intake to inspect this book and freeze its source identity, output paths, reference corpus, and lesson-flow policy."
+  short_description: "Freeze book identity policies and Canvas style input"
+  default_prompt: "Use $book-graph-intake to inspect this book and freeze its source, output, reference, lesson-flow, and same-series Canvas style identities."

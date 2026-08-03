@@ -17,12 +17,17 @@ profile/source identity, `errors`, `warnings`, and counts.
 - a coverage unit is missing, duplicated, or blocked;
 - a required lesson-flow manifest is missing, stale, unresolved, incomplete,
   non-contiguous, or inconsistent with split child ranges;
+- a same-book reference is configured but the lesson-flow-bound split manifest
+  lacks its passed reviewer-confirmed semantic review, matching reference
+  identity, or matching proposal-report digest;
 - a lesson moves its situation introduction or transition to a child, retains
   no substantive preview beyond links, or keeps an oversized independent
   teaching block in the entry page;
 - an empty Markdown or concept note exists;
 - a non-concept note does not begin with a valid H1-H3 entry heading;
 - a concept note lacks `# <concept name>` or `## 定义`;
+- a concept definition contains a functional callout marker, H4-H6 teaching
+  heading, worked-example label, or practice boundary;
 - a concept has no resolving inbound definition link;
 - a Markdown, image, or canvas link does not resolve;
 - a configured vault-root Markdown note link lacks its leading slash;

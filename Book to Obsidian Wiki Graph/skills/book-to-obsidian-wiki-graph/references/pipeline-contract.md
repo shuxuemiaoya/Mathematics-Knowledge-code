@@ -5,14 +5,14 @@
 | Intake | `book-graph-intake` | source and target | inventory, profile | frozen source identity |
 | PDF conversion | `book-pdf-to-markdown` | PDF and profile | raw Markdown and assets | forced OCR, complete pages/assets |
 | TOC formatting | `book-toc-formatting` | raw Markdown and printed TOC | TOC manifest, formatted Markdown, report | every TOC entry matched; other headings below H3 |
-| TOC splitting | `book-toc-splitting` | formatted Markdown, TOC, split, and lesson-flow manifests | categorized notes, parent links, coverage | every lesson line receives one reviewed logical role; no block crosses a functional/definition/example/practice boundary; context and transitions remain in the entry; independent topics and exercises are routed; all targets resolve |
+| TOC splitting | `book-toc-splitting` | formatted Markdown, TOC, split, same-book reference evidence when configured, and lesson-flow manifests | categorized notes, parent links, coverage | same-book reference ranges are reviewed before lesson flow; every lesson line receives one reviewed logical role; no block crosses a functional/definition/example/practice boundary; context and transitions remain in the entry; independent topics and exercises are routed; all targets resolve |
 | Split audit | `book-graph-audit --stage split` | split corpus and coverage | audit report | identity, coverage, links, and assets pass |
 | Concepts | `book-graph-concepts` | split notes and coverage | concept notes and manifest | formal definitions complete and linked |
 | Concept audit | `book-graph-audit --stage concepts` | concept-linked corpus | audit report | concept manifest and links pass |
 | Standardization | `book-graph-markdown` | concept-linked notes | standardized notes | protected fields unchanged; functional blocks become continuous quoted-body callouts, with nested analysis/solution callouts inside examples |
 | Formatting audit | `book-graph-audit --stage formatting` | standardized corpus | audit report | Markdown rules, links, assets, callout continuity, and callout semantic ownership pass |
 | Pre-audit | `book-graph-audit --stage pre-canvas` | complete note corpus | audit report | `status: passed` |
-| Canvas | `book-graph-canvas` | passed notes and graph plan | `.canvas` | compiler passes |
+| Canvas | `book-graph-canvas` | passed notes, graph plan, approved same-book reference review, and frozen same-series style reference when configured | `.canvas`, graph manifest, and `canvas-style-report.json` when configured | compiler passes; retained same-book topology is preserved; same-series visual metrics pass |
 | Final audit | `book-graph-audit --stage final` | final corpus | final report | `status: passed` |
 
 TOC formatting and TOC splitting are one uninterrupted transition: a passed formatting report triggers splitting immediately.
@@ -56,6 +56,20 @@ After source-backed review, exact blocker keys may be accepted through an
 identity-bound review-decisions artifact. Every decision requires a specific
 reason, and the comparator must reject stale source/reference hashes. Missing
 or unreviewed blocker keys remain blocking.
+
+The same-book reference is also an upstream decomposition input. Immediately
+after the deterministic split draft, generate the reference semantic proposal,
+review its exact source ranges, adopt confirmed candidates, and freeze that
+reference path/digest plus the proposal-report digest inside
+`semantic_review.reference`. Physical splitting must reject missing or stale
+same-book reference evidence.
+
+A same-series sibling Canvas is a separate visual input frozen under
+`canvas.style_reference`. It does not trigger cross-book content comparison.
+After compilation, write `canvas-style-report.json` and iterate the manifest
+until scale-independent grouping, nesting, aspect, card rhythm, annotation,
+and edge styling metrics pass. Raw counts, sibling content, and legacy link
+syntax are not parity criteria.
 
 Use `scripts/compare_reference_content.py` to write
 `reference-content-parity-report.json`; merge its blocking summary into the

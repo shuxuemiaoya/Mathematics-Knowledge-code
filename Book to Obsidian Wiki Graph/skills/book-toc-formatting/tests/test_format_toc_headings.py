@@ -137,6 +137,46 @@ class TocHeadingTests(unittest.TestCase):
         )
         self.assertFalse(report["matched"][0]["second_fragment_was_heading"])
 
+    def test_inserts_reviewed_printed_toc_heading_at_frozen_line(self) -> None:
+        manifest = {
+            "schema_version": 1,
+            "toc_source_ranges": [],
+            "entries": [
+                {
+                    "key": "index",
+                    "title": "部分中英文词汇索引",
+                    "level": 1,
+                    "insertion_line": 2,
+                    "insertion_reason": "OCR omitted the printed index heading",
+                }
+            ],
+        }
+        source = "正文。\n<table><tr><td>中文</td></tr></table>\n"
+        candidate, report = MODULE.format_headings(source, manifest)
+        self.assertEqual(
+            candidate,
+            "正文。\n# 部分中英文词汇索引\n\n<table><tr><td>中文</td></tr></table>\n",
+        )
+        self.assertEqual(report["matched_toc_headings"], 1)
+        self.assertEqual(report["inserted_toc_headings"], 1)
+        self.assertTrue(report["matched"][0]["inserted_from_printed_toc"])
+
+    def test_requires_reason_for_reviewed_heading_insertion(self) -> None:
+        manifest = {
+            "schema_version": 1,
+            "toc_source_ranges": [],
+            "entries": [
+                {
+                    "key": "index",
+                    "title": "部分中英文词汇索引",
+                    "level": 1,
+                    "insertion_line": 1,
+                }
+            ],
+        }
+        with self.assertRaises(MODULE.TocFormattingError):
+            MODULE.format_headings("索引正文。\n", manifest)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -25,7 +25,9 @@ Process each non-concept note independently:
 2. Block and return an invalid candidate to the split manifest; do not silently preserve or recategorize it.
 3. Identify additional concepts formally defined inside non-concept notes.
 4. Reject undefined terms and concepts defined only in another note or chapter.
-5. Copy the complete definition without truncation.
+5. Copy the complete definition without truncation, but do not copy surrounding
+   exploration, counterexample, worked-example, or practice blocks merely
+   because they occur before the naming sentence.
 6. Write one flat concept file without silently overwriting a split candidate.
 7. Include a resolving source-note link in the concept file.
 8. Replace the first defining occurrence in the source note with one Markdown link.
@@ -53,6 +55,15 @@ script to decide which terms qualify as concepts. If a defining term is inside
 LaTeX, retain it in the source and reject the candidate unless another complete,
 linkable defining occurrence exists.
 
+Use the smallest source-derived range that contains the complete formal
+definition. A reviewed range must not cross a functional callout, H4-H6
+teaching heading, worked-example label, or practice boundary. If the definition
+requires separated source passages, record ordered, non-overlapping
+`definition_segments` instead of widening one range across the intervening
+teaching block. Each segment uses `start_line` and `end_line`; copied segments
+remain verbatim and in source order. The segment containing `anchor_text`
+controls the one source-link replacement.
+
 When a human-reviewed concept directory from the same edition is available,
 use it only as a reviewed term list to reduce rediscovery:
 
@@ -71,15 +82,19 @@ incomplete definition; the rejection remains explicit in the candidate JSON.
 The planner recognizes formal variants such as `称…是`, `就说`, and
 `判断为`, including parallel terms in one definition sentence, but every
 located candidate still requires review.
+For a reviewed canonical name shaped like `X的Y`, also recognize a source
+surface that inserts only a mathematical object label between `X` and `的`
+(for example, `X $A$ 的Y`). Preserve that complete source surface as the
+Markdown link text while keeping the canonical filename and concept name.
 When one term has several matches, rank direct naming evidence such as
 `叫做集合`, `称为子集`, or `定义为...` ahead of a generic noun merely
 following `我们说`, `就说`, or `并且说`. Source-path order must not decide
 between those evidence classes.
 Also rank a general construction beginning with `一般地`, `通常`, or a
 domain-and-condition statement ahead of an earlier concrete worked example.
-For a concept whose name ends in `公式`, require its reviewed definition range
-to contain an actual TeX equation; a naming sentence with only a symbol
-reference is incomplete.
+For a concept whose name ends in `公式` or `方程`, require its reviewed
+definition range or segments to contain an actual TeX equation; a naming
+sentence with only a symbol reference is incomplete.
 
 The planner writes `status: review_required` and `reviewed: false`. Before
 materialization, review every exact range, resolve all `review_flags`, set each
@@ -97,5 +112,7 @@ Do not complete this stage while a routed item is undecided.
 Require every accepted concept file to contain the complete definition and a
 valid source link, every definition occurrence link to resolve, each concept to
 be linked at most once per source file, and every rejected candidate to remain
-unmaterialized. Require `book-graph-audit --stage concepts` to pass, then invoke
+unmaterialized. Reject a generated definition that still contains a functional
+callout marker, teaching heading, worked-example label, or practice boundary.
+Require `book-graph-audit --stage concepts` to pass, then invoke
 `book-graph-markdown`.

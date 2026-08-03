@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -57,6 +58,15 @@ NOTE_LINK_MODES = {"relative", "vault-root"}
 BACKUP_POLICIES = {"none", "task-scoped"}
 CALLOUT_BODY_MODES = {"quoted-body"}
 REFERENCE_SCOPES = {"style-only", "same-book-content-and-style"}
+CANVAS_STYLE_REFERENCE_SCOPE = "same-series-style"
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def _vault_relative(book_root: Path, vault_root: Path) -> str:
@@ -80,6 +90,7 @@ def create_profile(
     textbook_aux_roles: list[str] | None = None,
     reference_corpus: Path | None = None,
     reference_scope: str = "style-only",
+    canvas_style_reference: Path | None = None,
 ) -> dict[str, Any]:
     source = source.resolve()
     vault_root = vault_root.resolve()
@@ -194,6 +205,20 @@ def create_profile(
         },
         "workspace": {"backup_policy": "none"},
     }
+    if canvas_style_reference is not None:
+        canvas_style_reference = canvas_style_reference.resolve()
+        if (
+            not canvas_style_reference.is_file()
+            or canvas_style_reference.suffix.casefold() != ".canvas"
+        ):
+            raise ValueError(
+                "canvas_style_reference must be an existing .canvas file"
+            )
+        profile["canvas"]["style_reference"] = {
+            "path": str(canvas_style_reference),
+            "sha256": sha256_file(canvas_style_reference),
+            "scope": CANVAS_STYLE_REFERENCE_SCOPE,
+        }
     if reference_corpus is not None:
         reference_corpus = reference_corpus.resolve()
         reference_inventory = inspect_source(reference_corpus)
@@ -381,6 +406,34 @@ def profile_errors(profile: Any) -> list[str]:
                     "same-book-content-and-style"
                 )
 
+    canvas = profile.get("canvas")
+    if not isinstance(canvas, dict):
+        errors.append("canvas must be an object")
+    else:
+        style_reference = canvas.get("style_reference")
+        if style_reference is not None:
+            if not isinstance(style_reference, dict):
+                errors.append("canvas.style_reference must be an object")
+            else:
+                if not str(style_reference.get("path", "")).strip():
+                    errors.append("canvas.style_reference.path is required")
+                style_hash = str(style_reference.get("sha256", ""))
+                if len(style_hash) != 64 or any(
+                    char not in "0123456789abcdef" for char in style_hash
+                ):
+                    errors.append(
+                        "canvas.style_reference.sha256 must be a lowercase "
+                        "SHA-256 digest"
+                    )
+                if (
+                    style_reference.get("scope")
+                    != CANVAS_STYLE_REFERENCE_SCOPE
+                ):
+                    errors.append(
+                        "canvas.style_reference.scope must be "
+                        "same-series-style"
+                    )
+
     workspace = profile.get("workspace", {})
     if workspace.get("backup_policy") not in BACKUP_POLICIES:
         errors.append("workspace.backup_policy must be none or task-scoped")
@@ -420,6 +473,19 @@ def profile_location_errors(profile: dict[str, Any], profile_path: Path) -> list
                 errors.append(
                     "reference.sha256 does not match the current reference corpus"
                 )
+    style_reference = profile.get("canvas", {}).get("style_reference")
+    if isinstance(style_reference, dict):
+        style_path = Path(str(style_reference.get("path", ""))).resolve()
+        if not style_path.is_file() or style_path.suffix.casefold() != ".canvas":
+            errors.append(
+                "canvas.style_reference.path is not a .canvas file: "
+                f"{style_path}"
+            )
+        elif sha256_file(style_path) != style_reference.get("sha256"):
+            errors.append(
+                "canvas.style_reference.sha256 does not match the current "
+                "reference canvas"
+            )
     return errors
 
 
@@ -462,6 +528,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     create.add_argument("--staging-root", type=Path)
     create.add_argument("--reference-corpus", type=Path)
     create.add_argument(
+        "--canvas-style-reference",
+        type=Path,
+        help=(
+            "Freeze a same-series sibling .canvas as the visual-style "
+            "reference for the Canvas stage."
+        ),
+    )
+    create.add_argument(
         "--reference-scope",
         choices=sorted(REFERENCE_SCOPES),
         default="style-only",
@@ -489,6 +563,7 @@ def main(argv: list[str] | None = None) -> int:
                 textbook_aux_roles=args.textbook_aux_role,
                 reference_corpus=args.reference_corpus,
                 reference_scope=args.reference_scope,
+                canvas_style_reference=args.canvas_style_reference,
             )
             write_json_atomic(args.output.resolve(), profile, args.overwrite)
             result = {

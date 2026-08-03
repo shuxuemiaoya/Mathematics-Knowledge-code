@@ -47,6 +47,11 @@ checked before formatting.
 - Record the exact source lines occupied by the printed TOC so those headings are not mistaken for book content.
 - Assign a category for the later split stage.
 - Assign book-wide standalone indexes and glossaries to category `root`.
+- When OCR omits a printed TOC heading but its complete body is present, a
+  reviewed entry may set `insertion_line` to the one-based line where the
+  authoritative title must be restored and `insertion_reason` to a specific
+  explanation. The manifest input hash binds this line to the exact frozen
+  Markdown. Never use insertion to invent a title absent from the printed TOC.
 - For textbooks, use the three required core roles plus only the
   source-supported auxiliary roles enabled in the profile.
 - For other books, let the LLM propose categories, then record them in the profile before splitting.

@@ -1,0 +1,224 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import re
+import tempfile
+from pathlib import Path
+from typing import Any, Iterable
+from urllib.parse import quote, unquote
+
+
+class GraphError(RuntimeError):
+    """Base error for deterministic pipeline failures."""
+
+
+class ConfigurationError(GraphError):
+    """Raised when a frozen interface is missing or inconsistent."""
+
+
+class ReviewRequired(GraphError):
+    """Raised when a semantic choice has not been reviewed."""
+
+
+def sha256_bytes(value: bytes) -> str:
+    return hashlib.sha256(value).hexdigest()
+
+
+def sha256_text(value: str) -> str:
+    return sha256_bytes(value.encode("utf-8"))
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def load_json(path: Path) -> dict[str, Any]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8-sig"))
+    except Exception as exc:
+        raise ConfigurationError(f"Cannot read JSON {path}: {exc}") from exc
+    if not isinstance(value, dict):
+        raise ConfigurationError(f"JSON root must be an object: {path}")
+    return value
+
+
+def write_text_atomic(path: Path, text: str, overwrite: bool = False) -> None:
+    path = path.resolve()
+    if path.exists() and not overwrite:
+        raise ConfigurationError(f"Output exists; explicit overwrite required: {path}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    temp = Path(temp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as stream:
+            stream.write(text)
+        temp.replace(path)
+    finally:
+        temp.unlink(missing_ok=True)
+
+
+def write_json_atomic(path: Path, value: dict[str, Any], overwrite: bool = False) -> None:
+    write_text_atomic(
+        path,
+        json.dumps(value, ensure_ascii=False, indent=2) + "\n",
+        overwrite=overwrite,
+    )
+
+
+def pdf_page_count(path: Path) -> int:
+    try:
+        from pypdf import PdfReader
+    except Exception as exc:
+        raise ConfigurationError("pypdf is required for PDF inputs") from exc
+    try:
+        count = len(PdfReader(str(path)).pages)
+    except Exception as exc:
+        raise ConfigurationError(f"Cannot inspect PDF {path}: {exc}") from exc
+    if count < 1:
+        raise ConfigurationError(f"PDF has no pages: {path}")
+    return count
+
+
+def resolve_inside(root: Path, relative: str | Path) -> Path:
+    root = root.resolve()
+    candidate = (root / relative).resolve()
+    try:
+        candidate.relative_to(root)
+    except ValueError as exc:
+        raise ConfigurationError(f"Path escapes root {root}: {relative}") from exc
+    return candidate
+
+
+def safe_name(value: str, fallback: str = "node") -> str:
+    value = re.sub(r"[<>:\"/\\|?*\x00-\x1f]", "_", value).strip().rstrip(".")
+    return value[:120] or fallback
+
+
+def bounded_output_path(root: Path, desired: Path, max_length: int, identity: str) -> Path:
+    """Keep generated paths inside the graph and below a conservative Windows budget."""
+    root = root.resolve()
+    desired = desired.resolve()
+    try:
+        desired.relative_to(root)
+    except ValueError as exc:
+        raise ConfigurationError("Generated output escaped graph root") from exc
+    if max_length < 160 or max_length > 320:
+        raise ConfigurationError("content.max_path_length must be between 160 and 320")
+    if len(str(desired)) <= max_length:
+        return desired
+    suffix = desired.suffix or ".md"
+    digest = sha256_text(f"{identity}\n{desired}")[:16]
+    compact = (root / "_compact" / f"{digest}{suffix}").resolve()
+    if len(str(compact)) > max_length:
+        raise ConfigurationError(f"Graph root leaves no safe output-path budget: {root}")
+    return compact
+
+
+def markdown_target(from_note: Path, to_note: Path) -> str:
+    relative = os.path.relpath(to_note, from_note.parent).replace("\\", "/")
+    return quote(relative, safe="/%._-~")
+
+
+def markdown_link(label: str, from_note: Path, to_note: Path) -> str:
+    return f"[{label}]({markdown_target(from_note, to_note)})"
+
+
+MARKDOWN_LINK_RE = re.compile(r"(?<!!)\[[^\]]*\]\(([^)]+)\)")
+IMAGE_LINK_RE = re.compile(r"!\[[^\]]*\]\(([^)]+)\)")
+ALL_MARKDOWN_LINK_RE = re.compile(r"(!?\[[^\]]*\]\()([^)]+)(\))")
+HTML_IMAGE_RE = re.compile(r"(<img\b[^>]*?\bsrc=[\"'])([^\"']+)([\"'])", re.IGNORECASE)
+
+
+def rebase_local_links(
+    text: str,
+    from_note: Path,
+    to_note: Path,
+    relocations: list[tuple[Path, Path]] | None = None,
+) -> str:
+    """Keep local link identity while making it resolve from a moved note."""
+    roots = [(source.resolve(), target.resolve()) for source, target in (relocations or [])]
+
+    def destination(value: str) -> str | None:
+        clean = value.strip().strip("<>")
+        if not clean or clean.startswith(("http://", "https://", "data:", "#")):
+            return None
+        anchor = ""
+        if "#" in clean:
+            clean, fragment = clean.split("#", 1)
+            anchor = f"#{fragment}"
+        target = (from_note.parent / unquote(clean)).resolve()
+        for source_root, target_root in roots:
+            try:
+                relative = target.relative_to(source_root)
+            except ValueError:
+                continue
+            target = target_root / relative
+            break
+        if not target.exists():
+            return None
+        return f"{markdown_target(to_note, target)}{anchor}"
+
+    def replace_markdown(match: re.Match[str]) -> str:
+        rewritten = destination(match.group(2))
+        return match.group(0) if rewritten is None else f"{match.group(1)}{rewritten}{match.group(3)}"
+
+    def replace_html(match: re.Match[str]) -> str:
+        rewritten = destination(match.group(2))
+        return match.group(0) if rewritten is None else f"{match.group(1)}{rewritten}{match.group(3)}"
+
+    return HTML_IMAGE_RE.sub(replace_html, ALL_MARKDOWN_LINK_RE.sub(replace_markdown, text))
+
+
+def local_markdown_destinations(text: str) -> Iterable[str]:
+    for pattern in (MARKDOWN_LINK_RE, IMAGE_LINK_RE):
+        for match in pattern.finditer(text):
+            value = match.group(1).strip().strip("<>")
+            if not value or value.startswith(("http://", "https://", "#", "data:")):
+                continue
+            yield unquote(value.split("#", 1)[0])
+
+
+def lexical_signature(text: str) -> str:
+    """Hash lexical content while allowing Markdown-only presentation changes."""
+    text = re.sub(r"\A---\n.*?\n---\n", "", text, flags=re.DOTALL)
+    text = re.sub(r"<!--\s*(?:question|answer)-source:(?:start|end)\s*-->", "", text)
+    text = re.sub(r"!\[([^\]]*)\]\([^)]+\)", r"\1", text)
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+    text = re.sub(r"(?m)^\s*(?:#{1,6}|>|[-+*])\s*", "", text)
+    return sha256_text(re.sub(r"\s+", "", text))
+
+
+def load_profile(path: Path, verify_sources: bool = True) -> dict[str, Any]:
+    path = path.expanduser().resolve()
+    profile = load_json(path)
+    if profile.get("schema_version") != 1:
+        raise ConfigurationError("question-type-profile schema_version must be 1")
+    if not isinstance(profile.get("sources"), list) or not profile["sources"]:
+        raise ConfigurationError("profile.sources must be a non-empty list")
+    if verify_sources:
+        for source in profile["sources"]:
+            source_path = Path(str(source.get("path", ""))).resolve()
+            if not source_path.is_file():
+                raise ConfigurationError(f"Frozen source is missing: {source_path}")
+            if sha256_file(source_path) != source.get("sha256"):
+                raise ConfigurationError(f"Frozen source changed: {source_path}")
+    profile["_profile_path"] = str(path)
+    return profile
+
+
+def require_reviewed_adapter(profile: dict[str, Any], adapter_path: Path) -> dict[str, Any]:
+    adapter = load_json(adapter_path.resolve())
+    if adapter.get("schema_version") != 1:
+        raise ConfigurationError("format-adapter schema_version must be 1")
+    if adapter.get("status") != "passed" or adapter.get("reviewer_confirmed") is not True:
+        raise ReviewRequired("format-adapter must be passed and reviewer_confirmed")
+    expected = adapter.get("profile")
+    if expected and Path(str(expected)).resolve() != Path(profile["_profile_path"]).resolve():
+        raise ConfigurationError("format-adapter is bound to another profile")
+    return adapter
