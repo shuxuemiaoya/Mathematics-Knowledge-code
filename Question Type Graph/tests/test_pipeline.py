@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from argparse import Namespace
 from pathlib import Path
 
@@ -112,6 +113,14 @@ def test_full_separate_question_and_answer_pipeline(tmp_path: Path) -> None:
     assert "First question?" in first
     assert "Keep this subpart." in first
     assert "Exact analysis one." in first
+    question_preamble = first.split("<!-- question-source:start -->", 1)[0]
+    assert not re.search(r"(?m)^#{1,6}\s+", question_preamble)
+    nodes = {node["key"]: node for node in manifest["functional_nodes"]}
+    owner = nodes[manifest["questions"][0]["owner"]]
+    owner_text = Path(owner["output"]).read_text(encoding="utf-8")
+    question_target = Path(manifest["questions"][0]["output"]).resolve().relative_to(vault.resolve()).as_posix()
+    assert f"![[{question_target}]]" in owner_text
+    assert f"- ![[{question_target}]]" not in owner_text
     canvas = json.loads((graph / "Synthetic.canvas").read_text(encoding="utf-8"))
     assert all("Question 1" not in str(node) for node in canvas["nodes"])
 

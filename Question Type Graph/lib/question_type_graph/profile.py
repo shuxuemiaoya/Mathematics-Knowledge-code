@@ -63,6 +63,10 @@ def create_profile(
     graph_root = graph_root.expanduser().resolve()
     if staging_root == graph_root or graph_root in staging_root.parents:
         raise ConfigurationError("staging_root must be outside graph_root")
+    try:
+        graph_root.relative_to(vault_root)
+    except ValueError as exc:
+        raise ConfigurationError("graph_root must be inside vault_root for Obsidian embeds") from exc
     sources = []
     for role, path in parsed:
         sources.append(
@@ -108,7 +112,10 @@ def create_profile(
         "output": {
             "folder_layout": "adapter-controlled",
             "question_folder": "questions",
-            "link_mode": "relative",
+            "link_mode": "obsidian-embed",
+            "embed_children": True,
+            "list_prefix": None,
+            "atomic_question_heading": False,
         },
         "canvas": {"enabled": canvas_enabled, "question_type_color": "6"},
         "knowledge_linking": {"status": "deferred", "enabled": False},

@@ -11,7 +11,7 @@ from .common import (
     ConfigurationError,
     load_json,
     load_profile,
-    markdown_link,
+    obsidian_embed,
     rebase_local_links,
     require_reviewed_adapter,
     resolve_inside,
@@ -241,7 +241,7 @@ def plan_hierarchy(profile_path: Path, adapter_path: Path) -> dict[str, Any]:
         "source_markdown_sha256": sha256_file(markdown),
         "line_count": len(lines),
         "root_output": str(hierarchy.get("root_output", "index.md")),
-        "navigation_outline_depth": int(hierarchy.get("navigation_outline_depth", 1)),
+        "navigation_embed_mode": "direct-children",
         "entries": entries,
         "review_items": review_items,
     }
@@ -249,24 +249,6 @@ def plan_hierarchy(profile_path: Path, adapter_path: Path) -> dict[str, Any]:
 
 def direct_children(entries: list[dict[str, Any]], key: str | None) -> list[dict[str, Any]]:
     return [entry for entry in entries if entry.get("parent") == key]
-
-
-def navigation_outline(
-    entries: list[dict[str, Any]],
-    parent_key: str,
-    note: Path,
-    output_by_key: dict[str, Path],
-    depth: int,
-    indent: int,
-) -> list[str]:
-    if depth <= 0:
-        return []
-    rendered: list[str] = []
-    children = [item for item in direct_children(entries, parent_key) if item.get("supplemental") is not True]
-    for child in sorted(children, key=lambda item: item["start_line"]):
-        rendered.append(f"{'  ' * indent}- {markdown_link(child['title'], note, output_by_key[child['key']])}")
-        rendered.extend(navigation_outline(entries, child["key"], note, output_by_key, depth - 1, indent + 1))
-    return rendered
 
 
 def apply_hierarchy(profile_path: Path, adapter_path: Path, manifest_path: Path, overwrite: bool) -> dict[str, Any]:
@@ -280,6 +262,7 @@ def apply_hierarchy(profile_path: Path, adapter_path: Path, manifest_path: Path,
         raise ConfigurationError("Hierarchy source Markdown changed after planning")
     lines = markdown.read_text(encoding="utf-8-sig").splitlines()
     graph_root = Path(profile["paths"]["graph_root"]).resolve()
+    vault_root = Path(profile["paths"]["vault_root"]).resolve()
     if graph_root.exists() and any(graph_root.iterdir()) and not overwrite:
         raise ConfigurationError("Graph root is non-empty; explicit --overwrite required")
     raw_asset_root = markdown.parent / "images"
@@ -288,9 +271,6 @@ def apply_hierarchy(profile_path: Path, adapter_path: Path, manifest_path: Path,
         shutil.copytree(raw_asset_root, graph_asset_root, dirs_exist_ok=overwrite)
     relocations = [(raw_asset_root, graph_asset_root)] if raw_asset_root.is_dir() else []
     entries = manifest["entries"]
-    navigation_depth = int(manifest.get("navigation_outline_depth", 1))
-    if navigation_depth < 1 or navigation_depth > 6:
-        raise ConfigurationError("hierarchy.navigation_outline_depth must be between 1 and 6")
     output_by_key = {entry["key"]: resolve_inside(graph_root, entry["output"]) for entry in entries}
     line_owners = ["root"] * len(lines)
 
@@ -314,10 +294,7 @@ def apply_hierarchy(profile_path: Path, adapter_path: Path, manifest_path: Path,
         while line <= entry["end_line"]:
             child = child_by_start.get(line)
             if child:
-                output_lines.append(f"- {markdown_link(child['title'], note, output_by_key[child['key']])}")
-                output_lines.extend(
-                    navigation_outline(entries, child["key"], note, output_by_key, navigation_depth - 1, 1)
-                )
+                output_lines.append(obsidian_embed(output_by_key[child["key"]], vault_root))
                 line = child["end_line"] + 1
             else:
                 output_lines.append(lines[line - 1])
@@ -331,6 +308,7 @@ def apply_hierarchy(profile_path: Path, adapter_path: Path, manifest_path: Path,
                 "title": entry["title"],
                 "role": entry.get("role", "hierarchy"),
                 "level": entry["level"],
+                "parent": entry.get("parent"),
                 "structural_only": entry.get("structural_only") is True,
                 "supplemental": entry.get("supplemental") is True,
                 "answer_context": entry.get("answer_context", entry["key"]),
@@ -347,10 +325,7 @@ def apply_hierarchy(profile_path: Path, adapter_path: Path, manifest_path: Path,
     while line <= len(lines):
         child = top_by_start.get(line)
         if child:
-            root_lines.append(f"- {markdown_link(child['title'], root_note, output_by_key[child['key']])}")
-            root_lines.extend(
-                navigation_outline(entries, child["key"], root_note, output_by_key, navigation_depth - 1, 1)
-            )
+            root_lines.append(obsidian_embed(output_by_key[child["key"]], vault_root))
             line = child["end_line"] + 1
         else:
             root_lines.append(lines[line - 1])

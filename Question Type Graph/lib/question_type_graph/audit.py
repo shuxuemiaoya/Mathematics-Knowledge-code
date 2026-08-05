@@ -7,19 +7,56 @@ from pathlib import Path
 from typing import Any
 
 from .answers import ANSWER_BODY_RE, QUESTION_BODY_RE
-from .common import lexical_signature, local_markdown_destinations, load_json, load_profile, sha256_file, sha256_text, write_json_atomic
+from .common import (
+    lexical_signature,
+    local_markdown_destinations,
+    load_json,
+    load_profile,
+    obsidian_embed,
+    obsidian_embed_destinations,
+    sha256_file,
+    sha256_text,
+    write_json_atomic,
+)
 
 
 LINK_FILE_SUFFIXES = {".md", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".avif"}
 
 
-def broken_local_links(note: Path, text: str) -> list[str]:
+def broken_local_links(note: Path, text: str, vault_root: Path) -> list[str]:
     values = []
     for destination in local_markdown_destinations(text):
         target = (note.parent / destination).resolve()
         if not target.exists() and Path(destination).suffix.casefold() in LINK_FILE_SUFFIXES:
             values.append(destination)
+    for destination in obsidian_embed_destinations(text):
+        target = (vault_root / destination).resolve()
+        if not target.exists():
+            values.append(destination)
     return values
+
+
+def validate_embed(parent: Path, child: Path, vault_root: Path, kind: str, identity: str) -> list[dict[str, Any]]:
+    if not parent.is_file():
+        return [{"kind": "missing-embed-parent", "relation": kind, "identity": identity, "path": str(parent)}]
+    text = parent.read_text(encoding="utf-8-sig")
+    embed = obsidian_embed(child, vault_root)
+    count = text.count(embed)
+    errors: list[dict[str, Any]] = []
+    if count != 1:
+        errors.append(
+            {
+                "kind": "invalid-embed-ownership",
+                "relation": kind,
+                "identity": identity,
+                "parent": str(parent),
+                "child": str(child),
+                "embed_count": count,
+            }
+        )
+    if any(line.strip().startswith((f"- {embed}", f"* {embed}", f"+ {embed}")) for line in text.splitlines()):
+        errors.append({"kind": "embed-has-list-prefix", "relation": kind, "identity": identity, "parent": str(parent)})
+    return errors
 
 
 def audit_graph(
@@ -30,6 +67,7 @@ def audit_graph(
     canvas_path: Path | None,
 ) -> dict[str, Any]:
     profile = load_profile(profile_path)
+    vault_root = Path(profile["paths"]["vault_root"]).resolve()
     hierarchy = load_json(hierarchy_coverage_path)
     content = load_json(content_manifest_path)
     errors: list[dict[str, Any]] = []
@@ -73,12 +111,36 @@ def audit_graph(
         match = QUESTION_BODY_RE.search(text)
         if not match or lexical_signature(match.group(1).rstrip() + "\n") != question.get("body_lexical_signature"):
             errors.append({"kind": "question-content-drift", "question_id": question["id"], "path": str(note)})
-        for destination in broken_local_links(note, text):
+        preamble = text.split("<!-- question-source:start -->", 1)[0]
+        if re.search(r"(?m)^#{1,6}\s+", preamble):
+            errors.append({"kind": "atomic-question-has-generated-heading", "question_id": question["id"], "path": str(note)})
+        for destination in broken_local_links(note, text, vault_root):
             errors.append({"kind": "broken-link", "path": str(note), "destination": destination})
     for node in functional_nodes:
         note = Path(node["output"])
         if not note.is_file():
             errors.append({"kind": "missing-functional-note", "key": node.get("key"), "path": str(note)})
+
+    hierarchy_notes = {str(item.get("key")): Path(item["path"]) for item in hierarchy.get("notes", []) if item.get("path")}
+    root_note = hierarchy_notes.get("root")
+    for item in hierarchy.get("notes", []):
+        key = str(item.get("key"))
+        if key == "root" or not item.get("path"):
+            continue
+        parent_key = item.get("parent")
+        parent_note = hierarchy_notes.get(str(parent_key)) if parent_key is not None else root_note
+        if parent_note is not None:
+            errors.extend(validate_embed(parent_note, Path(item["path"]), vault_root, "hierarchy", key))
+
+    functional_by_key = {str(item.get("key")): item for item in functional_nodes}
+    for node in functional_nodes:
+        parent = functional_by_key.get(str(node.get("parent"))) if node.get("parent") else None
+        parent_note = Path(parent["output"]) if parent else Path(node["source_note"])
+        errors.extend(validate_embed(parent_note, Path(node["output"]), vault_root, "functional", str(node.get("key"))))
+    for question in questions:
+        owner = functional_by_key.get(str(question.get("owner"))) if question.get("owner") else None
+        parent_note = Path(owner["output"]) if owner else Path(question["source_note"])
+        errors.extend(validate_embed(parent_note, Path(question["output"]), vault_root, "question", str(question.get("id"))))
     if profile.get("answers", {}).get("mode") != "unavailable":
         if answer_manifest_path is None or not answer_manifest_path.is_file():
             errors.append({"kind": "missing-answer-manifest"})
@@ -117,7 +179,7 @@ def audit_graph(
         if str(note.resolve()).casefold() not in expected_notes:
             errors.append({"kind": "unexpected-generated-note", "path": str(note.resolve())})
         text = note.read_text(encoding="utf-8-sig")
-        for destination in broken_local_links(note, text):
+        for destination in broken_local_links(note, text, vault_root):
             errors.append({"kind": "broken-link", "path": str(note), "destination": destination})
     canvas_metrics: dict[str, Any] | None = None
     if profile.get("canvas", {}).get("enabled"):

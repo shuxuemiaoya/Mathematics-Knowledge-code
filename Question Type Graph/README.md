@@ -6,6 +6,11 @@ Publisher labels, page ranges, numbering rules, answer layouts, and folder
 templates belong in a reviewed per-book `format-adapter.json`; reusable Python
 contains no book-specific catalogue.
 
+Generated parent-child navigation uses standalone vault-relative Obsidian
+embeds (`![[path/to/note.md]]`) without list prefixes. Each parent embeds only
+its direct children. Atomic question notes contain provenance and exact source
+content but no generated question-title heading.
+
 ## Source arrangements
 
 - `questions=<path>` plus `answers=<path>` for separate sources.

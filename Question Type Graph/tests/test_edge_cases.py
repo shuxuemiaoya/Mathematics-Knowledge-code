@@ -246,8 +246,10 @@ def test_structural_toc_node_can_share_reviewed_boundary_with_content_child(tmp_
     apply_hierarchy(profile_path, adapter_path, manifest_path, overwrite=True)
     unit_text = (vault / "graph" / "unit" / "unit.md").read_text(encoding="utf-8")
     topic_text = (vault / "graph" / "unit" / "topic" / "topic.md").read_text(encoding="utf-8")
-    assert "[1.1 Topic](topic/topic.md)" in unit_text
-    assert topic_text.startswith("## 1.1 Topic\n\n- [Core](core.md)")
+    assert "![[graph/unit/topic/topic.md]]" in unit_text
+    assert "- ![[" not in unit_text
+    assert topic_text.startswith("## 1.1 Topic\n\n![[graph/unit/topic/core.md]]")
+    assert "- ![[" not in topic_text
     content_manifest = plan_content(profile_path, adapter_path, staging / "hierarchy-coverage-manifest.json")
     assert content_manifest["status"] == "passed"
     assert len(content_manifest["questions"]) == 1
@@ -276,6 +278,60 @@ def test_alternate_labels_are_adapter_roles_and_unknown_labels_block(tmp_path: P
     assert labels[0]["role"] == "question-type"
     assert len(questions) == 1
     assert review == [{"kind": "unknown-label", "source_note": str(note), "line": 5, "text": "Mystery Label"}]
+
+
+def test_existing_child_embed_is_a_content_range_barrier(tmp_path: Path) -> None:
+    note = tmp_path / "parent.md"
+    note.write_text(
+        "## Parent\n\n#### Type Intro\nContext retained here.\n![[graph/child.md]]\n",
+        encoding="utf-8",
+    )
+    adapter = {
+        "_graph_root": str(tmp_path),
+        "content": {
+            "unknown_label_policy": "retain",
+            "question_patterns": [r"^(?P<number>\d+)[.]\s+"],
+            "roles": [{"role": "question-type", "depth": 0, "pattern": r"Type (?P<title>.+)"}],
+        },
+    }
+
+    labels, questions, review = plan_note(
+        {"key": "parent", "title": "Parent", "path": str(note), "answer_context": "parent"},
+        compile_role_rules(adapter),
+        compile_question_patterns(adapter),
+        adapter,
+    )
+
+    assert labels[0]["end_line"] == 4
+    assert questions == []
+    assert review == []
+
+
+def test_question_line_cannot_also_become_a_functional_node(tmp_path: Path) -> None:
+    note = tmp_path / "section.md"
+    note.write_text("#### Type Algebra\n1. Question body.\n", encoding="utf-8")
+    adapter = {
+        "_graph_root": str(tmp_path),
+        "content": {
+            "unknown_label_policy": "retain",
+            "question_patterns": [r"^(?P<number>\d+)[.]\s+"],
+            "roles": [
+                {"role": "question-type", "depth": 1, "pattern": r"Type (?P<title>.+)"},
+                {"role": "neutral-context", "depth": 0, "pattern": r"(?P<title>.+)"},
+            ],
+        },
+    }
+
+    labels, questions, review = plan_note(
+        {"key": "section", "title": "Section", "path": str(note), "answer_context": "section"},
+        compile_role_rules(adapter),
+        compile_question_patterns(adapter),
+        adapter,
+    )
+
+    assert [label["role"] for label in labels] == ["question-type"]
+    assert [question["number"] for question in questions] == ["1"]
+    assert review == []
 
 
 def test_reviewed_answer_strategies_never_use_fuzzy_similarity_as_acceptance() -> None:

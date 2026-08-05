@@ -6,7 +6,11 @@ Allowed changes:
 - trailing-space removal;
 - bounded blank lines;
 - blank separation before headings and callouts;
-- generated headings, provenance metadata, and resolving navigation links.
+- generated non-atomic headings, provenance metadata, and standalone
+  vault-relative `![[...]]` navigation embeds.
+
+Atomic question notes remain headingless before their source marker; an
+optional answer-section heading is permitted after the exact question body.
 
 Protected content:
 

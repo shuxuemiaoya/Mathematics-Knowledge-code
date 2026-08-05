@@ -16,4 +16,4 @@ python scripts/match_answers.py apply `
   "<profile>" "<staging>/answer-match-manifest.json"
 ```
 
-Apply only a passed manifest. Store the exact answer beneath `答案与解析` in the atomic question note with independent markers and hashes. Treat fuzzy similarity as review evidence only. Pass without answer sections only when the frozen profile deliberately declares `answers.mode: unavailable`.
+Apply only a passed manifest. Store the exact answer beneath `答案与解析` in the atomic question note with independent markers and hashes, without adding a question-title heading. Treat fuzzy similarity as review evidence only. Pass without answer sections only when the frozen profile deliberately declares `answers.mode: unavailable`.
