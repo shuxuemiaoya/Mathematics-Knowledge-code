@@ -11,8 +11,8 @@ from .common import (
     ConfigurationError,
     load_json,
     load_profile,
-    markdown_link,
     lexical_signature,
+    obsidian_embed,
     rebase_local_links,
     require_reviewed_adapter,
     safe_name,
@@ -23,7 +23,9 @@ from .common import (
 )
 
 
-GENERATED_LINK_RE = re.compile(r"^\s*-\s+\[[^\]]+\]\([^)]+\)\s*$")
+GENERATED_LINK_RE = re.compile(
+    r"^(?:\s*!\[\[[^\]]+\]\]\s*|\s*-\s+\[[^\]]+\]\([^)]+\)\s*)$"
+)
 SOURCE_PART_RE = re.compile(r"<!--\s*source-part:(?P<part>\d+)\s+pages:(?P<start>\d+)-(?P<end>\d+)\s*-->")
 
 
@@ -92,8 +94,15 @@ def plan_note(
     labels: list[dict[str, Any]] = []
     unknown: list[dict[str, Any]] = []
     role_occurrences: dict[str, int] = {}
+    embed_barriers = {
+        index
+        for index, line in enumerate(lines, 1)
+        if GENERATED_LINK_RE.match(line)
+    }
     for index, line in enumerate(lines, 1):
         if GENERATED_LINK_RE.match(line):
+            continue
+        if match_question(line, question_patterns):
             continue
         if (
             adapter.get("content", {}).get("skip_source_heading", True)
@@ -140,6 +149,9 @@ def plan_note(
             if following["depth"] <= label["depth"]:
                 end = following["start_line"] - 1
                 break
+        barrier = min((line for line in embed_barriers if label["start_line"] < line <= end), default=None)
+        if barrier is not None:
+            end = barrier - 1
         label["end_line"] = end
         parent = None
         for previous in reversed(labels[:index]):
@@ -203,6 +215,9 @@ def plan_note(
         boundary = min((value for value in label_start_lines if start < value <= end), default=None)
         if boundary:
             end = boundary - 1
+        embed_boundary = min((value for value in embed_barriers if start < value <= end), default=None)
+        if embed_boundary is not None:
+            end = embed_boundary - 1
         owner = None
         for label in labels:
             if label["start_line"] < start <= label["end_line"]:
@@ -305,8 +320,6 @@ def render_question(question: dict[str, Any], body: str, answer_mode: str = "sep
         f"question_body_sha256: {question['body_sha256']}",
         f"answer_status: {'unavailable' if answer_mode == 'unavailable' else 'unmatched'}",
         "---",
-        f"# {question['title']}",
-        "",
         "<!-- question-source:start -->",
         body.rstrip(),
         "<!-- question-source:end -->",
@@ -330,6 +343,7 @@ def apply_content(profile_path: Path, adapter_path: Path, manifest_path: Path, o
         raise ConfigurationError("Content manifest must pass before application")
     functional = manifest.get("functional_nodes", [])
     questions = manifest.get("questions", [])
+    vault_root = Path(profile["paths"]["vault_root"]).resolve()
     by_source: dict[str, dict[str, Any]] = {}
     for node in functional:
         by_source.setdefault(node["source_note"], {"nodes": [], "questions": []})["nodes"].append(node)
@@ -371,12 +385,12 @@ def apply_content(profile_path: Path, adapter_path: Path, manifest_path: Path, o
             for child in child_nodes:
                 replacements[child["start_line"]] = (
                     child["end_line"],
-                    f"- {markdown_link(child['title'], output, Path(child['output']))}",
+                    obsidian_embed(Path(child["output"]), vault_root),
                 )
             for question in direct_questions.get(node["key"], []):
                 replacements[question["start_line"]] = (
                     question["end_line"],
-                    f"- {markdown_link(question['title'], output, Path(question['output']))}",
+                    obsidian_embed(Path(question["output"]), vault_root),
                 )
             rendered: list[str] = []
             line = node["start_line"]
@@ -395,9 +409,15 @@ def apply_content(profile_path: Path, adapter_path: Path, manifest_path: Path, o
         top_nodes = [node for node in nodes if node.get("parent") is None]
         replacements: dict[int, tuple[int, str]] = {}
         for node in top_nodes:
-            replacements[node["start_line"]] = (node["end_line"], f"- {markdown_link(node['title'], source, Path(node['output']))}")
+            replacements[node["start_line"]] = (
+                node["end_line"],
+                obsidian_embed(Path(node["output"]), vault_root),
+            )
         for question in direct_questions.get(None, []):
-            replacements[question["start_line"]] = (question["end_line"], f"- {markdown_link(question['title'], source, Path(question['output']))}")
+            replacements[question["start_line"]] = (
+                question["end_line"],
+                obsidian_embed(Path(question["output"]), vault_root),
+            )
         rendered = []
         line = 1
         while line <= len(lines):

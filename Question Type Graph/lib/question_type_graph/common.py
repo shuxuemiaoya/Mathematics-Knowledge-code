@@ -129,8 +129,22 @@ def markdown_link(label: str, from_note: Path, to_note: Path) -> str:
     return f"[{label}]({markdown_target(from_note, to_note)})"
 
 
+def obsidian_target(to_note: Path, vault_root: Path) -> str:
+    target = to_note.resolve()
+    root = vault_root.resolve()
+    try:
+        return target.relative_to(root).as_posix()
+    except ValueError as exc:
+        raise ConfigurationError(f"Obsidian embed target is outside the vault: {target}") from exc
+
+
+def obsidian_embed(to_note: Path, vault_root: Path) -> str:
+    return f"![[{obsidian_target(to_note, vault_root)}]]"
+
+
 MARKDOWN_LINK_RE = re.compile(r"(?<!!)\[[^\]]*\]\(([^)]+)\)")
 IMAGE_LINK_RE = re.compile(r"!\[[^\]]*\]\(([^)]+)\)")
+OBSIDIAN_EMBED_RE = re.compile(r"!\[\[([^\]]+)\]\]")
 ALL_MARKDOWN_LINK_RE = re.compile(r"(!?\[[^\]]*\]\()([^)]+)(\))")
 HTML_IMAGE_RE = re.compile(r"(<img\b[^>]*?\bsrc=[\"'])([^\"']+)([\"'])", re.IGNORECASE)
 
@@ -182,6 +196,16 @@ def local_markdown_destinations(text: str) -> Iterable[str]:
             if not value or value.startswith(("http://", "https://", "#", "data:")):
                 continue
             yield unquote(value.split("#", 1)[0])
+
+
+def obsidian_embed_destinations(text: str) -> Iterable[str]:
+    for match in OBSIDIAN_EMBED_RE.finditer(text):
+        value = match.group(1).strip()
+        if not value:
+            continue
+        value = value.split("|", 1)[0].split("#", 1)[0].strip()
+        if value:
+            yield value
 
 
 def lexical_signature(text: str) -> str:

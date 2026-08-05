@@ -20,9 +20,11 @@ printed page. Repeated functional labels remain content children, not a
 replacement hierarchy.
 
 The applier writes every entry note, replaces each direct child range with one
-relative Markdown link at that position, and places content outside top-level
-entries in the root note. `hierarchy-coverage-manifest.json` records one owner
-for every raw Markdown line and a digest for every generated note.
+standalone vault-relative `![[path/to/note.md]]` embed at that position, and
+places content outside top-level entries in the root note. Generated embeds
+have no list prefix, and each note embeds only its direct children so Obsidian
+does not render descendants twice. `hierarchy-coverage-manifest.json` records
+one owner for every raw Markdown line and a digest for every generated note.
 
 Reject duplicate keys, unsafe outputs, incomplete authority coverage, order
 changes, invalid levels or anchors, source drift, or non-passed review state.
