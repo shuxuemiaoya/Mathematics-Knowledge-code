@@ -37,7 +37,7 @@ python .\skills\book-pdf-to-markdown\scripts\book_pdf_to_markdown.py convert `
 
 The default output is `<staging_root>\<pdf-stem>.raw.md`. Use `--output` only for an explicit alternative. Never pass `--overwrite` by inference.
 
-Read `MINERU_API_KEY` from the process environment, then `C:\Mathematics-Knowledge\.env`. Never print or persist the token.
+Read `MINERU_API_KEY` from the process environment, then `/Users/oven/Documents/Mathematics-Knowledge-code/.env`. Never print or persist the token.
 
 ## Fixed MinerU Contract
 

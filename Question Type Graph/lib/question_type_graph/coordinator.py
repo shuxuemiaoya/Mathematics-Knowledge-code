@@ -167,7 +167,7 @@ def add_run_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("profile", type=Path)
     parser.add_argument("--skip-conversion", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
-    parser.add_argument("--env-file", default=r"C:\Mathematics-Knowledge\.env")
+    parser.add_argument("--env-file", default="/Users/oven/Documents/Mathematics-Knowledge-code/.env")
     parser.add_argument("--base-url")
     parser.add_argument("--mineru-language")
     parser.add_argument("--poll-interval", type=float, default=10.0)

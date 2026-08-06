@@ -24,7 +24,7 @@ for _stream in (sys.stdout, sys.stderr):
         _stream.reconfigure(encoding="utf-8")
 
 
-DEFAULT_ENV_FILE = Path(r"C:\Mathematics-Knowledge\.env")
+DEFAULT_ENV_FILE = Path("/Users/oven/Documents/Mathematics-Knowledge-code/.env")
 DEFAULT_BASE_URL = "https://mineru.net"
 MAX_PAGES = 200
 MAX_BYTES = 200 * 1024 * 1024

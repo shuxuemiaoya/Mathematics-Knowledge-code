@@ -33,7 +33,7 @@ python .\skills\convert-exam-pdf-to-markdown\scripts\convert_exam_pdf_to_markdow
 
 The default output is `<ordered-pdf-parent>\<ordered-pdf-stem>.md`. Use `--output` only when the user requests a different Markdown path. Do not pass `--overwrite` unless the user explicitly approves replacing the pre-existing Markdown and its MinerU asset namespace.
 
-Read `MINERU_API_KEY` from the process environment first, then from `C:\Mathematics-Knowledge\.env`. Never print, persist, or include the token in a report.
+Read `MINERU_API_KEY` from the process environment first, then from `/Users/oven/Documents/Mathematics-Knowledge-code/.env`. Never print, persist, or include the token in a report.
 
 ## Keep the MinerU contract fixed
 
