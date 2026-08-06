@@ -151,19 +151,6 @@ aliases: []
             with open(target_filepath, 'w', encoding='utf-8') as fp:
                 fp.write(template)
 
-        # 反向注入知识点 WikiLink 到实体题型笔记 (Bidirectional Backlink)
-        try:
-            with open(full_path, 'r', encoding='utf-8') as fp:
-                note_content = fp.read()
-            backlink_str = f'[[{target_node}]]'
-            if backlink_str not in note_content:
-                new_note_content = note_content.rstrip() + f'\n\n> [!info] 关联知识点\n> - [[{target_node}]]\n'
-                with open(full_path, 'w', encoding='utf-8') as fp:
-                    fp.write(new_note_content)
-                backlinked_count += 1
-        except Exception as e:
-            print(f"警告：无法写入反向链接到 {full_path}: {e}")
-
         target_filepath = mathmap_existing[target_node]
 
         with open(target_filepath, 'r', encoding='utf-8') as fp:
@@ -217,7 +204,7 @@ aliases: []
 
         linked_count += 1
 
-    print(f"知识点链接完成: 成功链接 {linked_count} 个题型, 跳过重复 {skipped_count} 个, 新注入反向链接 {backlinked_count} 个")
+    print(f"知识点链接完成: 成功链接 {linked_count} 个题型, 跳过重复 {skipped_count} 个")
 
 if __name__ == '__main__':
     link_mathmap('/Users/oven/Documents/ovenmathmap', '/Users/oven/Documents/ovenmathmap/课堂同步/教辅/必刷题/2026版 高中必刷题数学必修第一册')

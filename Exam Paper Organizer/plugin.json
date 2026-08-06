@@ -1,0 +1,5 @@
+{
+  "name": "exam-paper-organizer",
+  "version": "1.0.0",
+  "description": "Exam Paper Organizer pipeline agent for ordering exam page scans, forced OCR conversion, solution supplementation, image cleanup, and LaTeX PDF rendering."
+}

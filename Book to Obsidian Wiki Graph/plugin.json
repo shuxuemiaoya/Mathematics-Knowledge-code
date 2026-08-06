@@ -1,0 +1,5 @@
+{
+  "name": "book-to-obsidian-wiki-graph",
+  "version": "1.0.0",
+  "description": "Book to Obsidian Wiki Graph pipeline agent for extracting textbook PDF/Markdown into structured knowledge points & Obsidian graph notes."
+}
