@@ -116,8 +116,11 @@ def _run_pipeline(profile_path: Path, args: argparse.Namespace) -> dict[str, Any
         update_stage(paths["state"], "content-segmentation", "completed", content_required)
 
     update_stage(paths["state"], "answer-matching", "running")
-    answers = plan_matches(profile_path, paths["adapter"], paths["content"])
-    write_json_atomic(paths["answers"], answers, overwrite=True)
+    if paths["answers"].is_file() and load_json(paths["answers"]).get("status") == "passed":
+        answers = load_json(paths["answers"])
+    else:
+        answers = plan_matches(profile_path, paths["adapter"], paths["content"])
+        write_json_atomic(paths["answers"], answers, overwrite=True)
     if answers["status"] != "passed":
         update_stage(paths["state"], "answer-matching", "review_required", [paths["answers"]])
         return {"schema_version": 1, "status": "review_required", "next_stage": "answer-review", "manifest": str(paths["answers"])}

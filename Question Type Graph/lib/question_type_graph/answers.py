@@ -310,6 +310,102 @@ def plan_matches(profile_path: Path, adapter_path: Path, content_manifest_path: 
     }
 
 
+def format_answer_callout(body: str, callout_title: str = "必刷题解析") -> str:
+    lines = body.strip().splitlines()
+    if not lines:
+        return f"> [!faq]- {callout_title}\n> "
+
+    option = None
+    first_line = lines[0].strip()
+    m_opt = re.match(r"^\d+[\.、\s]*([A-Z]+)\b\s*(?:【解析】)?\s*", first_line)
+    if m_opt:
+        option = m_opt.group(1)
+        first_line = first_line[m_opt.end():].strip()
+    else:
+        first_line = re.sub(r"^\d+[\.、\s]*", "", first_line)
+        first_line = re.sub(r"^【解析】\s*", "", first_line).strip()
+
+    rebuilt_lines = [first_line] + [l.strip() for l in lines[1:] if l.strip()]
+
+    extra_keywords = ["规律方法", "名师点拨", "敲黑板", "点悟", "链接教材", "易错警示", "避坑", "二级结论", "归纳总结", "多种解法", "思路导引", "巧思"]
+    emoji_map = {
+        "规律方法": "💡 规律方法",
+        "名师点拨": "📌 名师点拨",
+        "敲黑板": "🔔 敲黑板",
+        "点悟": "💡 点悟",
+        "链接教材": "🔗 链接教材",
+        "易错警示": "⚠️ 易错警示",
+        "避坑": "⚠️ 避坑",
+        "二级结论": "📚 二级结论",
+        "归纳总结": "📝 归纳总结",
+        "多种解法": "🔀 多种解法",
+        "思路导引": "🎯 思路导引",
+        "巧思": "✨ 巧思",
+    }
+
+    blocks = []
+    current_block = []
+    current_type = "main"
+    current_extra_kw = None
+
+    for l in rebuilt_lines:
+        matched_kw = next((kw for kw in extra_keywords if re.match(r"^" + re.escape(kw) + r"[\s：:]*", l)), None)
+        if matched_kw:
+            if current_block:
+                blocks.append((current_type, current_extra_kw, "\n".join(current_block)))
+                current_block = []
+            current_type = "extra"
+            current_extra_kw = matched_kw
+            content = re.sub(r"^" + re.escape(matched_kw) + r"[\s：:]*", "", l).strip()
+            if content:
+                current_block.append(content)
+        else:
+            current_block.append(l)
+
+    if current_block:
+        blocks.append((current_type, current_extra_kw, "\n".join(current_block)))
+
+    callout_lines = [f"> [!faq]- {callout_title}"]
+    if option:
+        callout_lines.append(f"> **【答案】** {option}  ")
+        callout_lines.append("> ")
+
+    callout_lines.append("> **【解析】**  ")
+
+    main_text = blocks[0][2] if blocks and blocks[0][0] == "main" else ""
+    raw_sub_items = re.split(r"\n(?=(?:对于\s*)?[①②③④⑤⑥⑦⑧⑨⑩])|(?<=[；;。])\s*(?=(?:对于\s*)?[①②③④⑤⑥⑦⑧⑨⑩])", main_text)
+    conclusion_line = None
+    for sub in raw_sub_items:
+        sub_str = sub.strip()
+        if not sub_str:
+            continue
+        m_conc = re.search(r"(故选\s*[A-Z]+\b.*)$", sub_str)
+        if m_conc:
+            conclusion = m_conc.group(1).strip()
+            sub_str = sub_str[:m_conc.start()].strip()
+            conclusion_line = re.sub(r"故选\s*([A-Z]+)\b", r"故选 **\1**", conclusion)
+
+        if re.match(r"^(?:对于\s*)?[①②③④⑤⑥⑦⑧⑨⑩]", sub_str):
+            sub_str = re.sub(r"^(对于\s*[①②③④⑤⑥⑦⑧⑨⑩]|[①②③④⑤⑥⑦⑧⑨⑩])[\s：:]*", r"- **\1**：", sub_str)
+            callout_lines.append(f"> {sub_str}  ")
+        elif sub_str:
+            callout_lines.append(f"> {sub_str}  ")
+
+    if conclusion_line:
+        callout_lines.append("> ")
+        callout_lines.append(f"> {conclusion_line}  ")
+
+    for btype, kw, content in blocks:
+        if btype == "extra" and content.strip():
+            callout_lines.append("> ")
+            callout_lines.append("> ---")
+            header = emoji_map.get(kw, f"💡 {kw}")
+            callout_lines.append(f"> **{header}**  ")
+            callout_lines.append(f"> {content.strip()}  ")
+
+    return "\n".join(callout_lines)
+
+
 def apply_matches(profile_path: Path, manifest_path: Path, overwrite: bool) -> dict[str, Any]:
     profile = load_profile(profile_path)
     manifest = load_json(manifest_path)
@@ -322,28 +418,50 @@ def apply_matches(profile_path: Path, manifest_path: Path, overwrite: bool) -> d
         if sha256_file(answer_markdown) != manifest.get("answer_markdown_sha256"):
             raise ConfigurationError("Answer Markdown changed after matching")
         applied = []
+        matches_by_question: dict[str, list[dict[str, Any]]] = {}
         for match in manifest.get("matches", []):
-            note = Path(match["question_path"])
+            matches_by_question.setdefault(match["question_path"], []).append(match)
+
+        for q_path_str, q_matches in matches_by_question.items():
+            note = Path(q_path_str)
             if not note.is_file():
                 raise ConfigurationError(f"Atomic question note is missing: {note}")
             text = note.read_text(encoding="utf-8-sig")
-            text = ANSWER_BODY_RE.sub("\n", text).rstrip() + "\n"
             text = re.sub(r"(?m)^answer_status:\s*\S+", "answer_status: matched", text, count=1)
-            answer_body = rebase_local_links(
-                match["answer_body"],
-                answer_markdown,
-                note,
-                [(answer_markdown.parent / "images", Path(profile["paths"]["graph_root"]) / "images")],
-            )
-            block = (
-                "\n## 答案与解析\n\n"
-                "<!-- answer-source:start -->\n"
-                f"{answer_body.rstrip()}\n"
-                "<!-- answer-source:end -->\n"
-            )
-            text = text.rstrip() + "\n" + block
+            q_basename = note.stem
+
+            answers_dir = note.parent / "answers"
+            answers_dir.mkdir(parents=True, exist_ok=True)
+
+            embed_links = []
+            for i, match in enumerate(q_matches, 1):
+                ans_name = f"{q_basename}A{i}"
+                ans_path = answers_dir / f"{ans_name}.md"
+
+                rebased_body = rebase_local_links(
+                    match["answer_body"],
+                    answer_markdown,
+                    ans_path,
+                    [(answer_markdown.parent / "images", Path(profile["paths"]["graph_root"]) / "images")],
+                )
+
+                callout_text = format_answer_callout(rebased_body, callout_title="必刷题解析")
+                write_text_atomic(ans_path, callout_text + "\n", overwrite=True)
+                embed_links.append(f"![[{ans_name}]]")
+                match["answer_note_path"] = str(ans_path)
+                match["answer_name"] = ans_name
+
+            for embed_link in embed_links:
+                if embed_link not in text:
+                    text = text.rstrip() + "\n\n" + embed_link + "\n"
+
             write_text_atomic(note, text, overwrite=True)
-            applied.append({"question_id": match["question_id"], "path": str(note), "answer_body_sha256": match["answer_body_sha256"], "note_sha256": sha256_file(note)})
+            applied.append({
+                "question_id": q_matches[0]["question_id"],
+                "path": str(note),
+                "answer_notes": [m.get("answer_note_path") for m in q_matches],
+                "note_sha256": sha256_file(note),
+            })
         result = {"schema_version": 1, "stage": "answer-application", "status": "passed", "profile": profile["_profile_path"], "mode": manifest.get("mode"), "applied_count": len(applied), "questions": applied}
     output = Path(profile["paths"]["staging_root"]) / "answer-application-report.json"
     write_json_atomic(output, result, overwrite=overwrite)

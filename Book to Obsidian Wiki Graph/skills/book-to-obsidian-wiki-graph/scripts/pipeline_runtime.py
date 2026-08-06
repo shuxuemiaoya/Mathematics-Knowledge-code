@@ -36,6 +36,7 @@ STAGE_NAMES = {
     "markdown-standardization",
     "pre-canvas-audit",
     "canvas",
+    "metadata-tagging",
     "final-audit",
 }
 PASS_STATUS_KINDS = {
@@ -45,6 +46,7 @@ PASS_STATUS_KINDS = {
     "audit-report",
     "reference-parity-report",
     "canvas-style-report",
+    "metadata-report",
 }
 STAGE_AUDIT_NAMES = {
     "toc-splitting": "split",
@@ -294,6 +296,15 @@ ARTIFACT_FIELDS: dict[str, dict[str, type | tuple[type, ...]]] = {
         "metrics": dict,
         "blocking_differences": list,
     },
+    "metadata-report": {
+        "schema_version": int,
+        "stage": str,
+        "status": str,
+        "profile": str,
+        "source_sha256": str,
+        "total_files": int,
+        "tagged_files": int,
+    },
     "review-queue": {
         "schema_version": int,
         "profile": str,
@@ -343,6 +354,7 @@ PROFILE_BOUND_KINDS = {
     "audit-report",
     "reference-parity-report",
     "canvas-style-report",
+    "metadata-report",
     "review-queue",
     "note-workplan",
     "note-results",
@@ -795,6 +807,7 @@ def stage_sequence(profile: dict[str, Any]) -> list[str]:
     ]
     if profile.get("canvas", {}).get("enabled", False):
         stages.append("canvas")
+    stages.append("metadata-tagging")
     stages.append("final-audit")
     return stages
 
@@ -1304,6 +1317,7 @@ def required_output_kinds(
         "markdown-standardization": {"markdown-report", "audit-report"},
         "pre-canvas-audit": {"audit-report"},
         "canvas": {"file", "graph-manifest"},
+        "metadata-tagging": {"metadata-report"},
         "final-audit": {"audit-report", "tree"},
     }
     required = set(requirements.get(stage_name, set()))

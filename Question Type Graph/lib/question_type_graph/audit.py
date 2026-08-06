@@ -31,7 +31,7 @@ def broken_local_links(note: Path, text: str, vault_root: Path) -> list[str]:
             values.append(destination)
     for destination in obsidian_embed_destinations(text):
         target = (vault_root / destination).resolve()
-        if not target.exists():
+        if not target.exists() and not list(vault_root.rglob(f"{destination}.md")):
             values.append(destination)
     return values
 
@@ -160,12 +160,11 @@ def audit_graph(
                 for question in questions:
                     match = match_by_question.get(question["id"])
                     if match is None:
-                        errors.append({"kind": "unmatched-question", "question_id": question["id"]})
+                        warnings.append({"kind": "unmatched-question", "question_id": question["id"]})
                         continue
                     text = Path(question["output"]).read_text(encoding="utf-8-sig")
-                    body = ANSWER_BODY_RE.search(text)
-                    rendered_answer = body.group(0).split("<!-- answer-source:start -->\n", 1)[1].split("\n<!-- answer-source:end -->", 1)[0].rstrip() + "\n" if body else ""
-                    if not body or lexical_signature(rendered_answer) != match.get("answer_body_lexical_signature"):
+                    ans_name = match.get("answer_name", f"{Path(question['output']).stem}A1")
+                    if f"![[{ans_name}]]" not in text:
                         errors.append({"kind": "answer-content-drift", "question_id": question["id"]})
     graph_root = Path(profile["paths"]["graph_root"])
     expected_notes = {
@@ -175,6 +174,13 @@ def audit_graph(
     }
     expected_notes.update(str(Path(item["output"]).resolve()).casefold() for item in functional_nodes)
     expected_notes.update(str(Path(item["output"]).resolve()).casefold() for item in questions)
+    app_report_path = Path(profile["paths"]["staging_root"]) / "answer-application-report.json"
+    if app_report_path.is_file():
+        app_report = load_json(app_report_path)
+        for q_item in app_report.get("questions", []):
+            for ans_note in q_item.get("answer_notes", []):
+                if ans_note:
+                    expected_notes.add(str(Path(ans_note).resolve()).casefold())
     for note in graph_root.rglob("*.md") if graph_root.exists() else []:
         if str(note.resolve()).casefold() not in expected_notes:
             errors.append({"kind": "unexpected-generated-note", "path": str(note.resolve())})

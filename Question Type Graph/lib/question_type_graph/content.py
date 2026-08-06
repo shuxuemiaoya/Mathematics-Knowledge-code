@@ -229,10 +229,18 @@ def plan_note(
             for key, value in match.groupdict().items()
             if key != "number" and value is not None and str(value).strip()
         }
+        label_by_key = {l["key"]: l for l in labels}
+        resolved_context = None
+        curr_label = owner
+        while curr_label:
+            if curr_label.get("answer_context"):
+                resolved_context = curr_label.get("answer_context")
+                break
+            curr_label = label_by_key.get(curr_label.get("parent")) if curr_label.get("parent") else None
+
         context_key = str(
-            owner.get("answer_context")
-            if owner and owner.get("answer_context")
-            else note_entry.get("answer_context", note_entry["key"])
+            resolved_context
+            or note_entry.get("answer_context", note_entry["key"])
         )
         base = Path(owner["output"]).parent if owner else path.parent
         title = str(adapter.get("content", {}).get("question_title_template", "Question {number}")).format(number=number)
@@ -269,6 +277,17 @@ def plan_note(
     return labels, questions, unknown
 
 
+
+def find_next_q_number(vault_root: Path) -> int:
+    max_num = 0
+    if vault_root.exists():
+        for p in vault_root.rglob("Q[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].md"):
+            m = re.search(r"Q(\d{8})\.md$", p.name)
+            if m:
+                max_num = max(max_num, int(m.group(1)))
+    return max_num + 1
+
+
 def plan_content(profile_path: Path, adapter_path: Path, hierarchy_coverage_path: Path) -> dict[str, Any]:
     profile = load_profile(profile_path)
     adapter = require_reviewed_adapter(profile, adapter_path)
@@ -276,6 +295,9 @@ def plan_content(profile_path: Path, adapter_path: Path, hierarchy_coverage_path
     if coverage.get("status") != "passed":
         raise ConfigurationError("Hierarchy coverage must pass before content planning")
     adapter["_graph_root"] = profile["paths"]["graph_root"]
+    vault_root = Path(profile["paths"]["vault_root"]).resolve()
+    next_q_seq = find_next_q_number(vault_root)
+
     rules = compile_role_rules(adapter)
     patterns = compile_question_patterns(adapter)
     labels: list[dict[str, Any]] = []
@@ -283,7 +305,12 @@ def plan_content(profile_path: Path, adapter_path: Path, hierarchy_coverage_path
     review: list[dict[str, Any]] = []
     hierarchy_adapter = adapter.get("hierarchy", {}).get("entries") or []
     context_by_key = {str(item.get("key")): item.get("answer_context", item.get("key")) for item in hierarchy_adapter}
-    for note in coverage.get("notes", []):
+    hierarchy_manifest_path = hierarchy_coverage_path.parent / "hierarchy-manifest.json"
+    hierarchy_entries = load_json(hierarchy_manifest_path).get("entries", []) if hierarchy_manifest_path.is_file() else []
+    key_order = {entry["key"]: idx for idx, entry in enumerate(hierarchy_entries)}
+    sorted_notes = sorted(coverage.get("notes", []), key=lambda n: key_order.get(str(n.get("key")), 9999))
+
+    for note in sorted_notes:
         if note.get("key") == "root" or note.get("structural_only") is True:
             continue
         note = {**note, "answer_context": context_by_key.get(str(note.get("key")), note.get("key"))}
@@ -291,6 +318,15 @@ def plan_content(profile_path: Path, adapter_path: Path, hierarchy_coverage_path
         labels.extend(note_labels)
         questions.extend(note_questions)
         review.extend(note_review)
+
+    for question in questions:
+        q_code = f"Q{next_q_seq:08d}"
+        next_q_seq += 1
+        old_path = Path(question["output"])
+        new_path = old_path.parent / f"{q_code}.md"
+        question["output"] = str(new_path)
+        question["title"] = q_code
+
     ids = [question["id"] for question in questions]
     outputs = [question["output"].casefold() for question in questions]
     functional_outputs = [node["output"].casefold() for node in labels]

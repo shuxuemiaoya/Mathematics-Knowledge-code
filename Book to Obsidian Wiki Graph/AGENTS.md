@@ -15,6 +15,7 @@ This directory is a standalone multi-skill agent. It does not use MathOS Agent f
 | `book-graph-markdown` | post-split Markdown standardization |
 | `book-graph-audit` | pre-canvas and final validation |
 | `book-graph-canvas` | optional graph manifest and canvas compilation |
+| `book-graph-metadata` | batch Frontmatter metadata tagging and validation |
 
 Each stage skill is authoritative for its own rules. Do not copy its implementation into the coordinator.
 
@@ -33,6 +34,7 @@ source and profile
   -> formatting audit
   -> pre-canvas audit
   -> optional canvas and same-series style-parity gate
+  -> metadata tagging (book-graph-metadata)
   -> final audit
 ```
 
@@ -52,6 +54,7 @@ Do not insert `mathos-pdf-to-md`, `mathos-formatting`, or `mathos-segmentation`.
 - audit reports
 - `pipeline-state.json`, optional `review-queue.json`, `note-workplan.json`, and `note-results.json`
 - optional `graph-manifest.json`, `.canvas`, and `canvas-style-report.json`
+- `metadata-report.json`
 
 Every machine-readable handoff carries the same absolute profile path and frozen source digest. Markdown-derived stages also carry their immediate input digest.
 

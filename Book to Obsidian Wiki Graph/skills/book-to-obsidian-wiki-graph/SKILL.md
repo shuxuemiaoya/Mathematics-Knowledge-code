@@ -70,7 +70,8 @@ final-result-only behavior. Never treat test checkpoints as cross-book reuse.
    comparator, revise and rebuild until `canvas-style-report.status: passed`,
    then provide that report to runtime completion. Canonical Markdown links
    and valid topology override defects inherited from a legacy reference.
-10. Invoke `book-graph-audit --stage final` for the final gate.
+10. Invoke `book-graph-metadata` to derive, inject, and validate Frontmatter metadata properties for all notes in the vault, producing `metadata-report.json`.
+11. Invoke `book-graph-audit --stage final` for the final gate.
     A configured reference also requires a passed, profile-bound
     `reference-parity-report`; the runtime must not complete without it.
 
