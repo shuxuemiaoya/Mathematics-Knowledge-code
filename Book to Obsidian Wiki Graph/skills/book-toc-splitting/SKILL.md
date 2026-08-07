@@ -139,9 +139,9 @@ that split and its downstream artifacts and restart from the split draft.
   example, start every example separately, and keep `练习` outside every
   question/example block.
 - Leave introductions, transitions, and ordinary lesson practice in their parent unless intentionally moved.
-- Give repeated generic chapter children contextual titles and filenames:
-  use `<章名> 小结` for `小结`, and append the chapter name to a generic
-  `复习参考题` title. Do not emit ambiguous `第1章 小结.md` placeholders.
+- Give repeated generic chapter and section children contextual titles and filenames:
+  - Use `<章名> 小结` for `小结`, and append the chapter name to a generic `复习参考题` title (e.g., `第1章 复习参考题`). Do not emit ambiguous `第1章 小结.md` placeholders.
+  - For section exercises (`习题`), always combine the exercise identifier and section topic text into the format `习题<编号> <对应小节标题>` (e.g. `习题10.1 随机事件与概率` instead of bare `习题 10.1`). If the source heading lacks the section topic text, derive and append it from its parent section title.
 - Keep book-wide standalone indexes and glossaries as child nodes with category
   `root`, so they are written beside the book entry note and retain their own
   TOC heading.

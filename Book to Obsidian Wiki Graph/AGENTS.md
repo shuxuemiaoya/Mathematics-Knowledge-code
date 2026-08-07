@@ -94,6 +94,7 @@ from another book or an older run.
   independent teaching block. Require the same passed lesson-flow manifest in
   splitting, Markdown standardization, and progressive audits.
 - Replace each moved child range with a resolving Markdown link at that same source position in the parent.
+- Ensure generic nodes receive contextual titles and filenames: `小结` → `<章名> 小结`, `复习参考题` → `<章名> 复习参考题`, `习题` → `习题<编号> <对应小节标题>` (例如: `习题10.1 随机事件与概率`).
 
 ## Categories
 

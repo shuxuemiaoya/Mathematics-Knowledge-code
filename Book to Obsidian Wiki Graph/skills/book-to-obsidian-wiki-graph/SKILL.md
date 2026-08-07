@@ -87,6 +87,8 @@ Never invoke `mathos-pdf-to-md`, `mathos-formatting`, or `mathos-segmentation`.
   `工具`; never create an empty auxiliary directory.
 - Record LLM-selected categories in the profile before splitting other books.
 - Retain a link in the parent at every moved child block's original position.
+- Give repeated generic chapter and section children contextual titles and filenames:
+  `小结` → `<章名> 小结`, `复习参考题` → `<章名> 复习参考题`, and `习题` → `习题<编号> <对应小节标题>` (e.g., `习题10.1 随机事件与概率`).
 - Do not accept TOC-only textbook splitting. Require the complete H4-H6
   semantic-review ledger with confidence, numbered subsection notes, and
   section-exercise notes. Retain unnumbered non-TOC blocks unless a reviewed

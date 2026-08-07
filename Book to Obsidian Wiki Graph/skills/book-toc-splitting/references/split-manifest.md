@@ -163,7 +163,7 @@ unnumbered independent teaching arc before running the splitter.
   remove the intermediate node and record the heading as
   `decision: retain`, `structural_container: true`, `promote_to_h3: true`,
   with the promoted `child_node_keys`.
-- Section exercises (`习题6.1`, `习题8.4`, and so on) are mandatory `exercise` nodes.
+- Section exercises (`习题6.1`, `习题8.4`, and so on) are mandatory `exercise` nodes and must use contextual titles combining section number and section topic text (e.g., `习题6.1 平面向量的概念`, `习题10.1 随机事件与概率`).
 - Leave introductions, transitions, and ordinary lesson practice in the parent unless intentionally split.
 - The splitter replaces every direct child range with a Markdown link in the parent at that exact source position.
 - Parent navigation links are bullet items. A reviewed H4-H6 range that becomes
