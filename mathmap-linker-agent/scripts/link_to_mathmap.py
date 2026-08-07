@@ -31,6 +31,13 @@ import shutil
 import subprocess
 from pathlib import Path
 
+# 导入多层级语义去重与合并引擎
+try:
+    from mathmap_dedup import MathMapDedupEngine, normalize_latex, extract_stem, compare_qt_titles
+except ImportError:
+    from scripts.mathmap_dedup import MathMapDedupEngine, normalize_latex, extract_stem, compare_qt_titles
+
+
 
 def clean_title(name: str) -> str:
     """去掉 _bN 后缀，用于链接显示名。"""
@@ -130,31 +137,56 @@ def build_kp_index(kp_dir: Path) -> dict:
 def kp_for_section(section: str, kp_index: dict, kp_dir: Path, section_map: dict, chapter_map: dict):
     """小节目录名/章目录名 -> 知识点节点名。
 
-    匹配顺序：手工映射表 -> 章目录表 -> 精确（去编号前缀）-> 子串模糊。
+    匹配逻辑：
+      1. 手工精确映射
+      2. 细分知识点分离：若原旧节点为多概念组合节点（含 _ 或 与/及），而新目录为拆分后的精细单概念，
+         创建并指向全新的独立知识点节点。
+      3. 精确匹配 -> 子串匹配。
     """
     if section in section_map:
         return section_map[section]
     if section in chapter_map:
         return chapter_map[section]
+
     s = re.sub(r"^\d+(\.\d+)*_", "", section)
     norm_s = re.sub(r"[\s·:：,，。.．~～+＋]", "", s)
+
+    # 检查是否为精细切分小节
     if norm_s in kp_index:
-        return kp_index[norm_s]
+        matched_name = kp_index[norm_s]
+        # 如果已存在的匹配节点是多概念组合节点 (例如含 '_' 或 '及'/'与')，且当前小节为单概念，建立独立节点
+        if ("_" in matched_name or "及" in matched_name or "与" in matched_name) and ("_" not in s and "及" not in s and "与" not in s):
+            new_kp_name = s.strip()
+            new_kp_file = kp_dir / f"{new_kp_name}.md"
+            if not new_kp_file.exists():
+                new_kp_file.write_text(f"# {new_kp_name}\n\n# 题型\n", encoding="utf-8")
+                kp_index[re.sub(r"[\s·:：,，。.．~～+＋]", "", new_kp_name)] = new_kp_name
+            return new_kp_name
+        return matched_name
+
     for stem, norm_k in kp_index.items():
         if len(norm_k) >= 3 and (norm_k in norm_s or norm_s in norm_k):
             return stem
+
+    # 无法匹配时，自动建立新的精细知识点节点（不强行盲目合并到组合大节点）
+    clean_section_name = s.strip()
+    if clean_section_name:
+        new_kp_file = kp_dir / f"{clean_section_name}.md"
+        if not new_kp_file.exists():
+            new_kp_file.write_text(f"# {clean_section_name}\n\n# 题型\n", encoding="utf-8")
+            kp_index[re.sub(r"[\s·:：,，。.．~～+＋]", "", clean_section_name)] = clean_section_name
+        return clean_section_name
+
     return None
 
 
 def mount_kp(kp: str, tier: str, stem: str, kp_dir: Path, book_short: str) -> bool:
-    """把 (tier, stem) 挂载到知识点节点 kp 的 # 题型 章节（纯新增，幂等）。
-
-    返回 True 表示本次新增挂载。
+    """把 (tier, stem) 挂载到知识点节点 kp 的 # 题型 章节（纯新增，标明来源，幂等）。
     """
     kp_path = kp_dir / f"{kp}.md"
     if not kp_path.is_file():
-        print(f"  !! 知识点节点缺失: {kp}")
-        return False
+        kp_path.write_text(f"# {kp}\n\n# 题型\n", encoding="utf-8")
+
     text = kp_path.read_text(encoding="utf-8-sig")
     embed = f"![[mathmap/习题/{tier}/{stem}|{clean_title(stem)}]]"
     if embed in text:
@@ -165,19 +197,20 @@ def mount_kp(kp: str, tier: str, stem: str, kp_dir: Path, book_short: str) -> bo
         text = text.rstrip() + "\n\n# 题型\n"
     q_idx = text.find("# 题型")
     if source_heading in text[q_idx:]:
-        # 追加到已有来源分组内（分组末尾，不越过下一个 ## 标题）
         pos = text.find(source_heading, q_idx)
         end = text.find("\n## ", pos + len(source_heading))
         if end == -1:
             end = len(text)
         text = text[:end].rstrip() + f"\n{embed}\n" + text[end:]
     else:
-        # 新建来源分组，插在 # 题型 标题之后
         q_end = text.find("\n", q_idx)
+        if q_end == -1:
+            q_end = len(text)
         after = text[q_end:]
         text = text[:q_end] + f"\n{source_heading}\n{embed}" + after
     kp_path.write_text(text, encoding="utf-8")
     return True
+
 
 
 # ================= 主流程 =================
@@ -226,6 +259,9 @@ def archive_and_link_mathmap(vault_root: str, source_book_dir: str, book_short: 
         """链接中使用的路径：书目录名 + 相对书根的路径。"""
         return os.path.join(source_book.name, os.path.relpath(p, source_book))
 
+    # 初始化去重与合并引擎
+    dedup_engine = MathMapDedupEngine(vault)
+
     # ---- Pass 1: Tier1 questions/answers ----
     for root, dirs, files in os.walk(source_book):
         rel_dir = os.path.relpath(root, source_book)
@@ -235,27 +271,69 @@ def archive_and_link_mathmap(vault_root: str, source_book_dir: str, book_short: 
                 if not f.endswith(".md") or f.startswith("."):
                     continue
                 src = os.path.join(root, f)
-                if f in existing_q:
-                    q_skipped += 1
-                    continue
+                vp = src_vp(src)
                 content = Path(src).read_text(encoding="utf-8-sig")
-                content = re.sub(r"!\[\[(Q\d+A\d+)(\.md)?\]\]", r"![[mathmap/习题/answers/\1|\1]]", content)
-                (q_dest / f).write_text(content, encoding="utf-8")
-                q_copied += 1
-                name_map[src_vp(src)] = os.path.splitext(f)[0]
-                tier_map[src_vp(src)] = "questions"
+                stem = extract_stem(content)
+                matched_q = dedup_engine.match_question(stem)
+                
+                if matched_q:
+                    # 语义认定为完全同一题目（归一化一致），重用既有 Q 节点
+                    target_stem = os.path.splitext(matched_q)[0]
+                    name_map[vp] = target_stem
+                    tier_map[vp] = "questions"
+                    q_skipped += 1
+
+                    # 检查候选题目中是否有解析嵌入链接，若有新解析则仅复制解析并挂载回既有 Q 节点
+                    ans_links = re.findall(r"!\[\[(Q\d+A\d+)(\.md)?\]\]", content)
+                    for ans_stem, _ in ans_links:
+                        cand_ans_path = os.path.join(os.path.dirname(src), "answers", f"{ans_stem}.md")
+                        if not os.path.exists(cand_ans_path):
+                            cand_ans_path = os.path.join(os.path.dirname(os.path.dirname(src)), "answers", f"{ans_stem}.md")
+                        if not os.path.exists(cand_ans_path):
+                            cand_ans_path = os.path.join(os.path.dirname(os.path.dirname(src)), "答案", f"{ans_stem}.md")
+                        
+                        if os.path.exists(cand_ans_path):
+                            new_ans_stem = f"{target_stem}A_{book_short}"
+                            dst_ans_file = a_dest / f"{new_ans_stem}.md"
+                            shutil.copy2(cand_ans_path, dst_ans_file)
+                            
+                            # 链接回既有 Q 节点 (带解析来源标记)
+                            existing_q_file = q_dest / matched_q
+                            if existing_q_file.is_file():
+                                q_text = existing_q_file.read_text(encoding="utf-8-sig")
+                                ans_embed = f"![[mathmap/习题/answers/{new_ans_stem}|解析来源：{book_short}]]"
+                                if ans_embed not in q_text:
+                                    q_text = q_text.rstrip() + f"\n\n{ans_embed}\n"
+                                    existing_q_file.write_text(q_text, encoding="utf-8")
+
+                elif f in existing_q:
+                    target_stem = os.path.splitext(f)[0]
+                    name_map[vp] = target_stem
+                    tier_map[vp] = "questions"
+                    q_skipped += 1
+                else:
+                    content = re.sub(r"!\[\[(Q\d+A\d+)(\.md)?\]\]", r"![[mathmap/习题/answers/\1|\1]]", content)
+                    (q_dest / f).write_text(content, encoding="utf-8")
+                    q_copied += 1
+                    target_stem = os.path.splitext(f)[0]
+                    name_map[vp] = target_stem
+                    tier_map[vp] = "questions"
+                    
         if "answers" in parts or "答案" in parts:
             for f in files:
                 if not f.endswith(".md") or f.startswith("."):
                     continue
                 src = os.path.join(root, f)
+                vp = src_vp(src)
                 if f in existing_a:
                     a_skipped += 1
+                    name_map[vp] = os.path.splitext(f)[0]
+                    tier_map[vp] = "answers"
                     continue
                 shutil.copy2(src, a_dest / f)
                 a_copied += 1
-                name_map[src_vp(src)] = os.path.splitext(f)[0]
-                tier_map[src_vp(src)] = "answers"
+                name_map[vp] = os.path.splitext(f)[0]
+                tier_map[vp] = "answers"
 
     # ---- Pass 2: Tier2/Tier3 落盘计划 ----
     for root, dirs, files in os.walk(source_book):
@@ -278,7 +356,7 @@ def archive_and_link_mathmap(vault_root: str, source_book_dir: str, book_short: 
                 section_dir = parts[-2] if len(parts) >= 2 else "章节"
                 qt_plans.append((src, f, section_dir))
 
-    # Tier3 落盘
+    # Tier3 落盘（不合并，书命名空间隔离）
     for src, clean_name, rel_dir in paper_plans:
         base = clean_name
         vp = src_vp(src)
@@ -300,21 +378,40 @@ def archive_and_link_mathmap(vault_root: str, source_book_dir: str, book_short: 
             dst.write_text(content, encoding="utf-8")
         paper_copied += 1
 
-    # Tier2 落盘
+    # Tier2 落盘与严格语义合并
     for src, fname, section_dir in qt_plans:
         vp = src_vp(src)
-        final_name = safe_dest_name(fname, section_dir, existing_qt, tier2_used)
-        name_map[vp] = os.path.splitext(final_name)[0]
-        tier_map[vp] = "题型整理"
-        dst = qt_dest / final_name
-        if dst.is_file():
-            if dst.read_bytes() == Path(src).read_bytes():
-                pass  # 幂等
+        matched_qt = dedup_engine.match_problem_type(fname)
+        if matched_qt:
+            target_file, ratio = matched_qt
+            final_name = target_file
+            name_map[vp] = os.path.splitext(final_name)[0]
+            tier_map[vp] = "题型整理"
+            dst = qt_dest / final_name
+            # 合并新旧题型中的单题链接
+            src_content = Path(src).read_text(encoding="utf-8-sig")
+            dst_content = dst.read_text(encoding="utf-8-sig") if dst.is_file() else ""
+            new_links = re.findall(r"!\[\[([^\]]+)\]\]", src_content)
+            merged_content = dst_content
+            for link in new_links:
+                if link not in merged_content:
+                    merged_content = merged_content.rstrip() + f"\n\n![[{link}]]\n"
+            if merged_content != dst_content:
+                dst.write_text(merged_content, encoding="utf-8")
+        else:
+            final_name = safe_dest_name(fname, section_dir, existing_qt, tier2_used)
+            name_map[vp] = os.path.splitext(final_name)[0]
+            tier_map[vp] = "题型整理"
+            dst = qt_dest / final_name
+            if dst.is_file():
+                if dst.read_bytes() == Path(src).read_bytes():
+                    pass  # 幂等
+                else:
+                    shutil.copy2(src, dst)
             else:
                 shutil.copy2(src, dst)
-        else:
-            shutil.copy2(src, dst)
         qt_copied += 1
+
 
     # ---- Pass 3: 统一重写已落盘笔记内链 ----
     for d, tier in ((qt_dest, "题型整理"), (paper_dest, "题集")):

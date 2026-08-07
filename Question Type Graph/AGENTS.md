@@ -31,6 +31,18 @@ freeze typed sources
   Markdown structure and navigation only.
 - Never accept fuzzy answer similarity by itself. Route ambiguous or missing
   matches to a blocking review queue.
+- Assign each answer block to at most one question and each question to at most
+  one answer. A re-claimed candidate routes to the blocking review queue,
+  never to a second match (the final audit hard-errors on
+  `answer-owned-more-than-once`).
+- Answer patterns must accept real "N.M…" answers (e.g. `8.2或-2或…`,
+  `5.2 【解析】`) while rejecting section-number phantoms (`1.3 空间向量…`).
+  Verify the pattern set against every `^\d+[.．、]\d` line in the answer raw,
+  and keep the same patterns in the adapter and any build-script event scanner.
+- When answer matching changes, clean stale answer artifacts before the final
+  audit: orphaned `Q*<id>A1.md` notes and `![[Q*<id>A1]]` embeds left behind by
+  questions that flipped matched → unmatched. The audit errors on
+  `unexpected-generated-note` / `broken-link` otherwise.
 - Keep atomic questions off the structural Canvas.
 - Leave knowledge-point linking disabled until a later explicit stage.
 - Keep staging outside published vault roots and create no backup directories.

@@ -44,7 +44,8 @@ The first run stops after `format-inventory.json` until a reviewer-confirmed `fo
 - Create one note per top-level question, named with monotonically increasing 8-digit sequence numbers across the vault (e.g. `Q00000001.md`, `Q00000002.md`). Automatically lookup vault `max_q_num` to prevent duplicates.
 - Save matched solutions as standalone answer notes named `<Question_ID>A<Index>.md` (e.g., `Q00000001A1.md`), and embed them in the question note via `![[Q00000001A1]]`.
 - Format all answer notes into collapsable Callout blocks (`> [!faq]- 必刷题解析`), including option selections, itemized bullet points, and pedagogical sections (`💡 规律方法`, `📌 名师点拨`, `🔔 敲黑板`, `💡 点悟`, `🔗 链接教材`, `⚠️ 易错警示`).
-- Require exact answer identity or blocking review. Never accept fuzzy evidence alone.
+- Require exact answer identity or blocking review. Never accept fuzzy evidence alone. A passed answer manifest must have unique `answer_id` AND unique `question_id` (one owner per answer block, one match per question).
+- Before the final audit, after any matcher/adapter change that flips questions matched → unmatched, clean stale answer artifacts: orphaned `Q*<id>A1.md` notes and `![[Q*<id>A1]]` embeds in question notes (the audit errors `unexpected-generated-note` / `broken-link` otherwise).
 - Permit Markdown-only presentation changes and verify lexical preservation.
 - Keep atomic questions off Canvas and knowledge linking deferred.
 - Complete only when `final-audit-report.json` reports `status: passed`.

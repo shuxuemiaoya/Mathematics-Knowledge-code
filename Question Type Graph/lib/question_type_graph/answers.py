@@ -213,6 +213,7 @@ def plan_matches(profile_path: Path, adapter_path: Path, content_manifest_path: 
     indexes = build_answer_indexes(answers)
     strategies = adapter.get("answers", {}).get("matching_strategies") or ["hierarchy-number"]
     matches: list[dict[str, Any]] = []
+    used_answer_ids: set[str] = set()
     for question in content.get("questions", []):
         question_note = Path(question["output"])
         question_text = question_note.read_text(encoding="utf-8-sig") if question_note.is_file() else ""
@@ -236,6 +237,29 @@ def plan_matches(profile_path: Path, adapter_path: Path, content_manifest_path: 
             continue
         if decisive and not ambiguous:
             strategy, answer = decisive[0]
+            if answer["id"] in used_answer_ids:
+                # Already claimed by an earlier question (numbering-restart
+                # context where the second run's own answer block is missing
+                # from OCR, so both runs see the same single candidate).  Never
+                # double-assign: the audit hard-errors on answer-owned-more-
+                # than-once.  Route to the duplicate-answer review queue like
+                # the two-candidate restart numbers.
+                review.append(
+                    {
+                        "kind": "duplicate-answer",
+                        "question_id": question["id"],
+                        "context": str(question.get("context_key")),
+                        "number": str(question.get("number")),
+                        "candidate_count": 1,
+                        "strategy_results": [
+                            {"strategy": name, "candidate_ids": [item["id"] for item in values]}
+                            for name, values in evaluated
+                        ],
+                        "fuzzy_suggestions_not_accepted": [],
+                    }
+                )
+                continue
+            used_answer_ids.add(answer["id"])
             matches.append(
                 {
                     "question_id": question["id"],

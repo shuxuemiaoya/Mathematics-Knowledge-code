@@ -61,9 +61,27 @@ description: 专职负责将 Book to Obsidian Wiki Graph 与 Question Type Graph
 
 ---
 
-## 5. 运行命令 (CLI)
+## 5. 多层级语义去重与合并规范 (Multi-Tier Semantic Deduplication & Merging — 必做)
+
+1. **Tier 1 单题去重与极微差异敏感**：
+   - 归一化 match：格式/空格/LaTeX 变体（`\frac` vs `/`）认定为同一题目，复用既有 `Q*.md`，解析嵌入更新。
+   - 单字符差异判定：题干措辞、数值或符号存在**1 个字符差异**（如 `>` 与 `\ge`），必须保留独立 `Q*.md`。
+2. **Tier 2 题型整理严格语义合并**：
+   - 同小节/知识点下，对相似度 $\ge 0.85$ 的题型进行合并，合并后题目的 `![[Q...]]` 链接求并集。
+3. **Tier 3 题集隔离**：
+   - 框架/套卷/检测笔记按 `<book_short>_` 独立命名空间隔离，绝不合并。
+4. **知识点宽泛挂载**：
+   - 四级匹配机制，自动挂载到既有 `mathmap/知识点/*.md`。
+
+---
+
+## 6. 运行命令 (CLI)
 
 ```bash
+# 1. 独立去重与合并计划预览 (Dry-run)
+python3 scripts/mathmap_dedup.py <vault_root> <source_book_dir> <book_short> --out dedup_plan.json
+
+# 2. 自动化归档、去重合并与链接挂载
 python3 scripts/link_to_mathmap.py <vault_root> <source_book_dir> <book_short>
 # 例：
 python3 scripts/link_to_mathmap.py /Users/oven/Documents/ovenmathmap \
@@ -71,9 +89,9 @@ python3 scripts/link_to_mathmap.py /Users/oven/Documents/ovenmathmap \
   选择性必修第一册RJA
 ```
 
-脚本四遍式：Tier1 questions/answers 归档 → Tier2/3 落盘（全路径重写+冲突命名+幂等）→
-统一重写内链 → 知识点挂载。运行后核对：题型整理/题集 文件数**不因重复运行而增长**，
-知识点节点改动为纯新增。
+脚本四遍式：Tier1 questions/answers 归档与去重 → Tier2 题型整理严格合并 + Tier3 题集落盘 →
+统一重写内链 → 知识点宽泛挂载。运行后核对：题型整理/题集 文件数**不因重复运行或高度相似书引入而膨胀**。
+
 
 
 
