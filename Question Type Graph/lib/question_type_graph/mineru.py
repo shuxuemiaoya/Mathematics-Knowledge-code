@@ -449,7 +449,7 @@ def convert(profile_path: Path, role: str, args: argparse.Namespace) -> dict[str
                 shutil.rmtree(asset_root)
             if provenance_root.exists():
                 shutil.rmtree(provenance_root)
-        target.write_text(merged, encoding="utf-8", newline="\n")
+        target.write_text(merged, encoding="utf-8")
         staged_base = temp / "assets"
         if staged_base.exists():
             asset_root.parent.mkdir(parents=True, exist_ok=True)

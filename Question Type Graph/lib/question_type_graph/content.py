@@ -218,6 +218,9 @@ def plan_note(
         embed_boundary = min((value for value in embed_barriers if start < value <= end), default=None)
         if embed_boundary is not None:
             end = embed_boundary - 1
+        heading_boundary = min((i for i in range(start + 1, end + 1) if re.match(r"^\s*#{1,6}\s+\S", lines[i - 1])), default=None)
+        if heading_boundary is not None:
+            end = heading_boundary - 1
         owner = None
         for label in labels:
             if label["start_line"] < start <= label["end_line"]:
@@ -278,13 +281,24 @@ def plan_note(
 
 
 
-def find_next_q_number(vault_root: Path) -> int:
+DEFAULT_QUESTION_REPO_PATH = Path("/Users/oven/Documents/ovenmathmap/mathmap/习题/questions")
+
+
+def find_next_q_number(vault_root: Path, extra_roots: list[Path] = None) -> int:
     max_num = 0
-    if vault_root.exists():
-        for p in vault_root.rglob("Q[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].md"):
-            m = re.search(r"Q(\d{8})\.md$", p.name)
-            if m:
-                max_num = max(max_num, int(m.group(1)))
+    search_paths = [vault_root]
+    if extra_roots:
+        search_paths.extend(extra_roots)
+
+    if DEFAULT_QUESTION_REPO_PATH.exists() and DEFAULT_QUESTION_REPO_PATH not in search_paths:
+        search_paths.append(DEFAULT_QUESTION_REPO_PATH)
+
+    for root in search_paths:
+        if root and root.exists():
+            for p in root.rglob("Q[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].md"):
+                m = re.search(r"Q(\d{8})\.md$", p.name)
+                if m:
+                    max_num = max(max_num, int(m.group(1)))
     return max_num + 1
 
 
@@ -296,7 +310,13 @@ def plan_content(profile_path: Path, adapter_path: Path, hierarchy_coverage_path
         raise ConfigurationError("Hierarchy coverage must pass before content planning")
     adapter["_graph_root"] = profile["paths"]["graph_root"]
     vault_root = Path(profile["paths"]["vault_root"]).resolve()
-    next_q_seq = find_next_q_number(vault_root)
+
+    extra_roots = []
+    custom_repo = adapter.get("content", {}).get("question_repository_root") or profile.get("paths", {}).get("question_repository_root")
+    if custom_repo:
+        extra_roots.append(Path(custom_repo).resolve())
+
+    next_q_seq = find_next_q_number(vault_root, extra_roots)
 
     rules = compile_role_rules(adapter)
     patterns = compile_question_patterns(adapter)

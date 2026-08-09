@@ -50,6 +50,7 @@ Minimum shape:
   },
   "answers": {
     "source_role": "answers",
+    "callout_title": "全练一本通解析",
     "contexts": [{"key": "chapter-1", "pattern": "source-specific regex"}],
     "answer_patterns": ["^(?P<number>\\d+)[.．、]\\s*"],
     "ignore_ranges": []

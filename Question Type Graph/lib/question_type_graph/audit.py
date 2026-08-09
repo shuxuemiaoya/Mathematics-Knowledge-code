@@ -159,13 +159,24 @@ def audit_graph(
                 match_by_question = {item["question_id"]: item for item in answer_matches}
                 for question in questions:
                     match = match_by_question.get(question["id"])
-                    if match is None:
-                        warnings.append({"kind": "unmatched-question", "question_id": question["id"]})
-                        continue
-                    text = Path(question["output"]).read_text(encoding="utf-8-sig")
-                    ans_name = match.get("answer_name", f"{Path(question['output']).stem}A1")
-                    if f"![[{ans_name}]]" not in text:
-                        errors.append({"kind": "answer-content-drift", "question_id": question["id"]})
+                    q_file = Path(question["output"])
+                    text = q_file.read_text(encoding="utf-8-sig") if q_file.is_file() else ""
+                    has_embed = bool(re.search(r"!\[\[Q\d+A\d+[^\]]*\]\]", text))
+                    is_unmatched = "answer_status: unmatched" in text
+                    if not has_embed or is_unmatched:
+                        reason = "missing-answer-key" if match is None else "unembedded-solution"
+                        errors.append(
+                            {
+                                "kind": "question-lacking-explanation",
+                                "question_id": question["id"],
+                                "question_file": str(q_file),
+                                "reason": reason,
+                            }
+                        )
+                    if match is not None:
+                        ans_name = match.get("answer_name", f"{q_file.stem}A1")
+                        if f"![[{ans_name}]]" not in text:
+                            errors.append({"kind": "answer-content-drift", "question_id": question["id"]})
     graph_root = Path(profile["paths"]["graph_root"])
     expected_notes = {
         str(Path(item["path"]).resolve()).casefold()

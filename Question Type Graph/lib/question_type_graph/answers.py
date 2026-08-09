@@ -64,7 +64,12 @@ def parse_answer_blocks(path: Path, adapter: dict[str, Any]) -> tuple[list[dict[
         raise ConfigurationError("Adapter answers.answer_patterns is required when answers are enabled")
     if any("number" not in pattern.groupindex for pattern in answer_patterns):
         raise ConfigurationError("Every answer pattern requires a named 'number' group")
-    lines = path.read_text(encoding="utf-8-sig").splitlines()
+    raw_lines = path.read_text(encoding="utf-8-sig").splitlines()
+    lines: list[str] = []
+    for line in raw_lines:
+        sublines = re.split(r"(?<=[^\n])\s*(?=(?:【\d+】))", line)
+        for sub in sublines:
+            lines.append(sub)
     region = config.get("region") or {}
     start_limit = int(region.get("start_line", 1))
     end_limit = int(region.get("end_line", len(lines)))
@@ -122,6 +127,22 @@ def parse_answer_blocks(path: Path, adapter: dict[str, Any]) -> tuple[list[dict[
         answer["body"] = body
         answer["body_sha256"] = sha256_text(body)
         answer["id"] = f"{answer.get('context')}:{answer['number']}:{answer['line']}"
+
+    deduped_answers: list[dict[str, Any]] = []
+    for ans in answers:
+        if (
+            deduped_answers
+            and deduped_answers[-1].get("context") == ans.get("context")
+            and deduped_answers[-1].get("number") == ans.get("number")
+        ):
+            prev = deduped_answers[-1]
+            if ans["line"] - prev["line"] <= 4:
+                if len(ans["body"].strip()) >= len(prev["body"].strip()):
+                    deduped_answers[-1] = ans
+                continue
+        deduped_answers.append(ans)
+    answers = deduped_answers
+
     return answers, review
 
 
@@ -334,19 +355,19 @@ def plan_matches(profile_path: Path, adapter_path: Path, content_manifest_path: 
     }
 
 
-def format_answer_callout(body: str, callout_title: str = "必刷题解析") -> str:
+def format_answer_callout(body: str, callout_title: str = "答案与解析") -> str:
     lines = body.strip().splitlines()
     if not lines:
         return f"> [!faq]- {callout_title}\n> "
 
     option = None
     first_line = lines[0].strip()
-    m_opt = re.match(r"^\d+[\.、\s]*([A-Z]+)\b\s*(?:【解析】)?\s*", first_line)
+    m_opt = re.match(r"^【?\d+】?[\.、\s]*([A-Z]+)\b\s*(?:【解析】)?\s*", first_line)
     if m_opt:
         option = m_opt.group(1)
         first_line = first_line[m_opt.end():].strip()
     else:
-        first_line = re.sub(r"^\d+[\.、\s]*", "", first_line)
+        first_line = re.sub(r"^【?\d+】?[\.、\s]*", "", first_line)
         first_line = re.sub(r"^【解析】\s*", "", first_line).strip()
 
     rebuilt_lines = [first_line] + [l.strip() for l in lines[1:] if l.strip()]
@@ -446,6 +467,10 @@ def apply_matches(profile_path: Path, manifest_path: Path, overwrite: bool) -> d
         for match in manifest.get("matches", []):
             matches_by_question.setdefault(match["question_path"], []).append(match)
 
+        adapter_path = Path(manifest.get("adapter", profile["format"]["adapter"]))
+        adapter_data = load_json(adapter_path) if adapter_path.is_file() else {}
+        callout_title = adapter_data.get("answers", {}).get("callout_title", "答案与解析")
+
         for q_path_str, q_matches in matches_by_question.items():
             note = Path(q_path_str)
             if not note.is_file():
@@ -469,7 +494,7 @@ def apply_matches(profile_path: Path, manifest_path: Path, overwrite: bool) -> d
                     [(answer_markdown.parent / "images", Path(profile["paths"]["graph_root"]) / "images")],
                 )
 
-                callout_text = format_answer_callout(rebased_body, callout_title="必刷题解析")
+                callout_text = format_answer_callout(rebased_body, callout_title=callout_title)
                 write_text_atomic(ans_path, callout_text + "\n", overwrite=True)
                 embed_links.append(f"![[{ans_name}]]")
                 match["answer_note_path"] = str(ans_path)
