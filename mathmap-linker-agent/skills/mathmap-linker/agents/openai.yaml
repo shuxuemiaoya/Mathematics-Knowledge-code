@@ -1,0 +1,4 @@
+interface:
+  display_name: "MathMap Linker"
+  short_description: "Safely link and audit MathMap vault imports"
+  default_prompt: "Use $mathmap-linker to preview and safely apply this graph import to my MathMap vault."

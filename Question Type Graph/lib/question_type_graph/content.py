@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
 
 from .common import (
     bounded_output_path,
+    compile_number_patterns,
     ConfigurationError,
     load_json,
     load_profile,
@@ -21,6 +24,7 @@ from .common import (
     write_json_atomic,
     write_text_atomic,
 )
+from .spans import split_virtual_lines
 
 
 GENERATED_LINK_RE = re.compile(
@@ -46,19 +50,30 @@ def compile_role_rules(adapter: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def compile_question_patterns(adapter: dict[str, Any]) -> list[re.Pattern[str]]:
-    patterns = adapter.get("content", {}).get("question_patterns") or []
-    if not patterns:
-        raise ConfigurationError("Adapter content.question_patterns is required")
-    compiled = [re.compile(str(pattern)) for pattern in patterns]
-    for pattern in compiled:
-        if "number" not in pattern.groupindex:
-            raise ConfigurationError("Every question pattern requires a named 'number' group")
-    return compiled
+    return compile_number_patterns(
+        adapter.get("content", {}).get("question_patterns"),
+        "content.question_patterns",
+    )
+
+
+def compile_inline_question_patterns(
+    adapter: dict[str, Any], question_patterns: list[re.Pattern[str]]
+) -> list[re.Pattern[str]]:
+    content = adapter.get("content", {})
+    if "inline_question_patterns" not in content:
+        return question_patterns
+    return compile_number_patterns(
+        content.get("inline_question_patterns"),
+        "content.inline_question_patterns",
+        required=False,
+    )
 
 
 def match_role(line: str, rules: list[dict[str, Any]]) -> tuple[dict[str, Any], re.Match[str]] | None:
     title = visible_label(line)
     for rule in rules:
+        if rule.get("heading_only") is True and not re.match(r"^\s*#{1,6}\s+\S", line):
+            continue
         match = rule["_compiled"].fullmatch(title)
         if match:
             return rule, match
@@ -73,6 +88,12 @@ def match_question(line: str, patterns: list[re.Pattern[str]]) -> re.Match[str] 
     return None
 
 
+def split_inline_question_headers(
+    raw_lines: list[str], patterns: list[re.Pattern[str]]
+) -> list[dict[str, Any]]:
+    return split_virtual_lines(raw_lines, patterns)
+
+
 def plan_note(
     note_entry: dict[str, Any],
     rules: list[dict[str, Any]],
@@ -80,7 +101,12 @@ def plan_note(
     adapter: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     path = Path(note_entry["path"])
-    lines = path.read_text(encoding="utf-8-sig").splitlines()
+    content_source = Path(note_entry.get("content_source") or path)
+    raw_lines = content_source.read_text(encoding="utf-8-sig").splitlines()
+    virtual_lines = split_inline_question_headers(
+        raw_lines, compile_inline_question_patterns(adapter, question_patterns)
+    )
+    lines = [item["text"] for item in virtual_lines]
     source_parts = [
         {
             "line": index,
@@ -136,6 +162,7 @@ def plan_note(
                     "start_line": index,
                     "source_note_key": note_entry["key"],
                     "source_note": str(path),
+                    "source_content": str(content_source),
                     "occurrence": occurrence,
                     "answer_context": answer_context,
                 }
@@ -267,10 +294,14 @@ def plan_note(
                 "title": title,
                 "source_note_key": note_entry["key"],
                 "source_note": str(path),
+                "source_content": str(content_source),
                 "context_key": context_key,
                 "owner": owner["key"] if owner else None,
                 "start_line": start,
                 "end_line": end,
+                "source_start_line": virtual_lines[start - 1]["raw_line"],
+                "source_start_column": virtual_lines[start - 1]["raw_column"],
+                "source_end_line": virtual_lines[end - 1]["raw_line"],
                 "output": str(output.resolve()),
                 "body_sha256": sha256_text(body),
                 "body_lexical_signature": lexical_signature(body),
@@ -281,7 +312,43 @@ def plan_note(
 
 
 
-DEFAULT_QUESTION_REPO_PATH = Path("/Users/oven/Documents/ovenmathmap/mathmap/习题/questions")
+DEFAULT_QUESTION_REPO_PATH = (
+    Path(os.environ["QUESTION_TYPE_REPOSITORY_ROOT"]).expanduser().resolve()
+    if os.environ.get("QUESTION_TYPE_REPOSITORY_ROOT")
+    else None
+)
+
+
+@contextmanager
+def locked_registry(path: Path):
+    """Serialize question-ID reservations across concurrent book builds."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    stream = path.open("a+b")
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            if stream.tell() == 0:
+                stream.write(b"\0")
+                stream.flush()
+            stream.seek(0)
+            msvcrt.locking(stream.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
+        yield
+    finally:
+        if os.name == "nt":
+            import msvcrt
+
+            stream.seek(0)
+            msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
+        stream.close()
 
 
 def find_next_q_number(vault_root: Path, extra_roots: list[Path] = None) -> int:
@@ -290,7 +357,11 @@ def find_next_q_number(vault_root: Path, extra_roots: list[Path] = None) -> int:
     if extra_roots:
         search_paths.extend(extra_roots)
 
-    if DEFAULT_QUESTION_REPO_PATH.exists() and DEFAULT_QUESTION_REPO_PATH not in search_paths:
+    if (
+        DEFAULT_QUESTION_REPO_PATH is not None
+        and DEFAULT_QUESTION_REPO_PATH.exists()
+        and DEFAULT_QUESTION_REPO_PATH not in search_paths
+    ):
         search_paths.append(DEFAULT_QUESTION_REPO_PATH)
 
     for root in search_paths:
@@ -302,6 +373,113 @@ def find_next_q_number(vault_root: Path, extra_roots: list[Path] = None) -> int:
     return max_num + 1
 
 
+def stable_question_identity(profile: dict[str, Any], question: dict[str, Any], occurrence: int) -> str:
+    source_hashes = sorted(str(source.get("sha256", "")) for source in profile["sources"])
+    graph_relative = (
+        Path(profile["paths"]["graph_root"])
+        .resolve()
+        .relative_to(Path(profile["paths"]["vault_root"]).resolve())
+        .as_posix()
+    )
+    payload = {
+        "sources": source_hashes,
+        "graph_root": graph_relative,
+        "source_note_key": question.get("source_note_key"),
+        "context_key": question.get("context_key"),
+        "number": question.get("number"),
+        "occurrence": occurrence,
+        "body_sha256": question.get("body_sha256"),
+    }
+    return sha256_text(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+
+
+def assign_question_codes(
+    profile: dict[str, Any],
+    adapter: dict[str, Any],
+    questions: list[dict[str, Any]],
+) -> None:
+    """Assign persistent, concurrency-safe Q codes without renumbering unchanged questions."""
+    vault_root = Path(profile["paths"]["vault_root"]).resolve()
+    configured_registry = (
+        adapter.get("content", {}).get("question_id_registry")
+        or profile.get("paths", {}).get("question_id_registry")
+    )
+    registry_path = (
+        Path(configured_registry).expanduser().resolve()
+        if configured_registry
+        else vault_root / ".question-type-graph" / "question-id-registry.json"
+    )
+    lock_path = registry_path.with_suffix(registry_path.suffix + ".lock")
+
+    occurrence_by_key: dict[tuple[str, str, str], int] = {}
+    identities: list[str] = []
+    for question in questions:
+        occurrence_key = (
+            str(question.get("source_note_key")),
+            str(question.get("context_key")),
+            str(question.get("number")),
+        )
+        occurrence_by_key[occurrence_key] = occurrence_by_key.get(occurrence_key, 0) + 1
+        identities.append(
+            stable_question_identity(profile, question, occurrence_by_key[occurrence_key])
+        )
+
+    previous_by_identity: dict[str, str] = {}
+    previous_manifest = Path(profile["paths"]["staging_root"]) / "question-type-manifest.json"
+    if previous_manifest.is_file():
+        previous = load_json(previous_manifest)
+        previous_occurrences: dict[tuple[str, str, str], int] = {}
+        for item in previous.get("questions", []):
+            key = (
+                str(item.get("source_note_key")),
+                str(item.get("context_key")),
+                str(item.get("number")),
+            )
+            previous_occurrences[key] = previous_occurrences.get(key, 0) + 1
+            identity = stable_question_identity(profile, item, previous_occurrences[key])
+            code = str(item.get("title", ""))
+            if re.fullmatch(r"Q\d{8}", code):
+                previous_by_identity[identity] = code
+
+    with locked_registry(lock_path):
+        if registry_path.is_file():
+            registry = load_json(registry_path)
+            if registry.get("schema_version") != 1:
+                raise ConfigurationError("Unsupported question-ID registry schema")
+        else:
+            extra_roots = []
+            custom_repo = adapter.get("content", {}).get("question_repository_root") or profile.get("paths", {}).get("question_repository_root")
+            if custom_repo:
+                extra_roots.append(Path(custom_repo).resolve())
+            registry = {
+                "schema_version": 1,
+                "next_number": find_next_q_number(vault_root, extra_roots),
+                "assignments": {},
+            }
+        assignments = registry.setdefault("assignments", {})
+        used_codes = set(str(value) for value in assignments.values())
+        for identity, code in previous_by_identity.items():
+            if identity not in assignments and code not in used_codes:
+                assignments[identity] = code
+                used_codes.add(code)
+        next_number = max(int(registry.get("next_number", 1)), 1)
+        for question, identity in zip(questions, identities):
+            code = assignments.get(identity)
+            if code is None:
+                while f"Q{next_number:08d}" in used_codes:
+                    next_number += 1
+                code = f"Q{next_number:08d}"
+                next_number += 1
+                assignments[identity] = code
+                used_codes.add(code)
+            old_path = Path(question["output"])
+            question["output"] = str(old_path.parent / f"{code}.md")
+            question["title"] = code
+            question["stable_identity"] = identity
+        registry["next_number"] = next_number
+        write_json_atomic(registry_path, registry, overwrite=registry_path.is_file())
+
+
 def plan_content(profile_path: Path, adapter_path: Path, hierarchy_coverage_path: Path) -> dict[str, Any]:
     profile = load_profile(profile_path)
     adapter = require_reviewed_adapter(profile, adapter_path)
@@ -309,15 +487,6 @@ def plan_content(profile_path: Path, adapter_path: Path, hierarchy_coverage_path
     if coverage.get("status") != "passed":
         raise ConfigurationError("Hierarchy coverage must pass before content planning")
     adapter["_graph_root"] = profile["paths"]["graph_root"]
-    vault_root = Path(profile["paths"]["vault_root"]).resolve()
-
-    extra_roots = []
-    custom_repo = adapter.get("content", {}).get("question_repository_root") or profile.get("paths", {}).get("question_repository_root")
-    if custom_repo:
-        extra_roots.append(Path(custom_repo).resolve())
-
-    next_q_seq = find_next_q_number(vault_root, extra_roots)
-
     rules = compile_role_rules(adapter)
     patterns = compile_question_patterns(adapter)
     labels: list[dict[str, Any]] = []
@@ -339,13 +508,7 @@ def plan_content(profile_path: Path, adapter_path: Path, hierarchy_coverage_path
         questions.extend(note_questions)
         review.extend(note_review)
 
-    for question in questions:
-        q_code = f"Q{next_q_seq:08d}"
-        next_q_seq += 1
-        old_path = Path(question["output"])
-        new_path = old_path.parent / f"{q_code}.md"
-        question["output"] = str(new_path)
-        question["title"] = q_code
+    assign_question_codes(profile, adapter, questions)
 
     ids = [question["id"] for question in questions]
     outputs = [question["output"].casefold() for question in questions]
@@ -393,7 +556,7 @@ def render_question(question: dict[str, Any], body: str, answer_mode: str = "sep
 
 def apply_content(profile_path: Path, adapter_path: Path, manifest_path: Path, overwrite: bool) -> dict[str, Any]:
     profile = load_profile(profile_path)
-    require_reviewed_adapter(profile, adapter_path)
+    adapter = require_reviewed_adapter(profile, adapter_path)
     manifest = load_json(manifest_path)
     if manifest.get("status") != "passed":
         raise ConfigurationError("Content manifest must pass before application")
@@ -402,9 +565,17 @@ def apply_content(profile_path: Path, adapter_path: Path, manifest_path: Path, o
     vault_root = Path(profile["paths"]["vault_root"]).resolve()
     by_source: dict[str, dict[str, Any]] = {}
     for node in functional:
-        by_source.setdefault(node["source_note"], {"nodes": [], "questions": []})["nodes"].append(node)
+        group = by_source.setdefault(
+            node["source_note"],
+            {"nodes": [], "questions": [], "source_content": node.get("source_content")},
+        )
+        group["nodes"].append(node)
     for question in questions:
-        by_source.setdefault(question["source_note"], {"nodes": [], "questions": []})["questions"].append(question)
+        group = by_source.setdefault(
+            question["source_note"],
+            {"nodes": [], "questions": [], "source_content": question.get("source_content")},
+        )
+        group["questions"].append(question)
 
     report_path = Path(profile["paths"]["staging_root"]) / "content-application-report.json"
     previous_generated: set[str] = set()
@@ -416,7 +587,13 @@ def apply_content(profile_path: Path, adapter_path: Path, manifest_path: Path, o
     generated_outputs: list[dict[str, Any]] = []
     for source_name, values in by_source.items():
         source = Path(source_name)
-        lines = source.read_text(encoding="utf-8-sig").splitlines()
+        source_content = Path(values.get("source_content") or source)
+        raw_lines = source_content.read_text(encoding="utf-8-sig").splitlines()
+        question_patterns = compile_question_patterns(adapter)
+        virtual_lines = split_inline_question_headers(
+            raw_lines, compile_inline_question_patterns(adapter, question_patterns)
+        )
+        lines = [item["text"] for item in virtual_lines]
         nodes = values["nodes"]
         note_by_key = {node["key"]: Path(node["output"]) for node in nodes}
         direct_questions: dict[str | None, list[dict[str, Any]]] = {}

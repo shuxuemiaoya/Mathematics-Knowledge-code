@@ -1,0 +1,4 @@
+interface:
+  display_name: "MathMap Deduplication"
+  short_description: "Analyze MathMap duplicates with tier-aware rules"
+  default_prompt: "Use $mathmap-dedup to analyze duplicate questions and Tier-2 merge candidates in my MathMap vault."

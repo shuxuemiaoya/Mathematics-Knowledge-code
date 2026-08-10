@@ -15,9 +15,10 @@ description: 专职负责将刷题库与教辅书（如必刷题）进行 OCR �
 2. `question-type-toc-segmentation`: 教辅目录与大纲层级分割
 3. `question-type-content-segmentation`: 功能块与原子题目切分
 4. `question-answer-matching`: 题目与答案自动精准匹配与审查
-5. `question-type-markdown`: Markdown 格式美化与统一
-6. `question-type-canvas`: 生成 Question Type Graph 结构化 Obsidian Canvas
-7. `question-type-graph`: 总体流水线调度与控制
+5. `supplement-question-type-solutions`: 对权威答案缺失项生成并人工确认实质性解析
+6. `question-type-markdown`: Markdown 格式美化与统一
+7. `question-type-canvas`: 生成 Question Type Graph 结构化 Obsidian Canvas
+8. `question-type-graph`: 总体流水线调度与控制
 
 ---
 
@@ -30,6 +31,9 @@ description: 专职负责将刷题库与教辅书（如必刷题）进行 OCR �
   - 设 `vault-root` 为 `/Users/oven/Documents/ovenmathmap`
   - 设 `graph-root` 为 `/Users/oven/Documents/ovenmathmap/高中/课堂同步/题库/高中数学全练一本通/平面向量`
   - 设 `staging-root` 为 `/Users/oven/Documents/ovenmathmap/.temp/<书名>-staging`
+- **全局题号种子仓库**：在 adapter 的 `content.question_repository_root` 中设置
+  `/Users/oven/Documents/ovenmathmap/mathmap/习题/questions`。首次创建 vault 题号注册表时
+  扫描该仓库；后续由带锁注册表原子分配，避免并发重复和重跑改号。
 
 ---
 
@@ -61,17 +65,11 @@ description: 专职负责将刷题库与教辅书（如必刷题）进行 OCR �
    到同一个候选块（终审报 answer-owned-more-than-once）。
    处理：matcher 的 used_answer_ids 认领守卫已内建（lib/question_type_graph/answers.py），
    重构时不得移除；第二个认领者必须走 duplicate-answer 审阅项。
-4. **matched→unmatched 遗留陈旧产物**：匹配器/adapter 改动后，失去匹配的题会
-   残留孤儿 `Q*<id>A1.md` 和题注里的 `![[Q*<id>A1]]` 嵌入（终审报
-   unexpected-generated-note / broken-link）。
-   处理：终审前删除孤儿 A1、剥离题注中的残留嵌入行，再 resume --overwrite。
-5. **审阅闸口（answer-review）的放行标准**：重启集群（刷基础/刷提升题号重启）
-   和真实 OCR 页断缺失是书的真实属性，作为已审警告保留即可；绝不强行模糊匹配、
-   绝不编造缺失答案。同系列先例：必修第一册 passed 时仍有 missing 865 /
-   unmatched 874（匹配率 28%）；本册 passed 时 missing 34 / unmatched 103
-   （匹配率 86%）。终审必须 `final-audit-report.json` status=passed 才算完成。
-6. **公式概念抽离与关联规范（Stage 5 & Stage 7）**：
-   - **Stage 5 (内容切分阶段)**：扫描 `## 知识导学` 板块，将公式、定义与二级/三级知识点抽离为独立原子概念节点（如 `3. 终边相同的角.md`）。
-   - **Stage 7 (格式标准化阶段)**：在概念节点底部追加指向对应基础点题型节点的双向 Wiki 链接 `[[...]]`（如 `[[.../▶基础点 2_ 终边相同的角|▶基础点 2_ 终边相同的角]]`），绝不使用 `![[...]]` 嵌入渲染，避免总导学视图双重展开并实现 Wiki Graph 节点拓扑穿透。
-
-
+4. **matched→unmatched 遗留陈旧产物**：答案应用阶段必须按 manifest 自动协调
+   所有归属产物，删除失配题的旧 A1 注释并移除旧嵌入；禁止把手工清理当作正常步骤。
+5. **审阅闸口（answer-review）的放行标准**：缺失、冲突或重复证据必须保持阻塞；
+   绝不强行模糊匹配、绝不编造缺失答案。若补充 AI 解析，必须提供实质性内容、
+   `reviewer_confirmed: true` 和 `ai-generated-reviewed` 来源标记。最终仅以
+   `final-audit-report.json` 的 `status=passed` 为完成标准。
+6. **知识点关联状态**：本阶段保持 `knowledge_linking: deferred`。`知识导学` 及其
+   子标题、公式、图表原样保留，不在内容切分或 Markdown 标准化阶段隐式抽离或关联。

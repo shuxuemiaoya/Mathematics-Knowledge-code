@@ -7,6 +7,7 @@ from typing import Any
 
 from .common import (
     ConfigurationError,
+    load_json,
     pdf_page_count,
     sha256_file,
     write_json_atomic,
@@ -38,6 +39,7 @@ def create_profile(
     language: str,
     answers_mode: str | None,
     canvas_enabled: bool,
+    format_preset: Path | None = None,
 ) -> dict[str, Any]:
     parsed = [parse_source(value) for value in source_specs]
     roles = [role for role, _ in parsed]
@@ -61,6 +63,11 @@ def create_profile(
     staging_root = staging_root.expanduser().resolve()
     vault_root = vault_root.expanduser().resolve()
     graph_root = graph_root.expanduser().resolve()
+    preset_meta = None
+    if format_preset is not None:
+        preset_path = format_preset.expanduser().resolve()
+        load_json(preset_path)
+        preset_meta = {"path": str(preset_path), "sha256": sha256_file(preset_path)}
     if staging_root == graph_root or graph_root in staging_root.parents:
         raise ConfigurationError("staging_root must be outside graph_root")
     try:
@@ -93,7 +100,7 @@ def create_profile(
         "format": {
             "inventory": str(staging_root / "format-inventory.json"),
             "adapter": str(staging_root / "format-adapter.json"),
-            "preset": None,
+            "preset": preset_meta,
             "toc_authority": {"primary": None, "secondary_indexes": []},
             "label_to_role_mappings": [],
             "question_numbering": {"patterns": [], "restart_scopes": []},
@@ -101,6 +108,7 @@ def create_profile(
         },
         "answers": {
             "mode": inferred_answers_mode,
+            "completion_policy": "strict" if inferred_answers_mode != "unavailable" else "not-applicable",
             "regions": [],
             "matching_strategies": [
                 "explicit-reference",
@@ -135,6 +143,7 @@ def build_parser() -> argparse.ArgumentParser:
     create.add_argument("--language", default="zh-CN")
     create.add_argument("--answers-mode", choices=["separate", "embedded", "unavailable"])
     create.add_argument("--canvas", action="store_true")
+    create.add_argument("--format-preset", type=Path)
     create.add_argument("--output", type=Path, required=True)
     create.add_argument("--overwrite", action="store_true")
     validate = sub.add_parser("validate")
@@ -160,6 +169,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.language,
                 args.answers_mode,
                 args.canvas,
+                args.format_preset,
             )
             write_json_atomic(args.output, profile, overwrite=args.overwrite)
             result = {"schema_version": 1, "status": "completed", "profile": str(args.output.resolve())}

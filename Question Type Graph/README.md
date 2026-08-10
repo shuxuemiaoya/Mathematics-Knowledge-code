@@ -29,6 +29,7 @@ python skills/question-type-graph/scripts/question_type_graph.py init `
   --source "answers=<answers.pdf>" `
   --title "<book>" --staging-root "<staging>" `
   --vault-root "<vault>" --graph-root "<graph>" `
+  --format-preset "<optional-path-free-series-preset.json>" `
   --canvas --output "<staging>/question-type-profile.json"
 
 python skills/question-type-graph/scripts/question_type_graph.py run "<profile>"
@@ -37,10 +38,16 @@ python skills/question-type-graph/scripts/question_type_graph.py status "<profil
 python skills/question-type-graph/scripts/question_type_graph.py audit "<profile>" --overwrite
 ```
 
-Unknown formats always stop after `format-inventory.json`. Physical splitting
-begins only after `format-adapter.json` is explicitly marked `passed` and
+Unknown formats always stop after `format-inventory.json` and receive an
+unapproved `format-adapter.draft.json`. Physical splitting begins only after
+`format-adapter.json` is explicitly marked `passed` and
 `reviewer_confirmed: true`. Missing, duplicate, weak, or conflicting answer
 evidence remains a blocking review queue; fuzzy similarity is advisory only.
+After a reviewer confirms that an authoritative answer is genuinely absent,
+set the answer manifest to `status: passed` and `reviewer_confirmed: true`.
+The coordinator then emits `supplemental-solutions-manifest.json`; only substantive
+reviewer-confirmed supplemental solutions can satisfy the strict explanation
+audit.
 
 For books with a printed TOC, `hierarchy.primary_authority.entries` is a
 complete source-ordered ledger. Every chapter, section, subsection, lesson,
@@ -52,3 +59,23 @@ source body.
 
 Knowledge-point links are intentionally absent in this phase. Profiles,
 manifests, Canvas output, and audits report `knowledge_linking: deferred`.
+
+`resume` is idempotent: stages are reused using input fingerprints, and a
+rebuilt upstream stage invalidates its descendants. Question IDs are persisted
+in the vault-level `.question-type-graph/question-id-registry.json` under a
+cross-process lock so unchanged questions are not renumbered.
+Set `content.question_repository_root` in the reviewed adapter, or the
+`QUESTION_TYPE_REPOSITORY_ROOT` environment variable, when the initial registry
+must seed its numeric floor from an additional central question repository.
+
+CLI commands return exit code `2` for `review_required`, `1` for failure, and
+`0` for completed or passed results.
+
+## Development verification
+
+Use Python 3.10 or newer:
+
+```bash
+python -m pip install -e '.[test]'
+python -m pytest
+```

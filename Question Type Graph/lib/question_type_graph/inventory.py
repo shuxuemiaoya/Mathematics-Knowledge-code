@@ -7,7 +7,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from .common import load_profile, sha256_file, write_json_atomic
+from .common import ConfigurationError, load_json, load_profile, sha256_file, write_json_atomic
 
 
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
@@ -81,19 +81,26 @@ def contiguous_index_runs(lines: list[str]) -> list[dict[str, Any]]:
     return candidates
 
 
-def propose_role(literal: str) -> str | None:
-    if re.search(r"知识导学|知识梳理|考点精讲|公式|结论|知识精讲|考点清单", literal):
-        return "knowledge_guide"
-    if re.search(r"刷基础|基础", literal):
-        return "foundation_exercise"
-    if re.search(r"刷提升|提升|拔高|能力", literal):
-        return "advanced_exercise"
-    if re.search(r"刷易错|易错", literal):
-        return "error_warning"
+def propose_role(literal: str, role_hints: list[dict[str, str]] | None = None) -> str | None:
+    """Apply optional, preset-owned semantic hints to an observed literal."""
+    for index, hint in enumerate(role_hints or []):
+        role = str(hint.get("role", "")).strip()
+        pattern = str(hint.get("pattern", ""))
+        if not role or not pattern:
+            raise ConfigurationError(f"inventory.role_hints[{index}] is incomplete")
+        try:
+            if re.search(pattern, literal):
+                return role
+        except re.error as exc:
+            raise ConfigurationError(
+                f"Invalid regex in inventory.role_hints[{index}]: {exc}"
+            ) from exc
     return None
 
 
-def inventory_markdown(path: Path) -> dict[str, Any]:
+def inventory_markdown(
+    path: Path, role_hints: list[dict[str, str]] | None = None
+) -> dict[str, Any]:
     lines = path.read_text(encoding="utf-8-sig").splitlines()
     headings: list[dict[str, Any]] = []
     label_counts: Counter[str] = Counter()
@@ -125,7 +132,12 @@ def inventory_markdown(path: Path) -> dict[str, Any]:
         table_line_count += int(line.count("|") >= 2)
         wide_spacing_line_count += int(bool(re.search(r"\S\s{4,}\S", line)))
     repeated = [
-        {"literal": key, "count": count, "proposed_role": propose_role(key), "status": "review_required"}
+        {
+            "literal": key,
+            "count": count,
+            "proposed_role": propose_role(key, role_hints),
+            "status": "review_required",
+        }
         for key, count in label_counts.most_common()
         if count >= 2
     ]
@@ -149,6 +161,16 @@ def inventory_markdown(path: Path) -> dict[str, Any]:
 
 def build_inventory(profile_path: Path) -> dict[str, Any]:
     profile = load_profile(profile_path)
+    role_hints: list[dict[str, str]] = []
+    preset_meta = profile.get("format", {}).get("preset")
+    if preset_meta:
+        preset = load_json(Path(str(preset_meta["path"])).resolve())
+        configured_hints = preset.get("inventory", {}).get("role_hints", [])
+        if not isinstance(configured_hints, list) or any(
+            not isinstance(item, dict) for item in configured_hints
+        ):
+            raise ConfigurationError("Preset inventory.role_hints must be a list of objects")
+        role_hints = configured_hints
     sources = []
     unresolved = 0
     layout_candidates: list[dict[str, Any]] = []
@@ -161,7 +183,7 @@ def build_inventory(profile_path: Path) -> dict[str, Any]:
             sources.append({"role": source["role"], "status": "conversion_required", "markdown_path": str(markdown)})
             unresolved += 1
             continue
-        detail = inventory_markdown(markdown)
+        detail = inventory_markdown(markdown, role_hints)
         detail["role"] = source["role"]
         detail["status"] = "review_required"
         unresolved += 1 + len(detail["repeated_label_candidates"]) + len(detail["index_candidates"])
@@ -205,6 +227,87 @@ def build_inventory(profile_path: Path) -> dict[str, Any]:
         "unresolved_count": unresolved,
         "review_instructions": "Classify hierarchy authority, labels, numbering, layout, answer regions, and output paths in format-adapter.json.",
     }
+
+
+def build_adapter_draft(profile_path: Path, inventory: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Create a schema-shaped, deliberately unapproved adapter for focused review."""
+    profile = load_profile(profile_path)
+    inventory = inventory or build_inventory(profile_path)
+    hierarchy_role = "combined" if profile["answers"]["mode"] == "embedded" else "questions"
+    answer_role = "combined" if profile["answers"]["mode"] == "embedded" else "answers"
+    source_detail = next(
+        (item for item in inventory.get("sources", []) if item.get("role") == hierarchy_role),
+        {},
+    )
+    draft = {
+        "schema_version": 1,
+        "status": "review_required",
+        "reviewer_confirmed": False,
+        "profile": profile["_profile_path"],
+        "inventory_evidence": {
+            "source_role": hierarchy_role,
+            "markdown_sha256": source_detail.get("sha256"),
+            "heading_count": source_detail.get("heading_count", 0),
+            "index_candidate_count": len(source_detail.get("index_candidates", [])),
+        },
+        "hierarchy": {
+            "source_role": hierarchy_role,
+            "root_output": "index.md",
+            "primary_authority": None,
+            "entries": [],
+        },
+        "content": {
+            "unknown_label_policy": "review",
+            "question_folder": "questions",
+            "question_patterns": [],
+            "inline_question_patterns": [],
+            "roles": [],
+        },
+        "answers": (
+            {}
+            if profile["answers"]["mode"] == "unavailable"
+            else {
+                "source_role": answer_role,
+                "callout_title": "答案与解析",
+                "contexts": [],
+                "answer_patterns": [],
+                "inline_answer_patterns": [],
+                "ignore_ranges": [],
+            }
+        ),
+        "review_items": [
+            "Select a printed-TOC authority or provide a reviewed no-TOC decision.",
+            "Confirm every hierarchy entry and exact source anchor.",
+            "Confirm question patterns, functional roles, and output templates.",
+            *(
+                []
+                if profile["answers"]["mode"] == "unavailable"
+                else ["Confirm answer regions, raw-line context anchors, and answer patterns."]
+            ),
+        ],
+    }
+    preset_meta = profile.get("format", {}).get("preset")
+    if preset_meta:
+        preset_path = Path(str(preset_meta.get("path", ""))).resolve()
+        if not preset_path.is_file() or sha256_file(preset_path) != preset_meta.get("sha256"):
+            raise ConfigurationError("Frozen format preset is missing or changed")
+        preset = load_json(preset_path)
+
+        def merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+            merged = dict(base)
+            for key, value in override.items():
+                if isinstance(value, dict) and isinstance(merged.get(key), dict):
+                    merged[key] = merge(merged[key], value)
+                else:
+                    merged[key] = value
+            return merged
+
+        draft = merge(draft, preset)
+        draft["preset_evidence"] = preset_meta
+        draft["status"] = "review_required"
+        draft["reviewer_confirmed"] = False
+        draft["profile"] = profile["_profile_path"]
+    return draft
 
 
 def main(argv: list[str] | None = None) -> int:

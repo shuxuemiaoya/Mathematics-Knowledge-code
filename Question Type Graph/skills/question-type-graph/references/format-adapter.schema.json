@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openai.local/question-type-graph/format-adapter.schema.json",
+  "title": "Question Type Graph format adapter",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "status",
+    "reviewer_confirmed",
+    "profile",
+    "hierarchy",
+    "content"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "status": {"enum": ["review_required", "passed"]},
+    "reviewer_confirmed": {"type": "boolean"},
+    "profile": {"type": "string", "minLength": 1},
+    "inventory": {
+      "type": "object",
+      "properties": {
+        "role_hints": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["role", "pattern"],
+            "properties": {
+              "role": {"type": "string", "minLength": 1},
+              "pattern": {"type": "string", "minLength": 1}
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "hierarchy": {
+      "type": "object",
+      "required": ["source_role", "root_output", "entries"],
+      "properties": {
+        "source_role": {"type": "string", "minLength": 1},
+        "root_output": {"type": "string", "pattern": "\\.md$"},
+        "primary_authority": {"type": "object"},
+        "no_toc_authority": {"type": "object"},
+        "entries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["key"],
+            "properties": {
+              "key": {"type": "string", "minLength": 1},
+              "title": {"type": "string"},
+              "level": {"type": "integer", "minimum": 1, "maximum": 6},
+              "output": {"type": "string"},
+              "match_pattern": {"type": "string", "minLength": 1}
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "oneOf": [
+        {"required": ["primary_authority"], "not": {"required": ["no_toc_authority"]}},
+        {"required": ["no_toc_authority"], "not": {"required": ["primary_authority"]}}
+      ],
+      "additionalProperties": true
+    },
+    "content": {
+      "type": "object",
+      "required": ["question_patterns", "roles"],
+      "properties": {
+        "unknown_label_policy": {"enum": ["review", "retain"]},
+        "question_patterns": {"$ref": "#/$defs/number_patterns"},
+        "inline_question_patterns": {"$ref": "#/$defs/optional_number_patterns"},
+        "roles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["role", "depth", "pattern"],
+            "properties": {
+              "role": {"type": "string", "minLength": 1},
+              "depth": {"type": "integer", "minimum": 0},
+              "pattern": {"type": "string", "minLength": 1},
+              "heading_only": {"type": "boolean"}
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "answers": {
+      "type": "object",
+      "properties": {
+        "source_role": {"type": "string", "minLength": 1},
+        "answer_patterns": {"$ref": "#/$defs/number_patterns"},
+        "inline_answer_patterns": {"$ref": "#/$defs/optional_number_patterns"},
+        "contexts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["key"],
+            "properties": {
+              "key": {"type": "string", "minLength": 1},
+              "pattern": {"type": "string", "minLength": 1},
+              "start_line": {"type": "integer", "minimum": 1},
+              "anchor_text": {"type": "string"},
+              "anchor_pattern": {"type": "string", "minLength": 1}
+            },
+            "anyOf": [{"required": ["pattern"]}, {"required": ["start_line"]}],
+            "additionalProperties": true
+          }
+        },
+        "implicit_answers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["context", "number", "start_line"],
+            "properties": {
+              "context": {"type": "string", "minLength": 1},
+              "number": {"type": ["string", "integer"]},
+              "start_line": {"type": "integer", "minimum": 1},
+              "anchor_text": {"type": "string", "minLength": 1},
+              "anchor_pattern": {"type": "string", "minLength": 1}
+            },
+            "anyOf": [{"required": ["anchor_text"]}, {"required": ["anchor_pattern"]}],
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "number_patterns": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "optional_number_patterns": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    }
+  },
+  "additionalProperties": true
+}

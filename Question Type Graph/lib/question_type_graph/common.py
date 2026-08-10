@@ -232,8 +232,217 @@ def load_profile(path: Path, verify_sources: bool = True) -> dict[str, Any]:
                 raise ConfigurationError(f"Frozen source is missing: {source_path}")
             if sha256_file(source_path) != source.get("sha256"):
                 raise ConfigurationError(f"Frozen source changed: {source_path}")
+        preset = profile.get("format", {}).get("preset")
+        if preset:
+            preset_path = Path(str(preset.get("path", ""))).resolve()
+            if not preset_path.is_file():
+                raise ConfigurationError(f"Frozen format preset is missing: {preset_path}")
+            if sha256_file(preset_path) != preset.get("sha256"):
+                raise ConfigurationError(f"Frozen format preset changed: {preset_path}")
     profile["_profile_path"] = str(path)
     return profile
+
+
+def compile_number_patterns(
+    values: Any,
+    field: str,
+    *,
+    required: bool = True,
+) -> list[re.Pattern[str]]:
+    if values is None:
+        values = []
+    if not isinstance(values, list) or any(
+        not isinstance(value, str) or not value for value in values
+    ):
+        raise ConfigurationError(f"{field} must be a list of non-empty regex strings")
+    if required and not values:
+        raise ConfigurationError(f"{field} is required")
+    compiled: list[re.Pattern[str]] = []
+    for index, value in enumerate(values):
+        try:
+            pattern = re.compile(value)
+        except re.error as exc:
+            raise ConfigurationError(f"Invalid regex in {field}[{index}]: {exc}") from exc
+        if "number" not in pattern.groupindex:
+            raise ConfigurationError(
+                f"Every pattern in {field} requires a named 'number' group"
+            )
+        if pattern.search("") is not None:
+            raise ConfigurationError(f"{field}[{index}] must not match an empty string")
+        compiled.append(pattern)
+    return compiled
+
+
+def _validate_regex(value: Any, field: str, *, allow_empty_match: bool = False) -> None:
+    if not isinstance(value, str) or not value:
+        raise ConfigurationError(f"{field} must be a non-empty regex string")
+    try:
+        pattern = re.compile(value)
+    except re.error as exc:
+        raise ConfigurationError(f"Invalid regex in {field}: {exc}") from exc
+    if not allow_empty_match and pattern.search("") is not None:
+        raise ConfigurationError(f"{field} must not match an empty string")
+
+
+def validate_adapter_contract(adapter: dict[str, Any], profile: dict[str, Any]) -> None:
+    """Validate the executable v1 adapter contract before any stage uses it."""
+    for field in ("hierarchy", "content"):
+        if not isinstance(adapter.get(field), dict):
+            raise ConfigurationError(f"format-adapter.{field} must be an object")
+
+    hierarchy = adapter["hierarchy"]
+    if not isinstance(hierarchy.get("source_role"), str) or not hierarchy[
+        "source_role"
+    ].strip():
+        raise ConfigurationError("format-adapter.hierarchy.source_role is required")
+    root_output = hierarchy.get("root_output")
+    if not isinstance(root_output, str) or not root_output.endswith(".md"):
+        raise ConfigurationError(
+            "format-adapter.hierarchy.root_output must be a Markdown path"
+        )
+    entries = hierarchy.get("entries")
+    if not isinstance(entries, list):
+        raise ConfigurationError("format-adapter.hierarchy.entries must be a list")
+    keys: set[str] = set()
+    for index, item in enumerate(entries):
+        if not isinstance(item, dict):
+            raise ConfigurationError(
+                f"format-adapter.hierarchy.entries[{index}] must be an object"
+            )
+        key = str(item.get("key", "")).strip()
+        if not key or key in keys:
+            raise ConfigurationError(
+                "format-adapter hierarchy entry keys must be non-empty and unique"
+            )
+        keys.add(key)
+        if item.get("match_pattern") is not None:
+            _validate_regex(
+                item["match_pattern"], f"hierarchy.entries[{index}].match_pattern"
+            )
+    has_primary = isinstance(hierarchy.get("primary_authority"), dict)
+    has_no_toc = isinstance(hierarchy.get("no_toc_authority"), dict)
+    if has_primary == has_no_toc:
+        raise ConfigurationError(
+            "format-adapter.hierarchy requires exactly one of primary_authority or no_toc_authority"
+        )
+
+    content = adapter["content"]
+    if content.get("unknown_label_policy", "review") not in {"review", "retain"}:
+        raise ConfigurationError(
+            "content.unknown_label_policy must be 'review' or 'retain'"
+        )
+    compile_number_patterns(
+        content.get("question_patterns"), "content.question_patterns"
+    )
+    if "inline_question_patterns" in content:
+        compile_number_patterns(
+            content.get("inline_question_patterns"),
+            "content.inline_question_patterns",
+            required=False,
+        )
+    roles = content.get("roles")
+    if not isinstance(roles, list):
+        raise ConfigurationError("format-adapter.content.roles must be a list")
+    for index, rule in enumerate(roles):
+        if not isinstance(rule, dict) or not str(rule.get("role", "")).strip():
+            raise ConfigurationError(
+                f"content.roles[{index}] requires a non-empty role"
+            )
+        try:
+            depth = int(rule.get("depth"))
+        except (TypeError, ValueError) as exc:
+            raise ConfigurationError(
+                f"content.roles[{index}].depth must be an integer"
+            ) from exc
+        if depth < 0:
+            raise ConfigurationError(
+                f"content.roles[{index}].depth must be non-negative"
+            )
+        _validate_regex(rule.get("pattern"), f"content.roles[{index}].pattern")
+        if "heading_only" in rule and not isinstance(rule["heading_only"], bool):
+            raise ConfigurationError(
+                f"content.roles[{index}].heading_only must be boolean"
+            )
+
+    if profile.get("answers", {}).get("mode") == "unavailable":
+        return
+    answers = adapter.get("answers")
+    if not isinstance(answers, dict):
+        raise ConfigurationError(
+            "format-adapter.answers must be an object when answers are enabled"
+        )
+    compile_number_patterns(answers.get("answer_patterns"), "answers.answer_patterns")
+    if "inline_answer_patterns" in answers:
+        compile_number_patterns(
+            answers.get("inline_answer_patterns"),
+            "answers.inline_answer_patterns",
+            required=False,
+        )
+    contexts = answers.get("contexts", [])
+    if not isinstance(contexts, list):
+        raise ConfigurationError("answers.contexts must be a list")
+    context_keys: set[str] = set()
+    for index, item in enumerate(contexts):
+        if not isinstance(item, dict):
+            raise ConfigurationError(f"answers.contexts[{index}] must be an object")
+        key = str(item.get("key", "")).strip()
+        if not key or key in context_keys:
+            raise ConfigurationError(
+                "answers context keys must be non-empty and unique"
+            )
+        context_keys.add(key)
+        if item.get("pattern") is not None:
+            _validate_regex(item["pattern"], f"answers.contexts[{index}].pattern")
+        if item.get("anchor_pattern") is not None:
+            _validate_regex(
+                item["anchor_pattern"],
+                f"answers.contexts[{index}].anchor_pattern",
+                allow_empty_match=True,
+            )
+        try:
+            if item.get("start_line") is not None and int(item["start_line"]) < 1:
+                raise ConfigurationError(
+                    f"answers.contexts[{index}].start_line must be positive"
+                )
+        except (TypeError, ValueError) as exc:
+            raise ConfigurationError(
+                f"answers.contexts[{index}].start_line must be a positive integer"
+            ) from exc
+    implicit = answers.get("implicit_answers", [])
+    if not isinstance(implicit, list):
+        raise ConfigurationError("answers.implicit_answers must be a list")
+    implicit_keys: set[tuple[str, str, int]] = set()
+    for index, item in enumerate(implicit):
+        if not isinstance(item, dict):
+            raise ConfigurationError(
+                f"answers.implicit_answers[{index}] must be an object"
+            )
+        context = str(item.get("context", "")).strip()
+        number = str(item.get("number", "")).strip()
+        try:
+            start_line = int(item.get("start_line"))
+        except (TypeError, ValueError) as exc:
+            raise ConfigurationError(
+                f"answers.implicit_answers[{index}].start_line must be a positive integer"
+            ) from exc
+        key = (context, number, start_line)
+        if not context or not number or start_line < 1 or key in implicit_keys:
+            raise ConfigurationError(
+                "implicit answer identity must be complete, positive, and unique"
+            )
+        implicit_keys.add(key)
+        if not str(item.get("anchor_text", "")).strip() and not item.get(
+            "anchor_pattern"
+        ):
+            raise ConfigurationError(
+                f"answers.implicit_answers[{index}] requires a drift anchor"
+            )
+        if item.get("anchor_pattern") is not None:
+            _validate_regex(
+                item["anchor_pattern"],
+                f"answers.implicit_answers[{index}].anchor_pattern",
+                allow_empty_match=True,
+            )
 
 
 def require_reviewed_adapter(profile: dict[str, Any], adapter_path: Path) -> dict[str, Any]:
@@ -245,4 +454,5 @@ def require_reviewed_adapter(profile: dict[str, Any], adapter_path: Path) -> dic
     expected = adapter.get("profile")
     if expected and Path(str(expected)).resolve() != Path(profile["_profile_path"]).resolve():
         raise ConfigurationError("format-adapter is bound to another profile")
+    validate_adapter_contract(adapter, profile)
     return adapter

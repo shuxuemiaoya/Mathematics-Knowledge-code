@@ -1,5 +1,5 @@
 {
   "name": "question-type-graph",
-  "version": "1.0.0",
-  "description": "Question Type Graph pipeline agent for segmenting supplementary books into structured question types, atomic questions, matching answers, and compiling Canvas graphs."
+  "version": "1.1.0",
+  "description": "Resumable Question Type Graph agent for reviewed segmentation, stable-ID atomic questions, authoritative and supplemental solutions, audit, and Canvas generation."
 }

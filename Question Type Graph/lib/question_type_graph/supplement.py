@@ -7,7 +7,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .common import GraphError, load_json, load_profile, write_json_atomic
+from .common import GraphError, lexical_signature, load_json, load_profile, sha256_file, write_json_atomic, write_text_atomic
+from .runtime import update_stage
 
 
 class SupplementError(GraphError):
@@ -68,58 +69,131 @@ def apply_supplement(
     questions = manifest.get("questions", [])
 
     staging_root = Path(profile["paths"]["staging_root"])
-    app_report_path = staging_root / "answer-application-report.json"
-    app_report = load_json(app_report_path) if app_report_path.is_file() else {"schema_version": 1, "stage": "answer-application", "questions": []}
+    state_path = staging_root / "pipeline-state.json"
+    if state_path.is_file():
+        update_stage(state_path, "solution-supplement", "running")
+    app_report_path = staging_root / "supplemental-solution-application-report.json"
+    app_report = load_json(app_report_path) if app_report_path.is_file() else {
+        "schema_version": 1,
+        "stage": "supplemental-solution-application",
+        "questions": [],
+    }
     app_questions_by_id = {q["question_id"]: q for q in app_report.get("questions", []) if "question_id" in q}
 
     applied: list[dict[str, Any]] = []
+    review_items: list[dict[str, Any]] = []
     for q_item in questions:
         q_file = Path(q_item["file_path"])
         if not q_file.exists():
+            review_items.append(
+                {
+                    "kind": "supplemental-question-missing",
+                    "question_id": q_item.get("question_id"),
+                    "path": str(q_file),
+                }
+            )
+            continue
+        q_current_text = q_file.read_text(encoding="utf-8-sig")
+        if not re.search(r"^answer_status:\s*unmatched\b", q_current_text, re.MULTILINE):
+            review_items.append(
+                {
+                    "kind": "supplemental-question-no-longer-unmatched",
+                    "question_id": q_item.get("question_id"),
+                    "path": str(q_file),
+                }
+            )
             continue
 
         q_stem = q_item["question_stem"]
         qid = q_item.get("question_id", q_stem)
+        solution = str(q_item.get("solution") or q_item.get("solution_content") or "").strip()
+        compact_solution = re.sub(r"\s+", "", solution)
+        if (
+            q_item.get("reviewer_confirmed") is not True
+            or len(compact_solution) < 8
+            or re.search(r"待.*生成|暂无解析|仅占位|placeholder", compact_solution, re.IGNORECASE)
+        ):
+            review_items.append(
+                {
+                    "kind": "supplemental-solution-review-required",
+                    "question_id": qid,
+                    "reason": "A substantive reviewer-confirmed solution is required",
+                }
+            )
+            continue
         ans_dir = q_file.parent / "answers"
         ans_dir.mkdir(parents=True, exist_ok=True)
         ans_file = ans_dir / f"{q_stem}A1.md"
 
         if not ans_file.exists() or overwrite:
+            quoted_solution = "\n".join(f"> {line}" for line in solution.splitlines())
             solution_content = (
+                "---\n"
+                f"answer_for: {json.dumps(q_stem)}\n"
+                "answer_provenance: ai-generated-reviewed\n"
+                "---\n"
                 f"> [!faq]- {callout_title}\n"
                 f"> **【解析】**  \n"
-                f"> 略（待解题模型生成的完整解析）\n"
+                f"{quoted_solution}\n"
             )
-            ans_file.write_text(solution_content, encoding="utf-8")
+            write_text_atomic(ans_file, solution_content, overwrite=ans_file.exists())
 
-        q_text = q_file.read_text(encoding="utf-8")
+        q_text = q_current_text
         q_text = re.sub(r"^answer_status:\s*unmatched\b", "answer_status: ai-generated", q_text, flags=re.MULTILINE)
         embed_ref = f"![[{q_stem}A1]]"
         if embed_ref not in q_text:
             q_text = q_text.rstrip() + f"\n\n{embed_ref}\n"
 
-        q_file.write_text(q_text, encoding="utf-8")
+        write_text_atomic(q_file, q_text, overwrite=True)
         applied.append({"question_stem": q_stem, "answer_file": str(ans_file.resolve())})
 
         # Update app_report expected notes
         if qid not in app_questions_by_id:
-            app_questions_by_id[qid] = {"question_id": qid, "answer_notes": [str(ans_file.resolve())]}
+            app_questions_by_id[qid] = {
+                "question_id": qid,
+                "path": str(q_file.resolve()),
+                "answer_status": "ai-generated",
+                "answer_notes": [str(ans_file.resolve())],
+                "answer_note_records": [],
+            }
         else:
             notes = app_questions_by_id[qid].setdefault("answer_notes", [])
             if str(ans_file.resolve()) not in notes:
                 notes.append(str(ans_file.resolve()))
+        records = app_questions_by_id[qid].setdefault("answer_note_records", [])
+        records[:] = [record for record in records if record.get("path") != str(ans_file.resolve())]
+        records.append(
+            {
+                "path": str(ans_file.resolve()),
+                "sha256": sha256_file(ans_file),
+                "lexical_signature": lexical_signature(ans_file.read_text(encoding="utf-8-sig")),
+                "provenance": "ai-generated-reviewed",
+            }
+        )
+        app_questions_by_id[qid]["answer_status"] = "ai-generated"
 
+    app_report["status"] = "review_required" if review_items else "passed"
+    app_report["profile"] = profile["_profile_path"]
     app_report["questions"] = list(app_questions_by_id.values())
     write_json_atomic(app_report_path, app_report, overwrite=True)
 
     report = {
         "schema_version": 1,
         "stage": "supplement-question-type-solutions",
-        "status": "completed",
+        "status": "review_required" if review_items else "completed",
         "profile": profile["_profile_path"],
         "applied_count": len(applied),
         "applied": applied,
+        "review_items": review_items,
     }
+    if state_path.is_file():
+        update_stage(
+            state_path,
+            "solution-supplement",
+            "review_required" if review_items else "completed",
+            [app_report_path],
+            message=("Review supplemental solution items" if review_items else None),
+        )
     return report
 
 

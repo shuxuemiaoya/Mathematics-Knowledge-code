@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .common import (
+    compile_number_patterns,
     ConfigurationError,
     load_json,
     load_profile,
@@ -19,6 +20,7 @@ from .common import (
     write_json_atomic,
     write_text_atomic,
 )
+from .spans import split_virtual_lines
 
 
 QUESTION_BODY_RE = re.compile(
@@ -28,6 +30,9 @@ QUESTION_BODY_RE = re.compile(
 ANSWER_BODY_RE = re.compile(
     r"\n## 答案与解析\n\n<!-- answer-source:start -->\n.*?\n<!-- answer-source:end -->\n?",
     re.DOTALL,
+)
+GENERATED_ANSWER_EMBED_RE = re.compile(
+    r"(?m)^\s*!\[\[(?P<name>Q\d{8}A\d+)(?:[^\]]*)\]\]\s*\n?"
 )
 
 
@@ -59,20 +64,44 @@ def parse_answer_blocks(path: Path, adapter: dict[str, Any]) -> tuple[list[dict[
         for item in config.get("contexts", [])
         if item.get("start_line") is not None
     }
-    answer_patterns = [re.compile(str(value)) for value in config.get("answer_patterns", [])]
-    if not answer_patterns:
-        raise ConfigurationError("Adapter answers.answer_patterns is required when answers are enabled")
-    if any("number" not in pattern.groupindex for pattern in answer_patterns):
-        raise ConfigurationError("Every answer pattern requires a named 'number' group")
+    answer_patterns = compile_number_patterns(
+        config.get("answer_patterns"), "answers.answer_patterns"
+    )
+    inline_patterns = (
+        compile_number_patterns(
+            config.get("inline_answer_patterns"),
+            "answers.inline_answer_patterns",
+            required=False,
+        )
+        if "inline_answer_patterns" in config
+        else answer_patterns
+    )
     raw_lines = path.read_text(encoding="utf-8-sig").splitlines()
-    lines: list[str] = []
-    for line in raw_lines:
-        sublines = re.split(r"(?<=[^\n])\s*(?=(?:【\d+】))", line)
-        for sub in sublines:
-            lines.append(sub)
+    for item in [*config.get("contexts", []), *config.get("implicit_answers", [])]:
+        if item.get("start_line") is None:
+            continue
+        anchor_line = int(item["start_line"])
+        if anchor_line < 1 or anchor_line > len(raw_lines):
+            raise ConfigurationError(f"Answer context start_line is outside the raw Markdown: {item.get('key')}")
+        anchor_text = str(item.get("anchor_text", "")).strip()
+        if anchor_text and raw_lines[anchor_line - 1].strip() != anchor_text:
+            raise ConfigurationError(f"Answer context anchor_text drifted: {item.get('key')}")
+        anchor_pattern = item.get("anchor_pattern")
+        if anchor_pattern and not re.search(str(anchor_pattern), raw_lines[anchor_line - 1]):
+            raise ConfigurationError(
+                f"Answer boundary anchor_pattern drifted: {item.get('key') or item.get('context')}"
+            )
+    implicit_answers = {
+        int(item["start_line"]): item
+        for item in config.get("implicit_answers", [])
+        if item.get("start_line") is not None
+    }
+    lines = split_virtual_lines(raw_lines, inline_patterns)
     region = config.get("region") or {}
     start_limit = int(region.get("start_line", 1))
-    end_limit = int(region.get("end_line", len(lines)))
+    end_limit = int(region.get("end_line", len(raw_lines)))
+    if start_limit < 1 or end_limit > len(raw_lines) or start_limit > end_limit:
+        raise ConfigurationError("Answer region is outside the raw Markdown")
     ignored = config.get("ignore_ranges", [])
     events: list[dict[str, Any]] = []
     context: str | None = None
@@ -82,18 +111,43 @@ def parse_answer_blocks(path: Path, adapter: dict[str, Any]) -> tuple[list[dict[
         (item if isinstance(item, str) else item.get("name")) == "hierarchy-number"
         for item in strategies
     )
-    for line_number in range(start_limit, min(end_limit, len(lines)) + 1):
+    for position, line_entry in enumerate(lines):
+        line_number = int(line_entry["raw_line"])
+        if line_number < start_limit or line_number > end_limit:
+            continue
         if in_ignored_range(line_number, ignored):
             continue
-        line = lines[line_number - 1]
-        fixed_context = fixed_contexts.get(line_number)
+        line = str(line_entry["text"])
+        fixed_context = fixed_contexts.get(line_number) if line_entry["subline"] == 0 else None
         if fixed_context:
             context = fixed_context
-            events.append({"kind": "context", "line": line_number, "context": context})
+            events.append({"kind": "context", "line": line_number, "position": position, "context": context})
         matched_context = next((key for key, pattern in context_rules if pattern.search(line)), None)
         if matched_context:
             context = matched_context
-            events.append({"kind": "context", "line": line_number, "context": context})
+            events.append({"kind": "context", "line": line_number, "position": position, "context": context})
+            continue
+        implicit = implicit_answers.get(line_number) if line_entry["subline"] == 0 else None
+        if implicit:
+            implicit_context = str(implicit.get("context") or context or "").strip()
+            implicit_number = str(implicit.get("number", "")).strip()
+            if not implicit_context or not implicit_number:
+                raise ConfigurationError(
+                    "Every implicit answer requires a reviewed context and number"
+                )
+            context = implicit_context
+            events.append(
+                {
+                    "kind": "answer",
+                    "line": line_number,
+                    "subline": int(line_entry["subline"]),
+                    "raw_column": int(line_entry["raw_column"]),
+                    "position": position,
+                    "context": context,
+                    "number": implicit_number,
+                    "evidence": {"implicit_header": "reviewed-ocr-omission"},
+                }
+            )
             continue
         for pattern in answer_patterns:
             match = pattern.match(line)
@@ -109,6 +163,9 @@ def parse_answer_blocks(path: Path, adapter: dict[str, Any]) -> tuple[list[dict[
                     {
                         "kind": "answer",
                         "line": line_number,
+                        "subline": int(line_entry["subline"]),
+                        "raw_column": int(line_entry["raw_column"]),
+                        "position": position,
                         "context": context,
                         "number": str(match.group("number")).strip(),
                         "evidence": evidence,
@@ -116,17 +173,20 @@ def parse_answer_blocks(path: Path, adapter: dict[str, Any]) -> tuple[list[dict[
                 )
                 break
     answers = [event for event in events if event["kind"] == "answer"]
-    for index, answer in enumerate(answers):
-        end = end_limit
+    for answer in answers:
+        end_position = len(lines)
         for event in events:
-            if event["line"] > answer["line"] and event["kind"] in {"answer", "context"}:
-                end = event["line"] - 1
+            if event["position"] > answer["position"] and event["kind"] in {"answer", "context"}:
+                end_position = event["position"]
                 break
-        body = "\n".join(lines[answer["line"] - 1:end]).rstrip() + "\n"
-        answer["end_line"] = end
+        body_entries = lines[answer["position"]:end_position]
+        body = "\n".join(str(item["text"]) for item in body_entries).rstrip() + "\n"
+        answer["end_line"] = int(body_entries[-1]["raw_line"]) if body_entries else answer["line"]
         answer["body"] = body
         answer["body_sha256"] = sha256_text(body)
-        answer["id"] = f"{answer.get('context')}:{answer['number']}:{answer['line']}"
+        answer["id"] = (
+            f"{answer.get('context')}:{answer['number']}:{answer['line']}:{answer['subline']}"
+        )
 
     deduped_answers: list[dict[str, Any]] = []
     for ans in answers:
@@ -136,7 +196,7 @@ def parse_answer_blocks(path: Path, adapter: dict[str, Any]) -> tuple[list[dict[
             and deduped_answers[-1].get("number") == ans.get("number")
         ):
             prev = deduped_answers[-1]
-            if ans["line"] - prev["line"] <= 4:
+            if ans["position"] - prev["position"] <= 4:
                 if len(ans["body"].strip()) >= len(prev["body"].strip()):
                     deduped_answers[-1] = ans
                 continue
@@ -222,12 +282,18 @@ def plan_matches(profile_path: Path, adapter_path: Path, content_manifest_path: 
             "schema_version": 1,
             "stage": "answer-matching",
             "status": "passed",
+            "reviewer_confirmed": True,
             "profile": profile["_profile_path"],
+            "adapter": str(adapter_path.resolve()),
+            "adapter_sha256": sha256_file(adapter_path),
+            "content_manifest": str(content_manifest_path.resolve()),
+            "content_manifest_sha256": sha256_file(content_manifest_path),
             "mode": "unavailable",
             "matches": [],
             "review_items": [],
             "review_summary": {},
             "review_groups": [],
+            "metrics": {"question_count": len(content.get("questions", [])), "matched_count": 0, "match_rate": None},
         }
     answer_markdown, role = source_for_answers(profile, adapter)
     answers, review = parse_answer_blocks(answer_markdown, adapter)
@@ -268,6 +334,7 @@ def plan_matches(profile_path: Path, adapter_path: Path, content_manifest_path: 
                 review.append(
                     {
                         "kind": "duplicate-answer",
+                        "root_cause": "context-boundary-mismatch",
                         "question_id": question["id"],
                         "context": str(question.get("context_key")),
                         "number": str(question.get("number")),
@@ -316,6 +383,11 @@ def plan_matches(profile_path: Path, adapter_path: Path, content_manifest_path: 
             review.append(
                 {
                     "kind": "duplicate-answer" if ambiguous else "missing-answer",
+                    "root_cause": (
+                        "context-boundary-mismatch"
+                        if ambiguous or indexes["number"].get(str(question.get("number")))
+                        else "missing-answer-key"
+                    ),
                     "question_id": question["id"],
                     "context": str(question.get("context_key")),
                     "number": str(question.get("number")),
@@ -339,8 +411,12 @@ def plan_matches(profile_path: Path, adapter_path: Path, content_manifest_path: 
         "schema_version": 1,
         "stage": "answer-matching",
         "status": "review_required" if review else "passed",
+        "reviewer_confirmed": False if review else True,
         "profile": profile["_profile_path"],
         "adapter": str(adapter_path.resolve()),
+        "adapter_sha256": sha256_file(adapter_path),
+        "content_manifest": str(content_manifest_path.resolve()),
+        "content_manifest_sha256": sha256_file(content_manifest_path),
         "mode": mode,
         "answer_source_role": role,
         "answer_markdown": str(answer_markdown),
@@ -352,6 +428,14 @@ def plan_matches(profile_path: Path, adapter_path: Path, content_manifest_path: 
             {"kind": kind, "context": context, "number": number, "count": count}
             for (kind, context, number), count in sorted(review_groups.items())
         ],
+        "metrics": {
+            "question_count": len(content.get("questions", [])),
+            "answer_block_count": len(answers),
+            "matched_count": len(matches),
+            "match_rate": round(len(matches) / len(content.get("questions", [])), 4)
+            if content.get("questions")
+            else 1.0,
+        },
     }
 
 
@@ -456,13 +540,49 @@ def apply_matches(profile_path: Path, manifest_path: Path, overwrite: bool) -> d
     manifest = load_json(manifest_path)
     if manifest.get("status") != "passed":
         raise ConfigurationError("Answer match manifest must pass before application")
+    graph_root = Path(profile["paths"]["graph_root"]).resolve()
+    content_manifest_path = Path(
+        manifest.get("content_manifest")
+        or Path(profile["paths"]["staging_root"]) / "question-type-manifest.json"
+    )
+    content = load_json(content_manifest_path) if content_manifest_path.is_file() else {"questions": []}
+    if manifest.get("content_manifest_sha256") and sha256_file(content_manifest_path) != manifest.get("content_manifest_sha256"):
+        raise ConfigurationError("Content manifest changed after answer matching")
+    all_questions = content.get("questions", [])
+    output = Path(profile["paths"]["staging_root"]) / "answer-application-report.json"
+    previous = load_json(output) if output.is_file() else {"questions": []}
+    supplement_output = Path(profile["paths"]["staging_root"]) / "supplemental-solution-application-report.json"
+    previous_supplement = load_json(supplement_output) if supplement_output.is_file() else {"questions": []}
+    previously_owned = {
+        str(Path(note).resolve())
+        for item in previous.get("questions", [])
+        for note in item.get("answer_notes", [])
+        if note
+    }
+    previously_owned.update(
+        str(Path(note).resolve())
+        for item in previous_supplement.get("questions", [])
+        for note in item.get("answer_notes", [])
+        if note
+    )
+    desired_answer_paths: set[str] = set()
+    removed_stale: list[str] = []
     if manifest.get("mode") == "unavailable":
-        result = {"schema_version": 1, "stage": "answer-application", "status": "passed", "profile": profile["_profile_path"], "mode": "unavailable", "applied_count": 0}
+        result = {
+            "schema_version": 1,
+            "stage": "answer-application",
+            "status": "passed",
+            "profile": profile["_profile_path"],
+            "mode": "unavailable",
+            "applied_count": 0,
+            "questions": [],
+            "removed_stale_outputs": [],
+        }
     else:
         answer_markdown = Path(manifest["answer_markdown"])
         if sha256_file(answer_markdown) != manifest.get("answer_markdown_sha256"):
             raise ConfigurationError("Answer Markdown changed after matching")
-        applied = []
+        applied: list[dict[str, Any]] = []
         matches_by_question: dict[str, list[dict[str, Any]]] = {}
         for match in manifest.get("matches", []):
             matches_by_question.setdefault(match["question_path"], []).append(match)
@@ -471,18 +591,26 @@ def apply_matches(profile_path: Path, manifest_path: Path, overwrite: bool) -> d
         adapter_data = load_json(adapter_path) if adapter_path.is_file() else {}
         callout_title = adapter_data.get("answers", {}).get("callout_title", "答案与解析")
 
-        for q_path_str, q_matches in matches_by_question.items():
-            note = Path(q_path_str)
+        question_paths = [str(item["output"]) for item in all_questions]
+        if not question_paths:
+            question_paths = sorted(matches_by_question)
+        for q_path_str in question_paths:
+            q_matches = matches_by_question.get(q_path_str, [])
+            note = Path(q_path_str).resolve()
             if not note.is_file():
                 raise ConfigurationError(f"Atomic question note is missing: {note}")
             text = note.read_text(encoding="utf-8-sig")
-            text = re.sub(r"(?m)^answer_status:\s*\S+", "answer_status: matched", text, count=1)
+            text = GENERATED_ANSWER_EMBED_RE.sub("", text).rstrip() + "\n"
+            status = "matched" if q_matches else "unmatched"
+            text = re.sub(r"(?m)^answer_status:\s*\S+", f"answer_status: {status}", text, count=1)
             q_basename = note.stem
 
             answers_dir = note.parent / "answers"
-            answers_dir.mkdir(parents=True, exist_ok=True)
+            if q_matches:
+                answers_dir.mkdir(parents=True, exist_ok=True)
 
-            embed_links = []
+            embed_links: list[str] = []
+            answer_note_records: list[dict[str, Any]] = []
             for i, match in enumerate(q_matches, 1):
                 ans_name = f"{q_basename}A{i}"
                 ans_path = answers_dir / f"{ans_name}.md"
@@ -495,25 +623,89 @@ def apply_matches(profile_path: Path, manifest_path: Path, overwrite: bool) -> d
                 )
 
                 callout_text = format_answer_callout(rebased_body, callout_title=callout_title)
-                write_text_atomic(ans_path, callout_text + "\n", overwrite=True)
+                answer_text = "\n".join(
+                    [
+                        "---",
+                        f"answer_for: {json.dumps(q_basename)}",
+                        "answer_provenance: authoritative",
+                        f"answer_source_body_sha256: {match['answer_body_sha256']}",
+                        "---",
+                        callout_text,
+                        "",
+                    ]
+                )
+                write_text_atomic(ans_path, answer_text, overwrite=True)
                 embed_links.append(f"![[{ans_name}]]")
                 match["answer_note_path"] = str(ans_path)
                 match["answer_name"] = ans_name
+                desired_answer_paths.add(str(ans_path.resolve()))
+                answer_note_records.append(
+                    {
+                        "path": str(ans_path.resolve()),
+                        "sha256": sha256_file(ans_path),
+                        "lexical_signature": lexical_signature(answer_text),
+                        "provenance": "authoritative",
+                        "source_body_sha256": match["answer_body_sha256"],
+                    }
+                )
 
             for embed_link in embed_links:
-                if embed_link not in text:
-                    text = text.rstrip() + "\n\n" + embed_link + "\n"
+                text = text.rstrip() + "\n\n" + embed_link + "\n"
 
             write_text_atomic(note, text, overwrite=True)
             applied.append({
-                "question_id": q_matches[0]["question_id"],
+                "question_id": q_matches[0]["question_id"] if q_matches else next(
+                    (item["id"] for item in all_questions if Path(item["output"]).resolve() == note),
+                    q_basename,
+                ),
                 "path": str(note),
                 "answer_notes": [m.get("answer_note_path") for m in q_matches],
+                "answer_note_records": answer_note_records,
+                "answer_status": status,
                 "note_sha256": sha256_file(note),
             })
-        result = {"schema_version": 1, "stage": "answer-application", "status": "passed", "profile": profile["_profile_path"], "mode": manifest.get("mode"), "applied_count": len(applied), "questions": applied}
-    output = Path(profile["paths"]["staging_root"]) / "answer-application-report.json"
-    write_json_atomic(output, result, overwrite=overwrite)
+
+        stale_candidates = set(previously_owned)
+        if graph_root.is_dir():
+            stale_candidates.update(
+                str(path.resolve())
+                for path in graph_root.rglob("Q[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]A[0-9]*.md")
+                if path.parent.name == "answers"
+                and "answer_provenance: authoritative" in path.read_text(encoding="utf-8-sig")
+            )
+        for stale_name in sorted(stale_candidates - desired_answer_paths):
+            stale = Path(stale_name).resolve()
+            try:
+                stale.relative_to(graph_root)
+            except ValueError as exc:
+                raise ConfigurationError(f"Refusing to prune answer outside graph root: {stale}") from exc
+            if stale.is_file():
+                stale.unlink()
+                removed_stale.append(str(stale))
+        result = {
+            "schema_version": 1,
+            "stage": "answer-application",
+            "status": "passed",
+            "profile": profile["_profile_path"],
+            "mode": manifest.get("mode"),
+            "applied_count": sum(1 for item in applied if item["answer_status"] == "matched"),
+            "questions": applied,
+            "removed_stale_outputs": removed_stale,
+        }
+    write_json_atomic(output, result, overwrite=output.is_file() or overwrite)
+    if supplement_output.is_file():
+        write_json_atomic(
+            supplement_output,
+            {
+                "schema_version": 1,
+                "stage": "supplemental-solution-application",
+                "status": "invalidated",
+                "profile": profile["_profile_path"],
+                "questions": [],
+                "message": "Invalidated because authoritative answer application was rebuilt",
+            },
+            overwrite=True,
+        )
     return result
 
 

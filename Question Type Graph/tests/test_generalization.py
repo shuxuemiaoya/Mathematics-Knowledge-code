@@ -1,14 +1,21 @@
 from __future__ import annotations
 
+import copy
 import json
 import re
 import tempfile
 import unittest
 from pathlib import Path
 
-from question_type_graph.common import write_json_atomic
+from question_type_graph.answers import parse_answer_blocks
+from question_type_graph.common import (
+    ConfigurationError,
+    validate_adapter_contract,
+    write_json_atomic,
+)
 from question_type_graph.content import plan_content
 from question_type_graph.hierarchy import plan_hierarchy
+from question_type_graph.inventory import build_inventory, inventory_markdown
 from question_type_graph.mineru import PdfPart, build_payload
 from question_type_graph.profile import create_profile
 
@@ -39,6 +46,138 @@ class TestGeneralization(unittest.TestCase):
                 m = re.match(pattern, line)
                 self.assertIsNotNone(m)
                 self.assertEqual(m.group("number"), number)
+
+    def test_inline_answer_boundaries_support_multiple_adapter_formats(self) -> None:
+        cases = [
+            (
+                "1. First 2. Second",
+                r"^(?P<number>\d+)[.]\s*",
+                r"(?<!\d)(?P<number>\d+)[.]\s*",
+                ["1", "2"],
+            ),
+            (
+                "第一题 First 第二题 Second",
+                r"^第(?P<number>[一二三])题\s*",
+                r"第(?P<number>[一二三])题\s*",
+                ["一", "二"],
+            ),
+            (
+                "① First ② Second",
+                r"^(?P<number>[①②③])\s*",
+                r"(?P<number>[①②③])\s*",
+                ["①", "②"],
+            ),
+        ]
+        for raw, answer_pattern, inline_pattern, expected in cases:
+            with self.subTest(raw=raw), tempfile.TemporaryDirectory() as tmp_dir:
+                path = Path(tmp_dir) / "answers.md"
+                path.write_text(f"## Answers\n{raw}\n", encoding="utf-8")
+                answers, review = parse_answer_blocks(
+                    path,
+                    {
+                        "answers": {
+                            "contexts": [{"key": "unit", "pattern": r"^## Answers$"}],
+                            "answer_patterns": [answer_pattern],
+                            "inline_answer_patterns": [inline_pattern],
+                        }
+                    },
+                )
+                self.assertEqual(review, [])
+                self.assertEqual([item["number"] for item in answers], expected)
+                self.assertTrue(all(item["line"] == 2 for item in answers))
+                self.assertGreater(answers[1]["raw_column"], answers[0]["raw_column"])
+
+    def test_inventory_semantics_come_only_from_optional_preset_hints(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            path = root / "source.md"
+            path.write_text("#### Guide 1\n#### Guide 2\n", encoding="utf-8")
+            preset = root / "preset.json"
+            write_json_atomic(
+                preset,
+                {
+                    "inventory": {
+                        "role_hints": [
+                            {"role": "theory-guide", "pattern": r"^Guide$"}
+                        ]
+                    }
+                },
+            )
+            staging = root / "staging"
+            vault = root / "vault"
+            profile_path = staging / "profile.json"
+            profile = create_profile(
+                [f"questions={path}"],
+                "Preset hints",
+                staging,
+                vault,
+                vault / "graph",
+                "en",
+                None,
+                False,
+                preset,
+            )
+            write_json_atomic(profile_path, profile)
+            raw = Path(profile["sources"][0]["markdown_path"])
+            raw.parent.mkdir(parents=True, exist_ok=True)
+            raw.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
+
+            neutral = inventory_markdown(path)
+            configured = build_inventory(profile_path)["sources"][0]
+
+            self.assertIsNone(
+                neutral["repeated_label_candidates"][0]["proposed_role"]
+            )
+            self.assertEqual(
+                configured["repeated_label_candidates"][0]["proposed_role"],
+                "theory-guide",
+            )
+
+    def test_runtime_adapter_contract_rejects_ambiguous_or_unsafe_patterns(self) -> None:
+        profile = {"answers": {"mode": "unavailable"}}
+        base = {
+            "hierarchy": {
+                "source_role": "questions",
+                "root_output": "index.md",
+                "no_toc_authority": {},
+                "entries": [],
+            },
+            "content": {
+                "unknown_label_policy": "retain",
+                "question_patterns": [r"^(?P<number>\d+)[.]"],
+                "roles": [],
+            },
+        }
+        validate_adapter_contract(base, profile)
+
+        ambiguous = copy.deepcopy(base)
+        ambiguous["hierarchy"]["primary_authority"] = {}
+        with self.assertRaisesRegex(ConfigurationError, "exactly one"):
+            validate_adapter_contract(ambiguous, profile)
+
+        missing_group = copy.deepcopy(base)
+        missing_group["content"]["inline_question_patterns"] = [r"\d+[.]"]
+        with self.assertRaisesRegex(ConfigurationError, "named 'number'"):
+            validate_adapter_contract(missing_group, profile)
+
+        empty_match = copy.deepcopy(base)
+        empty_match["content"]["roles"] = [
+            {"role": "unsafe", "depth": 0, "pattern": r".*"}
+        ]
+        with self.assertRaisesRegex(ConfigurationError, "empty string"):
+            validate_adapter_contract(empty_match, profile)
+
+    def test_published_adapter_schema_is_valid_json(self) -> None:
+        schema = (
+            Path(__file__).resolve().parents[1]
+            / "skills"
+            / "question-type-graph"
+            / "references"
+            / "format-adapter.schema.json"
+        )
+        value = json.loads(schema.read_text(encoding="utf-8"))
+        self.assertEqual(value["$schema"], "https://json-schema.org/draft/2020-12/schema")
+        self.assertEqual(value["properties"]["schema_version"], {"const": 1})
 
     def test_no_toc_hierarchy_accepts_reviewed_start_lines(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -81,7 +220,20 @@ class TestGeneralization(unittest.TestCase):
     def test_reusable_code_has_no_sample_book_constants(self) -> None:
         root = Path(__file__).resolve().parents[1] / "lib"
         text = "\n".join(path.read_text(encoding="utf-8") for path in root.rglob("*.py"))
-        forbidden = ["必刷题", "集合与常用逻辑用语", "高中必刷题数学必修第一册"]
+        forbidden = [
+            "必刷题",
+            "集合与常用逻辑用语",
+            "高中必刷题数学必修第一册",
+            "知识导学",
+            "知识梳理",
+            "考点精讲",
+            "刷基础",
+            "刷提升",
+            "刷易错",
+            "基础点",
+            "全练一本通",
+            "空间向量",
+        ]
         for value in forbidden:
             self.assertNotIn(value, text)
 

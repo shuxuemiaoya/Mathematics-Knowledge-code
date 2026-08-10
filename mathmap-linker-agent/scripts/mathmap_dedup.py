@@ -22,6 +22,11 @@ import difflib
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Set
 
+try:
+    from mathmap_registry import RegistryStore, sha256_text
+except ImportError:
+    from scripts.mathmap_registry import RegistryStore, sha256_text
+
 
 def normalize_latex(text: str) -> str:
     """归一化 LaTeX 公式表达与空白格式。"""
@@ -121,43 +126,74 @@ class MathMapDedupEngine:
         self.kp_dir = self.mathmap / "知识点"
         
         self.existing_q_index: Dict[str, Tuple[str, str]] = {}  # norm_stem -> (file_name, original_content)
+        self.existing_q_hash_index: Dict[str, str] = {}  # sha256(norm_stem) -> file_name
         self.existing_qt_index: Dict[str, str] = {}  # file_name -> original_content
+        self.existing_qt_kps: Dict[str, Set[str]] = {}
+        self.index_warnings: List[str] = []
+        self.registry = RegistryStore(vault_root)
         self._build_indexes()
 
     def _build_indexes(self):
         """构建既有题库的归一化索引。"""
-        if self.q_dest.is_dir():
-            for p in self.q_dest.glob("*.md"):
+        registry_questions = self.registry.qids.get("questions", {})
+        normalized_stems = self.registry.qids.get("normalized_stems", {})
+        if registry_questions:
+            for norm_hash, qid_value in normalized_stems.items():
+                qid = qid_value if isinstance(qid_value, str) else None
+                if isinstance(qid_value, list) and len(qid_value) == 1:
+                    qid = qid_value[0]
+                record = registry_questions.get(qid) if qid else None
+                path = record.get("path") if isinstance(record, dict) else None
+                if isinstance(norm_hash, str) and isinstance(path, str):
+                    self.existing_q_hash_index[norm_hash] = os.path.basename(path)
+        elif self.q_dest.is_dir():
+            for p in sorted(self.q_dest.glob("*.md"), key=lambda value: value.name):
+                if not re.fullmatch(r"Q\d+\.md", p.name):
+                    continue
                 try:
                     content = p.read_text(encoding="utf-8-sig")
                     stem = extract_stem(content)
                     norm = normalize_latex(stem)
                     self.existing_q_index[norm] = (p.name, content)
-                except Exception:
-                    pass
+                    self.existing_q_hash_index[sha256_text(norm)] = p.name
+                except (OSError, UnicodeDecodeError) as exc:
+                    self.index_warnings.append(f"无法索引题目 {p}: {exc}")
                 
         if self.qt_dest.is_dir():
-            for p in self.qt_dest.glob("*.md"):
+            for p in sorted(self.qt_dest.glob("*.md"), key=lambda value: value.name):
                 try:
                     content = p.read_text(encoding="utf-8-sig")
                     self.existing_qt_index[p.name] = content
-                except Exception:
-                    pass
+                    rel = p.relative_to(self.vault_root).as_posix()
+                    record = self.registry.file_record(rel) or {}
+                    self.existing_qt_kps[p.name] = set(record.get("knowledge_points", []))
+                except (OSError, UnicodeDecodeError) as exc:
+                    self.index_warnings.append(f"无法索引题型 {p}: {exc}")
 
     def match_question(self, candidate_stem: str) -> Optional[str]:
         """匹配单题。若归一化一致返回既有 Q*.md 文件名，否则返回 None。"""
         norm = normalize_latex(candidate_stem)
+        matched = self.existing_q_hash_index.get(sha256_text(norm))
+        if matched:
+            return matched
         if norm in self.existing_q_index:
             return self.existing_q_index[norm][0]
         return None
 
-    def match_problem_type(self, candidate_name: str) -> Optional[Tuple[str, float]]:
-        """匹配既有题型整理节点。若高度相似返回 (target_filename, ratio)。"""
-        for exist_name in self.existing_qt_index.keys():
+    def match_problem_type(self, candidate_name: str, knowledge_point: Optional[str] = None) -> Optional[Tuple[str, float]]:
+        """Return the highest-scoring contextual Tier-2 match, never the first match."""
+        matches: List[Tuple[float, str]] = []
+        for exist_name in sorted(self.existing_qt_index.keys()):
+            existing_kps = self.existing_qt_kps.get(exist_name, set())
+            if knowledge_point and existing_kps and knowledge_point not in existing_kps:
+                continue
             is_match, ratio = compare_qt_titles(candidate_name, exist_name)
             if is_match:
-                return exist_name, ratio
-        return None
+                matches.append((ratio, exist_name))
+        if not matches:
+            return None
+        ratio, name = max(matches, key=lambda item: (item[0], item[1]))
+        return name, ratio
 
     def generate_dedup_plan(self, source_book_dir: Path, book_short: str) -> dict:
         """针对新书扫描并生成完整去重与合并计划。"""

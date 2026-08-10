@@ -1,5 +1,5 @@
 {
   "name": "mathmap-linker-agent",
-  "description": "Super Agent & Skill for Linking Book & Exam Paper Knowledge to Mathmap Knowledge Graph",
-  "version": "1.0.0"
+  "description": "Legacy manifest mirror; canonical Codex manifest is .codex-plugin/plugin.json",
+  "version": "1.1.0"
 }

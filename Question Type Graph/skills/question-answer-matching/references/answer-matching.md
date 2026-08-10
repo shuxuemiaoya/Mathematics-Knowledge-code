@@ -8,10 +8,13 @@ evidence in this order when available:
 3. source page identity;
 4. normalized-stem similarity as review evidence only.
 
-Every answer block has one exact source range and digest. A passed manifest
-contains one answer for every enabled question and no unused answer block.
-Missing, duplicate, conflicting, context-free, or fuzzy-only candidates remain
-`review_required`.
+Every answer block has one exact source range and digest. Missing, duplicate,
+conflicting, context-free, or fuzzy-only candidates initially remain
+`review_required`. A reviewer may mark a manifest passed with genuinely absent
+answers using `status: passed` and `reviewer_confirmed: true`, only to route
+those questions into the required supplemental-solution
+stage; the final audit still requires a validated solution for every enabled
+question.
 
 Build exact indexes for context-number, evidence fields, source-page-number,
 and normalized exact stems. Fuzzy review suggestions may inspect only ambiguous
@@ -19,9 +22,10 @@ exact candidates or same-number candidates; never compare every question with
 the full answer corpus. Emit both complete `review_items` and grouped counts so
 large duplicate/restart failures can be reviewed by context.
 
-Append the answer verbatim beneath `答案与解析` in the atomic question note.
-Keep question and answer provenance markers independent. For answerless books,
-pass only when the profile explicitly declares `answers.mode: unavailable`.
+Save the answer as an independently provenance-marked callout note and embed it
+from the atomic question. Keep question and answer provenance independent. For
+answerless books, pass only when the profile explicitly declares
+`answers.mode: unavailable`.
 
 ## Answer patterns: phantom guard vs real "N.M" answers
 
@@ -82,13 +86,10 @@ previously slipped through (both runs saw the same single candidate).
 
 ## Stale answer artifacts on matched → unmatched transitions
 
-markdown-standardization only ADDS answer embeds; it never removes the orphaned
-`Q*<id>A1.md` note or the `![[Q*<id>A1]]` line from a question note when a
-question loses its match. The final audit then errors
-`unexpected-generated-note` (orphan file) and `broken-link` (stale embed).
-Before the final audit after ANY matcher/adapter change that flips matches:
-delete orphan A1 notes and strip the trailing embed line from affected question
-notes, then resume --overwrite until the audit passes.
+Answer application is declarative. It removes previously owned authoritative
+or supplemental notes that are no longer desired, strips generated answer
+embeds, restores `answer_status: unmatched`, and records removals in the
+application report. Do not use manual file deletion as the normal workflow.
 
 ## Resolving the answer-review gate
 
@@ -99,12 +100,9 @@ notes, then resume --overwrite until the audit passes.
   drops 刷基础/刷提升 headings → one context holds two numbering runs while the
   answer book splits them). They legitimately route to the blocking queue — do
   NOT force fuzzy matches through them.
-- Genuine OCR page-boundary gaps stay unmatched no matter what — never
-  fabricate.
-- The audit does NOT require 100% coverage: unmatched questions are warnings;
-  hard errors are manifest status, duplicate question/answer ownership, missing
-  answer embed in a matched note, broken links, and unexpected generated notes.
-- Same-series precedent: 必修第一册 passed with review_summary
-  {missing-answer: 865, duplicate-answer: 14, unmatched-answer: 874} (349/1229
-  matched); RJA passed with {34, 71, 103} (626/731 matched). Reviewed warnings
-  may remain in a passed manifest.
+- Genuine OCR page-boundary gaps stay unmatched in authoritative matching;
+  never fabricate a publisher answer. Route the question to a substantive,
+  reviewer-confirmed supplemental solution when strict completion is enabled.
+- The audit requires 100% explanation coverage for enabled answers. It verifies
+  the solution note, callout structure, lexical signature, and provenance, not
+  merely the presence of an embed.

@@ -1,99 +1,65 @@
 ---
-name: mathmap-linker-agent
-description: 将 Book to Obsidian Wiki Graph 和 Question Type Graph 生成的课本知识点与试卷/刷题库笔记，自适应关联并有机链接到 mathmap 体系中，合并生成 master canvas，构建庞大、统一的数学 Wiki Graph。
+name: mathmap-linker
+description: Safely link Question Type Graph or Book-to-Obsidian outputs into an existing MathMap Obsidian vault. Use when bootstrapping legacy MathMap identity registries, previewing or applying question/answer/type-set imports, protecting manual Obsidian edits, auditing MathMap tier topology, or additively updating the master Canvas.
 ---
 
-# Mathmap 题型图谱 Canvas 演化美学与解题树架构规范
+# MathMap Linker
 
-本技能指导 AI 如何以 `mathmap题型.canvas` 的题型树图谱为美学与拓扑标杆，构建从**概念/知识点 $\rightarrow$ 具体题型 $\rightarrow$ 解题思想/技巧方法**层层递进的解题树白板图谱。
+Treat the Obsidian vault as a mixed human-and-machine workspace. Preserve existing notes and user-arranged Canvas positions.
 
----
+## Required workflow
 
-## 1. 题型图谱 Canvas 美学 4 大要素 (Question Type Canvas Directives)
+1. Confirm that the input is an audited, immutable graph output rather than a temporary compilation directory.
+2. If the vault has no `question-qid-registry.json` or `.mathmap-linker/provenance-manifest.json`, run the bootstrap scanner read-only:
 
-1. **题型与解题方法主题分组框 (Question Type & Method Grouping Containers)**：
-   - **大题型组**（如 `同角三角函数的基本关系公式练习`、`诱导公式练习`、`三角函数定义`）：涵盖某类题型的大逻辑边界。
-   - **子题型与细分考法组**（如 `扇形的弧长和面积`、`三角函数在单位圆上`）：包裹具体的考点拆解与典型例题。
+   ```bash
+   python3 scripts/bootstrap_registry.py <vault_root>
+   ```
 
-2. **解题思想与技巧卡片 (Method & Skill Cards Design)**：
-   - **白色题型主标题卡**：紫色/黑色文字，标注主要题型名称（如 `给角求值问题`、`同角三角函数的基本关系式化简`）。
-   - **浅紫色/青色技巧卡 (`color: "6"` 或 `"5"`)**：突出解题思想与方法（如 `拼凑角思想`、`利用平方关系求参数`、`求任意角的终边所在象限`）。
-   - **细分考法卡片**：圆角规整卡片，分支展现不同解题路径。
+3. Review duplicate stems, QID collisions, misplaced answers, and legacy names. Write registry state only when the inventory is acceptable:
 
-3. **从左至右解题树分支演化 (Left-to-Right Decision Tree Flow)**：
-   - 采用横向从左至右延伸的树状分流关系（`right -> left` 或 `bottom -> top`）。
-   - **基础概念 $\rightarrow$ 典型题型 $\rightarrow$ 解题方法1/方法2**。
+   ```bash
+   python3 scripts/bootstrap_registry.py <vault_root> --write-registry --report bootstrap-report.json
+   ```
 
-4. **解题方法有向边标注 (Labeled Edge Method Annotations)**：
-   - 在连线上标注具体的解法名称或变换技巧（如 `label: "方法1"`、`label: "平方和差"`、`label: "齐次式"`）。
+   Bootstrap must never rename, merge, move, or edit existing notes.
 
----
+4. Generate a dry-run plan. Dry-run is the default:
 
-## 2. 习题与题型三级递进拓扑与 `/习题/` 目录归档规范
+   ```bash
+   python3 scripts/link_to_mathmap.py <vault_root> <source_book_dir> <book_short> \
+     --dry-run --plan-out link-plan.json
+   ```
 
-1. **三级递进拓扑与存储定位**：
-   - **`Tier 1: questions/`（具体题目层）**：放置具体单题 md 文件 (`Q*.md`)，内部只链接 `answers/` 解析卡片。
-   - **`Tier 2: 题型整理/`（题型与考法层）**：放置细分题型、例题汇总、易错避坑及模块笔记（如 `题型 1..._b2.md`、`刷基础_b1.md`），**内部只链接 `questions/` 下的具体单题 md 文件**（或子题型笔记）。
-   - **`Tier 3: 题集/`（框架与套卷层）**：放置小节总集（`1.1_集合的概念.md`）、专题总集（`专题1...md`）、章末检测（`第一章素养检测.md`）、期中/期末/月考及课本《复习参考题》，**内部只链接 `题型整理/` 节点**。
+5. Do not apply while the plan reports conflicts or audit errors. Review knowledge-point warnings rather than creating nodes automatically.
+6. Apply only after reviewing the plan:
 
-3. **`mathmap/公式结论/` 知识导学与公式卡片存储规范**：
-   - **`公式合集/`（一级标题 / 小节级总集）**：对应 `# 第一节 任意角与弧度制` 等 Level 1 标题，放置小节公式总表（如 `任意角与弧度制_公式合集.md`），内部嵌入下辖的 `公式整理` 节点。
-   - **`公式整理/`（二级标题 / 主题级归纳）**：对应 `## 一. 任意角`、`## 二. 弧度制` 等 Level 2 标题，放置大主题公式与结论汇总笔记，内部嵌入下辖的 `独立公式` 节点。
-   - **`独立公式/`（原子公式与细分结论）**：对应 `## 1. 角的相关概念`、`## 3. 终边相同的角`、`## 6. 关于扇形的几个公式` 等细分考点标题，放置原子级公式卡片（如 `扇形弧长与面积公式.md`）。
+   ```bash
+   python3 scripts/link_to_mathmap.py <vault_root> <source_book_dir> <book_short> --apply
+   ```
 
-4. **知识点挂载与物理归档约束**：
-   - **归档物理复制**：三大层级节点全部物理复制落盘归档至 `mathmap/习题/` 对应子目录；公式与结论节点物理落盘至 `mathmap/公式结论/` 对应子目录。
-   - **内部嵌入修补**：修补各层内链，严格形成 `questions` $\rightarrow$ `题型整理` $\rightarrow$ `题集` 的三级链式引用；公式节点形成 `独立公式` $\rightarrow$ `公式整理` $\rightarrow$ `公式合集` 的三级链式引用。
-   - **知识点嵌入挂载**：`mathmap/知识点/*.md` 的 `# 题型` 章节中，挂载 `/mathmap/习题/题型整理/` 与 `/mathmap/习题/题集/` 节点；在 `# 公式与结论` 章节中，挂载 `/mathmap/公式结论/` 对应节点。
+7. Run a scoped or full audit as appropriate:
 
----
+   ```bash
+   python3 scripts/audit_mathmap.py <vault_root> --plan link-plan.json --fail-on-errors
+   python3 scripts/audit_mathmap.py <vault_root> --full --out full-audit.json
+   ```
 
-## 3. 知识点挂载强制规范 (Knowledge-Point Mounting — 必做)
+## Safety rules
 
-> 归档题型节点**必须**同时挂载到 `mathmap/知识点` 对应节点的 `# 题型` 章节，
-> 否则题型节点游离于知识图谱之外（本次必修第一册处理已踩坑，禁止再犯）。
+- Classify every source Markdown once. Give `answers`/`答案` precedence over an ancestor `questions` directory.
+- Resolve identities through provenance records, not Git tracking state or basename alone.
+- Preserve destination files that differ from their stored baseline. Leave the original in place and use `.mathmap-linker/review/<run-id>/` for the proposal.
+- Rewrite only current-run assets. Never sweep and rewrite all historical destination notes.
+- Enforce `question → answer`, `Tier 2 → question/Tier 2`, and `Tier 3 → Tier 2` in the changed subgraph.
+- Keep knowledge-point mounts append-only and bounded to the correct Markdown heading.
+- Do not create unmatched knowledge points unless the user explicitly authorizes `--allow-create-knowledge-points` after reviewing the mapping warning.
+- Route new unmatched question-type nodes to `mathmap/习题/题型整理/未链接题型/`. Keep them as auditable Tier-2 nodes, preserve nested link paths, and do not mount them to a knowledge point until mapping is resolved.
+- Never auto-move pre-existing Tier-2 notes into the unlinked folder. Report their legacy location and use a separate link-preserving migration when explicitly requested.
+- Keep formula extraction virtual during planning; write it only through the same protected apply path.
 
-1. **每个归档的题型整理/题集节点必须挂载**：
-   `![[mathmap/习题/题型整理/<stem>|<显示名>]]`（题集同理），显示名去掉 `_bN` 后缀。
-2. **公式/概念节点同步挂载 (`# 公式与结论`)**：`question-type-graph` 抽离的独立公式/概念节点物理落盘归档至 `mathmap/公式结论/` 相应三级目录后，同步挂载至 `mathmap/知识点/*.md` 的 `# 公式与结论` 章节（如 `![[mathmap/公式结论/独立公式/<stem>|<显示名>]]`），且内链重写必须保留底部的 `[[▶基础点 X]]` 双链拓扑。
-3. **同知识点异内容链接与标注**：按 `## 来源：<书短名>` 标题独立分组挂载，绝不覆盖或删除既有知识点讲解文本。
-4. **组合知识点切分与新建**：若旧知识点节点为组合大节点（如含 `_` 或 `与`），而新文件切分为独立精细知识点，**建立全新的独立知识点 md 节点**（如 `空间直角坐标系.md`），不盲目强行合并回旧组合节点。
-5. **同题干异解析关联**：题干一致时不重复建 `Q*.md`，仅将新解析存为 `Q*A_<书短名>.md` 并嵌入既有 `Q*.md`，标注 `![[mathmap/习题/answers/Q*A_<书短名>|解析来源：<书短名>]]`。
-6. **小节 → 知识点映射**：`SECTION_KP_MAP` 手工映射表 → `CHAPTER_KP_MAP` 章兜底 → 精确 → 子串模糊；
-   映射目标以磁盘实际文件名为准（如 `双曲线的标准方程`，不是 `双曲线及其标准方程`）。
-7. **幂等**：目标节点已含该链接则跳过；知识点节点改动必须**纯新增**（绝不删除既有行）。
+## Canvas
 
+Run `scripts/update_canvas_additive.py` only when the user explicitly requests Canvas changes. Dry-run first. Preserve all existing nodes, positions, dimensions, colors, and edges; add missing nodes into a collision-free local column. Never globally reflow or delete nodes by default.
 
----
-
-## 4. 幂等与防错规范 (Idempotency — 必做)
-
-1. **可重复运行是硬性要求**：重复运行不得产生重复副本、不得覆盖旧书文件。
-2. **existing 集合只用 `git ls-files`（已跟踪文件）**：用 `os.listdir` 会把上次运行自建的
-   文件当"已存在"而加数字前缀生成新副本（`选择性必修第一册RJA_N_xxx` 垃圾）。
-3. **冲突命名稳定**：同名优先「小节目录名_原名」，再冲突加书短名前缀；相同源→相同目标名。
-4. **落盘前比对内容**：目标已存在且内容相同则跳过写入。
-5. **链接重写按源全路径映射**（书目录名开头完整路径 → mathmap 目标），绝不按 basename——
-   同名 `_bN` 文件（如 18 个 `刷基础_b1.md`）按 basename 会错链/覆盖。
-
----
-
-## 5. 运行命令 (CLI)
-
-```bash
-python3 scripts/link_to_mathmap.py <vault_root> <source_book_dir> <book_short>
-# 例：
-python3 scripts/link_to_mathmap.py /Users/oven/Documents/ovenmathmap \
-  "/Users/oven/Documents/ovenmathmap/课堂同步/教辅/必刷题/2026版 必刷题 数学选择性必修第一册RJA" \
-  选择性必修第一册RJA
-```
-
-脚本四遍式：Tier1 questions/answers 归档 → Tier2/3 落盘（全路径重写+冲突命名+幂等）→
-统一重写内链 → 知识点挂载。运行后核对：题型整理/题集 文件数**不因重复运行而增长**，
-知识点节点改动为纯新增。
-
-
-
-
-
-
+Read [operations.md](references/operations.md) when resolving bootstrap anomalies, manual-edit conflicts, performance questions, or Canvas addition schemas.

@@ -1,0 +1,25 @@
+{
+  "name": "mathmap-linker-agent",
+  "version": "1.1.0",
+  "description": "Safely bootstrap, link, deduplicate, audit, and additively visualize an Obsidian MathMap knowledge graph.",
+  "author": {
+    "name": "Oven"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "MathMap Linker",
+    "shortDescription": "Safely link and audit MathMap vaults",
+    "longDescription": "Bootstrap legacy identity, protect manual Obsidian edits, preview and apply tiered MathMap imports, audit graph topology, and update Canvas files additively.",
+    "developerName": "Oven",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Preview linking this graph output into my MathMap vault.",
+      "Bootstrap and audit my existing MathMap registry.",
+      "Add these audited nodes to my MathMap Canvas."
+    ]
+  }
+}

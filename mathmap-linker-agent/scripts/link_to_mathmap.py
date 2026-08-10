@@ -1,41 +1,58 @@
 #!/usr/bin/env python3
-"""mathmap 习题三层归档 + 知识点挂载 链接器（通用多书版）。
+"""MathMap baseline-aware planner, linker, and changed-subgraph auditor.
 
 用法：
-    python3 link_to_mathmap.py <vault_root> <source_book_dir> <book_short_name>
+    python3 link_to_mathmap.py <vault_root> <source_book_dir> <book_short_name> --dry-run
+    python3 link_to_mathmap.py <vault_root> <source_book_dir> <book_short_name> --apply
 
 示例：
     python3 link_to_mathmap.py /Users/oven/Documents/ovenmathmap \
         "/Users/oven/Documents/ovenmathmap/课堂同步/教辅/必刷题/2026版 必刷题 数学选择性必修第一册RJA" \
         选择性必修第一册RJA
 
-功能（四遍式）：
-  Pass 1  Tier1 questions/answers 归档（Q 文件重写答案嵌入，跳过已存在）
-  Pass 2  Tier2 题型整理 + Tier3 题集 落盘（全路径链接重写、冲突命名、幂等）
-  Pass 3  统一重写已落盘笔记内链（按源全路径映射，避免同名错链）
-  Pass 4  知识点挂载：每个题型整理/题集节点挂到 mathmap/知识点 对应节点的
-           # 题型 章节（按「## 来源：<书短名>」分组，已存在跳过）
-
-关键设计（防重蹈覆辙）：
-  - 链接重写一律基于「源文件全路径 -> mathmap 目标」映射，绝不按 basename
-    匹配（同名 _bN 文件在不同小节大量存在，basename 会导致错链/覆盖）。
-  - 冲突命名稳定：同名优先「小节目录名_原名」，再冲突加书短名前缀；
-    existing 集合只统计 git 已跟踪文件，保证重复运行幂等（相同源->相同目标）。
-  - 落盘前比对内容，相同则跳过写入（幂等，不产生重复副本）。
-  - 知识点挂载纯新增（绝不删除既有行），旧书挂载完整保留。
+Default execution is read-only.  Apply mode protects manual Obsidian edits with
+bootstrapped content baselines, backs up changed files, rewrites only current-run
+assets, and rejects tier or broken-link errors in the changed subgraph.
 """
 import argparse
+import hashlib
+import json
 import os
 import re
 import shutil
-import subprocess
+import tempfile
+from collections import Counter, defaultdict
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Dict, Iterable, Optional
 
 # 导入多层级语义去重与合并引擎
 try:
-    from mathmap_dedup import MathMapDedupEngine, normalize_latex, extract_stem, compare_qt_titles
+    from mathmap_dedup import MathMapDedupEngine, normalize_latex, extract_stem
 except ImportError:
-    from scripts.mathmap_dedup import MathMapDedupEngine, normalize_latex, extract_stem, compare_qt_titles
+    from scripts.mathmap_dedup import MathMapDedupEngine, normalize_latex, extract_stem
+
+try:
+    from mathmap_registry import (
+        UNLINKED_QUESTION_TYPES_DIR,
+        RegistryStore,
+        atomic_write_json,
+        sha256_bytes,
+        sha256_text,
+        source_identity,
+        vault_relative,
+    )
+except ImportError:
+    from scripts.mathmap_registry import (
+        UNLINKED_QUESTION_TYPES_DIR,
+        RegistryStore,
+        atomic_write_json,
+        sha256_bytes,
+        sha256_text,
+        source_identity,
+        vault_relative,
+    )
 
 
 
@@ -80,28 +97,6 @@ def is_paper_tier3(rel_dir_parts, fname: str) -> bool:
     return False
 
 
-def safe_dest_name(base: str, section: str, existing: set, used: set) -> str:
-    """生成无冲突的目标文件名（幂等）。
-
-    优先用原名；冲突时用「小节目录名_原名」；再冲突则加书短名前缀。
-    existing 只含已跟踪（旧书）文件，保证相同源文件始终得到相同目标名。
-    """
-    if base not in existing and base not in used:
-        used.add(base)
-        return base
-    prefixed = f"{section}_{base}"
-    if prefixed not in existing and prefixed not in used:
-        used.add(prefixed)
-        return prefixed
-    book_prefixed = f"{BOOK_SHORT}_{base}"
-    n = 2
-    while book_prefixed in existing or book_prefixed in used:
-        book_prefixed = f"{BOOK_SHORT}_{n}_{base}"
-        n += 1
-    used.add(book_prefixed)
-    return book_prefixed
-
-
 def is_formula_note(fname: str) -> bool:
     """判定是否为公式/结论/知识导学笔记。"""
     return bool(re.search(r"(知识导学|知识梳理|公式|结论|考点精讲|知识精讲|考点清单|独立公式)", fname))
@@ -116,103 +111,6 @@ def classify_formula_tier(fname: str) -> str:
     return "独立公式"
 
 
-def extract_and_file_knowledge_guide(src: str, content: str, book_short: str, mathmap_dir: Path, name_map: dict, tier_map: dict) -> list:
-    """若文件包含 ## 知识导学 / ## 知识梳理 / ## 考点精讲，解析其标题架构，自动提取 3 级公式结论卡片。
-
-    1. 公式合集 (Level 1): <小节名>_公式合集.md
-    2. 公式整理 (Level 2): <大主题名>.md (如 任意角.md, 弧度制.md)
-    3. 独立公式 (Level 3/Atomic): <细分考点名>.md (如 终边相同的角.md, 扇形公式.md)
-    """
-    if "## 知识导学" not in content and "## 知识梳理" not in content and "## 考点精讲" not in content:
-        return []
-
-    # 截取 知识导学 / 知识梳理 / 考点精讲 区块
-    guide_match = re.search(r"(##\s*(?:知识导学|知识梳理|考点精讲).*?)(?=\n#\s|\n##\s*(?:重点题型|刷题|习题|考点分类|例题)|$)", content, flags=re.DOTALL)
-    if not guide_match:
-        return []
-
-    guide_text = guide_match.group(1)
-    
-    sec_match = re.search(r"^#\s+(.+)$", content, flags=re.MULTILINE)
-    sec_title = sec_match.group(1).strip() if sec_match else Path(src).stem
-    sec_clean = re.sub(r"^第[0-9一二三四五六七八九十]+[节章]\s*", "", sec_title).strip()
-
-    col_dir = mathmap_dir / "公式结论/公式合集"
-    sum_dir = mathmap_dir / "公式结论/公式整理"
-    atomic_dir = mathmap_dir / "公式结论/独立公式"
-    for d in (col_dir, sum_dir, atomic_dir):
-        d.mkdir(parents=True, exist_ok=True)
-
-    extracted_stems = []
-
-    # 解析 Level 2 块 (## 一. 任意角, ## 二. 弧度制)
-    level2_blocks = re.split(r"\n(?=##\s+[一二三四五六七八九十]+\.\s*)", guide_text)
-    level2_stems = []
-
-    for block in level2_blocks:
-        l2_match = re.match(r"##\s+[一二三四五六七八九十]+\.\s*([^\n]+)", block)
-        if not l2_match:
-            continue
-        l2_title = l2_match.group(1).strip()
-
-        # 解析 Level 3 / 独立公式 (## 1. 角的相关概念, ## 3. 终边相同的角, ## 6. 关于扇形的几个公式)
-        atomic_blocks = re.split(r"\n(?=##\s+\d+[\.．、\s]\s*)", block)
-        atomic_stems = []
-
-        for a_block in atomic_blocks:
-            a_match = re.match(r"##\s+\d+[\.．、\s]\s*([^\n]+)", a_block)
-            if not a_match:
-                continue
-            a_raw_title = a_match.group(1).strip()
-            a_title = re.sub(r"^[0-9一二三四五六七八九十①②③④⑤⑥⑦⑧⑨⑩\.．、\s\(\)（）]+", "", a_raw_title).strip()
-            if not a_title:
-                a_title = a_raw_title
-            
-            atomic_file = atomic_dir / f"{a_title}.md"
-            atomic_body = f"# {a_title}\n\n{a_block.strip()}\n"
-            if not atomic_file.exists() or atomic_file.read_text(encoding="utf-8-sig") != atomic_body:
-                atomic_file.write_text(atomic_body, encoding="utf-8")
-            
-            atomic_stems.append(a_title)
-            vp_atomic = f"formula:{a_title}"
-            name_map[vp_atomic] = a_title
-            tier_map[vp_atomic] = "独立公式"
-            extracted_stems.append((vp_atomic, "独立公式", a_title))
-
-        # 生成 Level 2 公式整理文件
-        if atomic_stems:
-            l2_body_lines = [f"# {l2_title}\n"]
-            for a_stem in atomic_stems:
-                l2_body_lines.append(f"![[mathmap/公式结论/独立公式/{a_stem}|{a_stem}]]\n")
-            l2_body = "\n".join(l2_body_lines)
-            l2_file = sum_dir / f"{l2_title}.md"
-            if not l2_file.exists() or l2_file.read_text(encoding="utf-8-sig") != l2_body:
-                l2_file.write_text(l2_body, encoding="utf-8")
-            
-            level2_stems.append(l2_title)
-            vp_l2 = f"formula:{l2_title}"
-            name_map[vp_l2] = l2_title
-            tier_map[vp_l2] = "公式整理"
-            extracted_stems.append((vp_l2, "公式整理", l2_title))
-
-    # 生成 Level 1 公式合集文件
-    if level2_stems:
-        col_title = f"{sec_clean}_公式合集" if sec_clean else f"{Path(src).stem}_公式合集"
-        col_file = col_dir / f"{col_title}.md"
-        col_body_lines = [f"# {sec_title} 公式合集\n"]
-        for l2_stem in level2_stems:
-            col_body_lines.append(f"![[mathmap/公式结论/公式整理/{l2_stem}|{l2_stem}]]\n")
-        col_body = "\n".join(col_body_lines)
-        if not col_file.exists() or col_file.read_text(encoding="utf-8-sig") != col_body:
-            col_file.write_text(col_body, encoding="utf-8")
-        vp_col = f"formula:{col_title}"
-        name_map[vp_col] = col_title
-        tier_map[vp_col] = "公式合集"
-        extracted_stems.append((vp_col, "公式合集", col_title))
-
-    return extracted_stems
-
-
 def rewrite_links(content: str, name_map: dict, tier_map: dict) -> str:
     """按「源全路径 -> mathmap 目标」重写笔记内 ![[...]] 链接。
 
@@ -222,22 +120,27 @@ def rewrite_links(content: str, name_map: dict, tier_map: dict) -> str:
     """
 
     def repl(match):
-        link_path = match.group(1)
+        link_path = match.group(1).strip()
+        anchor = match.group(2) or ""
+        alias = match.group(3)
         norm = link_path.lstrip("./")
         if norm in name_map:
             target = name_map[norm]
             tier = tier_map.get(norm, "题型整理")
+            display = alias[1:] if alias else clean_title(Path(target).name)
             if tier in ("公式合集", "公式整理", "独立公式"):
-                return f"![[mathmap/公式结论/{tier}/{target}|{clean_title(target)}]]"
-            return f"![[mathmap/习题/{tier}/{target}|{clean_title(target)}]]"
+                return f"![[mathmap/公式结论/{tier}/{target}{anchor}|{display}]]"
+            return f"![[mathmap/习题/{tier}/{target}{anchor}|{display}]]"
         stem = link_target_stem(link_path)
         if re.match(r"^Q\d+$", stem):
-            return f"![[mathmap/习题/questions/{stem}|{stem}]]"
-        if re.match(r"^Q\d+A\d+$", stem):
-            return f"![[mathmap/习题/answers/{stem}|{stem}]]"
+            display = alias[1:] if alias else stem
+            return f"![[mathmap/习题/questions/{stem}{anchor}|{display}]]"
+        if re.match(r"^Q\d+A.+$", stem):
+            display = alias[1:] if alias else stem
+            return f"![[mathmap/习题/answers/{stem}{anchor}|{display}]]"
         return match.group(0)
 
-    return re.sub(r"!\[\[([^\]]+)\]\]", repl, content)
+    return re.sub(r"!\[\[([^\]|#]+)(#[^\]|]*)?(\|[^\]]*)?\]\]", repl, content)
 
 
 # ================= 知识点挂载 =================
@@ -247,7 +150,14 @@ def build_kp_index(kp_dir: Path) -> dict:
     return {re.sub(r"[\s·:：,，。.．~～+＋]", "", p.stem): p.stem for p in kp_dir.glob("*.md")}
 
 
-def kp_for_section(section: str, kp_index: dict, kp_dir: Path, section_map: dict, chapter_map: dict):
+def kp_for_section(
+    section: str,
+    kp_index: dict,
+    kp_dir: Path,
+    section_map: dict,
+    chapter_map: dict,
+    allow_create: bool = False,
+):
     """小节目录名/章目录名 -> 知识点节点名。
 
     匹配逻辑：
@@ -257,9 +167,11 @@ def kp_for_section(section: str, kp_index: dict, kp_dir: Path, section_map: dict
       3. 精确匹配 -> 子串匹配。
     """
     if section in section_map:
-        return section_map[section]
+        target = section_map[section]
+        return target if (kp_dir / f"{target}.md").is_file() else None
     if section in chapter_map:
-        return chapter_map[section]
+        target = chapter_map[section]
+        return target if (kp_dir / f"{target}.md").is_file() else None
 
     s = re.sub(r"^\d+(\.\d+)*_", "", section)
     norm_s = re.sub(r"[\s·:：,，。.．~～+＋]", "", s)
@@ -267,13 +179,10 @@ def kp_for_section(section: str, kp_index: dict, kp_dir: Path, section_map: dict
     # 检查是否为精细切分小节
     if norm_s in kp_index:
         matched_name = kp_index[norm_s]
-        # 如果已存在的匹配节点是多概念组合节点 (例如含 '_' 或 '及'/'与')，且当前小节为单概念，建立独立节点
-        if ("_" in matched_name or "及" in matched_name or "与" in matched_name) and ("_" not in s and "及" not in s and "与" not in s):
+        # 精细拆分节点只有显式授权时才创建；默认进入人工映射队列。
+        if allow_create and ("_" in matched_name or "及" in matched_name or "与" in matched_name) and ("_" not in s and "及" not in s and "与" not in s):
             new_kp_name = s.strip()
-            new_kp_file = kp_dir / f"{new_kp_name}.md"
-            if not new_kp_file.exists():
-                new_kp_file.write_text(f"# {new_kp_name}\n\n# 题型\n", encoding="utf-8")
-                kp_index[re.sub(r"[\s·:：,，。.．~～+＋]", "", new_kp_name)] = new_kp_name
+            kp_index[re.sub(r"[\s·:：,，。.．~～+＋]", "", new_kp_name)] = new_kp_name
             return new_kp_name
         return matched_name
 
@@ -281,29 +190,21 @@ def kp_for_section(section: str, kp_index: dict, kp_dir: Path, section_map: dict
         if len(norm_k) >= 3 and (norm_k in norm_s or norm_s in norm_k):
             return stem
 
-    # 无法匹配时，自动建立新的精细知识点节点（不强行盲目合并到组合大节点）
+    # 无法匹配时默认不创建节点；显式 --allow-create-knowledge-points 才允许。
     clean_section_name = s.strip()
-    if clean_section_name:
-        new_kp_file = kp_dir / f"{clean_section_name}.md"
-        if not new_kp_file.exists():
-            new_kp_file.write_text(f"# {clean_section_name}\n\n# 题型\n", encoding="utf-8")
-            kp_index[re.sub(r"[\s·:：,，。.．~～+＋]", "", clean_section_name)] = clean_section_name
+    if allow_create and clean_section_name:
+        kp_index[re.sub(r"[\s·:：,，。.．~～+＋]", "", clean_section_name)] = clean_section_name
         return clean_section_name
 
     return None
 
 
-def mount_kp(kp: str, tier: str, stem: str, kp_dir: Path, book_short: str) -> bool:
-    """把 (tier, stem) 挂载到知识点节点 kp 的对应章节（纯新增，标明来源，幂等）。
+def render_kp_mount(text: str, tier: str, stem: str, book_short: str) -> tuple[str, bool]:
+    """Return a heading-bounded, append-only knowledge-point mount edit.
+
     - 题型节点 -> # 题型
     - 公式/结论节点 -> # 公式与结论
     """
-    kp_path = kp_dir / f"{kp}.md"
-    if not kp_path.is_file():
-        kp_path.write_text(f"# {kp}\n\n# 题型\n\n# 公式与结论\n", encoding="utf-8")
-
-    text = kp_path.read_text(encoding="utf-8-sig")
-
     if tier in ("公式合集", "公式整理", "独立公式"):
         embed = f"![[mathmap/公式结论/{tier}/{stem}|{clean_title(stem)}]]"
         heading_target = "# 公式与结论"
@@ -312,314 +213,929 @@ def mount_kp(kp: str, tier: str, stem: str, kp_dir: Path, book_short: str) -> bo
         heading_target = "# 题型"
 
     if embed in text:
-        return False
+        return text, False
     source_heading = f"## 来源：{book_short}"
 
-    if heading_target not in text:
+    heading_match = re.search(rf"(?m)^{re.escape(heading_target)}\s*$", text)
+    if not heading_match:
         text = text.rstrip() + f"\n\n{heading_target}\n"
-    q_idx = text.find(heading_target)
-    if source_heading in text[q_idx:]:
-        pos = text.find(source_heading, q_idx)
-        end = text.find("\n## ", pos + len(source_heading))
-        if end == -1:
-            end = len(text)
-        text = text[:end].rstrip() + f"\n{embed}\n" + text[end:]
+        heading_match = re.search(rf"(?m)^{re.escape(heading_target)}\s*$", text)
+    assert heading_match is not None
+    section_start = heading_match.end()
+    next_h1 = re.search(r"(?m)^# (?!#)", text[section_start:])
+    section_end = section_start + next_h1.start() if next_h1 else len(text)
+    section_text = text[section_start:section_end]
+    source_match = re.search(rf"(?m)^{re.escape(source_heading)}\s*$", section_text)
+    if source_match:
+        group_start = section_start + source_match.end()
+        next_h2 = re.search(r"(?m)^## ", text[group_start:section_end])
+        insert_at = group_start + next_h2.start() if next_h2 else section_end
+        text = text[:insert_at].rstrip() + f"\n{embed}\n\n" + text[insert_at:].lstrip("\n")
     else:
-        q_end = text.find("\n", q_idx)
-        if q_end == -1:
-            q_end = len(text)
-        after = text[q_end:]
-        text = text[:q_end] + f"\n{source_heading}\n{embed}" + after
-    kp_path.write_text(text, encoding="utf-8")
-    return True
+        insertion = f"\n{source_heading}\n{embed}\n"
+        text = text[:section_start] + insertion + text[section_start:].lstrip("\n")
+    return text, True
+
+
+def mount_kp(kp: str, tier: str, stem: str, kp_dir: Path, book_short: str) -> bool:
+    """Compatibility wrapper for callers outside the planner."""
+    kp_path = kp_dir / f"{kp}.md"
+    if not kp_path.is_file():
+        return False
+    current = kp_path.read_text(encoding="utf-8-sig")
+    updated, changed = render_kp_mount(current, tier, stem, book_short)
+    if changed:
+        kp_path.write_text(updated, encoding="utf-8")
+    return changed
 
 
 
 # ================= 主流程 =================
 
-def archive_and_link_mathmap(vault_root: str, source_book_dir: str, book_short: str):
-    global BOOK_SHORT
-    BOOK_SHORT = book_short
+EMBED_RE = re.compile(r"!\[\[([^\]|#]+)")
+FORMULA_TIERS = ("公式合集", "公式整理", "独立公式")
 
-    vault = Path(vault_root)
-    source_book = Path(source_book_dir)
+
+@dataclass(frozen=True)
+class SourceAsset:
+    path: Path
+    relative: str
+    identity: str
+    virtual_path: str
+    node_type: str
+    section: str
+    naming_section: str
+    content: str
+
+
+@dataclass
+class PlannedChange:
+    destination: str
+    content: bytes
+    node_type: str
+    source_identity: str
+    source_hash: Optional[str]
+    reason: str
+    source_identities: list[str] = field(default_factory=list)
+
+
+def _run_id() -> str:
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def _safe_component(value: str) -> str:
+    value = re.sub(r"[\\/:*?\"<>|\x00-\x1f]", "_", value).strip(" ._")
+    return value or "source"
+
+
+def _atomic_write_bytes(path: Path, content: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_name, path)
+    finally:
+        if os.path.exists(temp_name):
+            os.unlink(temp_name)
+
+
+class LinkPlan:
+    """A non-mutating virtual file overlay plus a scoped apply journal."""
+
+    def __init__(self, vault: Path, store: RegistryStore, book_short: str):
+        self.vault = vault.resolve()
+        self.store = store
+        self.book_short = book_short
+        self.run_id = _run_id()
+        self.changes: Dict[str, PlannedChange] = {}
+        self.conflicts: list[Dict[str, Any]] = []
+        self.warnings: list[Dict[str, Any]] = []
+        self.audit_errors: list[Dict[str, Any]] = []
+        self.unchanged: set[str] = set()
+        self.source_mappings: Dict[str, str] = {}
+        self.adoptions: Dict[str, Dict[str, Any]] = {}
+        self.question_registrations: list[Dict[str, Any]] = []
+        self.reserved: set[str] = set()
+        self.required_directories: set[str] = set()
+
+    def absolute(self, destination: str) -> Path:
+        path = (self.vault / destination).resolve()
+        try:
+            path.relative_to(self.vault)
+        except ValueError as exc:
+            raise ValueError(f"目标路径越出 Vault: {destination}") from exc
+        return path
+
+    def virtual_bytes(self, destination: str) -> Optional[bytes]:
+        change = self.changes.get(destination)
+        if change:
+            return change.content
+        path = self.absolute(destination)
+        return path.read_bytes() if path.is_file() else None
+
+    def virtual_text(self, destination: str, default: str = "") -> str:
+        value = self.virtual_bytes(destination)
+        return value.decode("utf-8-sig") if value is not None else default
+
+    def register_mapping(self, identity: str, destination: str) -> None:
+        self.source_mappings[identity] = destination
+
+    def ensure_directory(self, destination: str) -> None:
+        self.absolute(destination)
+        self.required_directories.add(destination.rstrip("/"))
+
+    def add_conflict(self, destination: str, reason: str, identity: str, proposed: Optional[bytes] = None) -> None:
+        item: Dict[str, Any] = {
+            "destination": destination,
+            "reason": reason,
+            "source_identity": identity,
+        }
+        if proposed is not None:
+            item["proposed_sha256"] = sha256_bytes(proposed)
+            item["_proposed"] = proposed
+        self.conflicts.append(item)
+
+    def propose(
+        self,
+        destination: str,
+        content: bytes,
+        node_type: str,
+        identity: str,
+        source_hash: Optional[str],
+        reason: str,
+    ) -> bool:
+        self.register_mapping(identity, destination)
+        existing_change = self.changes.get(destination)
+        if existing_change:
+            existing_change.content = content
+            existing_change.reason = reason
+            if identity not in existing_change.source_identities:
+                existing_change.source_identities.append(identity)
+            return True
+
+        current = self.virtual_bytes(destination)
+        if current == content:
+            self.unchanged.add(destination)
+            self.adoptions.setdefault(
+                destination,
+                {
+                    "identity": identity,
+                    "node_type": node_type,
+                    "source_hash": source_hash,
+                    "destination_hash": sha256_bytes(content),
+                },
+            )
+            return False
+
+        current_hash = sha256_bytes(current) if current is not None else None
+        baseline = self.store.baseline_state(destination, current_hash)
+        if current is not None and baseline in ("unknown", "manually_modified"):
+            reason_text = "未引导的既有文件" if baseline == "unknown" else "检测到基线后的人工修改"
+            self.add_conflict(destination, reason_text, identity, content)
+            return False
+
+        self.changes[destination] = PlannedChange(
+            destination=destination,
+            content=content,
+            node_type=node_type,
+            source_identity=identity,
+            source_hash=source_hash,
+            reason=reason,
+            source_identities=[identity],
+        )
+        return True
+
+    def choose_destination(
+        self,
+        directory: Path,
+        base_name: str,
+        section: str,
+        identity: str,
+        proposed_content: Optional[bytes] = None,
+    ) -> str:
+        mapped = self.store.destination_for_source(identity)
+        directory_rel = vault_relative(directory, self.vault)
+        if mapped:
+            if mapped == directory_rel or mapped.startswith(directory_rel.rstrip("/") + "/"):
+                self.reserved.add(mapped)
+                return mapped
+            self.add_conflict(mapped, "注册表目标层级与当前节点类型不一致", identity)
+
+        safe_base = Path(base_name).name
+        stem, suffix = os.path.splitext(safe_base)
+        candidates = [
+            safe_base,
+            f"{_safe_component(section)}_{safe_base}",
+            f"{_safe_component(self.book_short)}_{safe_base}",
+        ]
+        candidate_index = 0
+        suffix_counter = 2
+        while True:
+            if candidate_index < len(candidates):
+                candidate = candidates[candidate_index]
+            else:
+                candidate = f"{_safe_component(self.book_short)}_{suffix_counter}_{stem}{suffix}"
+                suffix_counter += 1
+            destination = f"{directory_rel}/{candidate}"
+            current = self.virtual_bytes(destination)
+            if destination not in self.reserved:
+                if current is None or (proposed_content is not None and current == proposed_content):
+                    self.reserved.add(destination)
+                    return destination
+                record = self.store.file_record(destination)
+                if record and record.get("source_identity") == identity:
+                    self.reserved.add(destination)
+                    return destination
+            candidate_index += 1
+
+    def audit(self) -> None:
+        planned = set(self.changes)
+        allowed = {
+            "questions": ("mathmap/习题/answers/",),
+            "题型整理": ("mathmap/习题/questions/", "mathmap/习题/题型整理/"),
+            "题集": ("mathmap/习题/题型整理/",),
+            "公式合集": ("mathmap/公式结论/公式整理/",),
+            "公式整理": ("mathmap/公式结论/独立公式/",),
+            "独立公式": ("mathmap/公式结论/", "mathmap/习题/题型整理/"),
+        }
+        self.audit_errors = []
+        for destination, change in sorted(self.changes.items()):
+            prefixes = allowed.get(change.node_type)
+            if not prefixes:
+                continue
+            text = change.content.decode("utf-8-sig")
+            for target in EMBED_RE.findall(text):
+                target = target.strip().removesuffix(".md")
+                if target.startswith("mathmap/") and not target.startswith(prefixes):
+                    self.audit_errors.append(
+                        {"destination": destination, "kind": "wrong_tier", "target": target}
+                    )
+                if target.startswith("mathmap/"):
+                    target_file = f"{target}.md"
+                    if target_file not in planned and not self.absolute(target_file).is_file():
+                        self.audit_errors.append(
+                            {"destination": destination, "kind": "broken_target", "target": target}
+                        )
+
+    def report(self, mode: str) -> Dict[str, Any]:
+        action_counts = Counter("create" if not self.absolute(path).exists() else "update" for path in self.changes)
+        directory_changes = [
+            path for path in sorted(self.required_directories) if not self.absolute(path).is_dir()
+        ]
+        public_conflicts = [{key: value for key, value in item.items() if not key.startswith("_")} for item in self.conflicts]
+        return {
+            "run_id": self.run_id,
+            "mode": mode,
+            "bootstrapped": self.store.bootstrapped,
+            "summary": {
+                "create": action_counts["create"],
+                "update": action_counts["update"],
+                "unchanged": len(self.unchanged),
+                "conflicts": len(self.conflicts),
+                "warnings": len(self.warnings),
+                "audit_errors": len(self.audit_errors),
+                "create_directories": len(directory_changes),
+                "unlinked_question_types": sum(
+                    warning.get("kind") == "knowledge_point_review"
+                    and warning.get("node_type") == "题型整理"
+                    for warning in self.warnings
+                ),
+            },
+            "directories": [
+                {
+                    "destination": path,
+                    "action": "unchanged" if self.absolute(path).is_dir() else "create",
+                }
+                for path in sorted(self.required_directories)
+            ],
+            "changes": [
+                {
+                    "destination": path,
+                    "action": "create" if not self.absolute(path).exists() else "update",
+                    "node_type": change.node_type,
+                    "reason": change.reason,
+                    "source_identity": change.source_identity,
+                    "proposed_sha256": sha256_bytes(change.content),
+                }
+                for path, change in sorted(self.changes.items())
+            ],
+            "conflicts": public_conflicts,
+            "warnings": self.warnings,
+            "audit_errors": self.audit_errors,
+        }
+
+    def apply(self, allow_audit_errors: bool = False, backup: bool = True) -> Path:
+        if self.conflicts:
+            review_dir = self.store.state_dir / "review" / self.run_id
+            review_dir.mkdir(parents=True, exist_ok=True)
+            public = []
+            for index, item in enumerate(self.conflicts, 1):
+                clean = {key: value for key, value in item.items() if not key.startswith("_")}
+                public.append(clean)
+                proposed = item.get("_proposed")
+                if proposed is not None:
+                    proposal_path = review_dir / f"{index:04d}-{Path(item['destination']).name}.proposed"
+                    proposal_path.write_bytes(proposed)
+            atomic_write_json(review_dir / "conflicts.json", {"run_id": self.run_id, "conflicts": public})
+            raise RuntimeError(f"存在 {len(self.conflicts)} 个冲突；原文件未移动，建议稿位于 {review_dir}")
+        if self.audit_errors and not allow_audit_errors:
+            raise RuntimeError(f"变更子图审计失败，共 {len(self.audit_errors)} 项；使用 dry-run 报告检查")
+
+        for destination in sorted(self.required_directories):
+            self.absolute(destination).mkdir(parents=True, exist_ok=True)
+
+        backup_dir = self.store.state_dir / "backups" / self.run_id
+        if backup:
+            for destination in sorted(self.changes):
+                source = self.absolute(destination)
+                if source.is_file():
+                    target = backup_dir / destination
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(source, target)
+
+        for destination, change in sorted(self.changes.items()):
+            _atomic_write_bytes(self.absolute(destination), change.content)
+            self.store.adopt_file(
+                destination,
+                change.source_identity,
+                change.node_type,
+                sha256_bytes(change.content),
+                source_hash=change.source_hash,
+                book_short=self.book_short,
+                origin="linker",
+            )
+        for destination, adoption in self.adoptions.items():
+            if not self.store.file_record(destination):
+                self.store.adopt_file(
+                    destination,
+                    adoption["identity"],
+                    adoption["node_type"],
+                    adoption["destination_hash"],
+                    source_hash=adoption["source_hash"],
+                    book_short=self.book_short,
+                    origin="linker_adopted_identical",
+                )
+        for identity, destination in self.source_mappings.items():
+            self.store.provenance["sources"][identity] = {"destination": destination}
+        for registration in self.question_registrations:
+            destination = registration["destination"]
+            path = self.absolute(destination)
+            if path.is_file():
+                self.store.register_question(
+                    registration["qid"],
+                    destination,
+                    registration["normalized_stem_hash"],
+                    sha256_bytes(path.read_bytes()),
+                    registration["origin"],
+                    answers=registration.get("answers"),
+                    status="linked",
+                )
+        self.store.save()
+        return backup_dir
+
+
+def _section_from_parts(parts: Iterable[str], fallback: str) -> str:
+    part_list = list(parts)
+    for part in reversed(part_list):
+        if re.match(r"^(\d+(\.\d+)*|课时|专题|专练|第[0-9一二三四五六七八九十]+[节章]|第\d|模块)", part):
+            return part
+    return part_list[-1] if part_list else fallback
+
+
+def _generated_formula_assets(
+    source_book: Path,
+    source_path: Path,
+    source_relative: str,
+    book_short: str,
+    parts: tuple[str, ...],
+    content: str,
+) -> list[SourceAsset]:
+    """Extract formula hierarchy into virtual assets without writing during planning."""
+    if not any(marker in content for marker in ("## 知识导学", "## 知识梳理", "## 考点精讲")):
+        return []
+    guide_match = re.search(
+        r"(##\s*(?:知识导学|知识梳理|考点精讲).*?)(?=\n#\s|\n##\s*(?:重点题型|刷题|习题|考点分类|例题)|$)",
+        content,
+        flags=re.DOTALL,
+    )
+    if not guide_match:
+        return []
+    guide_text = guide_match.group(1)
+    section_match = re.search(r"^#\s+(.+)$", content, flags=re.MULTILINE)
+    section_title = section_match.group(1).strip() if section_match else source_path.stem
+    section_clean = re.sub(r"^第[0-9一二三四五六七八九十]+[节章]\s*", "", section_title).strip()
+    section = _section_from_parts(parts, source_book.name)
+    naming_section = parts[-1] if parts else "章节"
+    namespace = hashlib.sha1(source_relative.encode("utf-8")).hexdigest()[:12]
+    generated: list[SourceAsset] = []
+
+    def make_asset(title: str, tier: str, body: str) -> SourceAsset:
+        safe_title = _safe_component(title)
+        relative = f".generated-formulas/{namespace}/{tier}/{safe_title}.md"
+        virtual = f"{source_book.name}/{relative}"
+        return SourceAsset(
+            path=source_book / relative,
+            relative=relative,
+            identity=f"generated-formula:{book_short}:{source_relative}:{tier}:{title}",
+            virtual_path=virtual,
+            node_type=tier,
+            section=section,
+            naming_section=naming_section,
+            content=body,
+        )
+
+    level2_assets: list[SourceAsset] = []
+    level2_blocks = re.split(r"\n(?=##\s+[一二三四五六七八九十]+\.\s*)", guide_text)
+    for block in level2_blocks:
+        level2_match = re.match(r"##\s+[一二三四五六七八九十]+\.\s*([^\n]+)", block)
+        if not level2_match:
+            continue
+        level2_title = level2_match.group(1).strip()
+        atomic_assets: list[SourceAsset] = []
+        for atomic_block in re.split(r"\n(?=##\s+\d+[\.．、\s]\s*)", block):
+            atomic_match = re.match(r"##\s+\d+[\.．、\s]\s*([^\n]+)", atomic_block)
+            if not atomic_match:
+                continue
+            raw_title = atomic_match.group(1).strip()
+            atomic_title = re.sub(
+                r"^[0-9一二三四五六七八九十①②③④⑤⑥⑦⑧⑨⑩\.．、\s\(\)（）]+",
+                "",
+                raw_title,
+            ).strip() or raw_title
+            atomic_assets.append(make_asset(atomic_title, "独立公式", f"# {atomic_title}\n\n{atomic_block.strip()}\n"))
+        generated.extend(atomic_assets)
+        if atomic_assets:
+            links = "\n".join(f"![[{asset.virtual_path}|{Path(asset.path).stem}]]" for asset in atomic_assets)
+            level2_asset = make_asset(level2_title, "公式整理", f"# {level2_title}\n\n{links}\n")
+            generated.append(level2_asset)
+            level2_assets.append(level2_asset)
+
+    if level2_assets:
+        collection_title = f"{section_clean}_公式合集" if section_clean else f"{source_path.stem}_公式合集"
+        links = "\n".join(f"![[{asset.virtual_path}|{Path(asset.path).stem}]]" for asset in level2_assets)
+        generated.append(make_asset(collection_title, "公式合集", f"# {section_title} 公式合集\n\n{links}\n"))
+    return generated
+
+
+def discover_source_assets(source_book: Path, book_short: str) -> list[SourceAsset]:
+    """Classify each source Markdown exactly once, with answers taking precedence."""
+    assets: list[SourceAsset] = []
+    for root, dirs, files in os.walk(source_book):
+        dirs[:] = sorted(dirs)
+        root_path = Path(root)
+        rel_dir = root_path.relative_to(source_book)
+        parts = rel_dir.parts
+        if "images" in parts:
+            dirs[:] = []
+            continue
+        for filename in sorted(files):
+            if (
+                not filename.endswith(".md")
+                or filename.startswith(".")
+                or filename == "index.md"
+                or filename.endswith(".raw.md")
+                or filename in ("answers.raw.md", "hierarchy.raw.md")
+            ):
+                continue
+            path = root_path / filename
+            relative = path.relative_to(source_book).as_posix()
+            content = path.read_text(encoding="utf-8-sig")
+            if "answers" in parts or "答案" in parts:
+                node_type = "answers"
+            elif "questions" in parts:
+                node_type = "questions"
+            elif is_formula_note(filename):
+                node_type = classify_formula_tier(filename)
+            elif re.match(r"^(题型|考点|易错点|微专题|习题)", filename):
+                node_type = "题型整理"
+            elif is_paper_tier3(parts, filename):
+                node_type = "题集"
+            elif is_qt_tier2_name(filename):
+                node_type = "题型整理"
+            else:
+                node_type = None
+            if node_type:
+                assets.append(
+                    SourceAsset(
+                        path=path,
+                        relative=relative,
+                        identity=source_identity(book_short, source_book, path),
+                        virtual_path=f"{source_book.name}/{relative}",
+                        node_type=node_type,
+                        section=_section_from_parts(parts, source_book.name),
+                        naming_section=parts[-1] if parts else "章节",
+                        content=content,
+                    )
+                )
+            if "questions" not in parts and "answers" not in parts and "答案" not in parts:
+                assets.extend(
+                    _generated_formula_assets(
+                        source_book,
+                        path,
+                        relative,
+                        book_short,
+                        parts,
+                        content,
+                    )
+                )
+    return assets
+
+
+def _asset_mapping_keys(asset: SourceAsset) -> tuple[str, ...]:
+    return (asset.virtual_path, asset.relative, asset.virtual_path.lstrip("./"), asset.relative.lstrip("./"))
+
+
+def _embed_targets(content: str) -> list[str]:
+    return [target.strip().removesuffix(".md") for target in EMBED_RE.findall(content)]
+
+
+def _closest_asset(owner: SourceAsset, candidates: list[SourceAsset]) -> Optional[SourceAsset]:
+    if not candidates:
+        return None
+    owner_parts = Path(owner.relative).parts
+
+    def score(candidate: SourceAsset) -> tuple[int, str]:
+        candidate_parts = Path(candidate.relative).parts
+        common = 0
+        for left, right in zip(owner_parts, candidate_parts):
+            if left != right:
+                break
+            common += 1
+        return (-common, candidate.relative)
+
+    return sorted(candidates, key=score)[0]
+
+
+def _merge_embeds(existing: str, candidate: str) -> str:
+    merged = existing
+    existing_targets = set(_embed_targets(existing))
+    for match in re.finditer(r"!\[\[[^\]]+\]\]", candidate):
+        embed = match.group(0)
+        targets = _embed_targets(embed)
+        if targets and targets[0] not in existing_targets:
+            merged = merged.rstrip() + f"\n\n{embed}\n"
+            existing_targets.add(targets[0])
+    return merged
+
+
+def build_link_plan(
+    vault_root: Path,
+    source_book: Path,
+    book_short: str,
+    allow_create_knowledge_points: bool = False,
+) -> LinkPlan:
+    vault = vault_root.resolve()
+    source_book = source_book.resolve()
+    mathmap = vault / "mathmap"
     if not source_book.is_dir():
         raise SystemExit(f"源书目录不存在: {source_book}")
+    if not mathmap.is_dir():
+        raise SystemExit(f"mathmap 目录不存在: {mathmap}")
 
-    mathmap = vault / "mathmap"
-    q_dest = mathmap / "习题/questions"
-    a_dest = mathmap / "习题/answers"
-    qt_dest = mathmap / "习题/题型整理"
-    paper_dest = mathmap / "习题/题集"
-    formula_col_dest = mathmap / "公式结论/公式合集"
-    formula_sum_dest = mathmap / "公式结论/公式整理"
-    formula_atomic_dest = mathmap / "公式结论/独立公式"
-    kp_dir = mathmap / "知识点"
-    for d in (q_dest, a_dest, qt_dest, paper_dest, formula_col_dest, formula_sum_dest, formula_atomic_dest):
-        d.mkdir(parents=True, exist_ok=True)
+    store = RegistryStore(vault)
+    plan = LinkPlan(vault, store, book_short)
+    if not store.bootstrapped:
+        plan.warnings.append(
+            {
+                "kind": "registry_not_bootstrapped",
+                "message": "既有文件不会被覆盖；请先运行 bootstrap_registry.py --write-registry",
+            }
+        )
+    assets = discover_source_assets(source_book, book_short)
+    by_type: Dict[str, list[SourceAsset]] = defaultdict(list)
+    for asset in assets:
+        by_type[asset.node_type].append(asset)
 
-    # existing_* 只统计 git 已跟踪（旧书）文件：保证冲突命名与幂等稳定
-    def tracked_in(d: Path) -> set:
-        if not d.exists():
-            return set()
-        out = subprocess.run(
-            ["git", "-C", str(vault), "-c", "core.quotepath=false", "ls-files", str(d)],
-            capture_output=True, text=True,
-        ).stdout
-        return {os.path.basename(p) for p in out.splitlines() if p}
-
-    existing_qt = tracked_in(qt_dest)
-    existing_paper = tracked_in(paper_dest)
-    existing_q = tracked_in(q_dest)
-    existing_a = tracked_in(a_dest)
-    existing_formula_col = tracked_in(formula_col_dest)
-    existing_formula_sum = tracked_in(formula_sum_dest)
-    existing_formula_atomic = tracked_in(formula_atomic_dest)
-
-    q_copied = a_copied = qt_copied = paper_copied = formula_copied = 0
-    q_skipped = a_skipped = 0
-    tier2_used: set = set()
-    tier3_used: set = set()
-    formula_used: set = set()
-    name_map: dict = {}   # 源文件全路径(书目录名开头) -> mathmap stem
-    tier_map: dict = {}
-    paper_plans = []      # (src, clean_name, rel_dir)
-    qt_plans = []         # (src, fname, section_dir)
-    formula_plans = []    # (src, fname, f_tier, section_dir)
-
-    def src_vp(p: str) -> str:
-        """链接中使用的路径：书目录名 + 相对书根的路径。"""
-        return os.path.join(source_book.name, os.path.relpath(p, source_book))
-
-    # 初始化去重与合并引擎
+    directories = {
+        "questions": mathmap / "习题/questions",
+        "answers": mathmap / "习题/answers",
+        "题型整理": mathmap / "习题/题型整理",
+        "题集": mathmap / "习题/题集",
+        "公式合集": mathmap / "公式结论/公式合集",
+        "公式整理": mathmap / "公式结论/公式整理",
+        "独立公式": mathmap / "公式结论/独立公式",
+    }
+    unlinked_question_types = vault / UNLINKED_QUESTION_TYPES_DIR
+    plan.ensure_directory(UNLINKED_QUESTION_TYPES_DIR)
     dedup_engine = MathMapDedupEngine(vault)
+    name_map: Dict[str, str] = {}
+    tier_map: Dict[str, str] = {}
+    assignments: Dict[str, str] = {}
+    matched_questions: set[str] = set()
+    answer_by_stem: Dict[str, list[SourceAsset]] = defaultdict(list)
+    answer_assignments: Dict[str, str] = {}
+    for asset in by_type["answers"]:
+        answer_by_stem[asset.path.stem].append(asset)
 
-    # ---- Pass 1: Tier1 questions/answers ----
-    for root, dirs, files in os.walk(source_book):
-        rel_dir = os.path.relpath(root, source_book)
-        parts = rel_dir.split(os.sep)
-        if "questions" in parts:
-            for f in files:
-                if not f.endswith(".md") or f.startswith("."):
-                    continue
-                src = os.path.join(root, f)
-                vp = src_vp(src)
-                content = Path(src).read_text(encoding="utf-8-sig")
-                stem = extract_stem(content)
-                matched_q = dedup_engine.match_question(stem)
-                
-                if matched_q:
-                    # 语义认定为完全同一题目（归一化一致），重用既有 Q 节点
-                    target_stem = os.path.splitext(matched_q)[0]
-                    name_map[vp] = target_stem
-                    tier_map[vp] = "questions"
-                    q_skipped += 1
+    def set_mapping(asset: SourceAsset, destination: str) -> None:
+        tier_roots = {
+            "questions": "mathmap/习题/questions/",
+            "answers": "mathmap/习题/answers/",
+            "题型整理": "mathmap/习题/题型整理/",
+            "题集": "mathmap/习题/题集/",
+            "公式合集": "mathmap/公式结论/公式合集/",
+            "公式整理": "mathmap/公式结论/公式整理/",
+            "独立公式": "mathmap/公式结论/独立公式/",
+        }
+        root = tier_roots[asset.node_type]
+        target = destination.removeprefix(root).removesuffix(".md")
+        for key in _asset_mapping_keys(asset):
+            name_map[key] = target
+            tier_map[key] = asset.node_type
+        assignments[asset.identity] = destination
+        plan.register_mapping(asset.identity, destination)
 
-                    # 检查候选题目中是否有解析嵌入链接，若有新解析则仅复制解析并挂载回既有 Q 节点
-                    ans_links = re.findall(r"!\[\[(Q\d+A\d+)(\.md)?\]\]", content)
-                    for ans_stem, _ in ans_links:
-                        cand_ans_path = os.path.join(os.path.dirname(src), "answers", f"{ans_stem}.md")
-                        if not os.path.exists(cand_ans_path):
-                            cand_ans_path = os.path.join(os.path.dirname(os.path.dirname(src)), "answers", f"{ans_stem}.md")
-                        if not os.path.exists(cand_ans_path):
-                            cand_ans_path = os.path.join(os.path.dirname(os.path.dirname(src)), "答案", f"{ans_stem}.md")
-                        
-                        if os.path.exists(cand_ans_path):
-                            new_ans_stem = f"{target_stem}A_{book_short}"
-                            dst_ans_file = a_dest / f"{new_ans_stem}.md"
-                            shutil.copy2(cand_ans_path, dst_ans_file)
-                            
-                            # 链接回既有 Q 节点 (带解析来源标记)
-                            existing_q_file = q_dest / matched_q
-                            if existing_q_file.is_file():
-                                q_text = existing_q_file.read_text(encoding="utf-8-sig")
-                                ans_embed = f"![[mathmap/习题/answers/{new_ans_stem}|解析来源：{book_short}]]"
-                                if ans_embed not in q_text:
-                                    q_text = q_text.rstrip() + f"\n\n{ans_embed}\n"
-                                    existing_q_file.write_text(q_text, encoding="utf-8")
+    def assign_answer(answer: SourceAsset, preferred_name: str) -> str:
+        existing = answer_assignments.get(answer.identity)
+        if existing:
+            return existing
+        destination = plan.choose_destination(
+            directories["answers"],
+            preferred_name,
+            answer.naming_section,
+            answer.identity,
+            answer.content.encode("utf-8"),
+        )
+        answer_assignments[answer.identity] = destination
+        set_mapping(answer, destination)
+        return destination
 
-                elif f in existing_q:
-                    target_stem = os.path.splitext(f)[0]
-                    name_map[vp] = target_stem
-                    tier_map[vp] = "questions"
-                    q_skipped += 1
-                else:
-                    content = re.sub(r"!\[\[(Q\d+A\d+)(\.md)?\]\]", r"![[mathmap/习题/answers/\1|\1]]", content)
-                    (q_dest / f).write_text(content, encoding="utf-8")
-                    q_copied += 1
-                    target_stem = os.path.splitext(f)[0]
-                    name_map[vp] = target_stem
-                    tier_map[vp] = "questions"
-                    
-        if "answers" in parts or "答案" in parts:
-            for f in files:
-                if not f.endswith(".md") or f.startswith("."):
-                    continue
-                src = os.path.join(root, f)
-                vp = src_vp(src)
-                if f in existing_a:
-                    a_skipped += 1
-                    name_map[vp] = os.path.splitext(f)[0]
-                    tier_map[vp] = "answers"
-                    continue
-                shutil.copy2(src, a_dest / f)
-                a_copied += 1
-                name_map[vp] = os.path.splitext(f)[0]
-                tier_map[vp] = "answers"
-
-    # ---- Pass 2: Tier2/Tier3 与 公式结论 落盘计划 ----
-    for root, dirs, files in os.walk(source_book):
-        rel_dir = os.path.relpath(root, source_book)
-        parts = rel_dir.split(os.sep)
-        if "questions" in parts or "answers" in parts or "images" in parts:
+    question_metadata: list[Dict[str, Any]] = []
+    for asset in by_type["questions"]:
+        normalized = normalize_latex(extract_stem(asset.content))
+        normalized_hash = sha256_text(normalized)
+        matched_q = store.find_qid_by_stem_hash(normalized_hash) or dedup_engine.match_question(extract_stem(asset.content))
+        qid = asset.path.stem
+        existing_qid = store.qids["questions"].get(qid) if re.fullmatch(r"Q\d+", qid) else None
+        if existing_qid and existing_qid.get("normalized_stem_hash") != normalized_hash and not matched_q:
+            destination = existing_qid.get("path", f"mathmap/习题/questions/{asset.path.name}")
+            plan.add_conflict(destination, "QID 已由不同题干占用", asset.identity, asset.content.encode("utf-8"))
             continue
-        for f in files:
-            if not f.endswith(".md") or f.startswith(".") or f == "index.md":
+        previous_destination = store.destination_for_source(asset.identity)
+        same_source_rerun = bool(previous_destination and Path(previous_destination).stem == Path(matched_q or "").stem)
+        reuse_existing_question = bool(matched_q) and not same_source_rerun
+        if matched_q:
+            matched_name = Path(matched_q).name
+            if not matched_name.endswith(".md"):
+                matched_name += ".md"
+            destination = f"mathmap/习题/questions/{matched_name}"
+            if reuse_existing_question:
+                matched_questions.add(asset.identity)
+        else:
+            destination = plan.choose_destination(
+                directories["questions"],
+                asset.path.name,
+                asset.naming_section,
+                asset.identity,
+                asset.content.encode("utf-8"),
+            )
+            if not re.fullmatch(r"Q\d+\.md", Path(destination).name):
+                plan.warnings.append(
+                    {"kind": "noncanonical_question_name", "source": asset.relative, "destination": destination}
+                )
+        set_mapping(asset, destination)
+
+        linked_answers: list[str] = []
+        for target in _embed_targets(asset.content):
+            answer_stem = Path(target).stem
+            answer = _closest_asset(asset, answer_by_stem.get(answer_stem, []))
+            if not answer:
                 continue
-            src = os.path.join(root, f)
-            section_dir = parts[-2] if len(parts) >= 2 else "章节"
-            content = Path(src).read_text(encoding="utf-8-sig")
-
-            # 自动解包与提炼 知识导学/公式/结论 块至 mathmap/公式结论/
-            extracted_formulas = extract_and_file_knowledge_guide(src, content, book_short, mathmap, name_map, tier_map)
-            if extracted_formulas:
-                formula_copied += len(extracted_formulas)
-
-            if is_formula_note(f):
-                f_tier = classify_formula_tier(f)
-                formula_plans.append((src, f, f_tier, section_dir))
-            elif is_paper_tier3(parts, f):
-                clean_name = f
-                if len(parts) >= 2 and re.search(r"_b\d+\.md$", f):
-                    sec_folder = parts[-2] if parts[-1].startswith("刷") else parts[-1]
-                    clean_name = f"{sec_folder}_{f}"
-                clean_name = re.sub(r"^\d+-", "", clean_name)
-                paper_plans.append((src, clean_name, rel_dir))
-            elif is_qt_tier2_name(f):
-                qt_plans.append((src, f, section_dir))
-
-    # 公式结论落盘
-    for src, fname, f_tier, section_dir in formula_plans:
-        vp = src_vp(src)
-        if f_tier == "公式合集":
-            f_dest = formula_col_dest
-            existing_f = existing_formula_col
-        elif f_tier == "公式整理":
-            f_dest = formula_sum_dest
-            existing_f = existing_formula_sum
-        else:
-            f_dest = formula_atomic_dest
-            existing_f = existing_formula_atomic
-
-        final_name = safe_dest_name(fname, section_dir, existing_f, formula_used)
-        name_map[vp] = os.path.splitext(final_name)[0]
-        tier_map[vp] = f_tier
-        dst = f_dest / final_name
-        if dst.is_file() and dst.read_bytes() == Path(src).read_bytes():
-            pass  # 幂等
-        else:
-            shutil.copy2(src, dst)
-        formula_copied += 1
-
-    # Tier3 落盘（不合并，书命名空间隔离）
-    for src, clean_name, rel_dir in paper_plans:
-        base = clean_name
-        vp = src_vp(src)
-        final_name = base
-        if base in existing_paper or base in tier3_used:
-            final_name = f"{book_short}_{base}"
-            n = 2
-            while final_name in existing_paper or final_name in tier3_used:
-                final_name = f"{book_short}_{n}_{base}"
-                n += 1
-        tier3_used.add(final_name)
-        content = Path(src).read_text(encoding="utf-8-sig")
-        name_map[vp] = os.path.splitext(final_name)[0]
-        tier_map[vp] = "题集"
-        dst = paper_dest / final_name
-        if dst.is_file() and dst.read_text(encoding="utf-8-sig") == content:
-            pass  # 幂等
-        else:
-            dst.write_text(content, encoding="utf-8")
-        paper_copied += 1
-
-    # Tier2 落盘与严格语义合并
-    for src, fname, section_dir in qt_plans:
-        vp = src_vp(src)
-        matched_qt = dedup_engine.match_problem_type(fname)
-        if matched_qt:
-            target_file, ratio = matched_qt
-            final_name = target_file
-            name_map[vp] = os.path.splitext(final_name)[0]
-            tier_map[vp] = "题型整理"
-            dst = qt_dest / final_name
-            # 合并新旧题型中的单题链接
-            src_content = Path(src).read_text(encoding="utf-8-sig")
-            dst_content = dst.read_text(encoding="utf-8-sig") if dst.is_file() else ""
-            new_links = re.findall(r"!\[\[([^\]]+)\]\]", src_content)
-            merged_content = dst_content
-            for link in new_links:
-                if link not in merged_content:
-                    merged_content = merged_content.rstrip() + f"\n\n![[{link}]]\n"
-            if merged_content != dst_content:
-                dst.write_text(merged_content, encoding="utf-8")
-        else:
-            final_name = safe_dest_name(fname, section_dir, existing_qt, tier2_used)
-            name_map[vp] = os.path.splitext(final_name)[0]
-            tier_map[vp] = "题型整理"
-            dst = qt_dest / final_name
-            if dst.is_file():
-                if dst.read_bytes() == Path(src).read_bytes():
-                    pass  # 幂等
-                else:
-                    shutil.copy2(src, dst)
+            if reuse_existing_question:
+                preferred = f"{Path(destination).stem}A_{_safe_component(book_short)}.md"
             else:
-                shutil.copy2(src, dst)
-        qt_copied += 1
+                preferred = answer.path.name
+            answer_destination = assign_answer(answer, preferred)
+            linked_answers.append(answer_destination.removesuffix(".md"))
+        question_metadata.append(
+            {
+                "asset": asset,
+                "destination": destination,
+                "normalized_hash": normalized_hash,
+                "answers": linked_answers,
+                "matched": reuse_existing_question,
+            }
+        )
 
+    for asset in by_type["answers"]:
+        if asset.identity not in answer_assignments:
+            assign_answer(asset, asset.path.name)
+    unique_answer_stems = {stem for stem, values in answer_by_stem.items() if len(values) == 1}
+    for stem in unique_answer_stems:
+        answer = answer_by_stem[stem][0]
+        destination = answer_assignments[answer.identity]
+        name_map[stem] = Path(destination).stem
+        tier_map[stem] = "answers"
 
-    # ---- Pass 3: 统一重写已落盘笔记内链 ----
-    for d, tier in ((qt_dest, "题型整理"), (paper_dest, "题集"), (formula_col_dest, "公式合集"), (formula_sum_dest, "公式整理"), (formula_atomic_dest, "独立公式")):
-        if not d.exists():
-            continue
-        for f in os.listdir(d):
-            if not f.endswith(".md"):
-                continue
-            p = d / f
-            content = p.read_text(encoding="utf-8-sig")
-            new_content = rewrite_links(content, name_map, tier_map)
-            if new_content != content:
-                p.write_text(new_content, encoding="utf-8")
+    for asset in by_type["answers"]:
+        destination = answer_assignments[asset.identity]
+        plan.propose(
+            destination,
+            asset.content.encode("utf-8"),
+            "answers",
+            asset.identity,
+            sha256_text(asset.content),
+            "归档解析",
+        )
 
-    # ---- Pass 4: 知识点挂载 ----
-    kp_index = build_kp_index(kp_dir)
-    kp_mounted = kp_skipped = 0
-    for vp in [v for v, t in tier_map.items() if t in ("题型整理", "题集", "公式合集", "公式整理", "独立公式")]:
-        tier = tier_map[vp]
-        stem = name_map[vp]
-        # 从源路径提取所属章节/小节目录（跳过文件名段）
-        vp_parts = vp.split(os.sep)
-        section = None
-        for part in reversed(vp_parts[:-1]):
-            if re.match(r"^(\d+(\.\d+)*|课时|专题|专练|第[0-9一二三四五六七八九十]+[节章]|第\d|模块)", part):
-                section = part
-                break
-        if section is None:
-            section = vp_parts[0]
-        kp = kp_for_section(section, kp_index, kp_dir, SECTION_KP_MAP, CHAPTER_KP_MAP)
-        if kp is None:
-            print(f"  !! 未匹配知识点: {vp} (section={section})")
-            continue
-        if mount_kp(kp, tier, stem, kp_dir, book_short):
-            kp_mounted += 1
+    for metadata in question_metadata:
+        asset = metadata["asset"]
+        destination = metadata["destination"]
+        if metadata["matched"]:
+            content = plan.virtual_text(destination)
+            for answer_target in metadata["answers"]:
+                embed = f"![[{answer_target}|解析来源：{book_short}]]"
+                if embed not in content:
+                    content = content.rstrip() + f"\n\n{embed}\n"
+            if metadata["answers"]:
+                plan.propose(
+                    destination,
+                    content.encode("utf-8"),
+                    "questions",
+                    asset.identity,
+                    sha256_text(asset.content),
+                    "复用题干并追加新解析",
+                )
         else:
-            kp_skipped += 1
+            rewritten = rewrite_links(asset.content, name_map, tier_map)
+            plan.propose(
+                destination,
+                rewritten.encode("utf-8"),
+                "questions",
+                asset.identity,
+                sha256_text(asset.content),
+                "归档题目并重写解析链接",
+            )
+            if re.fullmatch(r"Q\d+", Path(destination).stem):
+                plan.question_registrations.append(
+                    {
+                        "qid": Path(destination).stem,
+                        "destination": destination,
+                        "normalized_stem_hash": metadata["normalized_hash"],
+                        "origin": asset.identity,
+                        "answers": metadata["answers"],
+                    }
+                )
 
-    print(f"Tier 1: 原始题目归档 (mathmap/习题/questions): {q_copied} 个 (跳过已存在 {q_skipped})")
-    print(f"Tier 1: 原始解析归档 (mathmap/习题/answers): {a_copied} 个 (跳过已存在 {a_skipped})")
-    print(f"Tier 2: 题型整理归档 (mathmap/习题/题型整理): {qt_copied} 个")
-    print(f"Tier 3: 题集总集归档 (mathmap/习题/题集): {paper_copied} 个")
-    print(f"知识点挂载: 新增 {kp_mounted}, 跳过已存在 {kp_skipped}")
+    kp_dir = mathmap / "知识点"
+    kp_index = build_kp_index(kp_dir)
+    higher_assignments: list[Dict[str, Any]] = []
+    for node_type in ("公式合集", "公式整理", "独立公式", "题集", "题型整理"):
+        for asset in by_type[node_type]:
+            knowledge_point = kp_for_section(
+                asset.section,
+                kp_index,
+                kp_dir,
+                SECTION_KP_MAP,
+                CHAPTER_KP_MAP,
+                allow_create=allow_create_knowledge_points,
+            )
+            matched_qt = (
+                dedup_engine.match_problem_type(asset.path.name, knowledge_point=knowledge_point)
+                if node_type == "题型整理" and knowledge_point
+                else None
+            )
+            if matched_qt:
+                destination = f"mathmap/习题/题型整理/{matched_qt[0]}"
+            else:
+                base_name = asset.path.name
+                if node_type == "题集":
+                    base_name = re.sub(r"^\d+-", "", base_name)
+                destination_directory = (
+                    unlinked_question_types
+                    if node_type == "题型整理" and not knowledge_point
+                    else directories[node_type]
+                )
+                mapped = plan.store.destination_for_source(asset.identity)
+                linked_tier2_prefix = "mathmap/习题/题型整理/"
+                if (
+                    node_type == "题型整理"
+                    and not knowledge_point
+                    and mapped
+                    and mapped.startswith(linked_tier2_prefix)
+                    and not mapped.startswith(UNLINKED_QUESTION_TYPES_DIR + "/")
+                ):
+                    # Preserve previously published paths. Moving them automatically would
+                    # break human-authored Obsidian links; a migration can promote them later.
+                    destination = mapped
+                    plan.reserved.add(mapped)
+                else:
+                    destination = plan.choose_destination(
+                        destination_directory,
+                        base_name,
+                        asset.naming_section,
+                        asset.identity,
+                    )
+            set_mapping(asset, destination)
+            higher_assignments.append(
+                {
+                    "asset": asset,
+                    "destination": destination,
+                    "matched": bool(matched_qt),
+                    "node_type": node_type,
+                    "knowledge_point": knowledge_point,
+                }
+            )
+
+    for item in higher_assignments:
+        asset = item["asset"]
+        destination = item["destination"]
+        rewritten = rewrite_links(asset.content, name_map, tier_map)
+        if item["matched"]:
+            existing = plan.virtual_text(destination)
+            proposed = _merge_embeds(existing, rewritten)
+            reason = "题型语义匹配后合并题目链接"
+        else:
+            proposed = rewritten
+            reason = "归档并重写当前来源内链"
+        plan.propose(
+            destination,
+            proposed.encode("utf-8"),
+            item["node_type"],
+            asset.identity,
+            sha256_text(asset.content),
+            reason,
+        )
+
+    for item in higher_assignments:
+        asset = item["asset"]
+        destination = item["destination"]
+        kp = item["knowledge_point"]
+        if not kp:
+            plan.warnings.append(
+                {
+                    "kind": "knowledge_point_review",
+                    "source": asset.relative,
+                    "section": asset.section,
+                    "destination": destination,
+                    "node_type": item["node_type"],
+                    "unlinked_question_type_folder": (
+                        UNLINKED_QUESTION_TYPES_DIR
+                        if item["node_type"] == "题型整理"
+                        else None
+                    ),
+                    "quarantined": destination.startswith(UNLINKED_QUESTION_TYPES_DIR + "/"),
+                }
+            )
+            continue
+        kp_destination = f"mathmap/知识点/{kp}.md"
+        if not plan.absolute(kp_destination).is_file() and kp_destination not in plan.changes:
+            if not allow_create_knowledge_points:
+                plan.warnings.append(
+                    {"kind": "missing_knowledge_point", "knowledge_point": kp, "source": asset.relative}
+                )
+                continue
+            plan.propose(
+                kp_destination,
+                f"# {kp}\n\n# 题型\n\n# 公式与结论\n".encode("utf-8"),
+                "知识点",
+                f"generated-kp:{book_short}:{kp}",
+                None,
+                "显式授权创建知识点",
+            )
+        current = plan.virtual_text(kp_destination)
+        updated, changed = render_kp_mount(current, item["node_type"], Path(destination).stem, book_short)
+        if changed:
+            plan.propose(
+                kp_destination,
+                updated.encode("utf-8"),
+                "知识点",
+                f"mount:{book_short}:{kp}",
+                sha256_text(f"{asset.identity}:{destination}"),
+                "追加来源分组挂载",
+            )
+
+    plan.audit()
+    return plan
+
+
+def archive_and_link_mathmap(
+    vault_root: str,
+    source_book_dir: str,
+    book_short: str,
+    apply: bool = False,
+    allow_create_knowledge_points: bool = False,
+    allow_audit_errors: bool = False,
+    backup: bool = True,
+) -> Dict[str, Any]:
+    plan = build_link_plan(
+        Path(vault_root),
+        Path(source_book_dir),
+        book_short,
+        allow_create_knowledge_points=allow_create_knowledge_points,
+    )
+    mode = "apply" if apply else "dry-run"
+    report = plan.report(mode)
+    if apply:
+        backup_dir = plan.apply(allow_audit_errors=allow_audit_errors, backup=backup)
+        report["backup_dir"] = str(backup_dir) if backup else None
+        report["applied"] = True
+    else:
+        report["applied"] = False
+    return report
 
 
 # 小节目录名 -> 知识点节点名（自动匹配不上的手工精确映射）
@@ -725,9 +1241,38 @@ CHAPTER_KP_MAP = {
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="mathmap 习题三层归档 + 知识点挂载")
+    parser = argparse.ArgumentParser(description="MathMap 安全归档计划、人工编辑保护与知识点挂载")
     parser.add_argument("vault_root", help="vault 根目录（如 /Users/oven/Documents/ovenmathmap）")
     parser.add_argument("source_book_dir", help="源书 QTG 产物目录（含 01-第一章... 等章节目录）")
     parser.add_argument("book_short", help="书短名，用于冲突文件命名空间与知识点来源分组（如 选择性必修第一册RJA）")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--apply", action="store_true", help="应用计划；默认只做 dry-run")
+    mode.add_argument("--dry-run", action="store_true", help="显式只生成计划（默认行为）")
+    parser.add_argument("--plan-out", help="把 JSON 计划写到指定路径")
+    parser.add_argument(
+        "--allow-create-knowledge-points",
+        action="store_true",
+        help="显式允许为无法映射的小节创建知识点；默认进入人工审查",
+    )
+    parser.add_argument(
+        "--allow-audit-errors",
+        action="store_true",
+        help="即使变更子图审计失败仍应用（高风险，不建议）",
+    )
+    parser.add_argument("--no-backup", action="store_true", help="应用前不备份将被修改的既有文件")
     args = parser.parse_args()
-    archive_and_link_mathmap(args.vault_root, args.source_book_dir, args.book_short)
+    try:
+        result = archive_and_link_mathmap(
+            args.vault_root,
+            args.source_book_dir,
+            args.book_short,
+            apply=args.apply,
+            allow_create_knowledge_points=args.allow_create_knowledge_points,
+            allow_audit_errors=args.allow_audit_errors,
+            backup=not args.no_backup,
+        )
+    except RuntimeError as exc:
+        parser.exit(2, f"错误: {exc}\n")
+    if args.plan_out:
+        atomic_write_json(Path(args.plan_out), result)
+    print(json.dumps(result, ensure_ascii=False, indent=2))

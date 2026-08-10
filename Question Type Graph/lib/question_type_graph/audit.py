@@ -23,7 +23,12 @@ from .common import (
 LINK_FILE_SUFFIXES = {".md", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".avif"}
 
 
-def broken_local_links(note: Path, text: str, vault_root: Path) -> list[str]:
+def broken_local_links(
+    note: Path,
+    text: str,
+    vault_root: Path,
+    obsidian_names: set[str] | None = None,
+) -> list[str]:
     values = []
     for destination in local_markdown_destinations(text):
         target = (note.parent / destination).resolve()
@@ -31,9 +36,38 @@ def broken_local_links(note: Path, text: str, vault_root: Path) -> list[str]:
             values.append(destination)
     for destination in obsidian_embed_destinations(text):
         target = (vault_root / destination).resolve()
-        if not target.exists() and not list(vault_root.rglob(f"{destination}.md")):
+        name = Path(destination).stem.casefold()
+        if not target.exists() and (obsidian_names is None or name not in obsidian_names):
             values.append(destination)
     return values
+
+
+def valid_solution_note(path: Path, record: dict[str, Any]) -> tuple[bool, str | None]:
+    if not path.is_file():
+        return False, "solution-note-missing"
+    text = path.read_text(encoding="utf-8-sig")
+    if record.get("lexical_signature") and lexical_signature(text) != record.get("lexical_signature"):
+        return False, "solution-note-drift"
+    if not record.get("lexical_signature") and record.get("sha256") and sha256_file(path) != record.get("sha256"):
+        return False, "solution-note-drift"
+    provenance = str(record.get("provenance", ""))
+    if provenance not in {"authoritative", "ai-generated-reviewed"}:
+        return False, "solution-provenance-unreviewed"
+    if f"answer_provenance: {provenance}" not in text:
+        return False, "solution-provenance-drift"
+    if provenance == "authoritative":
+        source_body_sha256 = str(record.get("source_body_sha256", ""))
+        if not source_body_sha256 or f"answer_source_body_sha256: {source_body_sha256}" not in text:
+            return False, "solution-source-provenance-drift"
+    if not re.search(r"(?m)^> \[!faq\]-\s+\S", text):
+        return False, "solution-callout-invalid"
+    lexical = re.sub(r"\A---\n.*?\n---\n", "", text, flags=re.DOTALL)
+    lexical = re.sub(r"(?m)^>\s*", "", lexical)
+    lexical = re.sub(r"\[!faq\]-|\*\*【(?:答案|解析)】\*\*|[-*_#]", "", lexical)
+    lexical = re.sub(r"\s+", "", lexical)
+    if len(lexical) < 8 or re.search(r"待.*生成|暂无解析|仅占位|placeholder", lexical, re.IGNORECASE):
+        return False, "solution-content-incomplete"
+    return True, None
 
 
 def validate_embed(parent: Path, child: Path, vault_root: Path, kind: str, identity: str) -> list[dict[str, Any]]:
@@ -68,6 +102,8 @@ def audit_graph(
 ) -> dict[str, Any]:
     profile = load_profile(profile_path)
     vault_root = Path(profile["paths"]["vault_root"]).resolve()
+    vault_markdown = list(vault_root.rglob("*.md")) if vault_root.exists() else []
+    obsidian_names = {path.stem.casefold() for path in vault_markdown}
     hierarchy = load_json(hierarchy_coverage_path)
     content = load_json(content_manifest_path)
     errors: list[dict[str, Any]] = []
@@ -114,7 +150,7 @@ def audit_graph(
         preamble = text.split("<!-- question-source:start -->", 1)[0]
         if re.search(r"(?m)^#{1,6}\s+", preamble):
             errors.append({"kind": "atomic-question-has-generated-heading", "question_id": question["id"], "path": str(note)})
-        for destination in broken_local_links(note, text, vault_root):
+        for destination in broken_local_links(note, text, vault_root, obsidian_names):
             errors.append({"kind": "broken-link", "path": str(note), "destination": destination})
     for node in functional_nodes:
         note = Path(node["output"])
@@ -124,6 +160,19 @@ def audit_graph(
     hierarchy_notes = {str(item.get("key")): Path(item["path"]) for item in hierarchy.get("notes", []) if item.get("path")}
     root_note = hierarchy_notes.get("root")
     for item in hierarchy.get("notes", []):
+        if item.get("content_source"):
+            content_source = Path(item["content_source"])
+            if (
+                not content_source.is_file()
+                or sha256_file(content_source) != item.get("content_sha256")
+            ):
+                errors.append(
+                    {
+                        "kind": "hierarchy-corpus-drift",
+                        "key": item.get("key"),
+                        "path": str(content_source),
+                    }
+                )
         key = str(item.get("key"))
         if key == "root" or not item.get("path"):
             continue
@@ -149,6 +198,13 @@ def audit_graph(
             if answer_manifest.get("status") != "passed":
                 errors.append({"kind": "answer-review-unresolved", "count": len(answer_manifest.get("review_items", []))})
             else:
+                if answer_manifest.get("review_items") and answer_manifest.get("reviewer_confirmed") is not True:
+                    errors.append(
+                        {
+                            "kind": "answer-review-unconfirmed",
+                            "count": len(answer_manifest.get("review_items", [])),
+                        }
+                    )
                 answer_matches = answer_manifest.get("matches", [])
                 matched_question_ids = [item["question_id"] for item in answer_matches]
                 matched_answer_ids = [item["answer_id"] for item in answer_matches]
@@ -157,14 +213,58 @@ def audit_graph(
                 if len(matched_answer_ids) != len(set(matched_answer_ids)):
                     errors.append({"kind": "answer-owned-more-than-once"})
                 match_by_question = {item["question_id"]: item for item in answer_matches}
+                app_by_question: dict[str, dict[str, Any]] = {}
+                for report_name in (
+                    "answer-application-report.json",
+                    "supplemental-solution-application-report.json",
+                ):
+                    app_report_path = Path(profile["paths"]["staging_root"]) / report_name
+                    app_report = load_json(app_report_path) if app_report_path.is_file() else {"questions": []}
+                    for item in app_report.get("questions", []):
+                        question_id = str(item.get("question_id"))
+                        current = app_by_question.setdefault(
+                            question_id,
+                            {"answer_notes": [], "answer_note_records": []},
+                        )
+                        current["answer_notes"].extend(item.get("answer_notes", []))
+                        current["answer_note_records"].extend(item.get("answer_note_records", []))
+                        if item.get("answer_status"):
+                            current["answer_status"] = item["answer_status"]
+                review_by_question = {
+                    str(item.get("question_id")): item
+                    for item in answer_manifest.get("review_items", [])
+                    if item.get("question_id")
+                }
                 for question in questions:
                     match = match_by_question.get(question["id"])
+                    application = app_by_question.get(str(question["id"]), {})
                     q_file = Path(question["output"])
                     text = q_file.read_text(encoding="utf-8-sig") if q_file.is_file() else ""
                     has_embed = bool(re.search(r"!\[\[Q\d+A\d+[^\]]*\]\]", text))
                     is_unmatched = "answer_status: unmatched" in text
-                    if not has_embed or is_unmatched:
-                        reason = "missing-answer-key" if match is None else "unembedded-solution"
+                    records = application.get("answer_note_records", [])
+                    record_errors = []
+                    for record in records:
+                        valid, reason = valid_solution_note(Path(record.get("path", "")), record)
+                        if not valid:
+                            record_errors.append(reason)
+                    expected_provenance = "authoritative" if match is not None else "ai-generated-reviewed"
+                    has_valid_solution = bool(records) and not record_errors and all(
+                        record.get("provenance") == expected_provenance for record in records
+                    )
+                    if match is not None:
+                        has_valid_solution = has_valid_solution and all(
+                            record.get("source_body_sha256") == match.get("answer_body_sha256")
+                            for record in records
+                        )
+                    if not has_embed or is_unmatched or not has_valid_solution:
+                        review_item = review_by_question.get(str(question["id"]), {})
+                        reason = (
+                            record_errors[0]
+                            if record_errors
+                            else review_item.get("root_cause")
+                            or ("missing-answer-key" if match is None else "unembedded-solution")
+                        )
                         errors.append(
                             {
                                 "kind": "question-lacking-explanation",
@@ -173,7 +273,7 @@ def audit_graph(
                                 "reason": reason,
                             }
                         )
-                    if match is not None:
+                    if match is not None and has_valid_solution:
                         ans_name = match.get("answer_name", f"{q_file.stem}A1")
                         if f"![[{ans_name}]]" not in text:
                             errors.append({"kind": "answer-content-drift", "question_id": question["id"]})
@@ -185,18 +285,22 @@ def audit_graph(
     }
     expected_notes.update(str(Path(item["output"]).resolve()).casefold() for item in functional_nodes)
     expected_notes.update(str(Path(item["output"]).resolve()).casefold() for item in questions)
-    app_report_path = Path(profile["paths"]["staging_root"]) / "answer-application-report.json"
-    if app_report_path.is_file():
-        app_report = load_json(app_report_path)
-        for q_item in app_report.get("questions", []):
-            for ans_note in q_item.get("answer_notes", []):
-                if ans_note:
-                    expected_notes.add(str(Path(ans_note).resolve()).casefold())
+    for report_name in (
+        "answer-application-report.json",
+        "supplemental-solution-application-report.json",
+    ):
+        app_report_path = Path(profile["paths"]["staging_root"]) / report_name
+        if app_report_path.is_file():
+            app_report = load_json(app_report_path)
+            for q_item in app_report.get("questions", []):
+                for ans_note in q_item.get("answer_notes", []):
+                    if ans_note:
+                        expected_notes.add(str(Path(ans_note).resolve()).casefold())
     for note in graph_root.rglob("*.md") if graph_root.exists() else []:
         if str(note.resolve()).casefold() not in expected_notes:
             errors.append({"kind": "unexpected-generated-note", "path": str(note.resolve())})
         text = note.read_text(encoding="utf-8-sig")
-        for destination in broken_local_links(note, text, vault_root):
+        for destination in broken_local_links(note, text, vault_root, obsidian_names):
             errors.append({"kind": "broken-link", "path": str(note), "destination": destination})
     canvas_metrics: dict[str, Any] | None = None
     if profile.get("canvas", {}).get("enabled"):

@@ -16,6 +16,7 @@ from .common import (
     require_reviewed_adapter,
     resolve_inside,
     sha256_file,
+    sha256_text,
     write_json_atomic,
     write_text_atomic,
 )
@@ -263,6 +264,15 @@ def apply_hierarchy(profile_path: Path, adapter_path: Path, manifest_path: Path,
     lines = markdown.read_text(encoding="utf-8-sig").splitlines()
     graph_root = Path(profile["paths"]["graph_root"]).resolve()
     vault_root = Path(profile["paths"]["vault_root"]).resolve()
+    coverage_path = Path(profile["paths"]["staging_root"]) / "hierarchy-coverage-manifest.json"
+    previous_notes: set[str] = set()
+    if overwrite and coverage_path.is_file():
+        previous_coverage = load_json(coverage_path)
+        previous_notes.update(
+            str(Path(item["path"]).resolve())
+            for item in previous_coverage.get("notes", [])
+            if item.get("path")
+        )
     if graph_root.exists() and any(graph_root.iterdir()) and not overwrite:
         raise ConfigurationError("Graph root is non-empty; explicit --overwrite required")
     raw_asset_root = markdown.parent / "images"
@@ -283,6 +293,7 @@ def apply_hierarchy(profile_path: Path, adapter_path: Path, manifest_path: Path,
                 line_owners[number - 1] = child["key"]
 
     written: list[dict[str, Any]] = []
+    corpus_root = Path(profile["paths"]["staging_root"]) / "hierarchy-corpus"
     for entry in sorted(entries, key=lambda item: item["level"], reverse=True):
         note = output_by_key[entry["key"]]
         children = sorted(direct_children(entries, entry["key"]), key=lambda item: item["start_line"])
@@ -301,6 +312,8 @@ def apply_hierarchy(profile_path: Path, adapter_path: Path, manifest_path: Path,
                 line += 1
         text = "\n".join(output_lines).rstrip() + "\n"
         text = rebase_local_links(text, markdown, note, relocations)
+        content_source = corpus_root / f"{sha256_text(entry['key'])[:16]}.md"
+        write_text_atomic(content_source, text, overwrite=True)
         write_text_atomic(note, text, overwrite=overwrite)
         written.append(
             {
@@ -314,6 +327,8 @@ def apply_hierarchy(profile_path: Path, adapter_path: Path, manifest_path: Path,
                 "answer_context": entry.get("answer_context", entry["key"]),
                 "path": str(note),
                 "sha256": sha256_file(note),
+                "content_source": str(content_source.resolve()),
+                "content_sha256": sha256_file(content_source),
             }
         )
 
@@ -333,6 +348,17 @@ def apply_hierarchy(profile_path: Path, adapter_path: Path, manifest_path: Path,
     root_text = rebase_local_links("\n".join(root_lines).rstrip() + "\n", markdown, root_note, relocations)
     write_text_atomic(root_note, root_text, overwrite=overwrite)
     written.append({"key": "root", "path": str(root_note), "sha256": sha256_file(root_note)})
+    current_notes = {str(Path(item["path"]).resolve()) for item in written if item.get("path")}
+    removed_stale: list[str] = []
+    for stale_name in sorted(previous_notes - current_notes):
+        stale = Path(stale_name).resolve()
+        try:
+            stale.relative_to(graph_root)
+        except ValueError as exc:
+            raise ConfigurationError(f"Refusing to prune hierarchy output outside graph root: {stale}") from exc
+        if stale.is_file():
+            stale.unlink()
+            removed_stale.append(str(stale))
     coverage = {
         "schema_version": 1,
         "stage": "hierarchy-coverage",
@@ -344,8 +370,8 @@ def apply_hierarchy(profile_path: Path, adapter_path: Path, manifest_path: Path,
         "owned_line_count": len(line_owners),
         "line_owners": line_owners,
         "notes": written,
+        "removed_stale_outputs": removed_stale,
     }
-    coverage_path = Path(profile["paths"]["staging_root"]) / "hierarchy-coverage-manifest.json"
     write_json_atomic(coverage_path, coverage, overwrite=overwrite)
     return coverage
 

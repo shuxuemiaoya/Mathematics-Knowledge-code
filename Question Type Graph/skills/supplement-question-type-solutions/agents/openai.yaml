@@ -1,0 +1,4 @@
+interface:
+  display_name: "Supplement Question Solutions"
+  short_description: "Review and add missing worked solutions"
+  default_prompt: "Use $supplement-question-type-solutions to add reviewed solutions for unmatched questions."

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,6 +16,7 @@ STAGES = [
     "hierarchy-segmentation",
     "content-segmentation",
     "answer-matching",
+    "solution-supplement",
     "markdown-standardization",
     "canvas",
     "final-audit",
@@ -23,6 +25,18 @@ STAGES = [
 
 def now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def input_fingerprint(paths: list[Path], values: dict[str, Any] | None = None) -> str:
+    """Hash a stage's immutable inputs and relevant configuration values."""
+    digest = hashlib.sha256()
+    for path in sorted((item.resolve() for item in paths), key=str):
+        digest.update(str(path).encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(sha256_file(path).encode("ascii") if path.is_file() else b"missing")
+        digest.update(b"\0")
+    digest.update(json.dumps(values or {}, ensure_ascii=False, sort_keys=True).encode("utf-8"))
+    return digest.hexdigest()
 
 
 def init_state(profile_path: Path, output: Path, overwrite: bool = False) -> dict[str, Any]:
@@ -40,12 +54,19 @@ def init_state(profile_path: Path, output: Path, overwrite: bool = False) -> dic
     return state
 
 
-def update_stage(state_path: Path, stage: str, status: str, artifacts: list[Path] | None = None, message: str | None = None) -> dict[str, Any]:
+def update_stage(
+    state_path: Path,
+    stage: str,
+    status: str,
+    artifacts: list[Path] | None = None,
+    message: str | None = None,
+    fingerprint: str | None = None,
+) -> dict[str, Any]:
     if stage not in STAGES or status not in {"running", "completed", "failed", "review_required", "skipped"}:
         raise ConfigurationError("Invalid runtime stage or status")
     state = load_json(state_path)
     load_profile(Path(state["profile"]))
-    record = state["stages"][stage]
+    record = state["stages"].setdefault(stage, {"status": "pending", "attempts": 0})
     if status == "running":
         state["status"] = "active"
         record["attempts"] = int(record.get("attempts", 0)) + 1
@@ -54,8 +75,19 @@ def update_stage(state_path: Path, stage: str, status: str, artifacts: list[Path
     record["status"] = status
     if status in {"completed", "failed", "review_required", "skipped"}:
         record["completed_at"] = now()
+        if record.get("started_at"):
+            try:
+                started = datetime.fromisoformat(str(record["started_at"]))
+                completed = datetime.fromisoformat(str(record["completed_at"]))
+                record["duration_seconds"] = round((completed - started).total_seconds(), 3)
+            except ValueError:
+                pass
     if message:
         record["message"] = message
+    elif status == "running":
+        record.pop("message", None)
+    if fingerprint is not None:
+        record["input_fingerprint"] = fingerprint
     if artifacts is not None:
         record["artifacts"] = [
             {"path": str(path.resolve()), "sha256": sha256_file(path.resolve())}
@@ -70,12 +102,19 @@ def update_stage(state_path: Path, stage: str, status: str, artifacts: list[Path
     return state
 
 
-def artifacts_current(state_path: Path, stage: str, required: list[Path]) -> bool:
+def artifacts_current(
+    state_path: Path,
+    stage: str,
+    required: list[Path],
+    fingerprint: str | None = None,
+) -> bool:
     if not state_path.is_file():
         return False
     state = load_json(state_path)
     record = state.get("stages", {}).get(stage, {})
     if record.get("status") != "completed":
+        return False
+    if fingerprint is not None and record.get("input_fingerprint") != fingerprint:
         return False
     recorded = {str(Path(item["path"]).resolve()): item for item in record.get("artifacts", [])}
     for raw_path in required:

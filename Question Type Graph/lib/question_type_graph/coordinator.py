@@ -9,14 +9,15 @@ from typing import Any
 from .answers import apply_matches, plan_matches
 from .audit import audit_graph
 from .canvas import build_canvas
-from .common import ConfigurationError, load_json, load_profile, require_reviewed_adapter, write_json_atomic, write_text_atomic
+from .common import ConfigurationError, load_json, load_profile, require_reviewed_adapter, sha256_file, write_json_atomic, write_text_atomic
 from .content import apply_content, plan_content
 from .formatting import standardize_corpus
 from .hierarchy import apply_hierarchy, plan_hierarchy
-from .inventory import build_inventory
-from .mineru import convert as convert_pdf
+from .inventory import build_adapter_draft, build_inventory
+from .mineru import DEFAULT_ENV_FILE, convert as convert_pdf
 from .profile import create_profile
-from .runtime import artifacts_current, init_state, status_state, update_stage
+from .runtime import artifacts_current, init_state, input_fingerprint, status_state, update_stage
+from .supplement import plan_supplement
 
 
 def artifact_paths(profile: dict[str, Any]) -> dict[str, Path]:
@@ -25,12 +26,16 @@ def artifact_paths(profile: dict[str, Any]) -> dict[str, Path]:
     return {
         "inventory": Path(profile["format"]["inventory"]),
         "adapter": Path(profile["format"]["adapter"]),
+        "adapter_draft": staging / "format-adapter.draft.json",
         "state": staging / "pipeline-state.json",
         "hierarchy": staging / "hierarchy-manifest.json",
         "hierarchy_coverage": staging / "hierarchy-coverage-manifest.json",
         "content": staging / "question-type-manifest.json",
         "content_application": staging / "content-application-report.json",
         "answers": staging / "answer-match-manifest.json",
+        "answer_application": staging / "answer-application-report.json",
+        "supplement_plan": staging / "supplemental-solutions-manifest.json",
+        "supplement_application": staging / "supplemental-solution-application-report.json",
         "formatting": staging / "markdown-standardization-report.json",
         "graph_manifest": staging / "graph-manifest.json",
         "canvas": graph / f"{profile['title']}.canvas",
@@ -62,6 +67,13 @@ def ensure_raw_sources(profile_path: Path, profile: dict[str, Any], args: argpar
         convert_pdf(profile_path, source["role"], conversion_args)
 
 
+def stage_has_owned_outputs(state_path: Path, stage: str) -> bool:
+    if not state_path.is_file():
+        return False
+    record = load_json(state_path).get("stages", {}).get(stage, {})
+    return bool(record.get("artifacts"))
+
+
 def _run_pipeline(profile_path: Path, args: argparse.Namespace) -> dict[str, Any]:
     profile_path = profile_path.resolve()
     profile = load_profile(profile_path)
@@ -69,73 +81,321 @@ def _run_pipeline(profile_path: Path, args: argparse.Namespace) -> dict[str, Any
     Path(profile["paths"]["staging_root"]).mkdir(parents=True, exist_ok=True)
     if not paths["state"].exists():
         init_state(profile_path, paths["state"])
-    update_stage(paths["state"], "pdf-conversion", "running")
-    ensure_raw_sources(profile_path, profile, args)
     conversion_artifacts = [Path(source["markdown_path"]) for source in profile["sources"]]
     conversion_artifacts.extend(
         Path(profile["paths"]["staging_root"]) / f"{source['role']}-conversion-report.json"
         for source in profile["sources"] if source.get("kind") == "pdf"
     )
-    update_stage(paths["state"], "pdf-conversion", "completed", conversion_artifacts)
+    conversion_fingerprint = input_fingerprint(
+        [profile_path, *[Path(source["path"]) for source in profile["sources"]]],
+        {"stage_contract": 2},
+    )
+    if not artifacts_current(paths["state"], "pdf-conversion", conversion_artifacts, conversion_fingerprint):
+        update_stage(paths["state"], "pdf-conversion", "running", fingerprint=conversion_fingerprint)
+        ensure_raw_sources(profile_path, profile, args)
+        update_stage(
+            paths["state"],
+            "pdf-conversion",
+            "completed",
+            conversion_artifacts,
+            fingerprint=conversion_fingerprint,
+        )
 
-    update_stage(paths["state"], "format-inventory", "running")
-    inventory = build_inventory(profile_path)
-    write_json_atomic(paths["inventory"], inventory, overwrite=True)
+    inventory_fingerprint = input_fingerprint([profile_path, *conversion_artifacts], {"stage_contract": 3})
+    inventory_reused = artifacts_current(
+        paths["state"], "format-inventory", [paths["inventory"]], inventory_fingerprint
+    )
+    if inventory_reused:
+        inventory = load_json(paths["inventory"])
+    else:
+        update_stage(paths["state"], "format-inventory", "running", fingerprint=inventory_fingerprint)
+        inventory = build_inventory(profile_path)
+        write_json_atomic(paths["inventory"], inventory, overwrite=True)
     if not paths["adapter"].is_file():
-        update_stage(paths["state"], "format-inventory", "review_required", [paths["inventory"]], "Create and review format-adapter.json")
-        return {"schema_version": 1, "status": "review_required", "next_stage": "format-adapter-review", "inventory": str(paths["inventory"]), "adapter": str(paths["adapter"])}
+        write_json_atomic(
+            paths["adapter_draft"],
+            build_adapter_draft(profile_path, inventory),
+            overwrite=True,
+        )
+        update_stage(
+            paths["state"],
+            "format-inventory",
+            "review_required",
+            [paths["inventory"]],
+            "Create and review format-adapter.json",
+            inventory_fingerprint,
+        )
+        return {
+            "schema_version": 1,
+            "status": "review_required",
+            "next_stage": "format-adapter-review",
+            "inventory": str(paths["inventory"]),
+            "adapter_draft": str(paths["adapter_draft"]),
+            "adapter": str(paths["adapter"]),
+        }
     require_reviewed_adapter(profile, paths["adapter"])
-    update_stage(paths["state"], "format-inventory", "completed", [paths["inventory"], paths["adapter"]])
+    if not inventory_reused:
+        update_stage(
+            paths["state"],
+            "format-inventory",
+            "completed",
+            [paths["inventory"]],
+            fingerprint=inventory_fingerprint,
+        )
 
-    hierarchy_required = [paths["adapter"], paths["hierarchy"], paths["hierarchy_coverage"]]
-    hierarchy_reused = artifacts_current(paths["state"], "hierarchy-segmentation", hierarchy_required)
+    hierarchy_required = [paths["hierarchy"], paths["hierarchy_coverage"]]
+    if paths["hierarchy_coverage"].is_file():
+        existing_coverage = load_json(paths["hierarchy_coverage"])
+        hierarchy_required.extend(
+            Path(item["content_source"])
+            for item in existing_coverage.get("notes", [])
+            if item.get("content_source")
+        )
+    hierarchy_fingerprint = input_fingerprint(
+        [profile_path, paths["adapter"], *conversion_artifacts],
+        {"stage_contract": 2},
+    )
+    hierarchy_reused = artifacts_current(
+        paths["state"], "hierarchy-segmentation", hierarchy_required, hierarchy_fingerprint
+    )
     if hierarchy_reused:
         hierarchy = load_json(paths["hierarchy"])
     else:
-        update_stage(paths["state"], "hierarchy-segmentation", "running")
+        update_stage(paths["state"], "hierarchy-segmentation", "running", fingerprint=hierarchy_fingerprint)
         hierarchy = plan_hierarchy(profile_path, paths["adapter"])
         write_json_atomic(paths["hierarchy"], hierarchy, overwrite=True)
         if hierarchy["status"] != "passed":
-            update_stage(paths["state"], "hierarchy-segmentation", "review_required", [paths["adapter"], paths["hierarchy"]])
+            update_stage(
+                paths["state"],
+                "hierarchy-segmentation",
+                "review_required",
+                [paths["hierarchy"]],
+                fingerprint=hierarchy_fingerprint,
+            )
             return {"schema_version": 1, "status": "review_required", "next_stage": "hierarchy-review", "manifest": str(paths["hierarchy"])}
-        apply_hierarchy(profile_path, paths["adapter"], paths["hierarchy"], args.overwrite)
-        update_stage(paths["state"], "hierarchy-segmentation", "completed", hierarchy_required)
+        hierarchy_owned_overwrite = (
+            args.overwrite
+            or paths["hierarchy_coverage"].is_file()
+            or stage_has_owned_outputs(paths["state"], "hierarchy-segmentation")
+        )
+        coverage = apply_hierarchy(
+            profile_path, paths["adapter"], paths["hierarchy"], hierarchy_owned_overwrite
+        )
+        hierarchy_required.extend(
+            Path(item["content_source"])
+            for item in coverage.get("notes", [])
+            if item.get("content_source")
+        )
+        update_stage(
+            paths["state"],
+            "hierarchy-segmentation",
+            "completed",
+            hierarchy_required,
+            fingerprint=hierarchy_fingerprint,
+        )
 
-    content_required = [paths["adapter"], paths["content"], paths["content_application"]]
-    content_reused = hierarchy_reused and artifacts_current(paths["state"], "content-segmentation", content_required)
+    content_required = [paths["content"], paths["content_application"]]
+    hierarchy_coverage = load_json(paths["hierarchy_coverage"])
+    content_inputs = [profile_path, paths["adapter"], paths["hierarchy"], paths["hierarchy_coverage"]]
+    content_inputs.extend(
+        Path(item["content_source"])
+        for item in hierarchy_coverage.get("notes", [])
+        if item.get("content_source")
+    )
+    content_fingerprint = input_fingerprint(content_inputs, {"stage_contract": 3})
+    content_reused = hierarchy_reused and artifacts_current(
+        paths["state"], "content-segmentation", content_required, content_fingerprint
+    )
     if content_reused:
         content = load_json(paths["content"])
     else:
-        update_stage(paths["state"], "content-segmentation", "running")
+        update_stage(paths["state"], "content-segmentation", "running", fingerprint=content_fingerprint)
         content = plan_content(profile_path, paths["adapter"], paths["hierarchy_coverage"])
         write_json_atomic(paths["content"], content, overwrite=True)
         if content["status"] != "passed":
-            update_stage(paths["state"], "content-segmentation", "review_required", [paths["adapter"], paths["content"]])
+            update_stage(
+                paths["state"],
+                "content-segmentation",
+                "review_required",
+                [paths["content"]],
+                fingerprint=content_fingerprint,
+            )
             return {"schema_version": 1, "status": "review_required", "next_stage": "content-review", "manifest": str(paths["content"])}
-        apply_content(profile_path, paths["adapter"], paths["content"], args.overwrite)
-        update_stage(paths["state"], "content-segmentation", "completed", content_required)
+        content_owned_overwrite = (
+            args.overwrite
+            or paths["content_application"].is_file()
+            or stage_has_owned_outputs(paths["state"], "content-segmentation")
+        )
+        apply_content(profile_path, paths["adapter"], paths["content"], content_owned_overwrite)
+        update_stage(
+            paths["state"],
+            "content-segmentation",
+            "completed",
+            content_required,
+            fingerprint=content_fingerprint,
+        )
 
-    update_stage(paths["state"], "answer-matching", "running")
-    if paths["answers"].is_file() and load_json(paths["answers"]).get("status") == "passed":
+    answer_inputs = [profile_path, paths["adapter"], paths["content"]]
+    if profile.get("answers", {}).get("mode") != "unavailable":
+        answer_role = "combined" if profile["answers"]["mode"] == "embedded" else "answers"
+        answer_inputs.extend(
+            Path(source["markdown_path"])
+            for source in profile["sources"]
+            if source.get("role") == answer_role
+        )
+    answer_fingerprint = input_fingerprint(answer_inputs, {"stage_contract": 3})
+    answer_required = [paths["answers"], paths["answer_application"]]
+    answer_reused = content_reused and artifacts_current(
+        paths["state"], "answer-matching", answer_required, answer_fingerprint
+    )
+    if answer_reused:
         answers = load_json(paths["answers"])
     else:
-        answers = plan_matches(profile_path, paths["adapter"], paths["content"])
-        write_json_atomic(paths["answers"], answers, overwrite=True)
+        update_stage(paths["state"], "answer-matching", "running", fingerprint=answer_fingerprint)
+        existing_answers = load_json(paths["answers"]) if paths["answers"].is_file() else {}
+        manually_reviewed_current = bool(
+            existing_answers.get("status") == "passed"
+            and existing_answers.get("reviewer_confirmed") is True
+            and existing_answers.get("adapter_sha256") == sha256_file(paths["adapter"])
+            and existing_answers.get("content_manifest_sha256") == sha256_file(paths["content"])
+            and (
+                profile.get("answers", {}).get("mode") == "unavailable"
+                or existing_answers.get("answer_markdown_sha256") == sha256_file(answer_inputs[-1])
+            )
+        )
+        if manually_reviewed_current:
+            answers = existing_answers
+        else:
+            answers = plan_matches(profile_path, paths["adapter"], paths["content"])
+            write_json_atomic(paths["answers"], answers, overwrite=True)
     if answers["status"] != "passed":
-        update_stage(paths["state"], "answer-matching", "review_required", [paths["answers"]])
+        update_stage(
+            paths["state"],
+            "answer-matching",
+            "review_required",
+            [paths["answers"]],
+            fingerprint=answer_fingerprint,
+        )
         return {"schema_version": 1, "status": "review_required", "next_stage": "answer-review", "manifest": str(paths["answers"])}
-    apply_matches(profile_path, paths["answers"], args.overwrite)
-    update_stage(paths["state"], "answer-matching", "completed", [paths["answers"]])
+    if not answer_reused:
+        apply_matches(
+            profile_path,
+            paths["answers"],
+            args.overwrite
+            or paths["answer_application"].is_file()
+            or stage_has_owned_outputs(paths["state"], "answer-matching"),
+        )
+        update_stage(
+            paths["state"],
+            "answer-matching",
+            "completed",
+            answer_required,
+            fingerprint=answer_fingerprint,
+        )
 
-    update_stage(paths["state"], "markdown-standardization", "running")
-    formatting = standardize_corpus(profile_path)
-    write_json_atomic(paths["formatting"], formatting, overwrite=True)
-    update_stage(paths["state"], "markdown-standardization", "completed", [paths["formatting"]])
+    if profile.get("answers", {}).get("mode") != "unavailable":
+        answer_application = load_json(paths["answer_application"])
+        unmatched_ids = {
+            str(item.get("question_id"))
+            for item in answer_application.get("questions", [])
+            if item.get("answer_status") == "unmatched"
+        }
+        supplemental_application = (
+            load_json(paths["supplement_application"])
+            if paths["supplement_application"].is_file()
+            else {"questions": []}
+        )
+        supplemented_ids = {
+            str(item.get("question_id"))
+            for item in supplemental_application.get("questions", [])
+            if item.get("answer_status") == "ai-generated"
+            and item.get("answer_note_records")
+        }
+        unresolved_supplements = unmatched_ids - supplemented_ids
+        if unresolved_supplements:
+            plan_supplement(profile_path, paths["supplement_plan"])
+            update_stage(
+                paths["state"],
+                "solution-supplement",
+                "review_required",
+                [paths["supplement_plan"]],
+                message=f"{len(unresolved_supplements)} questions require reviewed solutions",
+            )
+            return {
+                "schema_version": 1,
+                "status": "review_required",
+                "next_stage": "solution-supplement-review",
+                "manifest": str(paths["supplement_plan"]),
+                "unresolved_count": len(unresolved_supplements),
+            }
+        supplement_status = load_json(paths["state"]).get("stages", {}).get("solution-supplement", {}).get("status")
+        if not unmatched_ids and supplement_status not in {"completed", "skipped"}:
+            update_stage(
+                paths["state"],
+                "solution-supplement",
+                "skipped",
+                message="All questions have authoritative solutions",
+            )
+    else:
+        supplement_status = load_json(paths["state"]).get("stages", {}).get("solution-supplement", {}).get("status")
+        if supplement_status not in {"completed", "skipped"}:
+            update_stage(
+                paths["state"],
+                "solution-supplement",
+                "skipped",
+                message="Answers are unavailable by profile design",
+            )
+
+    graph_markdown = sorted(Path(profile["paths"]["graph_root"]).rglob("*.md"))
+    formatting_fingerprint = input_fingerprint(graph_markdown, {"stage_contract": 2})
+    if not artifacts_current(
+        paths["state"],
+        "markdown-standardization",
+        [paths["formatting"]],
+        formatting_fingerprint,
+    ):
+        update_stage(paths["state"], "markdown-standardization", "running", fingerprint=formatting_fingerprint)
+        formatting = standardize_corpus(profile_path)
+        write_json_atomic(paths["formatting"], formatting, overwrite=True)
+        graph_markdown = sorted(Path(profile["paths"]["graph_root"]).rglob("*.md"))
+        formatting_fingerprint = input_fingerprint(graph_markdown, {"stage_contract": 2})
+        update_stage(
+            paths["state"],
+            "markdown-standardization",
+            "completed",
+            [paths["formatting"]],
+            fingerprint=formatting_fingerprint,
+        )
 
     if profile.get("canvas", {}).get("enabled"):
-        update_stage(paths["state"], "canvas", "running")
-        build_canvas(profile_path, paths["hierarchy"], paths["content"], paths["graph_manifest"], paths["canvas"], args.overwrite)
-        update_stage(paths["state"], "canvas", "completed", [paths["graph_manifest"], paths["canvas"]])
+        canvas_fingerprint = input_fingerprint(
+            [profile_path, paths["hierarchy"], paths["content"]], {"stage_contract": 2}
+        )
+        canvas_required = [paths["graph_manifest"], paths["canvas"]]
+        if not (content_reused and hierarchy_reused) or not artifacts_current(
+            paths["state"], "canvas", canvas_required, canvas_fingerprint
+        ):
+            update_stage(paths["state"], "canvas", "running", fingerprint=canvas_fingerprint)
+            canvas_owned_overwrite = (
+                args.overwrite
+                or any(path.is_file() for path in canvas_required)
+                or stage_has_owned_outputs(paths["state"], "canvas")
+            )
+            build_canvas(
+                profile_path,
+                paths["hierarchy"],
+                paths["content"],
+                paths["graph_manifest"],
+                paths["canvas"],
+                canvas_owned_overwrite,
+            )
+            update_stage(
+                paths["state"],
+                "canvas",
+                "completed",
+                canvas_required,
+                fingerprint=canvas_fingerprint,
+            )
     else:
         update_stage(paths["state"], "canvas", "skipped", message="Canvas disabled in profile")
 
@@ -167,7 +427,7 @@ def add_run_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("profile", type=Path)
     parser.add_argument("--skip-conversion", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
-    parser.add_argument("--env-file", default="/Users/oven/Documents/Mathematics-Knowledge-code/.env")
+    parser.add_argument("--env-file", default=str(DEFAULT_ENV_FILE))
     parser.add_argument("--base-url")
     parser.add_argument("--mineru-language")
     parser.add_argument("--poll-interval", type=float, default=10.0)
@@ -187,6 +447,7 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("--language", default="zh-CN")
     init.add_argument("--answers-mode", choices=["separate", "embedded", "unavailable"])
     init.add_argument("--canvas", action="store_true")
+    init.add_argument("--format-preset", type=Path)
     init.add_argument("--output", type=Path, required=True)
     init.add_argument("--overwrite", action="store_true")
     inventory = sub.add_parser("inventory-format")
@@ -208,7 +469,17 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         if args.command == "init":
-            profile = create_profile(args.source, args.title, args.staging_root, args.vault_root, args.graph_root, args.language, args.answers_mode, args.canvas)
+            profile = create_profile(
+                args.source,
+                args.title,
+                args.staging_root,
+                args.vault_root,
+                args.graph_root,
+                args.language,
+                args.answers_mode,
+                args.canvas,
+                args.format_preset,
+            )
             write_json_atomic(args.output, profile, overwrite=args.overwrite)
             result = {"schema_version": 1, "status": "completed", "profile": str(args.output.resolve())}
         elif args.command == "inventory-format":
@@ -227,7 +498,9 @@ def main(argv: list[str] | None = None) -> int:
             result = audit_graph(args.profile, paths["hierarchy_coverage"], paths["content"], paths["answers"] if paths["answers"].exists() else None, paths["canvas"] if paths["canvas"].exists() else None)
             write_json_atomic(args.output or paths["audit"], result, overwrite=args.overwrite)
         print(json.dumps(result, ensure_ascii=False))
-        return 0 if result.get("status") not in {"failed"} else 1
+        if result.get("status") == "review_required":
+            return 2
+        return 0 if result.get("status") != "failed" else 1
     except Exception as exc:
         print(json.dumps({"schema_version": 1, "status": "failed", "error_type": type(exc).__name__, "message": str(exc)}, ensure_ascii=False))
         return 1

@@ -1,6 +1,8 @@
-# 题型 Canvas 美学与解题树法则
+# Linking and Canvas Rules
 
-1. 标杆规范：以 `mathmap题型.canvas` 为题型树美学标杆。
-2. 解题树结构：基础概念 $\rightarrow$ 典型题型 $\rightarrow$ 解题思想/技巧方法（横向从左至右延伸）。
-3. 彩色技巧卡与连线标注：浅紫色/青色技巧卡，连线上附带 `label: "方法1"`、`label: "平方和差"` 等标注。
-4. 链接重标：卡片超链接全量重标为 `mathmap/` 真实存在的新笔记路径。
+1. Preserve `question → answer → Tier 2 → Tier 3` directionality and reject broken MathMap targets.
+2. Mount links append-only inside the correct knowledge-point heading and source group.
+3. Treat manually edited notes as conflicts when both source and destination changed.
+4. Preserve all existing Canvas nodes and coordinates. Place only new nodes in collision-free columns flowing from knowledge point to problem type to method.
+5. Add labeled edges without deleting or globally rerouting existing edges.
+6. Store new Tier-2 nodes with unresolved knowledge points under `mathmap/习题/题型整理/未链接题型/`; keep nested paths intact and exclude them from knowledge-point mounts until reviewed.

@@ -2,6 +2,9 @@
 
 Store one reviewed adapter in staging. Reusable code consumes semantic roles;
 literal publisher labels and page assumptions live here.
+The executable v1 contract is also published as
+[`format-adapter.schema.json`](format-adapter.schema.json); runtime validation
+adds regex compilation, named-group, uniqueness, authority, and profile-mode checks.
 
 Minimum shape:
 
@@ -41,22 +44,36 @@ Minimum shape:
   "content": {
     "unknown_label_policy": "review",
     "question_folder": "questions",
+    "question_repository_root": "/optional/central/question/repository",
     "question_title_template": "Question {number}",
     "question_patterns": ["^(?P<number>\\d+)[.．、]\\s*"],
+    "inline_question_patterns": ["(?<!\\d)(?P<number>\\d+)[.．、]\\s*"],
     "roles": [
       {"role": "training-band", "depth": 0, "pattern": "source-specific regex", "answer_context": true},
-      {"role": "question-type", "depth": 1, "pattern": "source-specific regex"}
+      {"role": "question-type", "depth": 1, "pattern": "source-specific regex"},
+      {"role": "knowledge-item", "depth": 1, "pattern": "source-specific regex", "heading_only": true}
     ]
   },
   "answers": {
     "source_role": "answers",
     "callout_title": "全练一本通解析",
-    "contexts": [{"key": "chapter-1", "pattern": "source-specific regex"}],
+    "contexts": [{"key": "chapter-1", "pattern": "source-specific regex", "start_line": 200, "anchor_text": "## source heading"}],
     "answer_patterns": ["^(?P<number>\\d+)[.．、]\\s*"],
+    "inline_answer_patterns": ["(?<!\\d)(?P<number>\\d+)[.．、]\\s*"],
+    "implicit_answers": [
+      {"context": "chapter-1", "number": "1", "start_line": 205, "anchor_text": "reviewed first answer body line"}
+    ],
     "ignore_ranges": []
   }
 }
 ```
+
+`question_patterns` and `answer_patterns` recognize a virtual line at its
+start. Their optional `inline_*_patterns` counterparts identify additional
+records concatenated onto one OCR line. If the inline field is absent, the
+corresponding ordinary patterns are reused; set an empty inline list to disable
+same-line splitting. Every pattern requires a named `number` group. The shared
+virtual-line parser preserves raw line, raw column, and subline provenance.
 
 For a content-derived no-TOC hierarchy, replace `primary_authority` with an
 explicit `no_toc_authority` object containing `status: passed`,
@@ -69,11 +86,34 @@ For combined inputs, set the answer role to `combined` and freeze a
 non-overlapping `answers.region`. Save a series preset only after removing
 paths, titles, line ranges, and content-specific regex captures.
 
+A path-free series preset may provide `inventory.role_hints`, for example
+`[{"role": "knowledge_guide", "pattern": "series-specific label regex"}]`.
+Inventory applies only those reviewed hints; without them it reports repeated
+literals with `proposed_role: null` instead of guessing from a built-in
+publisher vocabulary. Adapter review remains mandatory in either case.
+
 Set `answer_context: true` on a repeated functional role when question numbers
 restart inside those blocks. Its stable context is
 `{note_key}:{role}:{occurrence}` by default; use `answer_context_template` only
 when the answer-source context keys require another reviewed convention.
 Generated paths default to a conservative 220-character budget and fall back
 to deterministic `_compact` names without changing visible note titles.
+Set `heading_only: true` when a role regex could also match ordinary body text
+such as numbered subparts; this prevents a subpart from truncating its owning
+top-level question or functional node.
 
-For supplementary exercise books with mixed theory sections (`知识导学`, `知识梳理`, `考点精讲`), set `role: "knowledge_guide"` on the matching `functional_roles` entry so the segmentation engine extracts them into lightweight Functional Nodes rather than invoking textbook concept extraction.
+`answers.contexts[].start_line` is always a raw Markdown line number, even when
+an OCR line contains multiple inline answer headers. Add `anchor_text` or
+`anchor_pattern` when freezing a fixed boundary so drift fails before matching.
+When OCR preserves a publisher solution but drops only its printed answer
+header, record it in `answers.implicit_answers` with the exact context, number,
+raw `start_line`, and an `anchor_text` or `anchor_pattern`. This is a reviewed
+recovery of authoritative content, not a supplemental solution.
+Set `content.question_repository_root` only when a new vault registry must seed
+above an additional central QID repository; ongoing allocation uses the locked
+vault registry.
+
+For books with mixed theory sections, map the source-specific labels to a
+semantic role such as `knowledge_guide` in `content.roles`; the segmentation
+engine then extracts lightweight Functional Nodes without needing those label
+literals in reusable code.

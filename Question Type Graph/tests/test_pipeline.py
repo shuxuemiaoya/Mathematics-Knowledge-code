@@ -8,8 +8,11 @@ from argparse import Namespace
 from pathlib import Path
 
 from question_type_graph.coordinator import run_pipeline
+from question_type_graph.answers import apply_matches
 from question_type_graph.profile import create_profile
 from question_type_graph.common import write_json_atomic
+from question_type_graph.supplement import apply_supplement
+from question_type_graph.runtime import status_state
 
 
 def make_adapter(profile_path: Path, answers: bool = True, combined: bool = False) -> dict:
@@ -72,6 +75,86 @@ def get_args(overwrite: bool = False) -> Namespace:
 
 
 class TestPipeline(unittest.TestCase):
+    def test_first_run_creates_unapproved_adapter_draft(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            questions = root / "questions.md"
+            questions.write_text("# Unit\n\n1. Question.\n", encoding="utf-8")
+            staging = root / "staging"
+            vault = root / "vault"
+            profile_path = staging / "profile.json"
+            profile = create_profile(
+                [f"questions={questions}"], "Draft", staging, vault, vault / "graph", "en", None, False
+            )
+            write_json_atomic(profile_path, profile)
+
+            result = run_pipeline(profile_path, get_args())
+            draft = json.loads(Path(result["adapter_draft"]).read_text(encoding="utf-8"))
+
+            self.assertEqual(result["next_stage"], "format-adapter-review")
+            self.assertEqual(draft["status"], "review_required")
+            self.assertFalse(draft["reviewer_confirmed"])
+
+    def test_missing_authoritative_answer_routes_through_reviewed_supplement(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            questions = root / "questions.md"
+            answers = root / "answers.md"
+            questions.write_text(
+                "# Unit One\n\n## Section 1\n\n#### Type Direct\n\n"
+                "1. First question.\n\n2. Second question.\n",
+                encoding="utf-8",
+            )
+            answers.write_text(
+                "# Solutions\n\n## Section 1 Answers\n\n1. A\nFirst analysis.\n",
+                encoding="utf-8",
+            )
+            staging = root / "staging"
+            vault = root / "vault"
+            profile_path = staging / "profile.json"
+            profile = create_profile(
+                [f"questions={questions}", f"answers={answers}"],
+                "SupplementFlow",
+                staging,
+                vault,
+                vault / "graph",
+                "en",
+                None,
+                False,
+            )
+            write_json_atomic(profile_path, profile)
+            adapter = make_adapter(profile_path)
+            adapter["content"]["roles"] = [
+                {"role": "question-type", "depth": 0, "pattern": r"Type (?P<title>.+)"}
+            ]
+            write_json_atomic(staging / "format-adapter.json", adapter)
+
+            answer_review = run_pipeline(profile_path, get_args())
+            self.assertEqual(answer_review["next_stage"], "answer-review")
+            answer_manifest_path = staging / "answer-match-manifest.json"
+            answer_manifest = json.loads(answer_manifest_path.read_text(encoding="utf-8"))
+            answer_manifest["status"] = "passed"
+            answer_manifest["reviewer_confirmed"] = True
+            write_json_atomic(answer_manifest_path, answer_manifest, overwrite=True)
+
+            supplement_review = run_pipeline(profile_path, get_args())
+            self.assertEqual(supplement_review["next_stage"], "solution-supplement-review")
+            supplement_path = Path(supplement_review["manifest"])
+            supplement = json.loads(supplement_path.read_text(encoding="utf-8"))
+            self.assertEqual(supplement["unmatched_count"], 1)
+            supplement["questions"][0]["solution"] = (
+                "Substitute the given values and simplify; the required result follows directly."
+            )
+            supplement["questions"][0]["reviewer_confirmed"] = True
+            write_json_atomic(supplement_path, supplement, overwrite=True)
+
+            applied = apply_supplement(profile_path, supplement_path)
+            completed = run_pipeline(profile_path, get_args())
+
+            self.assertEqual(applied["status"], "completed")
+            self.assertEqual(completed["status"], "passed")
+            self.assertEqual(status_state(staging / "pipeline-state.json")["status"], "completed")
+
     def test_full_separate_question_and_answer_pipeline(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)
@@ -131,6 +214,39 @@ class TestPipeline(unittest.TestCase):
             canvas = json.loads((graph / "Synthetic.canvas").read_text(encoding="utf-8"))
             self.assertTrue(all("Question 1" not in str(node) for node in canvas["nodes"]))
 
+            first_question_code = manifest["questions"][0]["title"]
+            state_before_resume = json.loads((staging / "pipeline-state.json").read_text(encoding="utf-8"))
+            resumed = run_pipeline(profile_path, get_args())
+            resumed_manifest = json.loads((staging / "question-type-manifest.json").read_text(encoding="utf-8"))
+            state_after_resume = json.loads((staging / "pipeline-state.json").read_text(encoding="utf-8"))
+            self.assertEqual(resumed["status"], "passed")
+            self.assertEqual(resumed_manifest["questions"][0]["title"], first_question_code)
+            for stage in ("pdf-conversion", "hierarchy-segmentation", "content-segmentation", "answer-matching", "canvas"):
+                self.assertEqual(
+                    state_after_resume["stages"][stage]["attempts"],
+                    state_before_resume["stages"][stage]["attempts"],
+                )
+
+            (staging / "content-application-report.json").unlink()
+            rebuilt = run_pipeline(profile_path, get_args())
+            rebuilt_manifest = json.loads((staging / "question-type-manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(rebuilt["status"], "passed")
+            self.assertEqual(rebuilt_manifest["questions"][0]["title"], first_question_code)
+
+            answer_manifest_path = staging / "answer-match-manifest.json"
+            answer_manifest = json.loads(answer_manifest_path.read_text(encoding="utf-8"))
+            removed_match = answer_manifest["matches"].pop()
+            write_json_atomic(answer_manifest_path, answer_manifest, overwrite=True)
+            stale_answer = Path(removed_match["question_path"]).parent / "answers" / f"{Path(removed_match['question_path']).stem}A1.md"
+            self.assertTrue(stale_answer.is_file())
+
+            apply_matches(profile_path, answer_manifest_path, overwrite=True)
+
+            self.assertFalse(stale_answer.exists())
+            removed_question_text = Path(removed_match["question_path"]).read_text(encoding="utf-8")
+            self.assertNotIn(f"![[{Path(removed_match['question_path']).stem}A1]]", removed_question_text)
+            self.assertIn("answer_status: unmatched", removed_question_text)
+
     def test_answerless_question_only_pipeline(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)
@@ -171,7 +287,10 @@ class TestPipeline(unittest.TestCase):
             staging.mkdir(parents=True, exist_ok=True)
             adapter = make_adapter(profile_path, combined=True)
             adapter["hierarchy"]["region"]["end_line"] = 11
-            adapter["answers"]["region"] = {"start_line": 12, "end_line": 19}
+            adapter["answers"]["region"] = {
+                "start_line": 12,
+                "end_line": len(combined.read_text(encoding="utf-8").splitlines()),
+            }
             adapter["content"]["roles"] = [{"role": "question-type", "depth": 0, "pattern": r"Type (?P<title>.+)"}]
             write_json_atomic(staging / "format-adapter.json", adapter)
 

@@ -21,7 +21,7 @@ from urllib.parse import urlparse, urlsplit
 from .common import ConfigurationError, GraphError, load_profile, pdf_page_count, safe_name, sha256_file, write_json_atomic
 
 
-DEFAULT_ENV_FILE = Path("/Users/oven/Documents/Mathematics-Knowledge-code/.env")
+DEFAULT_ENV_FILE = Path(os.environ.get("QUESTION_TYPE_GRAPH_ENV_FILE", ".env")).expanduser()
 DEFAULT_BASE_URL = "https://mineru.net"
 MAX_PAGES = 200
 MAX_BYTES = 200 * 1024 * 1024

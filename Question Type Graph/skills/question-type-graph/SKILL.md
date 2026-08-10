@@ -11,6 +11,8 @@ Coordinate the standalone skills and enforce profile, review, preservation, and 
 
 - Read `references/pipeline-contract.md` before starting or resuming.
 - Read `references/format-adapter.md` when inventorying an unfamiliar book.
+- Validate reviewed adapters against the runtime contract and
+  `references/format-adapter.schema.json` before segmentation.
 - Load each component skill only when entering its stage.
 
 ## Run
@@ -25,6 +27,7 @@ python scripts/question_type_graph.py init `
   --staging-root "/Users/oven/Documents/ovenmathmap/.temp/<pdf_title>-staging" `
   --vault-root "/Users/oven/Documents/ovenmathmap" `
   --graph-root "/Users/oven/Documents/ovenmathmap/<relative_path_to_pdf_title>" `
+  --format-preset "<optional_path_free_series_preset.json>" `
   --canvas --output "/Users/oven/Documents/ovenmathmap/.temp/<pdf_title>-staging/question-type-profile.json"
 ```
 
@@ -34,19 +37,30 @@ Use one `combined=<path>` source for a combined book, or only `questions=<path>`
 python scripts/question_type_graph.py run "<profile>"
 ```
 
-The first run stops after `format-inventory.json` until a reviewer-confirmed `format-adapter.json` exists. Resume with `resume`; unchanged hierarchy/content application artifacts are reused by hash, while drifted inputs are rebuilt. Inspect durable stage attempts and artifacts with `status`; rerun and persist the final checks with `audit --overwrite`.
+The first run stops after `format-inventory.json` and creates a schema-shaped
+`format-adapter.draft.json` until a reviewer-confirmed `format-adapter.json`
+exists. Resume with `resume`; unchanged stages are reused by input fingerprint,
+while a drifted stage invalidates and rebuilds its descendants. Inspect durable
+stage attempts, durations, fingerprints, and artifacts with `status`; rerun and
+persist the final checks with `audit --overwrite`.
 
 ## Gates
 
 - Freeze every source path, digest, role, page count, and output root.
 - Force MinerU OCR for PDFs and stop on incomplete page or asset coverage.
 - Require a reviewed adapter and complete primary-TOC authority ledger, or an explicit reviewed no-TOC authority decision, before physical hierarchy or content splitting.
-- Create one note per top-level question, named with monotonically increasing 8-digit sequence numbers across the vault and central repository `/Users/oven/Documents/ovenmathmap/mathmap/习题/questions` (e.g. `Q00004154.md`). Automatically lookup `max_q_num` across roots to prevent duplicates.
-- Save matched solutions as standalone answer notes named `<Question_ID>A<Index>.md` (e.g., `Q00004154A1.md`), and embed them in the question note via `![[Q00004154A1]]`. Pre-split inline OCR answer headers before scanning so concatenated headers (e.g. `... 故选：B 【5】A`) are parsed as distinct answer blocks. Validate and align `answers.contexts` `start_line` boundaries against exact section headings in `answers.raw.md`. In Stage 5 (Content Segmentation), extract `## 知识导学` formula and concept subheadings into standalone atomic concept notes (e.g. `3. 终边相同的角.md`). In Stage 7 (Markdown Standardization), append a Wiki bi-directional link (`[[<path>|<title>]]`) at the bottom of each concept note to connect it to its corresponding basic point note (e.g. `▶基础点 2_ 终边相同的角.md`) rather than an embedding (`![[...]]`), ensuring graph topology connectivity while preventing nested view redundancy.
+- Keep all source-label semantics and inline question/answer marker syntax in
+  the frozen adapter or path-free series preset. Treat any new-book change to
+  reusable recognition code as a generalization failure requiring review.
+- Create one note per top-level question, named with a persistent 8-digit QID
+  allocated through the locked vault registry. Seed a new registry from the
+  vault and an optional adapter-configured central repository.
+- Save matched solutions as standalone answer notes named `<Question_ID>A<Index>.md` (e.g., `Q00004154A1.md`), and embed them in the question note via `![[Q00004154A1]]`. Pre-split adapter-recognized inline OCR question and answer headers while retaining raw-line and raw-column coordinates so concatenated records are parsed without shifting reviewed region or context anchors. Preserve mapped theory-guide content in place; knowledge linking remains deferred.
 - Format all answer notes into collapsable Callout blocks (`> [!faq]- <callout_title>`, e.g., `全练一本通解析`), including option selections (`**【答案】** A`), itemized bullet points, and pedagogical sections (`💡 规律方法`, `📌 名师点拨`, `🔔 敲黑板`, `💡 点悟`, `🔗 链接教材`, `⚠️ 易错警示`).
 - Enforce zero-tolerance explanation validation: every atomic question note MUST embed a valid solution callout note (`![[Q*A1]]`). Any question lacking an explanation MUST trigger a blocking audit error (`question-lacking-explanation`) with its exact cause identified.
 - Require exact answer identity or blocking review. Never accept fuzzy evidence alone. A passed answer manifest must have unique `answer_id` AND unique `question_id` (one owner per answer block, one match per question).
-- Before the final audit, after any matcher/adapter change that flips questions matched → unmatched, clean stale answer artifacts: orphaned `Q*<id>A1.md` notes and `![[Q*<id>A1]]` embeds in question notes (the audit errors `unexpected-generated-note` / `broken-link` otherwise).
+- Reconcile stale answer artifacts automatically from the application ownership
+  report whenever matching changes.
 - Permit Markdown-only presentation changes and verify lexical preservation.
 - Keep atomic questions off Canvas and knowledge linking deferred.
 - Complete only when `final-audit-report.json` reports `status: passed`.
