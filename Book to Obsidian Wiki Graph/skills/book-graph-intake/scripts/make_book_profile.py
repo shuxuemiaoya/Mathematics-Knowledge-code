@@ -509,7 +509,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     subparsers = parser.add_subparsers(dest="command", required=True)
     create = subparsers.add_parser("create")
     create.add_argument("source", type=Path)
-    create.add_argument("--vault-root", type=Path, required=True)
+    create.add_argument(
+        "--vault-root",
+        type=Path,
+        default=Path.home() / "Documents/ovenmathmap",
+    )
     create.add_argument("--book-root", type=Path, required=True)
     create.add_argument("--title", required=True)
     create.add_argument("--edition", default="")

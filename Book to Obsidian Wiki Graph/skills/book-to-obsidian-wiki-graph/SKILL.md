@@ -79,6 +79,8 @@ Never invoke `mathos-pdf-to-md`, `mathos-formatting`, or `mathos-segmentation`.
 
 ## Cross-Stage Invariants
 
+- Set default `vault_root` to `/Users/oven/Documents/ovenmathmap`.
+- Preserve the relative input directory structure when deriving `book_root` under `vault_root` (e.g. `<vault_root>/<input_relative_path>/<book_folder>`).
 - Preserve source meaning, complete blocks, and order.
 - Carry one profile path and frozen source digest through every handoff.
 - Carry immediate Markdown input/output hashes through formatting and splitting.

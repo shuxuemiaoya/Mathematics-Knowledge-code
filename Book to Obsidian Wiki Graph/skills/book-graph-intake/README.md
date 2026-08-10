@@ -48,8 +48,8 @@ python scripts\discover_sibling_canvas_style.py `
 
 ```powershell
 python scripts\make_book_profile.py create "<source>" `
-  --vault-root "<vault_root>" `
-  --book-root "<book_root>" `
+  --vault-root "/Users/oven/Documents/ovenmathmap" `
+  --book-root "/Users/oven/Documents/ovenmathmap\<input_relative_path>\<book_folder>" `
   --title "<title>" `
   --edition "<edition>" `
   --book-kind "<kind>" `

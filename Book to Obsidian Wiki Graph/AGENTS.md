@@ -112,6 +112,8 @@ For non-textbooks, inspect the book and let the LLM propose useful categories. R
 
 ## Preservation And Safety
 
+- Default output root (`vault_root`) to `/Users/oven/Documents/ovenmathmap`.
+- Preserve the relative input directory structure when deriving `book_root` under `vault_root` (e.g. `/Users/oven/Documents/ovenmathmap/<input_relative_path>/<book_folder>`).
 - Treat the source PDF or source Markdown as immutable.
 - Keep staging outside the final book directory.
 - Preserve complete content, source order, formulas, tables, links, images, examples, proofs, and exercises.

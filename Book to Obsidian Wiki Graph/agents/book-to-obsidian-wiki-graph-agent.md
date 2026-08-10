@@ -31,3 +31,16 @@ description: 专职负责将数学课本 PDF/Markdown 经过 forced-OCR、TOC �
 - “运行 Book to Obsidian Wiki Graph”
 - “解析课本 PDF 并构建知识图谱”
 - “对课本 Markdown 划分为知识点节点”
+
+---
+
+## 3. 输出根目录与目录结构规范
+
+- **输出根目录 (vault_root)**：固定为 `/Users/oven/Documents/ovenmathmap`
+- **目录结构继承规范 (Input Relative Directory Preservation)**：
+  - 生成 `book_root` 时，必须保留输入源文件/目录在输入源根目录下的相对路径结构。
+  - 例如：输入源路径为 `<input_workspace>/高中/必修第一册/人教A版/【人教版】高中必修 第一册数学电子课本.pdf`
+  - 对应的输出 `book_root` 为 `/Users/oven/Documents/ovenmathmap/高中/必修第一册/人教A版/【人教版】高中必修 第一册数学电子课本`
+  - 确保输出 Obsidian 知识图谱笔记的目录层级与输入源的层级结构完全一致。
+
+
