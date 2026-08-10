@@ -72,6 +72,22 @@ class LinkerWorkflowTests(unittest.TestCase):
         self.assertEqual({asset.node_type for asset in generated}, {"独立公式", "公式整理", "公式合集"})
         self.assertFalse((self.vault / "mathmap/公式结论/独立公式/角的相关概念.md").exists())
 
+    def test_question_group_with_formula_in_title_is_not_a_formula_node(self) -> None:
+        relative = (
+            "第三节 几何体的表面积与体积/题目/"
+            "▶ 基础点 2_ 公式法求体积/▶ 基础点 2_ 公式法求体积.md"
+        )
+        self.write(
+            self.source,
+            relative,
+            "# 公式法求体积\n\n![[book/第三节/questions/Q00000001.md]]\n",
+        )
+
+        assets = discover_source_assets(self.source, "测试书")
+        by_path = {asset.relative: asset.node_type for asset in assets}
+
+        self.assertNotIn(relative, by_path)
+
     def test_bootstrap_is_read_only_until_write_flag(self) -> None:
         self.write(self.vault, "mathmap/习题/questions/Q00000001.md", "# 题目\n\n1+1=?")
         self.write(self.vault, "mathmap/知识点/集合的概念.md", "# 集合的概念\n\n# 题型\n")

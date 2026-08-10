@@ -1,0 +1,450 @@
+{
+  "applied": false,
+  "audit_errors": [],
+  "bootstrapped": true,
+  "changes": [],
+  "conflicts": [],
+  "directories": [
+    {
+      "action": "unchanged",
+      "destination": "mathmap/习题/题型整理/未链接题型"
+    }
+  ],
+  "mode": "dry-run",
+  "run_id": "20260810T115859Z",
+  "summary": {
+    "audit_errors": 0,
+    "conflicts": 0,
+    "create": 0,
+    "create_directories": 0,
+    "unchanged": 1269,
+    "unlinked_question_types": 33,
+    "update": 0,
+    "warnings": 47
+  },
+  "warnings": [
+    {
+      "destination": "mathmap/公式结论/公式整理/高中数学全练一本通_2_知识导学.md",
+      "kind": "knowledge_point_review",
+      "node_type": "公式整理",
+      "quarantined": false,
+      "section": "第三节 几何体的表面积与体积",
+      "source": "第三节 几何体的表面积与体积/知识导学/知识导学.md",
+      "unlinked_question_type_folder": null
+    },
+    {
+      "destination": "mathmap/公式结论/公式整理/高中数学全练一本通_3_知识导学.md",
+      "kind": "knowledge_point_review",
+      "node_type": "公式整理",
+      "quarantined": false,
+      "section": "第九节 专题-二面角的四种求法",
+      "source": "第九节 专题-二面角的四种求法/知识导学/知识导学.md",
+      "unlinked_question_type_folder": null
+    },
+    {
+      "destination": "mathmap/公式结论/公式整理/高中数学全练一本通_6_知识导学.md",
+      "kind": "knowledge_point_review",
+      "node_type": "公式整理",
+      "quarantined": false,
+      "section": "第八节 空间平面与平面的垂直",
+      "source": "第八节 空间平面与平面的垂直/知识导学/知识导学.md",
+      "unlinked_question_type_folder": null
+    },
+    {
+      "destination": "mathmap/公式结论/公式整理/高中数学全练一本通_7_知识导学.md",
+      "kind": "knowledge_point_review",
+      "node_type": "公式整理",
+      "quarantined": false,
+      "section": "第六节 空间直线与平面的垂直",
+      "source": "第六节 空间直线与平面的垂直/知识导学/知识导学.md",
+      "unlinked_question_type_folder": null
+    },
+    {
+      "destination": "mathmap/公式结论/公式整理/高中数学全练一本通_8_知识导学.md",
+      "kind": "knowledge_point_review",
+      "node_type": "公式整理",
+      "quarantined": false,
+      "section": "第十一节 专题-立体几何的翻折问题",
+      "source": "第十一节 专题-立体几何的翻折问题/知识导学/知识导学.md",
+      "unlinked_question_type_folder": null
+    },
+    {
+      "destination": "mathmap/公式结论/公式整理/高中数学全练一本通_9_知识导学.md",
+      "kind": "knowledge_point_review",
+      "node_type": "公式整理",
+      "quarantined": false,
+      "section": "第十二节 专题-立体几何的截面问题",
+      "source": "第十二节 专题-立体几何的截面问题/知识导学/知识导学.md",
+      "unlinked_question_type_folder": null
+    },
+    {
+      "destination": "mathmap/公式结论/独立公式/(2) 锥体的体积公式.md",
+      "kind": "knowledge_point_review",
+      "node_type": "独立公式",
+      "quarantined": false,
+      "section": "第三节 几何体的表面积与体积",
+      "source": "第三节 几何体的表面积与体积/知识导学/(2) 锥体的体积公式/(2) 锥体的体积公式.md",
+      "unlinked_question_type_folder": null
+    },
+    {
+      "destination": "mathmap/公式结论/独立公式/（1）柱体的体积公式.md",
+      "kind": "knowledge_point_review",
+      "node_type": "独立公式",
+      "quarantined": false,
+      "section": "第三节 几何体的表面积与体积",
+      "source": "第三节 几何体的表面积与体积/知识导学/（1）柱体的体积公式/（1）柱体的体积公式.md",
+      "unlinked_question_type_folder": null
+    },
+    {
+      "destination": "mathmap/公式结论/独立公式/（3）台体的体积公式.md",
+      "kind": "knowledge_point_review",
+      "node_type": "独立公式",
+      "quarantined": false,
+      "section": "第三节 几何体的表面积与体积",
+      "source": "第三节 几何体的表面积与体积/知识导学/（3）台体的体积公式/（3）台体的体积公式.md",
+      "unlinked_question_type_folder": null
+    },
+    {
+      "destination": "mathmap/习题/题集/高中数学全练一本通_▶ ▷ 重点题型专练.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题集",
+      "quarantined": false,
+      "section": "第七节 专题-空间的距离问题",
+      "source": "第七节 专题-空间的距离问题/▶ ▷ 重点题型专练/▶ ▷ 重点题型专练.md",
+      "unlinked_question_type_folder": null
+    },
+    {
+      "destination": "mathmap/习题/题集/高中数学全练一本通_2_▶ ▷ 重点题型专练.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题集",
+      "quarantined": false,
+      "section": "第九节 专题-二面角的四种求法",
+      "source": "第九节 专题-二面角的四种求法/▶ ▷ 重点题型专练/▶ ▷ 重点题型专练.md",
+      "unlinked_question_type_folder": null
+    },
+    {
+      "destination": "mathmap/习题/题集/高中数学全练一本通_13_重点题型专练.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题集",
+      "quarantined": false,
+      "section": "第六节 空间直线与平面的垂直",
+      "source": "第六节 空间直线与平面的垂直/重点题型专练/重点题型专练.md",
+      "unlinked_question_type_folder": null
+    },
+    {
+      "destination": "mathmap/习题/题集/高中数学全练一本通_14_重点题型专练.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题集",
+      "quarantined": false,
+      "section": "第十一节 专题-立体几何的翻折问题",
+      "source": "第十一节 专题-立体几何的翻折问题/重点题型专练/重点题型专练.md",
+      "unlinked_question_type_folder": null
+    },
+    {
+      "destination": "mathmap/习题/题集/高中数学全练一本通_3_▶ ▷ 重点题型专练.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题集",
+      "quarantined": false,
+      "section": "第十二节 专题-立体几何的截面问题",
+      "source": "第十二节 专题-立体几何的截面问题/▶ ▷ 重点题型专练/▶ ▷ 重点题型专练.md",
+      "unlinked_question_type_folder": null
+    },
+    {
+      "destination": "mathmap/习题/题型整理/未链接题型/题型 1_ 空间点到平面的距离问题.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题型整理",
+      "quarantined": true,
+      "section": "第七节 专题-空间的距离问题",
+      "source": "第七节 专题-空间的距离问题/▶ ▷ 重点题型专练/题型 1_ 空间点到平面的距离问题/题型 1_ 空间点到平面的距离问题.md",
+      "unlinked_question_type_folder": "mathmap/习题/题型整理/未链接题型"
+    },
+    {
+      "destination": "mathmap/习题/题型整理/未链接题型/题型 2_ 直线与平面的距离.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题型整理",
+      "quarantined": true,
+      "section": "第七节 专题-空间的距离问题",
+      "source": "第七节 专题-空间的距离问题/▶ ▷ 重点题型专练/题型 2_ 直线与平面的距离/题型 2_ 直线与平面的距离.md",
+      "unlinked_question_type_folder": "mathmap/习题/题型整理/未链接题型"
+    },
+    {
+      "destination": "mathmap/习题/题型整理/未链接题型/题型 3_ 平面与平面的距离.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题型整理",
+      "quarantined": true,
+      "section": "第七节 专题-空间的距离问题",
+      "source": "第七节 专题-空间的距离问题/▶ ▷ 重点题型专练/题型 3_ 平面与平面的距离/题型 3_ 平面与平面的距离.md",
+      "unlinked_question_type_folder": "mathmap/习题/题型整理/未链接题型"
+    },
+    {
+      "destination": "mathmap/习题/题型整理/未链接题型/题型 4_ 点到直线的距离.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题型整理",
+      "quarantined": true,
+      "section": "第七节 专题-空间的距离问题",
+      "source": "第七节 专题-空间的距离问题/▶ ▷ 重点题型专练/题型 4_ 点到直线的距离/题型 4_ 点到直线的距离.md",
+      "unlinked_question_type_folder": "mathmap/习题/题型整理/未链接题型"
+    },
+    {
+      "destination": "mathmap/习题/题型整理/未链接题型/题型 5_ 平行直线的距离.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题型整理",
+      "quarantined": true,
+      "section": "第七节 专题-空间的距离问题",
+      "source": "第七节 专题-空间的距离问题/▶ ▷ 重点题型专练/题型 5_ 平行直线的距离/题型 5_ 平行直线的距离.md",
+      "unlinked_question_type_folder": "mathmap/习题/题型整理/未链接题型"
+    },
+    {
+      "destination": "mathmap/习题/题型整理/未链接题型/题型 6_ 异面直线的距离.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题型整理",
+      "quarantined": true,
+      "section": "第七节 专题-空间的距离问题",
+      "source": "第七节 专题-空间的距离问题/▶ ▷ 重点题型专练/题型 6_ 异面直线的距离/题型 6_ 异面直线的距离.md",
+      "unlinked_question_type_folder": "mathmap/习题/题型整理/未链接题型"
+    },
+    {
+      "destination": "mathmap/习题/题型整理/未链接题型/题型 1_ 等体积、割补、比例法求体积.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题型整理",
+      "quarantined": true,
+      "section": "第三节 几何体的表面积与体积",
+      "source": "第三节 几何体的表面积与体积/题目/题型 1_ 等体积、割补、比例法求体积/题型 1_ 等体积、割补、比例法求体积.md",
+      "unlinked_question_type_folder": "mathmap/习题/题型整理/未链接题型"
+    },
+    {
+      "destination": "mathmap/习题/题型整理/未链接题型/题型 2_ 球的截面问题.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题型整理",
+      "quarantined": true,
+      "section": "第三节 几何体的表面积与体积",
+      "source": "第三节 几何体的表面积与体积/题目/题型 2_ 球的截面问题/题型 2_ 球的截面问题.md",
+      "unlinked_question_type_folder": "mathmap/习题/题型整理/未链接题型"
+    },
+    {
+      "destination": "mathmap/习题/题型整理/未链接题型/题型 3_ 与球有关的切、接问题.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题型整理",
+      "quarantined": true,
+      "section": "第三节 几何体的表面积与体积",
+      "source": "第三节 几何体的表面积与体积/题目/题型 3_ 与球有关的切、接问题/题型 3_ 与球有关的切、接问题.md",
+      "unlinked_question_type_folder": "mathmap/习题/题型整理/未链接题型"
+    },
+    {
+      "destination": "mathmap/习题/题型整理/未链接题型/题型 1_ 面面垂直的概念与定理的理解.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题型整理",
+      "quarantined": true,
+      "section": "第八节 空间平面与平面的垂直",
+      "source": "第八节 空间平面与平面的垂直/题目/题型 1_ 面面垂直的概念与定理的理解/题型 1_ 面面垂直的概念与定理的理解.md",
+      "unlinked_question_type_folder": "mathmap/习题/题型整理/未链接题型"
+    },
+    {
+      "destination": "mathmap/习题/题型整理/未链接题型/题型 2_ 面面垂直的判定与证明.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题型整理",
+      "quarantined": true,
+      "section": "第八节 空间平面与平面的垂直",
+      "source": "第八节 空间平面与平面的垂直/题目/题型 2_ 面面垂直的判定与证明/题型 2_ 面面垂直的判定与证明.md",
+      "unlinked_question_type_folder": "mathmap/习题/题型整理/未链接题型"
+    },
+    {
+      "destination": "mathmap/习题/题型整理/未链接题型/题型 4_ 求二面角（后有专题专练）.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题型整理",
+      "quarantined": true,
+      "section": "第八节 空间平面与平面的垂直",
+      "source": "第八节 空间平面与平面的垂直/题目/题型 4_ 求二面角（后有专题专练）/题型 4_ 求二面角（后有专题专练）.md",
+      "unlinked_question_type_folder": "mathmap/习题/题型整理/未链接题型"
+    },
+    {
+      "destination": "mathmap/习题/题型整理/未链接题型/题型 5_ 线面、面面垂直的综合应用.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题型整理",
+      "quarantined": true,
+      "section": "第八节 空间平面与平面的垂直",
+      "source": "第八节 空间平面与平面的垂直/题目/题型 5_ 线面、面面垂直的综合应用/题型 5_ 线面、面面垂直的综合应用.md",
+      "unlinked_question_type_folder": "mathmap/习题/题型整理/未链接题型"
+    },
+    {
+      "destination": "mathmap/习题/题型整理/未链接题型/题型 1_ 线面垂直的概念与定理的理解.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题型整理",
+      "quarantined": true,
+      "section": "第六节 空间直线与平面的垂直",
+      "source": "第六节 空间直线与平面的垂直/重点题型专练/题型 1_ 线面垂直的概念与定理的理解/题型 1_ 线面垂直的概念与定理的理解.md",
+      "unlinked_question_type_folder": "mathmap/习题/题型整理/未链接题型"
+    },
+    {
+      "destination": "mathmap/习题/题型整理/未链接题型/题型 2_ 线面垂直的判定与证明.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题型整理",
+      "quarantined": true,
+      "section": "第六节 空间直线与平面的垂直",
+      "source": "第六节 空间直线与平面的垂直/重点题型专练/题型 2_ 线面垂直的判定与证明/题型 2_ 线面垂直的判定与证明.md",
+      "unlinked_question_type_folder": "mathmap/习题/题型整理/未链接题型"
+    },
+    {
+      "destination": "mathmap/习题/题型整理/未链接题型/题型 4_ 异面直线的夹角问题.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题型整理",
+      "quarantined": true,
+      "section": "第六节 空间直线与平面的垂直",
+      "source": "第六节 空间直线与平面的垂直/重点题型专练/题型 4_ 异面直线的夹角问题/题型 4_ 异面直线的夹角问题.md",
+      "unlinked_question_type_folder": "mathmap/习题/题型整理/未链接题型"
+    },
+    {
+      "destination": "mathmap/习题/题型整理/未链接题型/题型 1_ 翻折与点的轨迹.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题型整理",
+      "quarantined": true,
+      "section": "第十一节 专题-立体几何的翻折问题",
+      "source": "第十一节 专题-立体几何的翻折问题/重点题型专练/题型 1_ 翻折与点的轨迹/题型 1_ 翻折与点的轨迹.md",
+      "unlinked_question_type_folder": "mathmap/习题/题型整理/未链接题型"
+    },
+    {
+      "destination": "mathmap/习题/题型整理/未链接题型/题型 2_ 证明探索位置关系.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题型整理",
+      "quarantined": true,
+      "section": "第十一节 专题-立体几何的翻折问题",
+      "source": "第十一节 专题-立体几何的翻折问题/重点题型专练/题型 2_ 证明探索位置关系/题型 2_ 证明探索位置关系.md",
+      "unlinked_question_type_folder": "mathmap/习题/题型整理/未链接题型"
+    },
+    {
+      "destination": "mathmap/习题/题型整理/未链接题型/题型 3_ 外接球问题.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题型整理",
+      "quarantined": true,
+      "section": "第十一节 专题-立体几何的翻折问题",
+      "source": "第十一节 专题-立体几何的翻折问题/重点题型专练/题型 3_ 外接球问题/题型 3_ 外接球问题.md",
+      "unlinked_question_type_folder": "mathmap/习题/题型整理/未链接题型"
+    },
+    {
+      "destination": "mathmap/习题/题型整理/未链接题型/题型 4_ 体积最值问题.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题型整理",
+      "quarantined": true,
+      "section": "第十一节 专题-立体几何的翻折问题",
+      "source": "第十一节 专题-立体几何的翻折问题/重点题型专练/题型 4_ 体积最值问题/题型 4_ 体积最值问题.md",
+      "unlinked_question_type_folder": "mathmap/习题/题型整理/未链接题型"
+    },
+    {
+      "destination": "mathmap/习题/题型整理/未链接题型/题型 5_ 展开图及最短距离问题.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题型整理",
+      "quarantined": true,
+      "section": "第十一节 专题-立体几何的翻折问题",
+      "source": "第十一节 专题-立体几何的翻折问题/重点题型专练/题型 5_ 展开图及最短距离问题/题型 5_ 展开图及最短距离问题.md",
+      "unlinked_question_type_folder": "mathmap/习题/题型整理/未链接题型"
+    },
+    {
+      "destination": "mathmap/习题/题型整理/未链接题型/题型 6_ 折叠中的夹角关系.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题型整理",
+      "quarantined": true,
+      "section": "第十一节 专题-立体几何的翻折问题",
+      "source": "第十一节 专题-立体几何的翻折问题/重点题型专练/题型 6_ 折叠中的夹角关系/题型 6_ 折叠中的夹角关系.md",
+      "unlinked_question_type_folder": "mathmap/习题/题型整理/未链接题型"
+    },
+    {
+      "destination": "mathmap/习题/题型整理/未链接题型/题型 7_与折叠有关的综合问题.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题型整理",
+      "quarantined": true,
+      "section": "第十一节 专题-立体几何的翻折问题",
+      "source": "第十一节 专题-立体几何的翻折问题/重点题型专练/题型 7_与折叠有关的综合问题/题型 7_与折叠有关的综合问题.md",
+      "unlinked_question_type_folder": "mathmap/习题/题型整理/未链接题型"
+    },
+    {
+      "destination": "mathmap/习题/题型整理/未链接题型/题型 1_ 求结合体的外接球.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题型整理",
+      "quarantined": true,
+      "section": "第十三节 专题-几何体的外接球与内切球问题",
+      "source": "第十三节 专题-几何体的外接球与内切球问题/题型 1_ 求结合体的外接球/题型 1_ 求结合体的外接球.md",
+      "unlinked_question_type_folder": "mathmap/习题/题型整理/未链接题型"
+    },
+    {
+      "destination": "mathmap/习题/题型整理/未链接题型/题型 2_ 求结合体的内接球.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题型整理",
+      "quarantined": true,
+      "section": "第十三节 专题-几何体的外接球与内切球问题",
+      "source": "第十三节 专题-几何体的外接球与内切球问题/题型 2_ 求结合体的内接球/题型 2_ 求结合体的内接球.md",
+      "unlinked_question_type_folder": "mathmap/习题/题型整理/未链接题型"
+    },
+    {
+      "destination": "mathmap/习题/题型整理/未链接题型/题型 3_ 求几何体切、接球的最值问题.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题型整理",
+      "quarantined": true,
+      "section": "第十三节 专题-几何体的外接球与内切球问题",
+      "source": "第十三节 专题-几何体的外接球与内切球问题/题型 3_ 求几何体切、接球的最值问题/题型 3_ 求几何体切、接球的最值问题.md",
+      "unlinked_question_type_folder": "mathmap/习题/题型整理/未链接题型"
+    },
+    {
+      "destination": "mathmap/习题/题型整理/未链接题型/题型 1_ 作截面.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题型整理",
+      "quarantined": true,
+      "section": "第十二节 专题-立体几何的截面问题",
+      "source": "第十二节 专题-立体几何的截面问题/▶ ▷ 重点题型专练/题型 1_ 作截面/题型 1_ 作截面.md",
+      "unlinked_question_type_folder": "mathmap/习题/题型整理/未链接题型"
+    },
+    {
+      "destination": "mathmap/习题/题型整理/未链接题型/题型 2_ 截面有关的周长面积体积问题.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题型整理",
+      "quarantined": true,
+      "section": "第十二节 专题-立体几何的截面问题",
+      "source": "第十二节 专题-立体几何的截面问题/▶ ▷ 重点题型专练/题型 2_ 截面有关的周长面积体积问题/题型 2_ 截面有关的周长面积体积问题.md",
+      "unlinked_question_type_folder": "mathmap/习题/题型整理/未链接题型"
+    },
+    {
+      "destination": "mathmap/习题/题型整理/未链接题型/题型 1_ 动点的距离问题.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题型整理",
+      "quarantined": true,
+      "section": "第十节 专题-立体几何的动点问题专练",
+      "source": "第十节 专题-立体几何的动点问题专练/题型 1_ 动点的距离问题/题型 1_ 动点的距离问题.md",
+      "unlinked_question_type_folder": "mathmap/习题/题型整理/未链接题型"
+    },
+    {
+      "destination": "mathmap/习题/题型整理/未链接题型/题型 2_ 动点的角度问题.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题型整理",
+      "quarantined": true,
+      "section": "第十节 专题-立体几何的动点问题专练",
+      "source": "第十节 专题-立体几何的动点问题专练/题型 2_ 动点的角度问题/题型 2_ 动点的角度问题.md",
+      "unlinked_question_type_folder": "mathmap/习题/题型整理/未链接题型"
+    },
+    {
+      "destination": "mathmap/习题/题型整理/未链接题型/题型 3_ 动点的位置关系.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题型整理",
+      "quarantined": true,
+      "section": "第十节 专题-立体几何的动点问题专练",
+      "source": "第十节 专题-立体几何的动点问题专练/题型 3_ 动点的位置关系/题型 3_ 动点的位置关系.md",
+      "unlinked_question_type_folder": "mathmap/习题/题型整理/未链接题型"
+    },
+    {
+      "destination": "mathmap/习题/题型整理/未链接题型/题型 4_ 动点有关的长度问题.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题型整理",
+      "quarantined": true,
+      "section": "第十节 专题-立体几何的动点问题专练",
+      "source": "第十节 专题-立体几何的动点问题专练/题型 4_ 动点有关的长度问题/题型 4_ 动点有关的长度问题.md",
+      "unlinked_question_type_folder": "mathmap/习题/题型整理/未链接题型"
+    },
+    {
+      "destination": "mathmap/习题/题型整理/未链接题型/题型 5_ 动点的综合问题.md",
+      "kind": "knowledge_point_review",
+      "node_type": "题型整理",
+      "quarantined": true,
+      "section": "第十节 专题-立体几何的动点问题专练",
+      "source": "第十节 专题-立体几何的动点问题专练/题型 5_ 动点的综合问题/题型 5_ 动点的综合问题.md",
+      "unlinked_question_type_folder": "mathmap/习题/题型整理/未链接题型"
+    }
+  ]
+}

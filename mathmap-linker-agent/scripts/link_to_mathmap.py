@@ -707,7 +707,12 @@ def discover_source_assets(source_book: Path, book_short: str) -> list[SourceAss
                 node_type = "answers"
             elif "questions" in parts:
                 node_type = "questions"
-            elif is_formula_note(filename):
+            # Question-group notes may contain words such as "公式法" in their
+            # title.  They are not formula hierarchy nodes; treating them as
+            # 独立公式 creates an illegal formula -> question edge.  Keep the
+            # existing behavior for ordinary question groups (unclassified
+            # unless their name explicitly matches a Tier-2 pattern).
+            elif is_formula_note(filename) and "题目" not in parts:
                 node_type = classify_formula_tier(filename)
             elif re.match(r"^(题型|考点|易错点|微专题|习题)", filename):
                 node_type = "题型整理"

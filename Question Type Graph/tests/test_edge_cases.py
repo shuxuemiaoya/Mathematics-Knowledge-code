@@ -496,6 +496,57 @@ class TestEdgeCases(unittest.TestCase):
             self.assertEqual([question["number"] for question in questions], ["1"])
             self.assertEqual(review, [])
 
+    def test_exercise_roles_can_detach_from_knowledge_guide_into_reviewed_folder(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            note = tmp_path / "Section.md"
+            note.write_text(
+                "## Knowledge Guide\n"
+                "## 1. Concept\n"
+                "Theory body.\n"
+                "## Basic Point 1: Shapes\n"
+                "1. Question body.\n"
+                "## 2. Exercise Method\n"
+                "Method body.\n",
+                encoding="utf-8",
+            )
+            adapter = {
+                "_graph_root": str(tmp_path),
+                "content": {
+                    "unknown_label_policy": "retain",
+                    "question_patterns": [r"^(?P<number>\d+)[.]\s+"],
+                    "roles": [
+                        {"role": "knowledge_guide", "depth": 0, "pattern": r"Knowledge Guide"},
+                        {"role": "knowledge-item", "depth": 1, "pattern": r"\d+[.] .+", "heading_only": True},
+                        {"role": "basic-point", "depth": 1, "pattern": r"Basic Point \d+: .+"},
+                    ],
+                    "detached_role_folders": [
+                        {
+                            "from_ancestor_role": "knowledge_guide",
+                            "roles": ["basic-point"],
+                            "folder": "Questions",
+                        }
+                    ],
+                },
+            }
+
+            labels, questions, review = plan_note(
+                {"key": "section", "title": "Section", "path": str(note), "answer_context": "section"},
+                compile_role_rules(adapter),
+                compile_question_patterns(adapter),
+                adapter,
+            )
+
+            guide, concept, exercise, method = labels
+            self.assertEqual(concept["parent"], guide["key"])
+            self.assertIsNone(exercise["parent"])
+            self.assertEqual(method["parent"], exercise["key"])
+            self.assertEqual(guide["end_line"], exercise["start_line"] - 1)
+            self.assertEqual(exercise["end_line"], method["end_line"])
+            self.assertEqual(Path(exercise["output"]).parent.parent.name, "Questions")
+            self.assertEqual(questions[0]["owner"], exercise["key"])
+            self.assertEqual(review, [])
+
     def test_reviewed_answer_strategies_never_use_fuzzy_similarity_as_acceptance(self) -> None:
         question = {
             "number": "1",

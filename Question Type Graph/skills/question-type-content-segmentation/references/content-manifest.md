@@ -4,6 +4,14 @@ Adapter role regexes map source labels to semantic roles. A numeric `depth`
 expresses containment: a later block is a child of the nearest active block
 with lower depth. Question regexes require a named `number` capture.
 
+When OCR omits a printed training-band label and exercise roles would otherwise
+become children of a theory block, use `content.detached_role_folders`. Each
+reviewed rule names `from_ancestor_role`, a non-empty list of exercise `roles`,
+and the independent `folder`. Matching roots become siblings of the theory
+block, the theory range ends before the first detached root, and descendants
+remain attached to their exercise root. Folder labels belong in the adapter,
+not reusable compiler vocabulary.
+
 Hierarchy ownership is established before this stage. Functional labels such
 as training bands are children of the current TOC note and cannot redefine or
 flatten the primary hierarchy. Existing hierarchy embeds are hard range

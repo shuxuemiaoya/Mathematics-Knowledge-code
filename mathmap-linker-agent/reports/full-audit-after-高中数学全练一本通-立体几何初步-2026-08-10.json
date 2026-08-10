@@ -1,0 +1,5749 @@
+{
+  "counts": {
+    "embeds": 11042,
+    "files:questions": 7467,
+    "files:公式整理": 16,
+    "files:独立公式": 5,
+    "files:题型整理": 652,
+    "files:题集": 334
+  },
+  "issue_count": 1147,
+  "issues": [
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/1.1_空间向量及其运算.md",
+      "target": "mathmap/习题/题集/1.1.1_空间向量及其线性运算"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/1.1_空间向量及其运算.md",
+      "target": "mathmap/习题/题集/1.1.2_空间向量的数量积运算"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/1.3_空间向量及其运算的坐标表示.md",
+      "target": "mathmap/习题/题集/1.3.1_空间直角坐标系_1.3.2_空间向量运算的坐标表示"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/1.4.1_用空间向量研究直线、平面的位置关系.md",
+      "target": "mathmap/习题/题集/课时1_空间中点、直线和平面的向量表示"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/1.4.1_用空间向量研究直线、平面的位置关系.md",
+      "target": "mathmap/习题/题集/课时2_空间线面位置关系的判定"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/1.4.2_用空间向量研究距离、夹角问题.md",
+      "target": "mathmap/习题/题集/课时1_用空间向量研究距离问题"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/1.4.2_用空间向量研究距离、夹角问题.md",
+      "target": "mathmap/习题/题集/课时2_用空间向量研究夹角问题"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/1.4_充分条件与必要条件.md",
+      "target": "mathmap/习题/题型整理/1.4.1_充分条件与必要条件_1.4.2_充要条件"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/1.4_空间向量的应用.md",
+      "target": "mathmap/习题/题集/1.4.1_用空间向量研究直线、平面的位置关系"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/1.4_空间向量的应用.md",
+      "target": "mathmap/习题/题集/1.4.2_用空间向量研究距离、夹角问题"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/1.5_全称量词与存在量词.md",
+      "target": "mathmap/习题/题型整理/1.5.1_全称量词与存在量词"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/1.5_全称量词与存在量词.md",
+      "target": "mathmap/习题/题型整理/1.5.2_全称量词命题和存在量词命题的否定"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/2.1_直线的倾斜角与斜率.md",
+      "target": "mathmap/习题/题集/2.1.1_倾斜角与斜率_2.1.2_两条直线平行和垂直的判定"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/2.2_直线的方程.md",
+      "target": "mathmap/习题/题集/2.2.1_直线的点斜式方程"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/2.2_直线的方程.md",
+      "target": "mathmap/习题/题集/2.2.2_直线的两点式方程"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/2.2_直线的方程.md",
+      "target": "mathmap/习题/题集/2.2.3_直线的一般式方程"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/2.3_直线的交点坐标与距离公式.md",
+      "target": "mathmap/习题/题集/2.3.1_两条直线的交点坐标"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/2.3_直线的交点坐标与距离公式.md",
+      "target": "mathmap/习题/题集/2.3.2_两点间的距离公式"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/2.3_直线的交点坐标与距离公式.md",
+      "target": "mathmap/习题/题集/2.3.3_点到直线的距离公式_2.3.4_两条平行直线间的距离"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/2.4_圆的方程.md",
+      "target": "mathmap/习题/题集/2.4.1_圆的标准方程"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/2.4_圆的方程.md",
+      "target": "mathmap/习题/题集/2.4.2_圆的一般方程"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/2.5_直线与圆、圆与圆的位置关系.md",
+      "target": "mathmap/习题/题集/2.5.1_直线与圆的位置关系"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/2.5_直线与圆、圆与圆的位置关系.md",
+      "target": "mathmap/习题/题集/2.5.2_圆与圆的位置关系"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/3.1.2_椭圆的简单几何性质.md",
+      "target": "mathmap/习题/题集/课时1_椭圆的简单几何性质"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/3.1.2_椭圆的简单几何性质.md",
+      "target": "mathmap/习题/题集/课时2_直线与椭圆的位置关系"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/3.1_函数的概念及其表示.md",
+      "target": "mathmap/习题/题型整理/3.1.1_函数的概念"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/3.1_函数的概念及其表示.md",
+      "target": "mathmap/习题/题型整理/3.1.2_函数的表示法"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/3.1_椭圆.md",
+      "target": "mathmap/习题/题集/3.1.1_椭圆及其标准方程"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/3.1_椭圆.md",
+      "target": "mathmap/习题/题集/3.1.2_椭圆的简单几何性质"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/3.2.1_单调性与最大(小)值.md",
+      "target": "mathmap/习题/题型整理/课时1_函数的单调性"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/3.2.1_单调性与最大(小)值.md",
+      "target": "mathmap/习题/题型整理/课时2_函数的最大(小)值"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/3.2.2_双曲线的简单几何性质.md",
+      "target": "mathmap/习题/题集/课时1_双曲线的简单几何性质"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/3.2.2_双曲线的简单几何性质.md",
+      "target": "mathmap/习题/题集/课时2_直线与双曲线的位置关系"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/3.2_函数的基本性质.md",
+      "target": "mathmap/习题/题型整理/3.2.1_单调性与最大(小)值"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/3.2_函数的基本性质.md",
+      "target": "mathmap/习题/题型整理/3.2.2_奇偶性"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/3.2_双曲线.md",
+      "target": "mathmap/习题/题集/3.2.1_双曲线及其标准方程"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/3.2_双曲线.md",
+      "target": "mathmap/习题/题集/3.2.2_双曲线的简单几何性质"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/3.3_抛物线.md",
+      "target": "mathmap/习题/题集/3.3.1_抛物线及其标准方程"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/3.3_抛物线.md",
+      "target": "mathmap/习题/题集/3.3.2_抛物线的简单几何性质"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/4.1_指数.md",
+      "target": "mathmap/习题/题型整理/4.1.1_n次方根与分数指数幂_4.1.2_无理数指数幂及其运算"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/4.2_指数函数.md",
+      "target": "mathmap/习题/题型整理/4.2.1_指数函数的概念"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/4.2_指数函数.md",
+      "target": "mathmap/习题/题型整理/4.2.2_指数函数的图象和性质"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/4.3_对数.md",
+      "target": "mathmap/习题/题型整理/4.3.1_对数的概念_4.3.2_对数的运算"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/4.4_对数函数.md",
+      "target": "mathmap/习题/题型整理/4.4.1_对数函数的概念_4.4.2_对数函数的图象和性质"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/4.4_对数函数.md",
+      "target": "mathmap/习题/题型整理/4.4.3_不同函数增长的差异"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/4.5_函数的应用(二).md",
+      "target": "mathmap/习题/题型整理/4.5.1_函数的零点与方程的解"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/4.5_函数的应用(二).md",
+      "target": "mathmap/习题/题型整理/4.5.2_用二分法求方程的近似解"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/4.5_函数的应用(二).md",
+      "target": "mathmap/习题/题型整理/4.5.3_函数模型的应用"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/5.1_任意角和弧度制.md",
+      "target": "mathmap/习题/题型整理/5.1.1_任意角"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/5.1_任意角和弧度制.md",
+      "target": "mathmap/习题/题型整理/5.1.2_弧度制"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/5.2_三角函数的概念.md",
+      "target": "mathmap/习题/题型整理/5.2.1_三角函数的概念"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/5.2_三角函数的概念.md",
+      "target": "mathmap/习题/题型整理/5.2.2_同角三角函数的基本关系"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/5.4.2_正弦函数_余弦函数的性质.md",
+      "target": "mathmap/习题/题型整理/课时1_正弦函数_余弦函数的性质(1)"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/5.4.2_正弦函数_余弦函数的性质.md",
+      "target": "mathmap/习题/题型整理/课时2_正弦函数_余弦函数的性质(2)"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/5.4_三角函数的图象与性质.md",
+      "target": "mathmap/习题/题型整理/5.4.1_正弦函数_余弦函数的图象"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/5.4_三角函数的图象与性质.md",
+      "target": "mathmap/习题/题型整理/5.4.2_正弦函数_余弦函数的性质"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/5.4_三角函数的图象与性质.md",
+      "target": "mathmap/习题/题型整理/5.4.3_正切函数的性质与图象"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/5.5.1_两角和与差的正弦_余弦和正切公式.md",
+      "target": "mathmap/习题/题型整理/课时1_两角和与差的正弦_余弦和正切公式"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/5.5.1_两角和与差的正弦_余弦和正切公式.md",
+      "target": "mathmap/习题/题型整理/课时2_二倍角的正弦_余弦_正切公式"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/5.5_三角恒等变换.md",
+      "target": "mathmap/习题/题型整理/5.5.1_两角和与差的正弦_余弦和正切公式"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/5.5_三角恒等变换.md",
+      "target": "mathmap/习题/题型整理/5.5.2_简单的三角恒等变换"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/5.6_函数_y_A_sin_wx_phi.md",
+      "target": "mathmap/习题/题型整理/5.6.1_5.6.2_图象"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ $y = A _sin x$ 的图像与性质.md",
+      "target": "mathmap/习题/questions/Q00004622"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ $y = A _sin x$ 的图像与性质.md",
+      "target": "mathmap/习题/questions/Q00004623"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ $y = A _sin x$ 的图像与性质.md",
+      "target": "mathmap/习题/questions/Q00004624"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ $y = A _sin x$ 的图像与性质.md",
+      "target": "mathmap/习题/questions/Q00004625"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ $y = A _sin x$ 的图像与性质.md",
+      "target": "mathmap/习题/questions/Q00004626"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 判断三角函数的周期.md",
+      "target": "mathmap/习题/questions/Q00004312"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 判断三角函数的周期.md",
+      "target": "mathmap/习题/questions/Q00004313"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 利用三角函数定义求值.md",
+      "target": "mathmap/习题/questions/Q00004201"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 利用三角函数定义求值.md",
+      "target": "mathmap/习题/questions/Q00004202"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 利用三角函数定义求值.md",
+      "target": "mathmap/习题/questions/Q00004203"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 利用三角函数定义求值.md",
+      "target": "mathmap/习题/questions/Q00004204"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 利用三角函数定义求值.md",
+      "target": "mathmap/习题/questions/Q00004205"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 利用三角函数定义求值.md",
+      "target": "mathmap/习题/questions/Q00004206"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 利用三角函数定义求值.md",
+      "target": "mathmap/习题/questions/Q00004207"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 利用三角函数定义求值.md",
+      "target": "mathmap/习题/questions/Q00004208"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 利用公式化简与求值.md",
+      "target": "mathmap/习题/questions/Q00004428"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 利用公式化简与求值.md",
+      "target": "mathmap/习题/questions/Q00004429"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 利用公式化简与求值.md",
+      "target": "mathmap/习题/questions/Q00004430"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 利用公式化简与求值.md",
+      "target": "mathmap/习题/questions/Q00004431"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 利用诱导公式求三角函数值.md",
+      "target": "mathmap/习题/questions/Q00004264"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 利用诱导公式求三角函数值.md",
+      "target": "mathmap/习题/questions/Q00004265"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 半角公式.md",
+      "target": "mathmap/习题/questions/Q00004587"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 半角公式.md",
+      "target": "mathmap/习题/questions/Q00004588"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 半角公式.md",
+      "target": "mathmap/习题/questions/Q00004589"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 半角公式.md",
+      "target": "mathmap/习题/questions/Q00004590"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 半角公式.md",
+      "target": "mathmap/习题/questions/Q00004591"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 向量及相关概念.md",
+      "target": "mathmap/习题/questions/Q00004767"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 向量及相关概念.md",
+      "target": "mathmap/习题/questions/Q00004768"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 向量及相关概念.md",
+      "target": "mathmap/习题/questions/Q00004769"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 向量及相关概念.md",
+      "target": "mathmap/习题/questions/Q00004770"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 向量数量积的概念.md",
+      "target": "mathmap/习题/questions/Q00004872"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 向量数量积的概念.md",
+      "target": "mathmap/习题/questions/Q00004873"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 向量数量积的概念.md",
+      "target": "mathmap/习题/questions/Q00004874"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 向量数量积的概念.md",
+      "target": "mathmap/习题/questions/Q00004875"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 向量数量积的概念.md",
+      "target": "mathmap/习题/questions/Q00004876"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 向量数量积的概念.md",
+      "target": "mathmap/习题/questions/Q00004877"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 向量的正交分解及坐标表示.md",
+      "target": "mathmap/习题/questions/Q00004940"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 向量的正交分解及坐标表示.md",
+      "target": "mathmap/习题/questions/Q00004941"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 向量的正交分解及坐标表示.md",
+      "target": "mathmap/习题/questions/Q00004942"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 向量的正交分解及坐标表示.md",
+      "target": "mathmap/习题/questions/Q00004943"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 向量的正交分解及坐标表示.md",
+      "target": "mathmap/习题/questions/Q00004944"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 向量的正交分解及坐标表示.md",
+      "target": "mathmap/习题/questions/Q00004945"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 向量的正交分解及坐标表示.md",
+      "target": "mathmap/习题/questions/Q00004946"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 基底的概念.md",
+      "target": "mathmap/习题/questions/Q00004840"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 基底的概念.md",
+      "target": "mathmap/习题/questions/Q00004841"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 基底的概念.md",
+      "target": "mathmap/习题/questions/Q00004842"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 基底的概念.md",
+      "target": "mathmap/习题/questions/Q00004843"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 基底的概念.md",
+      "target": "mathmap/习题/questions/Q00004844"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 对任意角的概念的理解.md",
+      "target": "mathmap/习题/questions/Q00004154"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 对任意角的概念的理解.md",
+      "target": "mathmap/习题/questions/Q00004155"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 对任意角的概念的理解.md",
+      "target": "mathmap/习题/questions/Q00004156"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 对任意角的概念的理解.md",
+      "target": "mathmap/习题/questions/Q00004157"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 对任意角的概念的理解.md",
+      "target": "mathmap/习题/questions/Q00004158"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 已知正弦值求角.md",
+      "target": "mathmap/习题/questions/Q00004745"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 已知正弦值求角.md",
+      "target": "mathmap/习题/questions/Q00004746"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 已知正弦值求角.md",
+      "target": "mathmap/习题/questions/Q00004747"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 已知正弦值求角.md",
+      "target": "mathmap/习题/questions/Q00004748"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 已知正弦值求角.md",
+      "target": "mathmap/习题/questions/Q00004749"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 已知正弦值求角.md",
+      "target": "mathmap/习题/questions/Q00004750"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 数乘向量的概念.md",
+      "target": "mathmap/习题/questions/Q00004805"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 数乘向量的概念.md",
+      "target": "mathmap/习题/questions/Q00004806"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 数乘向量的概念.md",
+      "target": "mathmap/习题/questions/Q00004807"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 正切函数图像.md",
+      "target": "mathmap/习题/questions/Q00004385"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_ 正切函数图像.md",
+      "target": "mathmap/习题/questions/Q00004386"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_五点作图法作图像.md",
+      "target": "mathmap/习题/questions/Q00004291"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_余弦定理解三角形.md",
+      "target": "mathmap/习题/questions/Q00005079"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_余弦定理解三角形.md",
+      "target": "mathmap/习题/questions/Q00005080"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_余弦定理解三角形.md",
+      "target": "mathmap/习题/questions/Q00005081"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_余弦定理解三角形.md",
+      "target": "mathmap/习题/questions/Q00005082"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_化简与求值.md",
+      "target": "mathmap/习题/questions/Q00004495"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_化简与求值.md",
+      "target": "mathmap/习题/questions/Q00004496"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_化简与求值.md",
+      "target": "mathmap/习题/questions/Q00004497"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_化简与求值.md",
+      "target": "mathmap/习题/questions/Q00004498"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_化简与求值.md",
+      "target": "mathmap/习题/questions/Q00004499"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 1_化简与求值.md",
+      "target": "mathmap/习题/questions/Q00004500"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ $y = _sin(x + _varphi)$ 的图像与性质.md",
+      "target": "mathmap/习题/questions/Q00004627"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ $y = _sin(x + _varphi)$ 的图像与性质.md",
+      "target": "mathmap/习题/questions/Q00004628"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ $y = _sin(x + _varphi)$ 的图像与性质.md",
+      "target": "mathmap/习题/questions/Q00004629"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ $y = _sin(x + _varphi)$ 的图像与性质.md",
+      "target": "mathmap/习题/questions/Q00004630"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ $y = _sin(x + _varphi)$ 的图像与性质.md",
+      "target": "mathmap/习题/questions/Q00004631"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ $y = _sin(x + _varphi)$ 的图像与性质.md",
+      "target": "mathmap/习题/questions/Q00004632"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ $y = _sin(x + _varphi)$ 的图像与性质.md",
+      "target": "mathmap/习题/questions/Q00004633"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ $y = _sin(x + _varphi)$ 的图像与性质.md",
+      "target": "mathmap/习题/questions/Q00004634"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 倍角公式证明三角恒等式.md",
+      "target": "mathmap/习题/questions/Q00004501"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 倍角公式证明三角恒等式.md",
+      "target": "mathmap/习题/questions/Q00004502"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 倍角公式证明三角恒等式.md",
+      "target": "mathmap/习题/questions/Q00004503"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 倍角公式证明三角恒等式.md",
+      "target": "mathmap/习题/questions/Q00004504"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 判断三角函数的奇偶性.md",
+      "target": "mathmap/习题/questions/Q00004314"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 判断三角函数的奇偶性.md",
+      "target": "mathmap/习题/questions/Q00004315"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 利用辅助角公式的化简.md",
+      "target": "mathmap/习题/questions/Q00004432"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 向量线性运算的坐标表示.md",
+      "target": "mathmap/习题/questions/Q00004947"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 向量线性运算的坐标表示.md",
+      "target": "mathmap/习题/questions/Q00004948"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 向量线性运算的坐标表示.md",
+      "target": "mathmap/习题/questions/Q00004949"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 向量线性运算的坐标表示.md",
+      "target": "mathmap/习题/questions/Q00004950"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 向量线性运算的坐标表示.md",
+      "target": "mathmap/习题/questions/Q00004951"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 向量线性运算的坐标表示.md",
+      "target": "mathmap/习题/questions/Q00004952"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 向量线性运算的坐标表示.md",
+      "target": "mathmap/习题/questions/Q00004953"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 向量线性运算的坐标表示.md",
+      "target": "mathmap/习题/questions/Q00004954"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 向量线性运算的坐标表示.md",
+      "target": "mathmap/习题/questions/Q00004955"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 向量线性运算的坐标表示.md",
+      "target": "mathmap/习题/questions/Q00004956"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 向量线性运算的坐标表示.md",
+      "target": "mathmap/习题/questions/Q00004957"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 含绝对值的三角函数图像.md",
+      "target": "mathmap/习题/questions/Q00004292"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 含绝对值的三角函数图像.md",
+      "target": "mathmap/习题/questions/Q00004293"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 含绝对值的三角函数图像.md",
+      "target": "mathmap/习题/questions/Q00004294"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 含绝对值的三角函数图像.md",
+      "target": "mathmap/习题/questions/Q00004295"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 已知三角函数值求参数.md",
+      "target": "mathmap/习题/questions/Q00004209"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 已知三角函数值求参数.md",
+      "target": "mathmap/习题/questions/Q00004210"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 已知三角函数值求参数.md",
+      "target": "mathmap/习题/questions/Q00004211"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 已知三角函数值求参数.md",
+      "target": "mathmap/习题/questions/Q00004212"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 已知余弦值求角.md",
+      "target": "mathmap/习题/questions/Q00004751"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 已知余弦值求角.md",
+      "target": "mathmap/习题/questions/Q00004752"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 已知余弦值求角.md",
+      "target": "mathmap/习题/questions/Q00004753"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 正弦定理的概念与辨析.md",
+      "target": "mathmap/习题/questions/Q00005083"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 正弦定理的概念与辨析.md",
+      "target": "mathmap/习题/questions/Q00005084"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 正弦定理的概念与辨析.md",
+      "target": "mathmap/习题/questions/Q00005085"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 正弦定理的概念与辨析.md",
+      "target": "mathmap/习题/questions/Q00005086"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 正弦定理的概念与辨析.md",
+      "target": "mathmap/习题/questions/Q00005087"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 正弦定理的概念与辨析.md",
+      "target": "mathmap/习题/questions/Q00005088"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 正弦定理的概念与辨析.md",
+      "target": "mathmap/习题/questions/Q00005089"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 正弦定理的概念与辨析.md",
+      "target": "mathmap/习题/questions/Q00005090"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 求向量的数量积.md",
+      "target": "mathmap/习题/questions/Q00004878"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 求向量的数量积.md",
+      "target": "mathmap/习题/questions/Q00004879"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 求向量的数量积.md",
+      "target": "mathmap/习题/questions/Q00004880"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 求向量的数量积.md",
+      "target": "mathmap/习题/questions/Q00004881"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 求向量的数量积.md",
+      "target": "mathmap/习题/questions/Q00004882"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 求向量的数量积.md",
+      "target": "mathmap/习题/questions/Q00004883"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 求向量的数量积.md",
+      "target": "mathmap/习题/questions/Q00004884"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 求正切函数的定义域.md",
+      "target": "mathmap/习题/questions/Q00004387"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 相等向量与共线向量.md",
+      "target": "mathmap/习题/questions/Q00004771"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 相等向量与共线向量.md",
+      "target": "mathmap/习题/questions/Q00004772"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 相等向量与共线向量.md",
+      "target": "mathmap/习题/questions/Q00004773"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 终边相同的角.md",
+      "target": "mathmap/习题/questions/Q00004159"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 终边相同的角.md",
+      "target": "mathmap/习题/questions/Q00004160"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 终边相同的角.md",
+      "target": "mathmap/习题/questions/Q00004161"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 终边相同的角.md",
+      "target": "mathmap/习题/questions/Q00004162"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_ 终边相同的角.md",
+      "target": "mathmap/习题/questions/Q00004163"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_三角函数式的化简.md",
+      "target": "mathmap/习题/questions/Q00004266"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_三角函数式的化简.md",
+      "target": "mathmap/习题/questions/Q00004267"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_三角函数式的化简.md",
+      "target": "mathmap/习题/questions/Q00004268"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_三角函数的化简.md",
+      "target": "mathmap/习题/questions/Q00004243"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 2_三角函数的化简.md",
+      "target": "mathmap/习题/questions/Q00004244"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ $y = _sin _omega x$ 的图像与性质.md",
+      "target": "mathmap/习题/questions/Q00004635"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ $y = _sin _omega x$ 的图像与性质.md",
+      "target": "mathmap/习题/questions/Q00004636"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ $y = _sin _omega x$ 的图像与性质.md",
+      "target": "mathmap/习题/questions/Q00004637"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ $y = _sin _omega x$ 的图像与性质.md",
+      "target": "mathmap/习题/questions/Q00004638"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ $y = _sin _omega x$ 的图像与性质.md",
+      "target": "mathmap/习题/questions/Q00004639"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ $y = _sin _omega x$ 的图像与性质.md",
+      "target": "mathmap/习题/questions/Q00004640"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ $y = _sin _omega x$ 的图像与性质.md",
+      "target": "mathmap/习题/questions/Q00004641"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ $y = _sin _omega x$ 的图像与性质.md",
+      "target": "mathmap/习题/questions/Q00004642"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ 判断三角函数值的正负.md",
+      "target": "mathmap/习题/questions/Q00004213"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ 判断三角函数值的正负.md",
+      "target": "mathmap/习题/questions/Q00004214"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ 判断三角函数值的正负.md",
+      "target": "mathmap/习题/questions/Q00004215"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ 判断三角函数值的正负.md",
+      "target": "mathmap/习题/questions/Q00004216"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ 判断三角函数值的正负.md",
+      "target": "mathmap/习题/questions/Q00004217"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ 判断三角函数值的正负.md",
+      "target": "mathmap/习题/questions/Q00004218"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ 判断三角函数值的正负.md",
+      "target": "mathmap/习题/questions/Q00004219"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ 判断正切函数的周期.md",
+      "target": "mathmap/习题/questions/Q00004388"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ 判断正切函数的周期.md",
+      "target": "mathmap/习题/questions/Q00004389"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ 判断正切函数的周期.md",
+      "target": "mathmap/习题/questions/Q00004390"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ 利用诱导公式证明三角恒等式.md",
+      "target": "mathmap/习题/questions/Q00004269"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ 利用诱导公式证明三角恒等式.md",
+      "target": "mathmap/习题/questions/Q00004270"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ 利用诱导公式证明三角恒等式.md",
+      "target": "mathmap/习题/questions/Q00004271"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ 利用诱导公式证明三角恒等式.md",
+      "target": "mathmap/习题/questions/Q00004272"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ 区域角的表示.md",
+      "target": "mathmap/习题/questions/Q00004164"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ 区域角的表示.md",
+      "target": "mathmap/习题/questions/Q00004165"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ 区域角的表示.md",
+      "target": "mathmap/习题/questions/Q00004166"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ 已知正切值求角.md",
+      "target": "mathmap/习题/questions/Q00004754"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ 已知正切值求角.md",
+      "target": "mathmap/习题/questions/Q00004755"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ 已知正切值求角.md",
+      "target": "mathmap/习题/questions/Q00004756"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ 正弦定理解三角形.md",
+      "target": "mathmap/习题/questions/Q00005091"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ 正弦定理解三角形.md",
+      "target": "mathmap/习题/questions/Q00005092"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ 正弦定理解三角形.md",
+      "target": "mathmap/习题/questions/Q00005093"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ 正弦定理解三角形.md",
+      "target": "mathmap/习题/questions/Q00005094"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ 正弦定理解三角形.md",
+      "target": "mathmap/习题/questions/Q00005095"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ 正弦定理解三角形.md",
+      "target": "mathmap/习题/questions/Q00005096"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ 求三角函数的单调性.md",
+      "target": "mathmap/习题/questions/Q00004316"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ 求三角函数的单调性.md",
+      "target": "mathmap/习题/questions/Q00004317"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ 相反向量的概念.md",
+      "target": "mathmap/习题/questions/Q00004774"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ 相反向量的概念.md",
+      "target": "mathmap/习题/questions/Q00004775"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ 相反向量的概念.md",
+      "target": "mathmap/习题/questions/Q00004776"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ 相反向量的概念.md",
+      "target": "mathmap/习题/questions/Q00004777"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_ 相反向量的概念.md",
+      "target": "mathmap/习题/questions/Q00004778"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 3_三角函数的证明.md",
+      "target": "mathmap/习题/questions/Q00004245"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 4_ 五点法作 $y = A _sin(_omega x + _varphi)$ 的图像.md",
+      "target": "mathmap/习题/questions/Q00004643"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 4_ 函数的对称轴与对称中心.md",
+      "target": "mathmap/习题/questions/Q00004318"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 4_ 判断正切函数的奇偶性.md",
+      "target": "mathmap/习题/questions/Q00004391"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 4_ 向量加减法的几何表示.md",
+      "target": "mathmap/习题/questions/Q00004779"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 4_ 向量加减法的几何表示.md",
+      "target": "mathmap/习题/questions/Q00004780"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 4_ 向量加减法的几何表示.md",
+      "target": "mathmap/习题/questions/Q00004781"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 4_ 向量加减法的几何表示.md",
+      "target": "mathmap/习题/questions/Q00004782"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 4_ 向量加减法的几何表示.md",
+      "target": "mathmap/习题/questions/Q00004783"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 4_ 确定已知角所在象限.md",
+      "target": "mathmap/习题/questions/Q00004167"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 4_ 确定已知角所在象限.md",
+      "target": "mathmap/习题/questions/Q00004168"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 4_作三角函数线.md",
+      "target": "mathmap/习题/questions/Q00004220"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 5_ 函数 $y = A _sin(_omega x + _varphi)$ 的相关概念.md",
+      "target": "mathmap/习题/questions/Q00004644"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 5_ 向量加减法的运算.md",
+      "target": "mathmap/习题/questions/Q00004784"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 5_ 向量加减法的运算.md",
+      "target": "mathmap/习题/questions/Q00004785"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 5_ 向量加减法的运算.md",
+      "target": "mathmap/习题/questions/Q00004786"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 5_ 向量加减法的运算.md",
+      "target": "mathmap/习题/questions/Q00004787"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 5_ 向量加减法的运算.md",
+      "target": "mathmap/习题/questions/Q00004788"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 5_ 求单位圆中角的终边.md",
+      "target": "mathmap/习题/questions/Q00004221"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 5_三角函数的值域问题.md",
+      "target": "mathmap/习题/questions/Q00004319"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 5_三角函数的值域问题.md",
+      "target": "mathmap/习题/questions/Q00004320"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 5_三角函数的值域问题.md",
+      "target": "mathmap/习题/questions/Q00004321"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 5_三角函数的值域问题.md",
+      "target": "mathmap/习题/questions/Q00004322"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 5_三角函数的值域问题.md",
+      "target": "mathmap/习题/questions/Q00004323"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 5_三角函数的值域问题.md",
+      "target": "mathmap/习题/questions/Q00004324"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 5_三角函数的值域问题.md",
+      "target": "mathmap/习题/questions/Q00004325"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 5_三角函数的值域问题.md",
+      "target": "mathmap/习题/questions/Q00004326"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 5_三角函数的值域问题.md",
+      "target": "mathmap/习题/questions/Q00004327"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 5_三角函数的值域问题.md",
+      "target": "mathmap/习题/questions/Q00004328"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 5_三角函数的值域问题.md",
+      "target": "mathmap/习题/questions/Q00004329"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 5_三角函数的值域问题.md",
+      "target": "mathmap/习题/questions/Q00004330"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 5_三角函数的值域问题.md",
+      "target": "mathmap/习题/questions/Q00004331"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 5_三角函数的值域问题.md",
+      "target": "mathmap/习题/questions/Q00004332"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 5_三角函数的值域问题.md",
+      "target": "mathmap/习题/questions/Q00004333"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 5_由角的加减确定角范围.md",
+      "target": "mathmap/习题/questions/Q00004169"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 5_由角的加减确定角范围.md",
+      "target": "mathmap/习题/questions/Q00004170"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 5_由角的加减确定角范围.md",
+      "target": "mathmap/习题/questions/Q00004171"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 5_由角的加减确定角范围.md",
+      "target": "mathmap/习题/questions/Q00004172"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 6_弧度制的相关概念.md",
+      "target": "mathmap/习题/questions/Q00004173"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 6_弧度制的相关概念.md",
+      "target": "mathmap/习题/questions/Q00004174"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 6_弧度制的相关概念.md",
+      "target": "mathmap/习题/questions/Q00004175"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 7_ 正切函数的的对称性.md",
+      "target": "mathmap/习题/questions/Q00004393"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 7_ 正切函数的的对称性.md",
+      "target": "mathmap/习题/questions/Q00004394"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 7_ 正切函数的的对称性.md",
+      "target": "mathmap/习题/questions/Q00004395"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 7_ 正切函数的的对称性.md",
+      "target": "mathmap/习题/questions/Q00004396"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 7_弧度制与角度制的互化.md",
+      "target": "mathmap/习题/questions/Q00004176"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 8_ 正切函数的值域.md",
+      "target": "mathmap/习题/questions/Q00004397"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 8_ 正切函数的值域.md",
+      "target": "mathmap/习题/questions/Q00004398"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 8_ 正切函数的值域.md",
+      "target": "mathmap/习题/questions/Q00004399"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 8_ 正切函数的值域.md",
+      "target": "mathmap/习题/questions/Q00004400"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 8_ 正切函数的值域.md",
+      "target": "mathmap/习题/questions/Q00004401"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 8_ 正切函数的值域.md",
+      "target": "mathmap/习题/questions/Q00004402"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 8_ 正切函数的值域.md",
+      "target": "mathmap/习题/questions/Q00004403"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 8_ 正切函数的值域.md",
+      "target": "mathmap/习题/questions/Q00004404"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 8_用弧度制表示角的集合.md",
+      "target": "mathmap/习题/questions/Q00004177"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 8_用弧度制表示角的集合.md",
+      "target": "mathmap/习题/questions/Q00004178"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 8_用弧度制表示角的集合.md",
+      "target": "mathmap/习题/questions/Q00004179"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 8_用弧度制表示角的集合.md",
+      "target": "mathmap/习题/questions/Q00004180"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点 8_用弧度制表示角的集合.md",
+      "target": "mathmap/习题/questions/Q00004181"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/▶基础点6_正切函数比较大小.md",
+      "target": "mathmap/习题/questions/Q00004392"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题1 集合与常用逻辑用语.md",
+      "target": "mathmap/习题/questions/复习参考题1 集合与常用逻辑用语-T1"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题1 集合与常用逻辑用语.md",
+      "target": "mathmap/习题/questions/复习参考题1 集合与常用逻辑用语-T2"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题1 集合与常用逻辑用语.md",
+      "target": "mathmap/习题/questions/复习参考题1 集合与常用逻辑用语-T3"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题1 集合与常用逻辑用语.md",
+      "target": "mathmap/习题/questions/复习参考题1 集合与常用逻辑用语-T4"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题1 集合与常用逻辑用语.md",
+      "target": "mathmap/习题/questions/复习参考题1 集合与常用逻辑用语-T5"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题1 集合与常用逻辑用语.md",
+      "target": "mathmap/习题/questions/复习参考题1 集合与常用逻辑用语-T6"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题1 集合与常用逻辑用语.md",
+      "target": "mathmap/习题/questions/复习参考题1 集合与常用逻辑用语-T7"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题1 集合与常用逻辑用语.md",
+      "target": "mathmap/习题/questions/复习参考题1 集合与常用逻辑用语-T8"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题1 集合与常用逻辑用语.md",
+      "target": "mathmap/习题/questions/复习参考题1 集合与常用逻辑用语-T9"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题1 集合与常用逻辑用语.md",
+      "target": "mathmap/习题/questions/复习参考题1 集合与常用逻辑用语-T10"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题1 集合与常用逻辑用语.md",
+      "target": "mathmap/习题/questions/复习参考题1 集合与常用逻辑用语-T11"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题1 集合与常用逻辑用语.md",
+      "target": "mathmap/习题/questions/复习参考题1 集合与常用逻辑用语-T12"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题2 一元二次函数、方程和不等式.md",
+      "target": "mathmap/习题/questions/复习参考题2 一元二次函数、方程和不等式-T1"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题2 一元二次函数、方程和不等式.md",
+      "target": "mathmap/习题/questions/复习参考题2 一元二次函数、方程和不等式-T2"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题2 一元二次函数、方程和不等式.md",
+      "target": "mathmap/习题/questions/复习参考题2 一元二次函数、方程和不等式-T3"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题2 一元二次函数、方程和不等式.md",
+      "target": "mathmap/习题/questions/复习参考题2 一元二次函数、方程和不等式-T4"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题2 一元二次函数、方程和不等式.md",
+      "target": "mathmap/习题/questions/复习参考题2 一元二次函数、方程和不等式-T5"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题2 一元二次函数、方程和不等式.md",
+      "target": "mathmap/习题/questions/复习参考题2 一元二次函数、方程和不等式-T6"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题2 一元二次函数、方程和不等式.md",
+      "target": "mathmap/习题/questions/复习参考题2 一元二次函数、方程和不等式-T7"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题2 一元二次函数、方程和不等式.md",
+      "target": "mathmap/习题/questions/复习参考题2 一元二次函数、方程和不等式-T8"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题2 一元二次函数、方程和不等式.md",
+      "target": "mathmap/习题/questions/复习参考题2 一元二次函数、方程和不等式-T9"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题2 一元二次函数、方程和不等式.md",
+      "target": "mathmap/习题/questions/复习参考题2 一元二次函数、方程和不等式-T10"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题3 函数的概念与性质.md",
+      "target": "mathmap/习题/questions/复习参考题3 函数的概念与性质-T1"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题3 函数的概念与性质.md",
+      "target": "mathmap/习题/questions/复习参考题3 函数的概念与性质-T2"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题3 函数的概念与性质.md",
+      "target": "mathmap/习题/questions/复习参考题3 函数的概念与性质-T3"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题3 函数的概念与性质.md",
+      "target": "mathmap/习题/questions/复习参考题3 函数的概念与性质-T4"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题3 函数的概念与性质.md",
+      "target": "mathmap/习题/questions/复习参考题3 函数的概念与性质-T5"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题3 函数的概念与性质.md",
+      "target": "mathmap/习题/questions/复习参考题3 函数的概念与性质-T6"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题3 函数的概念与性质.md",
+      "target": "mathmap/习题/questions/复习参考题3 函数的概念与性质-T7"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题3 函数的概念与性质.md",
+      "target": "mathmap/习题/questions/复习参考题3 函数的概念与性质-T8"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题3 函数的概念与性质.md",
+      "target": "mathmap/习题/questions/复习参考题3 函数的概念与性质-T9"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题3 函数的概念与性质.md",
+      "target": "mathmap/习题/questions/复习参考题3 函数的概念与性质-T10"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题3 函数的概念与性质.md",
+      "target": "mathmap/习题/questions/复习参考题3 函数的概念与性质-T11"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题3 函数的概念与性质.md",
+      "target": "mathmap/习题/questions/复习参考题3 函数的概念与性质-T12"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题3 函数的概念与性质.md",
+      "target": "mathmap/习题/questions/复习参考题3 函数的概念与性质-T13"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题3 函数的概念与性质.md",
+      "target": "mathmap/习题/questions/复习参考题3 函数的概念与性质-T14"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题4 指数函数与对数函数.md",
+      "target": "mathmap/习题/questions/复习参考题4 指数函数与对数函数-T2"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题4 指数函数与对数函数.md",
+      "target": "mathmap/习题/questions/复习参考题4 指数函数与对数函数-T3"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题4 指数函数与对数函数.md",
+      "target": "mathmap/习题/questions/复习参考题4 指数函数与对数函数-T4"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题4 指数函数与对数函数.md",
+      "target": "mathmap/习题/questions/复习参考题4 指数函数与对数函数-T5"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题4 指数函数与对数函数.md",
+      "target": "mathmap/习题/questions/复习参考题4 指数函数与对数函数-T6"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题4 指数函数与对数函数.md",
+      "target": "mathmap/习题/questions/复习参考题4 指数函数与对数函数-T7"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题4 指数函数与对数函数.md",
+      "target": "mathmap/习题/questions/复习参考题4 指数函数与对数函数-T8"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题4 指数函数与对数函数.md",
+      "target": "mathmap/习题/questions/复习参考题4 指数函数与对数函数-T9"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题4 指数函数与对数函数.md",
+      "target": "mathmap/习题/questions/复习参考题4 指数函数与对数函数-T10"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题4 指数函数与对数函数.md",
+      "target": "mathmap/习题/questions/复习参考题4 指数函数与对数函数-T11"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题4 指数函数与对数函数.md",
+      "target": "mathmap/习题/questions/复习参考题4 指数函数与对数函数-T12"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题4 指数函数与对数函数.md",
+      "target": "mathmap/习题/questions/复习参考题4 指数函数与对数函数-T13"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题5 三角函数.md",
+      "target": "mathmap/习题/questions/复习参考题5 三角函数-T1"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题5 三角函数.md",
+      "target": "mathmap/习题/questions/复习参考题5 三角函数-T2"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题5 三角函数.md",
+      "target": "mathmap/习题/questions/复习参考题5 三角函数-T3"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题5 三角函数.md",
+      "target": "mathmap/习题/questions/复习参考题5 三角函数-T4"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题5 三角函数.md",
+      "target": "mathmap/习题/questions/复习参考题5 三角函数-T5"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题5 三角函数.md",
+      "target": "mathmap/习题/questions/复习参考题5 三角函数-T6"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题5 三角函数.md",
+      "target": "mathmap/习题/questions/复习参考题5 三角函数-T7"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题5 三角函数.md",
+      "target": "mathmap/习题/questions/复习参考题5 三角函数-T8"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题5 三角函数.md",
+      "target": "mathmap/习题/questions/复习参考题5 三角函数-T9"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题5 三角函数.md",
+      "target": "mathmap/习题/questions/复习参考题5 三角函数-T10"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题5 三角函数.md",
+      "target": "mathmap/习题/questions/复习参考题5 三角函数-T11"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题5 三角函数.md",
+      "target": "mathmap/习题/questions/复习参考题5 三角函数-T12"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题5 三角函数.md",
+      "target": "mathmap/习题/questions/复习参考题5 三角函数-T13"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题5 三角函数.md",
+      "target": "mathmap/习题/questions/复习参考题5 三角函数-T14"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题5 三角函数.md",
+      "target": "mathmap/习题/questions/复习参考题5 三角函数-T15"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题5 三角函数.md",
+      "target": "mathmap/习题/questions/复习参考题5 三角函数-T16"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题5 三角函数.md",
+      "target": "mathmap/习题/questions/复习参考题5 三角函数-T17"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题5 三角函数.md",
+      "target": "mathmap/习题/questions/复习参考题5 三角函数-T18"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题5 三角函数.md",
+      "target": "mathmap/习题/questions/复习参考题5 三角函数-T19"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题5 三角函数.md",
+      "target": "mathmap/习题/questions/复习参考题5 三角函数-T20"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题5 三角函数.md",
+      "target": "mathmap/习题/questions/复习参考题5 三角函数-T21"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题5 三角函数.md",
+      "target": "mathmap/习题/questions/复习参考题5 三角函数-T22"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题5 三角函数.md",
+      "target": "mathmap/习题/questions/复习参考题5 三角函数-T23"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题5 三角函数.md",
+      "target": "mathmap/习题/questions/复习参考题5 三角函数-T24"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题5 三角函数.md",
+      "target": "mathmap/习题/questions/复习参考题5 三角函数-T25"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题5 三角函数.md",
+      "target": "mathmap/习题/questions/复习参考题5 三角函数-T26"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/复习参考题5 三角函数.md",
+      "target": "mathmap/习题/questions/复习参考题5 三角函数-T27"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/强基计划_刷综合_b1.md",
+      "target": "mathmap/习题/questions/Q00001211"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/强基计划_刷综合_b1.md",
+      "target": "mathmap/习题/questions/Q00001212"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/强基计划_刷综合_b1.md",
+      "target": "mathmap/习题/questions/Q00001213"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/强基计划_刷综合_b1.md",
+      "target": "mathmap/习题/questions/Q00001214"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/强基计划_刷综合_b1.md",
+      "target": "mathmap/习题/questions/Q00001215"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/强基计划_刷综合_b1.md",
+      "target": "mathmap/习题/questions/Q00001216"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/强基计划_刷综合_b1.md",
+      "target": "mathmap/习题/questions/Q00001217"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/强基计划_刷综合_b1.md",
+      "target": "mathmap/习题/questions/Q00001218"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/强基计划_刷综合_b1.md",
+      "target": "mathmap/习题/questions/Q00001219"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/强基计划_刷综合_b1.md",
+      "target": "mathmap/习题/questions/Q00001220"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/强基计划_刷综合_b1.md",
+      "target": "mathmap/习题/questions/Q00001221"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/强基计划_刷综合_b1.md",
+      "target": "mathmap/习题/questions/Q00001222"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/强基计划_刷综合_b1.md",
+      "target": "mathmap/习题/questions/Q00001223"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/强基计划_刷综合_b1.md",
+      "target": "mathmap/习题/questions/Q00001224"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/强基计划_刷综合_b1.md",
+      "target": "mathmap/习题/questions/Q00001225"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/强基计划_刷综合_b1.md",
+      "target": "mathmap/习题/questions/Q00001226"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/强基计划_刷综合_b1.md",
+      "target": "mathmap/习题/questions/Q00001227"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/强基计划_刷综合_b1.md",
+      "target": "mathmap/习题/questions/Q00001228"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/强基计划_刷综合_b1.md",
+      "target": "mathmap/习题/questions/Q00001229"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/第一章素养检测.md",
+      "target": "mathmap/习题/题型整理/刷速度_b1"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000139"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000140"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000141"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000142"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000143"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000144"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000145"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000146"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000147"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000148"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000149"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000150"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000151"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000152"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000153"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000154"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000155"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000156"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000157"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/第一章高考强化.md",
+      "target": "mathmap/习题/题型整理/刷真题_b1"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/第一章高考强化.md",
+      "target": "mathmap/习题/题型整理/刷原创_b6"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第一章高考强化_刷原创_b2.md",
+      "target": "mathmap/习题/questions/Q00002881"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第一章高考强化_刷原创_b2.md",
+      "target": "mathmap/习题/questions/Q00002882"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第一章高考强化_刷原创_b2.md",
+      "target": "mathmap/习题/questions/Q00003614"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第一章高考强化_刷原创_b6.md",
+      "target": "mathmap/习题/questions/Q00000173"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第一章高考强化_刷原创_b6.md",
+      "target": "mathmap/习题/questions/Q00000174"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/第三章素养检测.md",
+      "target": "mathmap/习题/题型整理/刷速度_b1"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000497"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000498"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000499"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000500"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000501"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000502"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000503"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000504"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000505"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000506"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000507"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000508"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000509"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000510"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000511"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000512"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000513"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000514"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000515"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/第三章高考强化.md",
+      "target": "mathmap/习题/题型整理/刷真题_b1"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/第三章高考强化.md",
+      "target": "mathmap/习题/题型整理/刷原创_b4"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第三章高考强化_刷原创_b4.md",
+      "target": "mathmap/习题/questions/Q00000526"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第三章高考强化_刷原创_b4.md",
+      "target": "mathmap/习题/questions/Q00000527"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第三章高考强化_刷原创_b4.md",
+      "target": "mathmap/习题/questions/Q00000528"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第三章高考强化_刷原创_b4.md",
+      "target": "mathmap/习题/questions/Q00000529"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第三章高考强化_刷原创_b4.md",
+      "target": "mathmap/习题/questions/Q00000530"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第三章高考强化_刷原创_b4.md",
+      "target": "mathmap/习题/questions/Q00000531"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第三章高考强化_刷原创_b6.md",
+      "target": "mathmap/习题/questions/Q00004114"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第三章高考强化_刷原创_b6.md",
+      "target": "mathmap/习题/questions/Q00004115"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第三章高考强化_刷原创_b6.md",
+      "target": "mathmap/习题/questions/Q00004116"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第三章高考强化_刷原创_b6.md",
+      "target": "mathmap/习题/questions/Q00004117"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第三章高考强化_刷原创_b6.md",
+      "target": "mathmap/习题/questions/Q00004118"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第三章高考强化_刷原创_b6.md",
+      "target": "mathmap/习题/questions/Q00003388"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/第二章素养检测.md",
+      "target": "mathmap/习题/题型整理/刷速度_b1"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000271"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000272"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000273"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000274"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000275"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000276"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000277"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000278"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000279"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000280"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000281"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000282"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000283"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000284"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000285"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000286"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000287"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000288"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000289"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/第二章高考强化.md",
+      "target": "mathmap/习题/题型整理/刷真题_b1"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/第二章高考强化.md",
+      "target": "mathmap/习题/题型整理/刷原创_b4"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第二章高考强化_刷原创_b4.md",
+      "target": "mathmap/习题/questions/Q00000293"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第二章高考强化_刷原创_b4.md",
+      "target": "mathmap/习题/questions/Q00000294"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第二章高考强化_刷原创_b4.md",
+      "target": "mathmap/习题/questions/Q00000295"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第二章高考强化_刷原创_b4.md",
+      "target": "mathmap/习题/questions/Q00000296"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第二章高考强化_刷原创_b5.md",
+      "target": "mathmap/习题/questions/Q00003838"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第二章高考强化_刷原创_b5.md",
+      "target": "mathmap/习题/questions/Q00003839"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第二章高考强化_刷原创_b5.md",
+      "target": "mathmap/习题/questions/Q00003840"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第二章高考强化_刷原创_b5.md",
+      "target": "mathmap/习题/questions/Q00003841"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第二章高考强化_刷原创_b5.md",
+      "target": "mathmap/习题/questions/Q00003842"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第二章高考强化_刷原创_b5.md",
+      "target": "mathmap/习题/questions/Q00003843"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第二章高考强化_刷原创_b5.md",
+      "target": "mathmap/习题/questions/Q00003113"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/第五章素养检测.md",
+      "target": "mathmap/习题/题型整理/刷速度_b1"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第五章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00001139"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第五章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00001140"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第五章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00001141"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第五章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00001142"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第五章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00001143"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第五章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00001144"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第五章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00001145"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第五章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00001146"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第五章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00001147"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第五章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00001148"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第五章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00001149"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第五章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00001150"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第五章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00001151"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第五章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00001152"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第五章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00001153"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第五章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00001154"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第五章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00001155"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第五章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00001156"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第五章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00001157"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/第五章高考强化.md",
+      "target": "mathmap/习题/题型整理/刷真题_b1"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/第五章高考强化.md",
+      "target": "mathmap/习题/题型整理/刷原创_b5"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第五章高考强化_刷原创_b5.md",
+      "target": "mathmap/习题/questions/Q00001179"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第五章高考强化_刷原创_b5.md",
+      "target": "mathmap/习题/questions/Q00001180"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第五章高考强化_刷原创_b5.md",
+      "target": "mathmap/习题/questions/Q00001181"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第五章高考强化_刷原创_b5.md",
+      "target": "mathmap/习题/questions/Q00001182"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第五章高考强化_刷原创_b5.md",
+      "target": "mathmap/习题/questions/Q00001183"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/第四章素养检测.md",
+      "target": "mathmap/习题/题型整理/刷速度_b1"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第四章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000764"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第四章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000765"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第四章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000766"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第四章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000767"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第四章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000768"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第四章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000769"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第四章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000770"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第四章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000771"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第四章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000772"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第四章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000773"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第四章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000774"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第四章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000775"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第四章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000776"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第四章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000777"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第四章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000778"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第四章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000779"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第四章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000780"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第四章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000781"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第四章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00000782"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/第四章高考强化.md",
+      "target": "mathmap/习题/题型整理/刷真题_b1"
+    },
+    {
+      "kind": "broken_target",
+      "path": "mathmap/习题/题集/第四章高考强化.md",
+      "target": "mathmap/习题/题型整理/刷原创_b9"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第四章高考强化_刷原创_b9.md",
+      "target": "mathmap/习题/questions/Q00000808"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第四章高考强化_刷原创_b9.md",
+      "target": "mathmap/习题/questions/Q00000809"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第四章高考强化_刷原创_b9.md",
+      "target": "mathmap/习题/questions/Q00000810"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/第四章高考强化_刷原创_b9.md",
+      "target": "mathmap/习题/questions/Q00000811"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第一章素养检测.md",
+      "target": "mathmap/习题/题集/选择性必修第一册RJA_第一章素养检测_刷速度_b1"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003588"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003589"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003590"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003591"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00002861"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003593"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003594"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003595"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003596"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003597"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003598"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003599"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003600"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00002870"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003602"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003603"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003604"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第一章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00002874"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第一章高考强化.md",
+      "target": "mathmap/习题/题集/选择性必修第一册RJA_第一章高考强化_刷真题_b1"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第一章高考强化.md",
+      "target": "mathmap/习题/题集/第一章高考强化_刷原创_b2"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第一章高考强化_刷真题_b1.md",
+      "target": "mathmap/习题/questions/Q00003606"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第一章高考强化_刷真题_b1.md",
+      "target": "mathmap/习题/questions/Q00003607"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第一章高考强化_刷真题_b1.md",
+      "target": "mathmap/习题/questions/Q00003608"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第一章高考强化_刷真题_b1.md",
+      "target": "mathmap/习题/questions/Q00003609"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第一章高考强化_刷真题_b1.md",
+      "target": "mathmap/习题/questions/Q00003610"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第一章高考强化_刷真题_b1.md",
+      "target": "mathmap/习题/questions/Q00003611"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第三章素养检测.md",
+      "target": "mathmap/习题/题集/选择性必修第一册RJA_第三章素养检测_刷速度_b1"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00004075"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003345"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00004077"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00004078"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00004079"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00004080"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00004081"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00004082"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00004083"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00004084"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00004085"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00004086"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00004087"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00004088"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00004089"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00004090"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00004091"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00004092"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第三章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003362"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第三章高考强化.md",
+      "target": "mathmap/习题/题集/选择性必修第一册RJA_第三章高考强化_刷真题_b1"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第三章高考强化.md",
+      "target": "mathmap/习题/题集/第三章高考强化_刷原创_b6"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第二章素养检测.md",
+      "target": "mathmap/习题/题集/选择性必修第一册RJA_第二章素养检测_刷速度_b1"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003814"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003815"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003816"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003817"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003818"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003819"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003820"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003090"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003822"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003823"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003824"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003825"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003826"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003827"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003828"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003829"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003830"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003831"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第二章素养检测_刷速度_b1.md",
+      "target": "mathmap/习题/questions/Q00003832"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第二章高考强化.md",
+      "target": "mathmap/习题/题集/选择性必修第一册RJA_第二章高考强化_刷真题_b1"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/选择性必修第一册RJA_第二章高考强化.md",
+      "target": "mathmap/习题/题集/第二章高考强化_刷原创_b5"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 中线问题.md",
+      "target": "mathmap/习题/questions/Q00005285"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 中线问题.md",
+      "target": "mathmap/习题/questions/Q00005286"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 中线问题.md",
+      "target": "mathmap/习题/questions/Q00005287"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 中线问题.md",
+      "target": "mathmap/习题/questions/Q00005288"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 中线问题.md",
+      "target": "mathmap/习题/questions/Q00005289"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 中线问题.md",
+      "target": "mathmap/习题/questions/Q00005290"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 判断三角形四心的位置.md",
+      "target": "mathmap/习题/questions/Q00005155"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 判断三角形四心的位置.md",
+      "target": "mathmap/习题/questions/Q00005156"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 判断三角形四心的位置.md",
+      "target": "mathmap/习题/questions/Q00005157"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 判断三角形四心的位置.md",
+      "target": "mathmap/习题/questions/Q00005158"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 判断三角形四心的位置.md",
+      "target": "mathmap/习题/questions/Q00005159"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 判断三角形四心的位置.md",
+      "target": "mathmap/习题/questions/Q00005160"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 判断三角形四心的位置.md",
+      "target": "mathmap/习题/questions/Q00005161"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 判断三角形四心的位置.md",
+      "target": "mathmap/习题/questions/Q00005162"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 判断三角形四心的位置.md",
+      "target": "mathmap/习题/questions/Q00005163"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 判断三角形四心的位置.md",
+      "target": "mathmap/习题/questions/Q00005164"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 判断三角形四心的位置.md",
+      "target": "mathmap/习题/questions/Q00005165"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 判断三角形四心的位置.md",
+      "target": "mathmap/习题/questions/Q00005166"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 判断三角形四心的位置.md",
+      "target": "mathmap/习题/questions/Q00005167"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 判断三角形四心的位置.md",
+      "target": "mathmap/习题/questions/Q00005168"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 判断三角形四心的位置.md",
+      "target": "mathmap/习题/questions/Q00005169"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 判断三角形四心的位置.md",
+      "target": "mathmap/习题/questions/Q00005170"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 判断三角形四心的位置.md",
+      "target": "mathmap/习题/questions/Q00005171"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 判断三角形四心的位置.md",
+      "target": "mathmap/习题/questions/Q00005172"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 判断三角形四心的位置.md",
+      "target": "mathmap/习题/questions/Q00005173"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 判断三角形四心的位置.md",
+      "target": "mathmap/习题/questions/Q00005174"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 判断三角形四心的位置.md",
+      "target": "mathmap/习题/questions/Q00005175"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 判断三角形四心的位置.md",
+      "target": "mathmap/习题/questions/Q00005176"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 判断三角形四心的位置.md",
+      "target": "mathmap/习题/questions/Q00005177"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 判断三角形四心的位置.md",
+      "target": "mathmap/习题/questions/Q00005178"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 判断三角形四心的位置.md",
+      "target": "mathmap/习题/questions/Q00005179"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 判断三角形四心的位置.md",
+      "target": "mathmap/习题/questions/Q00005180"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 判断三角形四心的位置.md",
+      "target": "mathmap/习题/questions/Q00005181"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 判断三角形四心的位置.md",
+      "target": "mathmap/习题/questions/Q00005182"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用三角函数单调性比较大小.md",
+      "target": "mathmap/习题/questions/Q00004334"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用三角函数单调性比较大小.md",
+      "target": "mathmap/习题/questions/Q00004335"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用三角函数单调性比较大小.md",
+      "target": "mathmap/习题/questions/Q00004336"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用三角函数图像解三角不等式.md",
+      "target": "mathmap/习题/questions/Q00004296"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用三角函数图像解三角不等式.md",
+      "target": "mathmap/习题/questions/Q00004297"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用三角函数图像解三角不等式.md",
+      "target": "mathmap/习题/questions/Q00004298"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用三角函数图像解三角不等式.md",
+      "target": "mathmap/习题/questions/Q00004299"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用三角函数图像解三角不等式.md",
+      "target": "mathmap/习题/questions/Q00004300"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用三角函数图像解三角不等式.md",
+      "target": "mathmap/习题/questions/Q00004301"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用半角公式求值.md",
+      "target": "mathmap/习题/questions/Q00004592"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用半角公式求值.md",
+      "target": "mathmap/习题/questions/Q00004593"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用半角公式求值.md",
+      "target": "mathmap/习题/questions/Q00004594"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用半角公式求值.md",
+      "target": "mathmap/习题/questions/Q00004595"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用半角公式求值.md",
+      "target": "mathmap/习题/questions/Q00004596"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用半角公式求值.md",
+      "target": "mathmap/习题/questions/Q00004597"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用半角公式求值.md",
+      "target": "mathmap/习题/questions/Q00004598"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用半角公式求值.md",
+      "target": "mathmap/习题/questions/Q00004599"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用半角公式求值.md",
+      "target": "mathmap/习题/questions/Q00004600"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用半角公式求值.md",
+      "target": "mathmap/习题/questions/Q00004601"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用半角公式求值.md",
+      "target": "mathmap/习题/questions/Q00004602"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用半角公式求值.md",
+      "target": "mathmap/习题/questions/Q00004603"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用半角公式求值.md",
+      "target": "mathmap/习题/questions/Q00004604"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用半角公式求值.md",
+      "target": "mathmap/习题/questions/Q00004605"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用半角公式求值.md",
+      "target": "mathmap/习题/questions/Q00004606"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用半角公式求值.md",
+      "target": "mathmap/习题/questions/Q00004607"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用奇偶性求值.md",
+      "target": "mathmap/习题/questions/Q00004405"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用奇偶性求值.md",
+      "target": "mathmap/习题/questions/Q00004406"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用奇偶性求值.md",
+      "target": "mathmap/习题/questions/Q00004407"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用奇偶性求值.md",
+      "target": "mathmap/习题/questions/Q00004408"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用奇偶性求值.md",
+      "target": "mathmap/习题/questions/Q00004409"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用奇偶性求值.md",
+      "target": "mathmap/习题/questions/Q00004410"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用线性运算分解求数量积.md",
+      "target": "mathmap/习题/questions/Q00004885"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用线性运算分解求数量积.md",
+      "target": "mathmap/习题/questions/Q00004886"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用线性运算分解求数量积.md",
+      "target": "mathmap/习题/questions/Q00004887"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用线性运算分解求数量积.md",
+      "target": "mathmap/习题/questions/Q00004888"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 利用线性运算分解求数量积.md",
+      "target": "mathmap/习题/questions/Q00004889"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 反三角函数的应用.md",
+      "target": "mathmap/习题/questions/Q00004757"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 反三角函数的应用.md",
+      "target": "mathmap/习题/questions/Q00004758"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 反三角函数的应用.md",
+      "target": "mathmap/习题/questions/Q00004759"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 反三角函数的应用.md",
+      "target": "mathmap/习题/questions/Q00004760"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 反三角函数的应用.md",
+      "target": "mathmap/习题/questions/Q00004761"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 反三角函数的应用.md",
+      "target": "mathmap/习题/questions/Q00004762"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 反三角函数的应用.md",
+      "target": "mathmap/习题/questions/Q00004763"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 反三角函数的应用.md",
+      "target": "mathmap/习题/questions/Q00004764"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 反三角函数的应用.md",
+      "target": "mathmap/习题/questions/Q00004765"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 反三角函数的应用.md",
+      "target": "mathmap/习题/questions/Q00004766"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 平面数量积的定值问题.md",
+      "target": "mathmap/习题/questions/Q00005043"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 平面数量积的定值问题.md",
+      "target": "mathmap/习题/questions/Q00005044"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 平面数量积的定值问题.md",
+      "target": "mathmap/习题/questions/Q00005045"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 平面数量积的定值问题.md",
+      "target": "mathmap/习题/questions/Q00005046"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 平面数量积的定值问题.md",
+      "target": "mathmap/习题/questions/Q00005047"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 平面数量积的定值问题.md",
+      "target": "mathmap/习题/questions/Q00005048"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 平面数量积的定值问题.md",
+      "target": "mathmap/习题/questions/Q00005049"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 平面数量积的定值问题.md",
+      "target": "mathmap/习题/questions/Q00005050"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 求三角齐次式的值.md",
+      "target": "mathmap/习题/questions/Q00004246"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 求三角齐次式的值.md",
+      "target": "mathmap/习题/questions/Q00004247"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 求三角齐次式的值.md",
+      "target": "mathmap/习题/questions/Q00004248"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 求三角齐次式的值.md",
+      "target": "mathmap/习题/questions/Q00004249"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 求三角齐次式的值.md",
+      "target": "mathmap/习题/questions/Q00004250"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 求三角齐次式的值.md",
+      "target": "mathmap/习题/questions/Q00004251"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 求三角齐次式的值.md",
+      "target": "mathmap/习题/questions/Q00004252"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 求三角齐次式的值.md",
+      "target": "mathmap/习题/questions/Q00004253"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 求三角齐次式的值.md",
+      "target": "mathmap/习题/questions/Q00004254"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 求三角齐次式的值.md",
+      "target": "mathmap/习题/questions/Q00004255"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 求面积的范围与最值.md",
+      "target": "mathmap/习题/questions/Q00005250"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 求面积的范围与最值.md",
+      "target": "mathmap/习题/questions/Q00005251"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 求面积的范围与最值.md",
+      "target": "mathmap/习题/questions/Q00005252"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 求面积的范围与最值.md",
+      "target": "mathmap/习题/questions/Q00005253"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 求面积的范围与最值.md",
+      "target": "mathmap/习题/questions/Q00005254"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 求面积的范围与最值.md",
+      "target": "mathmap/习题/questions/Q00005255"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 求面积的范围与最值.md",
+      "target": "mathmap/习题/questions/Q00005256"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 求面积的范围与最值.md",
+      "target": "mathmap/习题/questions/Q00005257"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 求面积的范围与最值.md",
+      "target": "mathmap/习题/questions/Q00005258"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 求面积的范围与最值.md",
+      "target": "mathmap/习题/questions/Q00005259"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 直接应用定理求面积关系.md",
+      "target": "mathmap/习题/questions/Q00005207"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 直接应用定理求面积关系.md",
+      "target": "mathmap/习题/questions/Q00005208"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 直接应用定理求面积关系.md",
+      "target": "mathmap/习题/questions/Q00005209"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 直接应用定理求面积关系.md",
+      "target": "mathmap/习题/questions/Q00005210"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 直接应用定理求面积关系.md",
+      "target": "mathmap/习题/questions/Q00005211"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 直接应用定理求面积关系.md",
+      "target": "mathmap/习题/questions/Q00005212"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 给值求值.md",
+      "target": "mathmap/习题/questions/Q00004433"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 给值求值.md",
+      "target": "mathmap/习题/questions/Q00004434"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 给值求值.md",
+      "target": "mathmap/习题/questions/Q00004435"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 给值求值.md",
+      "target": "mathmap/习题/questions/Q00004436"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 给值求值.md",
+      "target": "mathmap/习题/questions/Q00004437"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 给值求值.md",
+      "target": "mathmap/习题/questions/Q00004438"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 给值求值.md",
+      "target": "mathmap/习题/questions/Q00004439"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 给值求值.md",
+      "target": "mathmap/习题/questions/Q00004440"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 给值求值.md",
+      "target": "mathmap/习题/questions/Q00004441"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 给值求值.md",
+      "target": "mathmap/习题/questions/Q00004442"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 给值求值.md",
+      "target": "mathmap/习题/questions/Q00004443"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 给值求值.md",
+      "target": "mathmap/习题/questions/Q00004444"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 给值求值.md",
+      "target": "mathmap/习题/questions/Q00004445"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 给值求值.md",
+      "target": "mathmap/习题/questions/Q00004446"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_ 给值求值.md",
+      "target": "mathmap/习题/questions/Q00004447"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_三角形中的边角转化.md",
+      "target": "mathmap/习题/questions/Q00005097"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_三角形中的边角转化.md",
+      "target": "mathmap/习题/questions/Q00005098"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_三角形中的边角转化.md",
+      "target": "mathmap/习题/questions/Q00005099"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_三角形中的边角转化.md",
+      "target": "mathmap/习题/questions/Q00005100"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_三角形中的边角转化.md",
+      "target": "mathmap/习题/questions/Q00005101"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_三角形中的边角转化.md",
+      "target": "mathmap/习题/questions/Q00005102"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_三角形中的边角转化.md",
+      "target": "mathmap/习题/questions/Q00005103"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_三角形中的边角转化.md",
+      "target": "mathmap/习题/questions/Q00005104"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_三角形中的边角转化.md",
+      "target": "mathmap/习题/questions/Q00005105"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_三角形中的边角转化.md",
+      "target": "mathmap/习题/questions/Q00005106"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_三角形中的边角转化.md",
+      "target": "mathmap/习题/questions/Q00005107"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_三角形中的边角转化.md",
+      "target": "mathmap/习题/questions/Q00005108"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_三角形中的边角转化.md",
+      "target": "mathmap/习题/questions/Q00005109"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_三角形中的边角转化.md",
+      "target": "mathmap/习题/questions/Q00005110"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_三角形中的边角转化.md",
+      "target": "mathmap/习题/questions/Q00005111"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_用已知向量表示其他向量.md",
+      "target": "mathmap/习题/questions/Q00004808"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_用已知向量表示其他向量.md",
+      "target": "mathmap/习题/questions/Q00004809"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_用已知向量表示其他向量.md",
+      "target": "mathmap/习题/questions/Q00004810"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_用已知向量表示其他向量.md",
+      "target": "mathmap/习题/questions/Q00004811"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_用已知向量表示其他向量.md",
+      "target": "mathmap/习题/questions/Q00004812"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_用已知向量表示其他向量.md",
+      "target": "mathmap/习题/questions/Q00004813"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_用已知向量表示其他向量.md",
+      "target": "mathmap/习题/questions/Q00004814"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_用已知向量表示其他向量.md",
+      "target": "mathmap/习题/questions/Q00004815"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_用已知向量表示其他向量.md",
+      "target": "mathmap/习题/questions/Q00004816"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_用已知向量表示其他向量.md",
+      "target": "mathmap/习题/questions/Q00004817"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_用已知向量表示其他向量.md",
+      "target": "mathmap/习题/questions/Q00004818"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_用已知向量表示其他向量.md",
+      "target": "mathmap/习题/questions/Q00004819"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_用已知向量表示其他向量.md",
+      "target": "mathmap/习题/questions/Q00004820"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_用已知向量表示其他向量.md",
+      "target": "mathmap/习题/questions/Q00004821"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_用已知向量表示其他向量.md",
+      "target": "mathmap/习题/questions/Q00004822"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_用已知向量表示其他向量.md",
+      "target": "mathmap/习题/questions/Q00004823"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_用已知向量表示其他向量.md",
+      "target": "mathmap/习题/questions/Q00004824"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_用已知向量表示其他向量.md",
+      "target": "mathmap/习题/questions/Q00004825"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_用已知向量表示其他向量.md",
+      "target": "mathmap/习题/questions/Q00004826"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_用已知向量表示其他向量.md",
+      "target": "mathmap/习题/questions/Q00004827"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_用已知向量表示其他向量.md",
+      "target": "mathmap/习题/questions/Q00004828"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 1_用已知向量表示其他向量.md",
+      "target": "mathmap/习题/questions/Q00004829"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 判断三角形形状.md",
+      "target": "mathmap/习题/questions/Q00005112"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 判断三角形形状.md",
+      "target": "mathmap/习题/questions/Q00005113"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 判断三角形形状.md",
+      "target": "mathmap/习题/questions/Q00005114"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 判断三角形形状.md",
+      "target": "mathmap/习题/questions/Q00005115"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 判断三角形形状.md",
+      "target": "mathmap/习题/questions/Q00005116"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 判断三角形形状.md",
+      "target": "mathmap/习题/questions/Q00005117"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 判断三角形形状.md",
+      "target": "mathmap/习题/questions/Q00005118"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 判断三角形形状.md",
+      "target": "mathmap/习题/questions/Q00005119"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 判断三角形形状.md",
+      "target": "mathmap/习题/questions/Q00005120"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 判断三角形形状.md",
+      "target": "mathmap/习题/questions/Q00005121"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 判断三角形形状.md",
+      "target": "mathmap/习题/questions/Q00005122"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 判断三角形形状.md",
+      "target": "mathmap/习题/questions/Q00005123"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 判断三角形形状.md",
+      "target": "mathmap/习题/questions/Q00005124"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 判断三角形形状.md",
+      "target": "mathmap/习题/questions/Q00005125"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 判断三角形形状.md",
+      "target": "mathmap/习题/questions/Q00005126"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 判断三角形形状.md",
+      "target": "mathmap/习题/questions/Q00005127"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 判断三角形形状.md",
+      "target": "mathmap/习题/questions/Q00005128"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 利用三角函数线解不等式.md",
+      "target": "mathmap/习题/questions/Q00004228"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 利用三角函数线解不等式.md",
+      "target": "mathmap/习题/questions/Q00004229"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 利用三角函数线解不等式.md",
+      "target": "mathmap/习题/questions/Q00004230"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 利用三角函数线解不等式.md",
+      "target": "mathmap/习题/questions/Q00004231"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 利用三角函数线解不等式.md",
+      "target": "mathmap/习题/questions/Q00004232"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 向量共线定理.md",
+      "target": "mathmap/习题/questions/Q00004830"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 向量共线定理.md",
+      "target": "mathmap/习题/questions/Q00004831"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 向量共线定理.md",
+      "target": "mathmap/习题/questions/Q00004832"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 向量共线定理.md",
+      "target": "mathmap/习题/questions/Q00004833"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 向量共线定理.md",
+      "target": "mathmap/习题/questions/Q00004834"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 向量共线定理.md",
+      "target": "mathmap/习题/questions/Q00004835"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 向量共线定理.md",
+      "target": "mathmap/习题/questions/Q00004836"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 向量共线定理.md",
+      "target": "mathmap/习题/questions/Q00004837"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 向量共线定理.md",
+      "target": "mathmap/习题/questions/Q00004838"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 向量共线定理.md",
+      "target": "mathmap/习题/questions/Q00004839"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 图像交点与解的个数问题.md",
+      "target": "mathmap/习题/questions/Q00004302"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 图像交点与解的个数问题.md",
+      "target": "mathmap/习题/questions/Q00004303"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 图像交点与解的个数问题.md",
+      "target": "mathmap/习题/questions/Q00004304"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 图像交点与解的个数问题.md",
+      "target": "mathmap/习题/questions/Q00004305"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 图像交点与解的个数问题.md",
+      "target": "mathmap/习题/questions/Q00004306"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 图像交点与解的个数问题.md",
+      "target": "mathmap/习题/questions/Q00004307"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 图像交点与解的个数问题.md",
+      "target": "mathmap/习题/questions/Q00004308"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 图像交点与解的个数问题.md",
+      "target": "mathmap/习题/questions/Q00004309"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 图像交点与解的个数问题.md",
+      "target": "mathmap/习题/questions/Q00004310"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 图像交点与解的个数问题.md",
+      "target": "mathmap/习题/questions/Q00004311"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 已知值域求参数.md",
+      "target": "mathmap/习题/questions/Q00004337"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 已知值域求参数.md",
+      "target": "mathmap/习题/questions/Q00004338"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 已知值域求参数.md",
+      "target": "mathmap/习题/questions/Q00004339"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 已知值域求参数.md",
+      "target": "mathmap/习题/questions/Q00004340"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 已知值域求参数.md",
+      "target": "mathmap/习题/questions/Q00004341"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 已知值域求参数.md",
+      "target": "mathmap/习题/questions/Q00004342"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 已知值域求参数.md",
+      "target": "mathmap/习题/questions/Q00004343"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 已知值域求参数.md",
+      "target": "mathmap/习题/questions/Q00004344"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 已知值域求参数.md",
+      "target": "mathmap/习题/questions/Q00004345"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 数量积与向量的垂直.md",
+      "target": "mathmap/习题/questions/Q00004890"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 数量积与向量的垂直.md",
+      "target": "mathmap/习题/questions/Q00004891"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 数量积与向量的垂直.md",
+      "target": "mathmap/习题/questions/Q00004892"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 数量积与向量的垂直.md",
+      "target": "mathmap/习题/questions/Q00004893"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 数量积与向量的垂直.md",
+      "target": "mathmap/习题/questions/Q00004894"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 数量积的最值与范围问题.md",
+      "target": "mathmap/习题/questions/Q00005051"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 数量积的最值与范围问题.md",
+      "target": "mathmap/习题/questions/Q00005052"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 数量积的最值与范围问题.md",
+      "target": "mathmap/习题/questions/Q00005053"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 数量积的最值与范围问题.md",
+      "target": "mathmap/习题/questions/Q00005054"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 数量积的最值与范围问题.md",
+      "target": "mathmap/习题/questions/Q00005055"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 数量积的最值与范围问题.md",
+      "target": "mathmap/习题/questions/Q00005056"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 数量积的最值与范围问题.md",
+      "target": "mathmap/习题/questions/Q00005057"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 数量积的最值与范围问题.md",
+      "target": "mathmap/习题/questions/Q00005058"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 数量积的最值与范围问题.md",
+      "target": "mathmap/习题/questions/Q00005059"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 数量积的最值与范围问题.md",
+      "target": "mathmap/习题/questions/Q00005060"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 数量积的最值与范围问题.md",
+      "target": "mathmap/习题/questions/Q00005061"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 数量积的最值与范围问题.md",
+      "target": "mathmap/习题/questions/Q00005062"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 数量积的最值与范围问题.md",
+      "target": "mathmap/习题/questions/Q00005063"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 数量积的最值与范围问题.md",
+      "target": "mathmap/习题/questions/Q00005064"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 条件求值.md",
+      "target": "mathmap/习题/questions/Q00004608"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 条件求值.md",
+      "target": "mathmap/习题/questions/Q00004609"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 条件求值.md",
+      "target": "mathmap/习题/questions/Q00004610"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 条件求值.md",
+      "target": "mathmap/习题/questions/Q00004611"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 条件求值.md",
+      "target": "mathmap/习题/questions/Q00004612"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 条件求值.md",
+      "target": "mathmap/习题/questions/Q00004613"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 条件求值.md",
+      "target": "mathmap/习题/questions/Q00004614"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 条件求值.md",
+      "target": "mathmap/习题/questions/Q00004615"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 条件求值.md",
+      "target": "mathmap/习题/questions/Q00004616"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 根据三角形四心处理向量问题.md",
+      "target": "mathmap/习题/questions/Q00005183"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 根据三角形四心处理向量问题.md",
+      "target": "mathmap/习题/questions/Q00005184"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 根据三角形四心处理向量问题.md",
+      "target": "mathmap/习题/questions/Q00005185"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 根据三角形四心处理向量问题.md",
+      "target": "mathmap/习题/questions/Q00005186"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 根据三角形四心处理向量问题.md",
+      "target": "mathmap/习题/questions/Q00005187"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 根据三角形四心处理向量问题.md",
+      "target": "mathmap/习题/questions/Q00005188"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 根据三角形四心处理向量问题.md",
+      "target": "mathmap/习题/questions/Q00005189"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 根据三角形四心处理向量问题.md",
+      "target": "mathmap/习题/questions/Q00005190"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 根据三角形四心处理向量问题.md",
+      "target": "mathmap/习题/questions/Q00005191"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 根据三角形四心处理向量问题.md",
+      "target": "mathmap/习题/questions/Q00005192"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 根据三角形四心处理向量问题.md",
+      "target": "mathmap/习题/questions/Q00005193"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 根据三角形四心处理向量问题.md",
+      "target": "mathmap/习题/questions/Q00005194"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 根据三角形四心处理向量问题.md",
+      "target": "mathmap/习题/questions/Q00005195"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 根据三角形四心处理向量问题.md",
+      "target": "mathmap/习题/questions/Q00005196"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 根据三角形四心处理向量问题.md",
+      "target": "mathmap/习题/questions/Q00005197"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 根据三角形四心处理向量问题.md",
+      "target": "mathmap/习题/questions/Q00005198"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 根据三角形四心处理向量问题.md",
+      "target": "mathmap/习题/questions/Q00005199"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 根据三角形四心处理向量问题.md",
+      "target": "mathmap/习题/questions/Q00005200"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 根据三角形四心处理向量问题.md",
+      "target": "mathmap/习题/questions/Q00005201"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 根据三角形四心处理向量问题.md",
+      "target": "mathmap/习题/questions/Q00005202"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 根据三角形四心处理向量问题.md",
+      "target": "mathmap/习题/questions/Q00005203"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 根据三角形四心处理向量问题.md",
+      "target": "mathmap/习题/questions/Q00005204"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 根据三角形四心处理向量问题.md",
+      "target": "mathmap/习题/questions/Q00005205"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 根据三角形四心处理向量问题.md",
+      "target": "mathmap/习题/questions/Q00005206"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 正切函数周期的应用.md",
+      "target": "mathmap/习题/questions/Q00004411"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 正切函数周期的应用.md",
+      "target": "mathmap/习题/questions/Q00004412"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 正切函数周期的应用.md",
+      "target": "mathmap/习题/questions/Q00004413"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 正切函数周期的应用.md",
+      "target": "mathmap/习题/questions/Q00004414"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 正切函数周期的应用.md",
+      "target": "mathmap/习题/questions/Q00004415"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 正切函数周期的应用.md",
+      "target": "mathmap/习题/questions/Q00004416"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 求周长的范围与最值.md",
+      "target": "mathmap/习题/questions/Q00005260"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 求周长的范围与最值.md",
+      "target": "mathmap/习题/questions/Q00005261"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 求周长的范围与最值.md",
+      "target": "mathmap/习题/questions/Q00005262"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 求周长的范围与最值.md",
+      "target": "mathmap/习题/questions/Q00005263"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 求周长的范围与最值.md",
+      "target": "mathmap/习题/questions/Q00005264"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 求周长的范围与最值.md",
+      "target": "mathmap/习题/questions/Q00005265"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 求周长的范围与最值.md",
+      "target": "mathmap/习题/questions/Q00005266"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 求周长的范围与最值.md",
+      "target": "mathmap/习题/questions/Q00005267"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 求周长的范围与最值.md",
+      "target": "mathmap/习题/questions/Q00005268"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 给值求角.md",
+      "target": "mathmap/习题/questions/Q00004448"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 给值求角.md",
+      "target": "mathmap/习题/questions/Q00004449"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 给值求角.md",
+      "target": "mathmap/习题/questions/Q00004450"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 给值求角.md",
+      "target": "mathmap/习题/questions/Q00004451"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 给值求角.md",
+      "target": "mathmap/习题/questions/Q00004452"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 给值求角.md",
+      "target": "mathmap/习题/questions/Q00004453"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 给值求角.md",
+      "target": "mathmap/习题/questions/Q00004454"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 给值求角.md",
+      "target": "mathmap/习题/questions/Q00004455"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 给值求角.md",
+      "target": "mathmap/习题/questions/Q00004456"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 给值求角.md",
+      "target": "mathmap/习题/questions/Q00004457"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 给值求角.md",
+      "target": "mathmap/习题/questions/Q00004458"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 给值求角.md",
+      "target": "mathmap/习题/questions/Q00004459"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 给值求角.md",
+      "target": "mathmap/习题/questions/Q00004460"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 给值求角.md",
+      "target": "mathmap/习题/questions/Q00004461"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 给值求角.md",
+      "target": "mathmap/习题/questions/Q00004462"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 角分线问题.md",
+      "target": "mathmap/习题/questions/Q00005291"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 角分线问题.md",
+      "target": "mathmap/习题/questions/Q00005292"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 角分线问题.md",
+      "target": "mathmap/习题/questions/Q00005293"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 角分线问题.md",
+      "target": "mathmap/习题/questions/Q00005294"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 角分线问题.md",
+      "target": "mathmap/习题/questions/Q00005295"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 通过变形求面积关系.md",
+      "target": "mathmap/习题/questions/Q00005213"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 通过变形求面积关系.md",
+      "target": "mathmap/习题/questions/Q00005214"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 通过变形求面积关系.md",
+      "target": "mathmap/习题/questions/Q00005215"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 通过变形求面积关系.md",
+      "target": "mathmap/习题/questions/Q00005216"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 通过变形求面积关系.md",
+      "target": "mathmap/习题/questions/Q00005217"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 通过变形求面积关系.md",
+      "target": "mathmap/习题/questions/Q00005218"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 通过变形求面积关系.md",
+      "target": "mathmap/习题/questions/Q00005219"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 通过变形求面积关系.md",
+      "target": "mathmap/习题/questions/Q00005220"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 2_ 通过变形求面积关系.md",
+      "target": "mathmap/习题/questions/Q00005221"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 判断三角形的个数.md",
+      "target": "mathmap/习题/questions/Q00005129"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 判断三角形的个数.md",
+      "target": "mathmap/习题/questions/Q00005130"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 判断三角形的个数.md",
+      "target": "mathmap/习题/questions/Q00005131"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 判断三角形的个数.md",
+      "target": "mathmap/习题/questions/Q00005132"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 判断三角形的个数.md",
+      "target": "mathmap/习题/questions/Q00005133"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 判断三角形的个数.md",
+      "target": "mathmap/习题/questions/Q00005134"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 判断三角形的个数.md",
+      "target": "mathmap/习题/questions/Q00005135"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 判断三角形的个数.md",
+      "target": "mathmap/习题/questions/Q00005136"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 判断三角形的个数.md",
+      "target": "mathmap/习题/questions/Q00005137"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 利用三角函数线证明不等式.md",
+      "target": "mathmap/习题/questions/Q00004233"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 利用三角函数线证明不等式.md",
+      "target": "mathmap/习题/questions/Q00004234"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 利用三角函数线证明不等式.md",
+      "target": "mathmap/习题/questions/Q00004235"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 利用三角函数线证明不等式.md",
+      "target": "mathmap/习题/questions/Q00004236"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 利用正切函数单调性求参数.md",
+      "target": "mathmap/习题/questions/Q00004417"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 利用正切函数单调性求参数.md",
+      "target": "mathmap/习题/questions/Q00004418"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 利用正切函数单调性求参数.md",
+      "target": "mathmap/习题/questions/Q00004419"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 利用正切函数单调性求参数.md",
+      "target": "mathmap/习题/questions/Q00004420"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 利用等和线处理系数和问题.md",
+      "target": "mathmap/习题/questions/Q00005065"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 利用等和线处理系数和问题.md",
+      "target": "mathmap/习题/questions/Q00005066"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 利用等和线处理系数和问题.md",
+      "target": "mathmap/习题/questions/Q00005067"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 利用等和线处理系数和问题.md",
+      "target": "mathmap/习题/questions/Q00005068"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 利用等和线处理系数和问题.md",
+      "target": "mathmap/习题/questions/Q00005069"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 利用等和线处理系数和问题.md",
+      "target": "mathmap/习题/questions/Q00005070"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 利用等和线处理系数和问题.md",
+      "target": "mathmap/习题/questions/Q00005071"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 利用等和线处理系数和问题.md",
+      "target": "mathmap/习题/questions/Q00005072"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 利用等和线处理系数和问题.md",
+      "target": "mathmap/习题/questions/Q00005073"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 利用等和线处理系数和问题.md",
+      "target": "mathmap/习题/questions/Q00005074"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 利用等和线处理系数和问题.md",
+      "target": "mathmap/习题/questions/Q00005075"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 利用等和线处理系数和问题.md",
+      "target": "mathmap/习题/questions/Q00005076"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 利用等和线处理系数和问题.md",
+      "target": "mathmap/习题/questions/Q00005077"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 利用等和线处理系数和问题.md",
+      "target": "mathmap/习题/questions/Q00005078"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 向量的夹角.md",
+      "target": "mathmap/习题/questions/Q00004895"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 向量的夹角.md",
+      "target": "mathmap/习题/questions/Q00004896"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 向量的夹角.md",
+      "target": "mathmap/习题/questions/Q00004897"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 向量的夹角.md",
+      "target": "mathmap/习题/questions/Q00004898"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 向量的夹角.md",
+      "target": "mathmap/习题/questions/Q00004899"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 向量的夹角.md",
+      "target": "mathmap/习题/questions/Q00004900"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 向量的夹角.md",
+      "target": "mathmap/习题/questions/Q00004901"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 和差化积、积化和差的应用.md",
+      "target": "mathmap/习题/questions/Q00004617"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 和差化积、积化和差的应用.md",
+      "target": "mathmap/习题/questions/Q00004618"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 和差化积、积化和差的应用.md",
+      "target": "mathmap/习题/questions/Q00004619"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 和差化积、积化和差的应用.md",
+      "target": "mathmap/习题/questions/Q00004620"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 和差化积、积化和差的应用.md",
+      "target": "mathmap/习题/questions/Q00004621"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 定理与三角形四心的关系.md",
+      "target": "mathmap/习题/questions/Q00005222"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 定理与三角形四心的关系.md",
+      "target": "mathmap/习题/questions/Q00005223"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 定理与三角形四心的关系.md",
+      "target": "mathmap/习题/questions/Q00005224"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 定理与三角形四心的关系.md",
+      "target": "mathmap/习题/questions/Q00005225"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 已知奇偶性求参数与值.md",
+      "target": "mathmap/习题/questions/Q00004346"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 已知奇偶性求参数与值.md",
+      "target": "mathmap/习题/questions/Q00004347"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 已知奇偶性求参数与值.md",
+      "target": "mathmap/习题/questions/Q00004348"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 已知奇偶性求参数与值.md",
+      "target": "mathmap/习题/questions/Q00004349"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 已知奇偶性求参数与值.md",
+      "target": "mathmap/习题/questions/Q00004350"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 已知奇偶性求参数与值.md",
+      "target": "mathmap/习题/questions/Q00004351"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 已知奇偶性求参数与值.md",
+      "target": "mathmap/习题/questions/Q00004352"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 已知奇偶性求参数与值.md",
+      "target": "mathmap/习题/questions/Q00004353"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 已知奇偶性求参数与值.md",
+      "target": "mathmap/习题/questions/Q00004354"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 已知奇偶性求参数与值.md",
+      "target": "mathmap/习题/questions/Q00004355"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 求线段的范围与最值.md",
+      "target": "mathmap/习题/questions/Q00005269"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 求线段的范围与最值.md",
+      "target": "mathmap/习题/questions/Q00005270"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 求线段的范围与最值.md",
+      "target": "mathmap/习题/questions/Q00005271"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 求线段的范围与最值.md",
+      "target": "mathmap/习题/questions/Q00005272"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 求线段的范围与最值.md",
+      "target": "mathmap/习题/questions/Q00005273"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 求线段的范围与最值.md",
+      "target": "mathmap/习题/questions/Q00005274"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 求线段的范围与最值.md",
+      "target": "mathmap/习题/questions/Q00005275"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 求线段的范围与最值.md",
+      "target": "mathmap/习题/questions/Q00005276"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 求线段的范围与最值.md",
+      "target": "mathmap/习题/questions/Q00005277"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 求线段的范围与最值.md",
+      "target": "mathmap/习题/questions/Q00005278"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 高线问题.md",
+      "target": "mathmap/习题/questions/Q00005296"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 高线问题.md",
+      "target": "mathmap/习题/questions/Q00005297"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_ 高线问题.md",
+      "target": "mathmap/习题/questions/Q00005298"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_两角和与差在三角形中的应用.md",
+      "target": "mathmap/习题/questions/Q00004463"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_两角和与差在三角形中的应用.md",
+      "target": "mathmap/习题/questions/Q00004464"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_两角和与差在三角形中的应用.md",
+      "target": "mathmap/习题/questions/Q00004465"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_两角和与差在三角形中的应用.md",
+      "target": "mathmap/习题/questions/Q00004466"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_两角和与差在三角形中的应用.md",
+      "target": "mathmap/习题/questions/Q00004467"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_两角和与差在三角形中的应用.md",
+      "target": "mathmap/习题/questions/Q00004468"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_两角和与差在三角形中的应用.md",
+      "target": "mathmap/习题/questions/Q00004469"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_两角和与差在三角形中的应用.md",
+      "target": "mathmap/习题/questions/Q00004470"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_两角和与差在三角形中的应用.md",
+      "target": "mathmap/习题/questions/Q00004471"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_两角和与差在三角形中的应用.md",
+      "target": "mathmap/习题/questions/Q00004472"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_两角和与差在三角形中的应用.md",
+      "target": "mathmap/习题/questions/Q00004473"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_两角和与差在三角形中的应用.md",
+      "target": "mathmap/习题/questions/Q00004474"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 3_两角和与差在三角形中的应用.md",
+      "target": "mathmap/习题/questions/Q00004475"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 借助辅助角公式研究函数性质.md",
+      "target": "mathmap/习题/questions/Q00004476"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 借助辅助角公式研究函数性质.md",
+      "target": "mathmap/习题/questions/Q00004477"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 借助辅助角公式研究函数性质.md",
+      "target": "mathmap/习题/questions/Q00004478"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 借助辅助角公式研究函数性质.md",
+      "target": "mathmap/习题/questions/Q00004479"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 借助辅助角公式研究函数性质.md",
+      "target": "mathmap/习题/questions/Q00004480"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 借助辅助角公式研究函数性质.md",
+      "target": "mathmap/习题/questions/Q00004481"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 借助辅助角公式研究函数性质.md",
+      "target": "mathmap/习题/questions/Q00004482"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 借助辅助角公式研究函数性质.md",
+      "target": "mathmap/习题/questions/Q00004483"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 借助辅助角公式研究函数性质.md",
+      "target": "mathmap/习题/questions/Q00004484"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 借助辅助角公式研究函数性质.md",
+      "target": "mathmap/习题/questions/Q00004485"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 借助辅助角公式研究函数性质.md",
+      "target": "mathmap/习题/questions/Q00004486"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 借助辅助角公式研究函数性质.md",
+      "target": "mathmap/习题/questions/Q00004487"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 借助辅助角公式研究函数性质.md",
+      "target": "mathmap/习题/questions/Q00004488"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 周期与奇偶性综合.md",
+      "target": "mathmap/习题/questions/Q00004356"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 周期与奇偶性综合.md",
+      "target": "mathmap/习题/questions/Q00004357"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 周期与奇偶性综合.md",
+      "target": "mathmap/习题/questions/Q00004358"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 周期与奇偶性综合.md",
+      "target": "mathmap/习题/questions/Q00004359"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 周期与奇偶性综合.md",
+      "target": "mathmap/习题/questions/Q00004360"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 周期与奇偶性综合.md",
+      "target": "mathmap/习题/questions/Q00004361"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 周期与奇偶性综合.md",
+      "target": "mathmap/习题/questions/Q00004362"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 对称性与周期性的应用.md",
+      "target": "mathmap/习题/questions/Q00004421"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 对称性与周期性的应用.md",
+      "target": "mathmap/习题/questions/Q00004422"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 对称性与周期性的应用.md",
+      "target": "mathmap/习题/questions/Q00004423"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 对称性与周期性的应用.md",
+      "target": "mathmap/习题/questions/Q00004424"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 对称性与周期性的应用.md",
+      "target": "mathmap/习题/questions/Q00004425"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 对称性与周期性的应用.md",
+      "target": "mathmap/习题/questions/Q00004426"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 对称性与周期性的应用.md",
+      "target": "mathmap/习题/questions/Q00004427"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 已知夹角求参数取值范围.md",
+      "target": "mathmap/习题/questions/Q00004902"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 已知夹角求参数取值范围.md",
+      "target": "mathmap/习题/questions/Q00004903"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 已知夹角求参数取值范围.md",
+      "target": "mathmap/习题/questions/Q00004904"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 已知夹角求参数取值范围.md",
+      "target": "mathmap/习题/questions/Q00004905"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 求角或三角函数值的范围.md",
+      "target": "mathmap/习题/questions/Q00005279"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 求角或三角函数值的范围.md",
+      "target": "mathmap/习题/questions/Q00005280"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 求角或三角函数值的范围.md",
+      "target": "mathmap/习题/questions/Q00005281"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 求角或三角函数值的范围.md",
+      "target": "mathmap/习题/questions/Q00005282"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 求角或三角函数值的范围.md",
+      "target": "mathmap/习题/questions/Q00005283"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_ 求角或三角函数值的范围.md",
+      "target": "mathmap/习题/questions/Q00005284"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_三角形的面积问题.md",
+      "target": "mathmap/习题/questions/Q00005138"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_三角形的面积问题.md",
+      "target": "mathmap/习题/questions/Q00005139"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_三角形的面积问题.md",
+      "target": "mathmap/习题/questions/Q00005140"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_三角形的面积问题.md",
+      "target": "mathmap/习题/questions/Q00005141"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_三角形的面积问题.md",
+      "target": "mathmap/习题/questions/Q00005142"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_三角形的面积问题.md",
+      "target": "mathmap/习题/questions/Q00005143"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_三角形的面积问题.md",
+      "target": "mathmap/习题/questions/Q00005144"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_三角形的面积问题.md",
+      "target": "mathmap/习题/questions/Q00005145"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 4_三角形的面积问题.md",
+      "target": "mathmap/习题/questions/Q00005146"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 5_ 借助辅助角公式求取值范围.md",
+      "target": "mathmap/习题/questions/Q00004489"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 5_ 借助辅助角公式求取值范围.md",
+      "target": "mathmap/习题/questions/Q00004490"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 5_ 借助辅助角公式求取值范围.md",
+      "target": "mathmap/习题/questions/Q00004491"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 5_ 借助辅助角公式求取值范围.md",
+      "target": "mathmap/习题/questions/Q00004492"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 5_ 借助辅助角公式求取值范围.md",
+      "target": "mathmap/习题/questions/Q00004493"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 5_ 借助辅助角公式求取值范围.md",
+      "target": "mathmap/习题/questions/Q00004494"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 5_ 已知对称性求参数.md",
+      "target": "mathmap/习题/questions/Q00004363"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 5_ 已知对称性求参数.md",
+      "target": "mathmap/习题/questions/Q00004364"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 5_ 已知对称性求参数.md",
+      "target": "mathmap/习题/questions/Q00004365"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 5_ 已知对称性求参数.md",
+      "target": "mathmap/习题/questions/Q00004366"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 5_ 已知对称性求参数.md",
+      "target": "mathmap/习题/questions/Q00004367"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 5_ 已知对称性求参数.md",
+      "target": "mathmap/习题/questions/Q00004368"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 5_ 已知对称性求参数.md",
+      "target": "mathmap/习题/questions/Q00004369"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 5_ 投影与投影向量.md",
+      "target": "mathmap/习题/questions/Q00004906"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 5_ 投影与投影向量.md",
+      "target": "mathmap/习题/questions/Q00004907"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 5_ 投影与投影向量.md",
+      "target": "mathmap/习题/questions/Q00004908"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 5_ 投影与投影向量.md",
+      "target": "mathmap/习题/questions/Q00004909"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 5_ 投影与投影向量.md",
+      "target": "mathmap/习题/questions/Q00004910"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 5_ 投影与投影向量.md",
+      "target": "mathmap/习题/questions/Q00004911"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 5_ 投影与投影向量.md",
+      "target": "mathmap/习题/questions/Q00004912"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 5_ 投影与投影向量.md",
+      "target": "mathmap/习题/questions/Q00004913"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 5_ 投影与投影向量.md",
+      "target": "mathmap/习题/questions/Q00004914"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 5_三角形的实际应用.md",
+      "target": "mathmap/习题/questions/Q00005147"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 5_三角形的实际应用.md",
+      "target": "mathmap/习题/questions/Q00005148"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 5_三角形的实际应用.md",
+      "target": "mathmap/习题/questions/Q00005149"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 5_三角形的实际应用.md",
+      "target": "mathmap/习题/questions/Q00005150"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 5_三角形的实际应用.md",
+      "target": "mathmap/习题/questions/Q00005151"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 5_三角形的实际应用.md",
+      "target": "mathmap/习题/questions/Q00005152"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 5_三角形的实际应用.md",
+      "target": "mathmap/习题/questions/Q00005153"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 5_三角形的实际应用.md",
+      "target": "mathmap/习题/questions/Q00005154"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 6_ 向量的模.md",
+      "target": "mathmap/习题/questions/Q00004915"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 6_ 向量的模.md",
+      "target": "mathmap/习题/questions/Q00004916"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 6_ 向量的模.md",
+      "target": "mathmap/习题/questions/Q00004917"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 6_ 向量的模.md",
+      "target": "mathmap/习题/questions/Q00004918"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 6_ 向量的模.md",
+      "target": "mathmap/习题/questions/Q00004919"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 6_ 向量的模.md",
+      "target": "mathmap/习题/questions/Q00004920"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 6_ 向量的模.md",
+      "target": "mathmap/习题/questions/Q00004921"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 6_ 向量的模.md",
+      "target": "mathmap/习题/questions/Q00004922"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 6_ 向量的模.md",
+      "target": "mathmap/习题/questions/Q00004923"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 6_ 向量的模.md",
+      "target": "mathmap/习题/questions/Q00004924"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 6_ 对称性与周期性之间的关系 根据正余弦函数图像可知：.md",
+      "target": "mathmap/习题/questions/Q00004370"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 6_ 对称性与周期性之间的关系 根据正余弦函数图像可知：.md",
+      "target": "mathmap/习题/questions/Q00004371"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 6_ 对称性与周期性之间的关系 根据正余弦函数图像可知：.md",
+      "target": "mathmap/习题/questions/Q00004372"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 6_ 对称性与周期性之间的关系 根据正余弦函数图像可知：.md",
+      "target": "mathmap/习题/questions/Q00004373"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 6_ 对称性与周期性之间的关系 根据正余弦函数图像可知：.md",
+      "target": "mathmap/习题/questions/Q00004374"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 7_ 已知单调性求参数.md",
+      "target": "mathmap/习题/questions/Q00004375"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 7_ 已知单调性求参数.md",
+      "target": "mathmap/习题/questions/Q00004376"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 7_ 已知单调性求参数.md",
+      "target": "mathmap/习题/questions/Q00004377"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 7_ 已知单调性求参数.md",
+      "target": "mathmap/习题/questions/Q00004378"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 7_ 已知单调性求参数.md",
+      "target": "mathmap/习题/questions/Q00004379"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 7_ 已知单调性求参数.md",
+      "target": "mathmap/习题/questions/Q00004380"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 7_ 已知单调性求参数.md",
+      "target": "mathmap/习题/questions/Q00004381"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 7_ 已知单调性求参数.md",
+      "target": "mathmap/习题/questions/Q00004382"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 7_ 已知单调性求参数.md",
+      "target": "mathmap/习题/questions/Q00004383"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 7_ 已知单调性求参数.md",
+      "target": "mathmap/习题/questions/Q00004384"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 7_ 数量积有关的取值范围问题.md",
+      "target": "mathmap/习题/questions/Q00004925"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 7_ 数量积有关的取值范围问题.md",
+      "target": "mathmap/习题/questions/Q00004926"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 7_ 数量积有关的取值范围问题.md",
+      "target": "mathmap/习题/questions/Q00004927"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 7_ 数量积有关的取值范围问题.md",
+      "target": "mathmap/习题/questions/Q00004928"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 7_ 数量积有关的取值范围问题.md",
+      "target": "mathmap/习题/questions/Q00004929"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 7_ 数量积有关的取值范围问题.md",
+      "target": "mathmap/习题/questions/Q00004930"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 7_ 数量积有关的取值范围问题.md",
+      "target": "mathmap/习题/questions/Q00004931"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 7_ 数量积有关的取值范围问题.md",
+      "target": "mathmap/习题/questions/Q00004932"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 7_ 数量积有关的取值范围问题.md",
+      "target": "mathmap/习题/questions/Q00004933"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 7_ 数量积有关的取值范围问题.md",
+      "target": "mathmap/习题/questions/Q00004934"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 7_ 数量积有关的取值范围问题.md",
+      "target": "mathmap/习题/questions/Q00004935"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 7_ 数量积有关的取值范围问题.md",
+      "target": "mathmap/习题/questions/Q00004936"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 7_ 数量积有关的取值范围问题.md",
+      "target": "mathmap/习题/questions/Q00004937"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 7_ 数量积有关的取值范围问题.md",
+      "target": "mathmap/习题/questions/Q00004938"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型 7_ 数量积有关的取值范围问题.md",
+      "target": "mathmap/习题/questions/Q00004939"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型1_利用三角函数线比较大小.md",
+      "target": "mathmap/习题/questions/Q00004222"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型1_利用三角函数线比较大小.md",
+      "target": "mathmap/习题/questions/Q00004223"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型1_利用三角函数线比较大小.md",
+      "target": "mathmap/习题/questions/Q00004224"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型1_利用三角函数线比较大小.md",
+      "target": "mathmap/习题/questions/Q00004225"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型1_利用三角函数线比较大小.md",
+      "target": "mathmap/习题/questions/Q00004226"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/题型1_利用三角函数线比较大小.md",
+      "target": "mathmap/习题/questions/Q00004227"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/高中数学全练一本通_9_重点题型专练.md",
+      "target": "mathmap/习题/questions/Q00005299"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/高中数学全练一本通_9_重点题型专练.md",
+      "target": "mathmap/习题/questions/Q00005300"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/高中数学全练一本通_9_重点题型专练.md",
+      "target": "mathmap/习题/questions/Q00005301"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/高中数学全练一本通_9_重点题型专练.md",
+      "target": "mathmap/习题/questions/Q00005302"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/高中数学全练一本通_9_重点题型专练.md",
+      "target": "mathmap/习题/questions/Q00005303"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/高中数学全练一本通_9_重点题型专练.md",
+      "target": "mathmap/习题/questions/Q00005304"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/高中数学全练一本通_9_重点题型专练.md",
+      "target": "mathmap/习题/questions/Q00005305"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/高中数学全练一本通_9_重点题型专练.md",
+      "target": "mathmap/习题/questions/Q00005306"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/高中数学全练一本通_9_重点题型专练.md",
+      "target": "mathmap/习题/questions/Q00005307"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/高中数学全练一本通_9_重点题型专练.md",
+      "target": "mathmap/习题/questions/Q00005308"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/高中数学全练一本通_9_重点题型专练.md",
+      "target": "mathmap/习题/questions/Q00005309"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/高中数学全练一本通_9_重点题型专练.md",
+      "target": "mathmap/习题/questions/Q00005310"
+    },
+    {
+      "kind": "wrong_tier",
+      "path": "mathmap/习题/题集/高中数学全练一本通_9_重点题型专练.md",
+      "target": "mathmap/习题/questions/Q00005311"
+    }
+  ],
+  "vault_root": "/Users/oven/Documents/ovenmathmap"
+}

@@ -102,6 +102,12 @@ Set `heading_only: true` when a role regex could also match ordinary body text
 such as numbered subparts; this prevents a subpart from truncating its owning
 top-level question or functional node.
 
+If a missing OCR training-band label causes exercise roles to nest beneath a
+theory role, configure `content.detached_role_folders`, for example
+`[{"from_ancestor_role":"knowledge_guide","roles":["basic-point","question-type"],"folder":"Questions"}]`.
+The exercise roots then become siblings of the theory node and are written
+under the reviewed folder without hardcoding publisher labels in the compiler.
+
 `answers.contexts[].start_line` is always a raw Markdown line number, even when
 an OCR line contains multiple inline answer headers. Add `anchor_text` or
 `anchor_pattern` when freezing a fixed boundary so drift fails before matching.

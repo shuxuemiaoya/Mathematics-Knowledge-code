@@ -88,6 +88,69 @@ def match_question(line: str, patterns: list[re.Pattern[str]]) -> re.Match[str] 
     return None
 
 
+def detach_configured_role_roots(
+    labels: list[dict[str, Any]], adapter: dict[str, Any]
+) -> None:
+    """Detach exercise blocks from a non-exercise ancestor when OCR omits a band label."""
+    rules = adapter.get("content", {}).get("detached_role_folders") or []
+    if not isinstance(rules, list):
+        raise ConfigurationError("content.detached_role_folders must be a list")
+    by_key = {str(label["key"]): label for label in labels}
+    for index, rule in enumerate(rules):
+        if not isinstance(rule, dict):
+            raise ConfigurationError(
+                f"content.detached_role_folders[{index}] must be an object"
+            )
+        ancestor_role = str(rule.get("from_ancestor_role", "")).strip()
+        folder = str(rule.get("folder", "")).strip()
+        roles = {
+            str(role).strip()
+            for role in (rule.get("roles") or [])
+            if str(role).strip()
+        }
+        if not ancestor_role or not folder or not roles:
+            raise ConfigurationError(
+                f"content.detached_role_folders[{index}] requires "
+                "from_ancestor_role, folder, and non-empty roles"
+            )
+        for label_index, label in enumerate(labels):
+            if label.get("role") not in roles or not label.get("parent"):
+                continue
+            ancestor = by_key.get(str(label.get("parent")))
+            while ancestor and ancestor.get("role") != ancestor_role:
+                ancestor = by_key.get(str(ancestor.get("parent"))) if ancestor.get("parent") else None
+            if ancestor is None:
+                continue
+            ancestor["end_line"] = min(
+                int(ancestor["end_line"]), int(label["start_line"]) - 1
+            )
+            label["parent"] = None
+            label["detached_root_folder"] = folder
+            # Same-depth source headings can be subdivisions of the detached
+            # exercise root (for example numbered models beneath a question
+            # type).  Depth alone originally leaves them on the theory
+            # ancestor, so claim the contiguous run until the next exercise
+            # root or shallower structural boundary.
+            for following in labels[label_index + 1:]:
+                if int(following["depth"]) < int(label["depth"]):
+                    break
+                if (
+                    following.get("role") in roles
+                    and int(following["depth"]) <= int(label["depth"])
+                ):
+                    break
+                if (
+                    following.get("role") == ancestor_role
+                    and int(following["depth"]) <= int(ancestor["depth"])
+                ):
+                    break
+                if following.get("parent") == ancestor.get("key"):
+                    following["parent"] = label["key"]
+                    label["end_line"] = max(
+                        int(label["end_line"]), int(following["end_line"])
+                    )
+
+
 def split_inline_question_headers(
     raw_lines: list[str], patterns: list[re.Pattern[str]]
 ) -> list[dict[str, Any]]:
@@ -187,6 +250,8 @@ def plan_note(
                 break
         label["parent"] = parent
 
+    detach_configured_role_roots(labels, adapter)
+
     graph_root = Path(adapter["_graph_root"])
     question_folder = str(adapter.get("content", {}).get("question_folder", "questions"))
     path_by_label: dict[str, Path] = {}
@@ -200,6 +265,10 @@ def plan_note(
         parent_path = path.parent
         if label["parent"]:
             parent_path = path_by_label[label["parent"]].parent
+        elif label.get("detached_root_folder"):
+            parent_path = path.parent / safe_name(
+                str(label["detached_root_folder"]), "content"
+            )[:component_limit]
         values = {"ordinal": ordinal, "title": label["title"], "role": label["role"]}
         folder_name = functional_folder_template.format(**values)
         file_name = functional_file_template.format(**values)
@@ -285,6 +354,7 @@ def plan_note(
             f"{note_entry['key']}:question:{number}:{start}",
         )
         body = "\n".join(lines[start - 1:end]).rstrip() + "\n"
+        rendered_body = rebase_local_links(body, path, output)
         source_part = next((item for item in reversed(source_parts) if item["line"] <= start), None)
         questions.append(
             {
@@ -304,7 +374,11 @@ def plan_note(
                 "source_end_line": virtual_lines[end - 1]["raw_line"],
                 "output": str(output.resolve()),
                 "body_sha256": sha256_text(body),
-                "body_lexical_signature": lexical_signature(body),
+                # The source digest remains bound to the immutable hierarchy
+                # corpus, while the lexical signature reflects the body as it
+                # is rendered at its relocated leaf path.  This matters for
+                # HTML table cells whose <img src> values are rebased.
+                "body_lexical_signature": lexical_signature(rendered_body),
                 "source_part": source_part,
             }
         )
