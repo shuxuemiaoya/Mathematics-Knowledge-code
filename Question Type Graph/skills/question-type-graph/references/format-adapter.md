@@ -75,3 +75,5 @@ restart inside those blocks. Its stable context is
 when the answer-source context keys require another reviewed convention.
 Generated paths default to a conservative 220-character budget and fall back
 to deterministic `_compact` names without changing visible note titles.
+
+For supplementary exercise books with mixed theory sections (`知识导学`, `知识梳理`, `考点精讲`), set `role: "knowledge_guide"` on the matching `functional_roles` entry so the segmentation engine extracts them into lightweight Functional Nodes rather than invoking textbook concept extraction.

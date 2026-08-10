@@ -1,5 +1,5 @@
 ---
-name: mathmap-linker
+name: mathmap-linker-agent
 description: 将 Book to Obsidian Wiki Graph 和 Question Type Graph 生成的课本知识点与试卷/刷题库笔记，自适应关联并有机链接到 mathmap 体系中，合并生成 master canvas，构建庞大、统一的数学 Wiki Graph。
 ---
 

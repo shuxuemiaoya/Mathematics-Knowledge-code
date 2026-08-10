@@ -102,11 +102,122 @@ def safe_dest_name(base: str, section: str, existing: set, used: set) -> str:
     return book_prefixed
 
 
+def is_formula_note(fname: str) -> bool:
+    """判定是否为公式/结论/知识导学笔记。"""
+    return bool(re.search(r"(知识导学|知识梳理|公式|结论|考点精讲|知识精讲|考点清单|独立公式)", fname))
+
+
+def classify_formula_tier(fname: str) -> str:
+    """分类公式/结论笔记的层级: 公式合集 | 公式整理 | 独立公式。"""
+    if "公式合集" in fname or re.search(r"^(第一章|第二章|第三章|第四章|第五章|第六章|第七章|第八章|第九章|第\d+章|第\d+节|小节|章末).*公式", fname):
+        return "公式合集"
+    if "公式整理" in fname or re.search(r"(知识导学|知识梳理|考点精讲|知识精讲|考点清单)", fname):
+        return "公式整理"
+    return "独立公式"
+
+
+def extract_and_file_knowledge_guide(src: str, content: str, book_short: str, mathmap_dir: Path, name_map: dict, tier_map: dict) -> list:
+    """若文件包含 ## 知识导学 / ## 知识梳理 / ## 考点精讲，解析其标题架构，自动提取 3 级公式结论卡片。
+
+    1. 公式合集 (Level 1): <小节名>_公式合集.md
+    2. 公式整理 (Level 2): <大主题名>.md (如 任意角.md, 弧度制.md)
+    3. 独立公式 (Level 3/Atomic): <细分考点名>.md (如 终边相同的角.md, 扇形公式.md)
+    """
+    if "## 知识导学" not in content and "## 知识梳理" not in content and "## 考点精讲" not in content:
+        return []
+
+    # 截取 知识导学 / 知识梳理 / 考点精讲 区块
+    guide_match = re.search(r"(##\s*(?:知识导学|知识梳理|考点精讲).*?)(?=\n#\s|\n##\s*(?:重点题型|刷题|习题|考点分类|例题)|$)", content, flags=re.DOTALL)
+    if not guide_match:
+        return []
+
+    guide_text = guide_match.group(1)
+    
+    sec_match = re.search(r"^#\s+(.+)$", content, flags=re.MULTILINE)
+    sec_title = sec_match.group(1).strip() if sec_match else Path(src).stem
+    sec_clean = re.sub(r"^第[0-9一二三四五六七八九十]+[节章]\s*", "", sec_title).strip()
+
+    col_dir = mathmap_dir / "公式结论/公式合集"
+    sum_dir = mathmap_dir / "公式结论/公式整理"
+    atomic_dir = mathmap_dir / "公式结论/独立公式"
+    for d in (col_dir, sum_dir, atomic_dir):
+        d.mkdir(parents=True, exist_ok=True)
+
+    extracted_stems = []
+
+    # 解析 Level 2 块 (## 一. 任意角, ## 二. 弧度制)
+    level2_blocks = re.split(r"\n(?=##\s+[一二三四五六七八九十]+\.\s*)", guide_text)
+    level2_stems = []
+
+    for block in level2_blocks:
+        l2_match = re.match(r"##\s+[一二三四五六七八九十]+\.\s*([^\n]+)", block)
+        if not l2_match:
+            continue
+        l2_title = l2_match.group(1).strip()
+
+        # 解析 Level 3 / 独立公式 (## 1. 角的相关概念, ## 3. 终边相同的角, ## 6. 关于扇形的几个公式)
+        atomic_blocks = re.split(r"\n(?=##\s+\d+[\.．、\s]\s*)", block)
+        atomic_stems = []
+
+        for a_block in atomic_blocks:
+            a_match = re.match(r"##\s+\d+[\.．、\s]\s*([^\n]+)", a_block)
+            if not a_match:
+                continue
+            a_raw_title = a_match.group(1).strip()
+            a_title = re.sub(r"^[0-9一二三四五六七八九十①②③④⑤⑥⑦⑧⑨⑩\.．、\s\(\)（）]+", "", a_raw_title).strip()
+            if not a_title:
+                a_title = a_raw_title
+            
+            atomic_file = atomic_dir / f"{a_title}.md"
+            atomic_body = f"# {a_title}\n\n{a_block.strip()}\n"
+            if not atomic_file.exists() or atomic_file.read_text(encoding="utf-8-sig") != atomic_body:
+                atomic_file.write_text(atomic_body, encoding="utf-8")
+            
+            atomic_stems.append(a_title)
+            vp_atomic = f"formula:{a_title}"
+            name_map[vp_atomic] = a_title
+            tier_map[vp_atomic] = "独立公式"
+            extracted_stems.append((vp_atomic, "独立公式", a_title))
+
+        # 生成 Level 2 公式整理文件
+        if atomic_stems:
+            l2_body_lines = [f"# {l2_title}\n"]
+            for a_stem in atomic_stems:
+                l2_body_lines.append(f"![[mathmap/公式结论/独立公式/{a_stem}|{a_stem}]]\n")
+            l2_body = "\n".join(l2_body_lines)
+            l2_file = sum_dir / f"{l2_title}.md"
+            if not l2_file.exists() or l2_file.read_text(encoding="utf-8-sig") != l2_body:
+                l2_file.write_text(l2_body, encoding="utf-8")
+            
+            level2_stems.append(l2_title)
+            vp_l2 = f"formula:{l2_title}"
+            name_map[vp_l2] = l2_title
+            tier_map[vp_l2] = "公式整理"
+            extracted_stems.append((vp_l2, "公式整理", l2_title))
+
+    # 生成 Level 1 公式合集文件
+    if level2_stems:
+        col_title = f"{sec_clean}_公式合集" if sec_clean else f"{Path(src).stem}_公式合集"
+        col_file = col_dir / f"{col_title}.md"
+        col_body_lines = [f"# {sec_title} 公式合集\n"]
+        for l2_stem in level2_stems:
+            col_body_lines.append(f"![[mathmap/公式结论/公式整理/{l2_stem}|{l2_stem}]]\n")
+        col_body = "\n".join(col_body_lines)
+        if not col_file.exists() or col_file.read_text(encoding="utf-8-sig") != col_body:
+            col_file.write_text(col_body, encoding="utf-8")
+        vp_col = f"formula:{col_title}"
+        name_map[vp_col] = col_title
+        tier_map[vp_col] = "公式合集"
+        extracted_stems.append((vp_col, "公式合集", col_title))
+
+    return extracted_stems
+
+
 def rewrite_links(content: str, name_map: dict, tier_map: dict) -> str:
     """按「源全路径 -> mathmap 目标」重写笔记内 ![[...]] 链接。
 
     name_map: 源文件全路径(书目录名开头,含.md) -> mathmap 目标 stem
-    tier_map: 源文件全路径 -> "questions"|"answers"|"题型整理"|"题集"
+    tier_map: 源文件全路径 -> "questions"|"answers"|"题型整理"|"题集"|"公式合集"|"公式整理"|"独立公式"
     优先全路径精确匹配；Q 单题按 basename 兜底；未知链接原样保留。
     """
 
@@ -116,6 +227,8 @@ def rewrite_links(content: str, name_map: dict, tier_map: dict) -> str:
         if norm in name_map:
             target = name_map[norm]
             tier = tier_map.get(norm, "题型整理")
+            if tier in ("公式合集", "公式整理", "独立公式"):
+                return f"![[mathmap/公式结论/{tier}/{target}|{clean_title(target)}]]"
             return f"![[mathmap/习题/{tier}/{target}|{clean_title(target)}]]"
         stem = link_target_stem(link_path)
         if re.match(r"^Q\d+$", stem):
@@ -181,21 +294,30 @@ def kp_for_section(section: str, kp_index: dict, kp_dir: Path, section_map: dict
 
 
 def mount_kp(kp: str, tier: str, stem: str, kp_dir: Path, book_short: str) -> bool:
-    """把 (tier, stem) 挂载到知识点节点 kp 的 # 题型 章节（纯新增，标明来源，幂等）。
+    """把 (tier, stem) 挂载到知识点节点 kp 的对应章节（纯新增，标明来源，幂等）。
+    - 题型节点 -> # 题型
+    - 公式/结论节点 -> # 公式与结论
     """
     kp_path = kp_dir / f"{kp}.md"
     if not kp_path.is_file():
-        kp_path.write_text(f"# {kp}\n\n# 题型\n", encoding="utf-8")
+        kp_path.write_text(f"# {kp}\n\n# 题型\n\n# 公式与结论\n", encoding="utf-8")
 
     text = kp_path.read_text(encoding="utf-8-sig")
-    embed = f"![[mathmap/习题/{tier}/{stem}|{clean_title(stem)}]]"
+
+    if tier in ("公式合集", "公式整理", "独立公式"):
+        embed = f"![[mathmap/公式结论/{tier}/{stem}|{clean_title(stem)}]]"
+        heading_target = "# 公式与结论"
+    else:
+        embed = f"![[mathmap/习题/{tier}/{stem}|{clean_title(stem)}]]"
+        heading_target = "# 题型"
+
     if embed in text:
         return False
     source_heading = f"## 来源：{book_short}"
 
-    if "# 题型" not in text:
-        text = text.rstrip() + "\n\n# 题型\n"
-    q_idx = text.find("# 题型")
+    if heading_target not in text:
+        text = text.rstrip() + f"\n\n{heading_target}\n"
+    q_idx = text.find(heading_target)
     if source_heading in text[q_idx:]:
         pos = text.find(source_heading, q_idx)
         end = text.find("\n## ", pos + len(source_heading))
@@ -229,12 +351,17 @@ def archive_and_link_mathmap(vault_root: str, source_book_dir: str, book_short: 
     a_dest = mathmap / "习题/answers"
     qt_dest = mathmap / "习题/题型整理"
     paper_dest = mathmap / "习题/题集"
+    formula_col_dest = mathmap / "公式结论/公式合集"
+    formula_sum_dest = mathmap / "公式结论/公式整理"
+    formula_atomic_dest = mathmap / "公式结论/独立公式"
     kp_dir = mathmap / "知识点"
-    for d in (q_dest, a_dest, qt_dest, paper_dest):
+    for d in (q_dest, a_dest, qt_dest, paper_dest, formula_col_dest, formula_sum_dest, formula_atomic_dest):
         d.mkdir(parents=True, exist_ok=True)
 
     # existing_* 只统计 git 已跟踪（旧书）文件：保证冲突命名与幂等稳定
     def tracked_in(d: Path) -> set:
+        if not d.exists():
+            return set()
         out = subprocess.run(
             ["git", "-C", str(vault), "-c", "core.quotepath=false", "ls-files", str(d)],
             capture_output=True, text=True,
@@ -245,15 +372,20 @@ def archive_and_link_mathmap(vault_root: str, source_book_dir: str, book_short: 
     existing_paper = tracked_in(paper_dest)
     existing_q = tracked_in(q_dest)
     existing_a = tracked_in(a_dest)
+    existing_formula_col = tracked_in(formula_col_dest)
+    existing_formula_sum = tracked_in(formula_sum_dest)
+    existing_formula_atomic = tracked_in(formula_atomic_dest)
 
-    q_copied = a_copied = qt_copied = paper_copied = 0
+    q_copied = a_copied = qt_copied = paper_copied = formula_copied = 0
     q_skipped = a_skipped = 0
     tier2_used: set = set()
     tier3_used: set = set()
+    formula_used: set = set()
     name_map: dict = {}   # 源文件全路径(书目录名开头) -> mathmap stem
     tier_map: dict = {}
     paper_plans = []      # (src, clean_name, rel_dir)
     qt_plans = []         # (src, fname, section_dir)
+    formula_plans = []    # (src, fname, f_tier, section_dir)
 
     def src_vp(p: str) -> str:
         """链接中使用的路径：书目录名 + 相对书根的路径。"""
@@ -335,7 +467,7 @@ def archive_and_link_mathmap(vault_root: str, source_book_dir: str, book_short: 
                 name_map[vp] = os.path.splitext(f)[0]
                 tier_map[vp] = "answers"
 
-    # ---- Pass 2: Tier2/Tier3 落盘计划 ----
+    # ---- Pass 2: Tier2/Tier3 与 公式结论 落盘计划 ----
     for root, dirs, files in os.walk(source_book):
         rel_dir = os.path.relpath(root, source_book)
         parts = rel_dir.split(os.sep)
@@ -345,7 +477,18 @@ def archive_and_link_mathmap(vault_root: str, source_book_dir: str, book_short: 
             if not f.endswith(".md") or f.startswith(".") or f == "index.md":
                 continue
             src = os.path.join(root, f)
-            if is_paper_tier3(parts, f):
+            section_dir = parts[-2] if len(parts) >= 2 else "章节"
+            content = Path(src).read_text(encoding="utf-8-sig")
+
+            # 自动解包与提炼 知识导学/公式/结论 块至 mathmap/公式结论/
+            extracted_formulas = extract_and_file_knowledge_guide(src, content, book_short, mathmap, name_map, tier_map)
+            if extracted_formulas:
+                formula_copied += len(extracted_formulas)
+
+            if is_formula_note(f):
+                f_tier = classify_formula_tier(f)
+                formula_plans.append((src, f, f_tier, section_dir))
+            elif is_paper_tier3(parts, f):
                 clean_name = f
                 if len(parts) >= 2 and re.search(r"_b\d+\.md$", f):
                     sec_folder = parts[-2] if parts[-1].startswith("刷") else parts[-1]
@@ -353,8 +496,30 @@ def archive_and_link_mathmap(vault_root: str, source_book_dir: str, book_short: 
                 clean_name = re.sub(r"^\d+-", "", clean_name)
                 paper_plans.append((src, clean_name, rel_dir))
             elif is_qt_tier2_name(f):
-                section_dir = parts[-2] if len(parts) >= 2 else "章节"
                 qt_plans.append((src, f, section_dir))
+
+    # 公式结论落盘
+    for src, fname, f_tier, section_dir in formula_plans:
+        vp = src_vp(src)
+        if f_tier == "公式合集":
+            f_dest = formula_col_dest
+            existing_f = existing_formula_col
+        elif f_tier == "公式整理":
+            f_dest = formula_sum_dest
+            existing_f = existing_formula_sum
+        else:
+            f_dest = formula_atomic_dest
+            existing_f = existing_formula_atomic
+
+        final_name = safe_dest_name(fname, section_dir, existing_f, formula_used)
+        name_map[vp] = os.path.splitext(final_name)[0]
+        tier_map[vp] = f_tier
+        dst = f_dest / final_name
+        if dst.is_file() and dst.read_bytes() == Path(src).read_bytes():
+            pass  # 幂等
+        else:
+            shutil.copy2(src, dst)
+        formula_copied += 1
 
     # Tier3 落盘（不合并，书命名空间隔离）
     for src, clean_name, rel_dir in paper_plans:
@@ -414,7 +579,9 @@ def archive_and_link_mathmap(vault_root: str, source_book_dir: str, book_short: 
 
 
     # ---- Pass 3: 统一重写已落盘笔记内链 ----
-    for d, tier in ((qt_dest, "题型整理"), (paper_dest, "题集")):
+    for d, tier in ((qt_dest, "题型整理"), (paper_dest, "题集"), (formula_col_dest, "公式合集"), (formula_sum_dest, "公式整理"), (formula_atomic_dest, "独立公式")):
+        if not d.exists():
+            continue
         for f in os.listdir(d):
             if not f.endswith(".md"):
                 continue
@@ -427,14 +594,14 @@ def archive_and_link_mathmap(vault_root: str, source_book_dir: str, book_short: 
     # ---- Pass 4: 知识点挂载 ----
     kp_index = build_kp_index(kp_dir)
     kp_mounted = kp_skipped = 0
-    for vp in [v for v, t in tier_map.items() if t in ("题型整理", "题集")]:
+    for vp in [v for v, t in tier_map.items() if t in ("题型整理", "题集", "公式合集", "公式整理", "独立公式")]:
         tier = tier_map[vp]
         stem = name_map[vp]
         # 从源路径提取所属章节/小节目录（跳过文件名段）
         vp_parts = vp.split(os.sep)
         section = None
         for part in reversed(vp_parts[:-1]):
-            if re.match(r"^(\d+(\.\d+)*|课时|专题|专练|第\d|模块|第一章|第二章|第三章|第[一二三]章)", part):
+            if re.match(r"^(\d+(\.\d+)*|课时|专题|专练|第[0-9一二三四五六七八九十]+[节章]|第\d|模块)", part):
                 section = part
                 break
         if section is None:
@@ -516,6 +683,34 @@ SECTION_KP_MAP = {
     "专练1_新定义、新情境专练": "第三章 圆锥曲线的方程",
     "专练2_开放题专练": "第三章 圆锥曲线的方程",
     "模块综合测试": "第三章 圆锥曲线的方程",
+    "第一节 任意角与弧度制": "任意角和弧度制",
+    "第二节 三角函数的定义": "三角函数的概念",
+    "第三节 同角的三角函数关系": "同角三角函数的基本关系",
+    "第四节 诱导公式": "诱导公式",
+    "第五节 三角函数的图像": "三角函数的图象与性质",
+    "第六节 正余弦函数的性质": "三角函数的性质",
+    "第七节 正切函数的图像与性质": "正切函数的性质与图象",
+    "第八节 两角和与差公式": "两角和与差的正弦、余弦、正切公式",
+    "第九节 倍角公式": "二倍角的正弦、余弦、正切公式",
+    "第十节 半角与积化和差和差化积公式": "简单的三角恒等变换",
+    "第十一节 正弦型三角函数的图像与性质": "三角函数的图象与性质",
+    "第十二节 专题 三角函数的图像变换问题": "三角函数的图象与性质",
+    "第十三节 专题 求 omega 的取值范围问题": "三角函数的图象与性质",
+    "第十四节（补充）反三角函数": "反三角函数",
+    "第一节 向量的概念及加减法运算": "平面向量的概念",
+    "第二节 向量的数乘运算": "向量的数乘运算",
+    "第三节 平面向量基本定理": "平面向量基本定理",
+    "第四节 向量的数量积": "向量的数量积",
+    "第五节 向量的坐标表示": "平面向量基本定理及坐标表示",
+    "第六节 专题 与向量有关的取值范围方法总结": "平面向量的应用",
+    "第七节 专题 极化恒等式与等和线问题": "平面向量的应用",
+    "第八节 正弦、余弦定理": "余弦定理、正弦定理",
+    "第九节 专题 三角形四心的向量表示": "平面向量的应用",
+    "第十节 专题 奔驰定理与面积问题": "平面向量的应用",
+    "第十一节 专题 解三角形基础解答题专练": "余弦定理、正弦定理",
+    "第十二节 专题 三角形中的范围与最值问题": "余弦定理、正弦定理",
+    "第十三节 专题 三角形中的角分线中线高线问题": "余弦定理、正弦定理",
+    "第十四节 专题 多三角形组合问题": "余弦定理、正弦定理",
 }
 
 # 章目录名 -> 章知识点节点（兜底）
@@ -524,6 +719,8 @@ CHAPTER_KP_MAP = {
     "02-第二章_直线和圆的方程": "第二章 直线和圆的方程",
     "03-第三章_圆锥曲线的方程": "第三章 圆锥曲线的方程",
     "04-高考新题型": "第三章 圆锥曲线的方程",
+    "三角函数": "第五章 三角函数",
+    "平面向量": "第六章 平面向量及其应用",
 }
 
 

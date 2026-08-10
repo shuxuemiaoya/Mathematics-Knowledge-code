@@ -21,7 +21,19 @@ description: 专职负责将刷题库与教辅书（如必刷题）进行 OCR �
 
 ---
 
-## 2. 触发口令与应用场景
+## 2. 路径与输出根目录规范 (Vault Root Standard)
+
+- **全局输出 Vault 根目录 (`--vault-root`)**: `/Users/oven/Documents/ovenmathmap`
+- **目录结构保留规则**: 保持输入文件相对于源目录的相对层级结构不变。
+  - 示例：若输入 PDF 路径为 `/Users/oven/Documents/数学妙呀资料/高中/课堂同步/题库/高中数学全练一本通/平面向量.pdf`
+  - 提取源相对路径：`高中/课堂同步/题库/高中数学全练一本通/平面向量`
+  - 设 `vault-root` 为 `/Users/oven/Documents/ovenmathmap`
+  - 设 `graph-root` 为 `/Users/oven/Documents/ovenmathmap/高中/课堂同步/题库/高中数学全练一本通/平面向量`
+  - 设 `staging-root` 为 `/Users/oven/Documents/ovenmathmap/.temp/<书名>-staging`
+
+---
+
+## 3. 触发口令与应用场景
 
 当用户提出以下需求时触发本 Agent：
 - “运行 question-type-graph”
@@ -30,7 +42,7 @@ description: 专职负责将刷题库与教辅书（如必刷题）进行 OCR �
 
 ---
 
-## 3. 答案匹配阶段的已知坑与处理（生产验证，2026-08）
+## 4. 答案匹配阶段的已知坑与处理（生产验证，2026-08）
 
 题目大面积匹配不上答案时，按以下顺序排查（都是真实踩过的坑）：
 

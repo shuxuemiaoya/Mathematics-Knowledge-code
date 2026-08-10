@@ -81,6 +81,18 @@ def contiguous_index_runs(lines: list[str]) -> list[dict[str, Any]]:
     return candidates
 
 
+def propose_role(literal: str) -> str | None:
+    if re.search(r"知识导学|知识梳理|考点精讲|公式|结论|知识精讲|考点清单", literal):
+        return "knowledge_guide"
+    if re.search(r"刷基础|基础", literal):
+        return "foundation_exercise"
+    if re.search(r"刷提升|提升|拔高|能力", literal):
+        return "advanced_exercise"
+    if re.search(r"刷易错|易错", literal):
+        return "error_warning"
+    return None
+
+
 def inventory_markdown(path: Path) -> dict[str, Any]:
     lines = path.read_text(encoding="utf-8-sig").splitlines()
     headings: list[dict[str, Any]] = []
@@ -113,7 +125,7 @@ def inventory_markdown(path: Path) -> dict[str, Any]:
         table_line_count += int(line.count("|") >= 2)
         wide_spacing_line_count += int(bool(re.search(r"\S\s{4,}\S", line)))
     repeated = [
-        {"literal": key, "count": count, "proposed_role": None, "status": "review_required"}
+        {"literal": key, "count": count, "proposed_role": propose_role(key), "status": "review_required"}
         for key, count in label_counts.most_common()
         if count >= 2
     ]

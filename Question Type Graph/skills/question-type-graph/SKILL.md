@@ -22,10 +22,10 @@ python scripts/question_type_graph.py init `
   --source "questions=<questions.pdf>" `
   --source "answers=<answers.pdf>" `
   --title "<pdf_title>" `
-  --staging-root "<root>/<pdf_title>/staging" `
-  --vault-root "<root>" `
-  --graph-root "<root>/<pdf_title>" `
-  --canvas --output "<root>/<pdf_title>/staging/question-type-profile.json"
+  --staging-root "/Users/oven/Documents/ovenmathmap/.temp/<pdf_title>-staging" `
+  --vault-root "/Users/oven/Documents/ovenmathmap" `
+  --graph-root "/Users/oven/Documents/ovenmathmap/<relative_path_to_pdf_title>" `
+  --canvas --output "/Users/oven/Documents/ovenmathmap/.temp/<pdf_title>-staging/question-type-profile.json"
 ```
 
 Use one `combined=<path>` source for a combined book, or only `questions=<path>` for a deliberately answerless book. Then run:
