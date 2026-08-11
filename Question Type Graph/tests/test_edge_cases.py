@@ -12,22 +12,69 @@ from question_type_graph.answers import (
     parse_answer_blocks,
     strategy_candidates,
 )
-from question_type_graph.audit import question_requires_choice_answer, valid_solution_note
+from question_type_graph.audit import (
+    answer_without_question_errors,
+    path_has_forbidden_colon,
+    question_has_fragmented_html_table,
+    question_requires_choice_answer,
+    question_sequence_errors,
+    valid_solution_note,
+)
 from question_type_graph.common import ConfigurationError, safe_name, sha256_text, write_json_atomic
 from question_type_graph.content import (
+    apply_reviewed_recovered_questions,
+    apply_reviewed_virtual_span_relocations,
     compile_question_patterns,
     compile_role_rules,
     plan_content,
     plan_note,
     split_inline_question_headers,
 )
-from question_type_graph.hierarchy import apply_hierarchy, plan_hierarchy
+from question_type_graph.hierarchy import apply_hierarchy, normalize_generated_output, plan_hierarchy
 from question_type_graph.inventory import build_adapter_draft, build_inventory, inventory_markdown, parse_index_entry
 from question_type_graph.profile import create_profile
 from question_type_graph.supplement import apply_supplement, plan_supplement
 
 
 class TestEdgeCases(unittest.TestCase):
+    def test_html_table_audit_allows_balanced_data_table_but_blocks_fragments(self) -> None:
+        self.assertFalse(
+            question_has_fragmented_html_table(
+                "Question text\n<table><tr><td>x</td><td>1</td></tr></table>"
+            )
+        )
+        self.assertTrue(question_has_fragmented_html_table("Question text</td><td>next"))
+
+    def test_unmatched_authoritative_answer_blocks_terminal_question_loss(self) -> None:
+        errors = answer_without_question_errors(
+            [
+                {
+                    "kind": "unmatched-answer",
+                    "answer_id": "section-4:71:1764:0",
+                    "context": "section-4",
+                    "number": "71",
+                },
+                {
+                    "kind": "missing-answer",
+                    "question_id": "section-4:question:5:10",
+                    "context": "section-4",
+                    "number": "5",
+                },
+            ]
+        )
+
+        self.assertEqual(
+            errors,
+            [
+                {
+                    "kind": "answer-without-question",
+                    "answer_id": "section-4:71:1764:0",
+                    "context": "section-4",
+                    "number": "71",
+                }
+            ],
+        )
+
     def test_implicit_choice_answer_is_recovered_from_authoritative_conclusion(self) -> None:
         body = (
             "解析: A 与 D 表示同一集合，B、C 不满足题意。\n"
@@ -58,6 +105,17 @@ class TestEdgeCases(unittest.TestCase):
 
     def test_full_width_colon_is_stable_in_generated_name(self) -> None:
         self.assertEqual(safe_name("角度3：公式法.md"), "角度3_公式法.md")
+
+    def test_ascii_colon_is_removed_from_every_hierarchy_path_component(self) -> None:
+        self.assertEqual(
+            normalize_generated_output("第十节 专题:离心率/题型 1:定义.md"),
+            "第十节 专题_离心率/题型 1_定义.md",
+        )
+
+    def test_final_path_guard_rejects_ascii_and_full_width_colons(self) -> None:
+        self.assertTrue(path_has_forbidden_colon(Path("chapter/题型：定义.md")))
+        self.assertTrue(path_has_forbidden_colon(Path("chapter/topic:definition.md")))
+        self.assertFalse(path_has_forbidden_colon(Path("chapter/题型_定义.md")))
 
     def test_nonchoice_answer_prefix_is_split_from_analysis(self) -> None:
         body = "【12】$$\n\\frac{3}{2}\n$$\n解析：由条件整理可得该结果。"
@@ -395,6 +453,38 @@ class TestEdgeCases(unittest.TestCase):
             self.assertNotIn("这里开始答案二", answers[0]["body"])
             self.assertIn("这里开始答案二", answers[1]["body"])
 
+    def test_reviewed_pdf_answer_recovery_restores_omitted_block(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "answers.md"
+            path.write_text("# Unit\n【1】A\n【69】详见解析\n", encoding="utf-8")
+            adapter = {
+                "answers": {
+                    "answer_patterns": [r"^【(?P<number>\d+)】"],
+                    "contexts": [{"key": "unit", "start_line": 1}],
+                    "ignore_ranges": [{"start_line": 3, "end_line": 3}],
+                    "recovered_answers": [
+                        {
+                            "context": "unit",
+                            "number": "2",
+                            "body": "【2】答案\n解析：PDF 中可见的完整解析",
+                            "after_line": 3,
+                            "source_page": 8,
+                            "anchor_text": "【69】详见解析",
+                            "reviewer_confirmed": True,
+                        }
+                    ],
+                }
+            }
+
+            answers, review = parse_answer_blocks(path, adapter)
+
+            self.assertEqual(review, [])
+            self.assertEqual([item["number"] for item in answers], ["1", "2"])
+            self.assertEqual(
+                answers[1]["evidence"], {"reviewed_pdf_recovery": "8"}
+            )
+            self.assertIn("完整解析", answers[1]["body"])
+
     def test_reviewed_choice_answer_override_renders_explicit_field(self) -> None:
         rendered = format_answer_callout(
             "解析: the source derivation proves the first option.",
@@ -446,6 +536,69 @@ class TestEdgeCases(unittest.TestCase):
             self.assertEqual(review, [])
             self.assertEqual(questions[0]["number"], "37")
             self.assertEqual(questions[0]["evidence"]["reviewed_number_override"], "47")
+
+    def test_reviewed_number_shift_range_repairs_source_number_reset(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            note = root / "unit.md"
+            note.write_text("【1】First\n【1】Reset\n【2】Tail\n", encoding="utf-8")
+            adapter = {
+                "_graph_root": str(root),
+                "content": {
+                    "question_folder": "questions",
+                    "question_title_template": "Question {number}",
+                    "question_number_shift_ranges": [
+                        {
+                            "context": "unit",
+                            "start_line": 2,
+                            "end_line": 3,
+                            "offset": 1,
+                            "anchor_text": "【1】Reset",
+                            "end_anchor_text": "【2】Tail",
+                            "reviewer_confirmed": True,
+                        }
+                    ],
+                },
+            }
+            note_entry = {
+                "key": "unit",
+                "path": str(note),
+                "content_source": str(note),
+                "title": "Unit",
+                "answer_context": "unit",
+            }
+            patterns = [re.compile(r"^【(?P<number>\d+)】")]
+
+            _, questions, review = plan_note(note_entry, [], patterns, adapter)
+
+            self.assertEqual(review, [])
+            self.assertEqual([item["number"] for item in questions], ["1", "2", "3"])
+
+            answers = root / "answers.md"
+            answers.write_text("# Unit\n【1】A\n【1】B\n【2】C\n", encoding="utf-8")
+            parsed, answer_review = parse_answer_blocks(
+                answers,
+                {
+                    "answers": {
+                        "answer_patterns": [r"^【(?P<number>\d+)】"],
+                        "contexts": [{"key": "unit", "start_line": 1}],
+                        "answer_number_shift_ranges": [
+                            {
+                                "context": "unit",
+                                "start_line": 3,
+                                "end_line": 4,
+                                "offset": 1,
+                                "anchor_text": "【1】B",
+                                "end_anchor_text": "【2】C",
+                                "reviewer_confirmed": True,
+                            }
+                        ],
+                    }
+                },
+            )
+
+            self.assertEqual(answer_review, [])
+            self.assertEqual([item["number"] for item in parsed], ["1", "2", "3"])
 
     def test_inventory_proposes_multiple_indexes_wrapped_entries_and_layout_review(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -869,6 +1022,119 @@ class TestEdgeCases(unittest.TestCase):
             [(item["raw_line"], item["raw_column"]) for item in virtual],
             [(1, 1), (1, 20), (2, 1)],
         )
+
+    def test_question_html_table_recovers_column_roles_and_number_order(self) -> None:
+        adapter = {
+            "content": {
+                "question_patterns": [r"【(?P<number>\d+)】"],
+                "roles": [
+                    {
+                        "role": "basic-point",
+                        "depth": 1,
+                        "pattern": r"▶?Basic point\s*\d+:.+",
+                    }
+                ],
+            }
+        }
+        patterns = compile_question_patterns(adapter)
+        rules = compile_role_rules(adapter)
+        table = (
+            "<table><tr><td>【10】Left ten</td><td>▶Basic point3:Right block</td></tr>"
+            "<tr><td>【11】Left eleven</td><td>Right strategy</td></tr>"
+            "<tr><td rowspan=\"2\">【12】Left twelve</td><td>【13】Right thirteen<img src=\"r13.jpg\"/></td></tr>"
+            "<tr><td>【14】Right fourteen</td></tr></table>"
+        )
+
+        virtual = split_inline_question_headers([table], patterns, rules)
+
+        self.assertEqual(
+            [item["text"] for item in virtual],
+            [
+                "【10】Left ten",
+                "【11】Left eleven",
+                "【12】Left twelve",
+                "▶Basic point3:Right block",
+                "Right strategy",
+                "【13】Right thirteen<img src=\"r13.jpg\"/>",
+                "【14】Right fourteen",
+            ],
+        )
+        self.assertTrue(all("<td" not in item["text"] for item in virtual))
+
+    def test_question_sequence_audit_blocks_gaps_duplicates_and_reordering(self) -> None:
+        questions = [
+            {"id": "q1", "context_key": "unit", "number": "1"},
+            {"id": "q3", "context_key": "unit", "number": "3"},
+            {"id": "q2", "context_key": "unit", "number": "2"},
+            {"id": "q2b", "context_key": "unit", "number": "2"},
+        ]
+
+        errors = question_sequence_errors(questions)
+
+        self.assertEqual(
+            [(item["expected"], item["actual"]) for item in errors],
+            [(2, 3), (4, 2), (3, 2)],
+        )
+
+    def test_reviewed_virtual_span_relocation_repairs_column_spillover(self) -> None:
+        raw_lines = ["【5】Five", "## Model 2", "【7】Seven", "Unit【6】Six", "【8】Eight"]
+        patterns = compile_question_patterns(
+            {"content": {"question_patterns": [r"【(?P<number>\d+)】"]}}
+        )
+        virtual = split_inline_question_headers(raw_lines, patterns)
+        adapter = {
+            "content": {
+                "virtual_span_relocations": [
+                    {
+                        "context": "unit",
+                        "start_line": 4,
+                        "start_column": 1,
+                        "end_before_line": 5,
+                        "before_line": 2,
+                        "anchor_text": "Unit【6】Six",
+                        "reviewer_confirmed": True,
+                    }
+                ]
+            }
+        }
+
+        relocated = apply_reviewed_virtual_span_relocations(
+            virtual, raw_lines, "unit", adapter
+        )
+
+        self.assertEqual(
+            [item["text"] for item in relocated],
+            ["【5】Five", "Unit", "【6】Six", "## Model 2", "【7】Seven", "【8】Eight"],
+        )
+
+    def test_reviewed_pdf_question_recovery_inserts_missing_tail(self) -> None:
+        raw_lines = ["【1】One", "<table>【2】Two</table>"]
+        patterns = [re.compile(r"^【(?P<number>\d+)】")]
+        virtual = split_inline_question_headers(raw_lines, patterns)
+        recovered = apply_reviewed_recovered_questions(
+            virtual,
+            raw_lines,
+            "unit",
+            {
+                "content": {
+                    "recovered_questions": [
+                        {
+                            "context": "unit",
+                            "number": "3",
+                            "body": "【3】Recovered from PDF",
+                            "after_line": 2,
+                            "source_page": 7,
+                            "anchor_pattern": "【2】",
+                            "reviewer_confirmed": True,
+                        }
+                    ]
+                }
+            },
+            patterns,
+        )
+
+        self.assertEqual(recovered[-1]["text"], "【3】Recovered from PDF")
+        self.assertEqual(recovered[-1]["evidence"]["reviewed_pdf_recovery"], "7")
 
     def test_heading_only_role_does_not_split_numbered_question_subparts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

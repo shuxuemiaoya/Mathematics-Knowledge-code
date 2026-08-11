@@ -109,6 +109,38 @@ def parse_answer_blocks(path: Path, adapter: dict[str, Any]) -> tuple[list[dict[
         inline_patterns,
         additional_starts=implicit_starts,
     )
+    number_shift_ranges = config.get("answer_number_shift_ranges", [])
+    for item in number_shift_ranges:
+        start_line = int(item["start_line"])
+        end_line = int(item["end_line"])
+        for line_number, text_key, pattern_key in (
+            (start_line, "anchor_text", "anchor_pattern"),
+            (end_line, "end_anchor_text", "end_anchor_pattern"),
+        ):
+            if line_number < 1 or line_number > len(raw_lines):
+                raise ConfigurationError("Answer number shift range is outside the raw Markdown")
+            anchor_text = str(item.get(text_key, "")).strip()
+            if anchor_text and raw_lines[line_number - 1].strip() != anchor_text:
+                raise ConfigurationError(f"Answer number shift range {text_key} drifted")
+            anchor_pattern = item.get(pattern_key)
+            if anchor_pattern and not re.search(str(anchor_pattern), raw_lines[line_number - 1]):
+                raise ConfigurationError(f"Answer number shift range {pattern_key} drifted")
+
+    def shifted_number(value: str, answer_context: str | None, raw_line: int, raw_column: int) -> str:
+        result = value
+        coordinate = (raw_line, raw_column)
+        for item in number_shift_ranges:
+            if str(item.get("context")) != str(answer_context):
+                continue
+            start_coordinate = (int(item["start_line"]), int(item.get("start_column", 1)))
+            end_coordinate = (int(item["end_line"]), int(item.get("end_column", 2**31 - 1)))
+            if start_coordinate <= coordinate <= end_coordinate:
+                if not result.isdecimal():
+                    raise ConfigurationError("Answer number shift requires a decimal source number")
+                result = str(int(result) + int(item["offset"]))
+                if int(result) < 1:
+                    raise ConfigurationError("Answer number shift produced a non-positive number")
+        return result
     region = config.get("region") or {}
     start_limit = int(region.get("start_line", 1))
     end_limit = int(region.get("end_line", len(raw_lines)))
@@ -158,7 +190,12 @@ def parse_answer_blocks(path: Path, adapter: dict[str, Any]) -> tuple[list[dict[
                     "raw_column": int(line_entry["raw_column"]),
                     "position": position,
                     "context": context,
-                    "number": implicit_number,
+                    "number": shifted_number(
+                        implicit_number,
+                        context,
+                        line_number,
+                        int(line_entry["raw_column"]),
+                    ),
                     "evidence": {"implicit_header": "reviewed-ocr-omission"},
                 }
             )
@@ -181,7 +218,12 @@ def parse_answer_blocks(path: Path, adapter: dict[str, Any]) -> tuple[list[dict[
                         "raw_column": int(line_entry["raw_column"]),
                         "position": position,
                         "context": context,
-                        "number": str(match.group("number")).strip(),
+                        "number": shifted_number(
+                            str(match.group("number")).strip(),
+                            context,
+                            line_number,
+                            int(line_entry["raw_column"]),
+                        ),
                         "evidence": evidence,
                     }
                 )
@@ -216,6 +258,53 @@ def parse_answer_blocks(path: Path, adapter: dict[str, Any]) -> tuple[list[dict[
                 continue
         deduped_answers.append(ans)
     answers = deduped_answers
+
+    # MinerU can omit an entire answer block even when the corresponding PDF
+    # page is legible (for example, when two columns are merged incorrectly).
+    # Allow a reviewer to restore that authoritative block without editing the
+    # immutable converted Markdown.  The raw anchor and source page make the
+    # recovery drift-resistant and auditable.
+    recovered_keys = {(str(item.get("context")), str(item.get("number"))) for item in answers}
+    for ordinal, item in enumerate(config.get("recovered_answers", []), 1):
+        if item.get("reviewer_confirmed") is not True:
+            raise ConfigurationError("Recovered answer must be reviewer_confirmed")
+        after_line = int(item["after_line"])
+        if after_line < 1 or after_line > len(raw_lines):
+            raise ConfigurationError("Recovered answer anchor is outside the raw Markdown")
+        anchor_text = str(item.get("anchor_text", "")).strip()
+        if anchor_text and raw_lines[after_line - 1].strip() != anchor_text:
+            raise ConfigurationError("Recovered answer anchor_text drifted")
+        anchor_pattern = item.get("anchor_pattern")
+        if anchor_pattern and not re.search(str(anchor_pattern), raw_lines[after_line - 1]):
+            raise ConfigurationError("Recovered answer anchor_pattern drifted")
+        answer_context = str(item["context"]).strip()
+        number = str(item["number"]).strip()
+        body = str(item["body"]).strip() + "\n"
+        header = next((pattern.match(body) for pattern in answer_patterns if pattern.match(body)), None)
+        if header is None or str(header.group("number")).strip() != number:
+            raise ConfigurationError("Recovered answer body must start with its reviewed number")
+        identity = (answer_context, number)
+        if identity in recovered_keys:
+            raise ConfigurationError("Recovered answer duplicates a parsed context-number identity")
+        recovered_keys.add(identity)
+        answers.append(
+            {
+                "kind": "answer",
+                "line": after_line,
+                "end_line": after_line,
+                "subline": ordinal,
+                "raw_column": 2**30 + ordinal,
+                "position": len(lines) + ordinal,
+                "context": answer_context,
+                "number": number,
+                "body": body,
+                "body_sha256": sha256_text(body),
+                "id": f"{answer_context}:{number}:{after_line}:recovered-{ordinal}",
+                "evidence": {
+                    "reviewed_pdf_recovery": str(item.get("source_page", "reviewed")),
+                },
+            }
+        )
 
     return answers, review
 

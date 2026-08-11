@@ -23,6 +23,86 @@ from .common import (
 LINK_FILE_SUFFIXES = {".md", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".avif"}
 
 
+def path_has_forbidden_colon(path: Path) -> bool:
+    """Return true when any generated path component violates colon policy."""
+    return any(":" in part or "：" in part for part in path.parts)
+
+
+def question_sequence_errors(questions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Require each reviewed matching context to expose a complete 1..N ledger."""
+    by_context: dict[str, list[dict[str, Any]]] = {}
+    for question in questions:
+        by_context.setdefault(str(question.get("context_key", "")), []).append(question)
+    errors: list[dict[str, Any]] = []
+    for context, items in by_context.items():
+        expected = 1
+        for item in items:
+            number = str(item.get("number", "")).strip()
+            if not number.isdecimal():
+                continue
+            actual = int(number)
+            if actual != expected:
+                errors.append(
+                    {
+                        "kind": "question-sequence-discontinuity",
+                        "context": context,
+                        "expected": expected,
+                        "actual": actual,
+                        "question_id": item.get("id"),
+                        "source_start_line": item.get("source_start_line"),
+                        "source_start_column": item.get("source_start_column"),
+                    }
+                )
+                expected = actual + 1
+            else:
+                expected += 1
+    return errors
+
+
+def answer_without_question_errors(review_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Block authoritative answer records that have no atomic question owner.
+
+    A locally continuous question ledger can still hide a truncated tail (for
+    example, questions 1..70 when the answer source contains 71..73).  Answer
+    matching already exposes those records as ``unmatched-answer`` review
+    items, so final audit must never allow reviewer confirmation to suppress
+    this source-versus-output coverage failure.
+    """
+    return [
+        {
+            "kind": "answer-without-question",
+            "answer_id": item.get("answer_id"),
+            "context": item.get("context"),
+            "number": item.get("number"),
+        }
+        for item in review_items
+        if item.get("kind") == "unmatched-answer"
+    ]
+
+
+def question_has_fragmented_html_table(body: str) -> bool:
+    """Detect malformed table markup without rejecting a complete data table.
+
+    Equal opening/closing counts are not enough: ``</td><td>`` is balanced by
+    count but is still an orphaned fragment.  Validate the nesting order of the
+    four table-structure tags that may leak from converted source Markdown.
+    """
+    token_pattern = re.compile(r"<\s*(/?)\s*(table|tr|td|th)\b[^>]*>", re.IGNORECASE)
+    stack: list[str] = []
+    found = False
+    for match in token_pattern.finditer(body):
+        found = True
+        closing, tag = match.groups()
+        tag = tag.lower()
+        if closing:
+            if not stack or stack[-1] != tag:
+                return True
+            stack.pop()
+        else:
+            stack.append(tag)
+    return found and bool(stack)
+
+
 def broken_local_links(
     note: Path,
     text: str,
@@ -149,6 +229,7 @@ def audit_graph(
     question_outputs = [str(Path(question["output"]).resolve()).casefold() for question in questions]
     if len(question_ids) != len(set(question_ids)) or len(question_outputs) != len(set(question_outputs)):
         errors.append({"kind": "duplicate-question-ownership"})
+    errors.extend(question_sequence_errors(questions))
     ranges_by_source: dict[str, list[tuple[int, int, str]]] = {}
     for question in questions:
         ranges_by_source.setdefault(str(question.get("source_note")), []).append(
@@ -174,6 +255,16 @@ def audit_graph(
         match = QUESTION_BODY_RE.search(text)
         if not match or lexical_signature(match.group(1).rstrip() + "\n") != question.get("body_lexical_signature"):
             errors.append({"kind": "question-content-drift", "question_id": question["id"], "path": str(note)})
+        if match:
+            body = match.group(1).strip()
+            if question_has_fragmented_html_table(body):
+                errors.append(
+                    {
+                        "kind": "question-contains-fragmented-html-table",
+                        "question_id": question["id"],
+                        "path": str(note),
+                    }
+                )
         preamble = text.split("<!-- question-source:start -->", 1)[0]
         if re.search(r"(?m)^#{1,6}\s+", preamble):
             errors.append({"kind": "atomic-question-has-generated-heading", "question_id": question["id"], "path": str(note)})
@@ -232,6 +323,7 @@ def audit_graph(
                             "count": len(answer_manifest.get("review_items", [])),
                         }
                     )
+                errors.extend(answer_without_question_errors(answer_manifest.get("review_items", [])))
                 answer_matches = answer_manifest.get("matches", [])
                 matched_question_ids = [item["question_id"] for item in answer_matches]
                 matched_answer_ids = [item["answer_id"] for item in answer_matches]
@@ -336,6 +428,14 @@ def audit_graph(
                 for ans_note in q_item.get("answer_notes", []):
                     if ans_note:
                         expected_notes.add(str(Path(ans_note).resolve()).casefold())
+    for generated_path in graph_root.rglob("*") if graph_root.exists() else []:
+        if path_has_forbidden_colon(generated_path.relative_to(graph_root)):
+            errors.append(
+                {
+                    "kind": "generated-filename-forbidden-colon",
+                    "path": str(generated_path.resolve()),
+                }
+            )
     for note in graph_root.rglob("*.md") if graph_root.exists() else []:
         if str(note.resolve()).casefold() not in expected_notes:
             errors.append({"kind": "unexpected-generated-note", "path": str(note.resolve())})

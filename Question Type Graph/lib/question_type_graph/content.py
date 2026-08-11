@@ -31,6 +31,14 @@ GENERATED_LINK_RE = re.compile(
     r"^(?:\s*!\[\[[^\]]+\]\]\s*|\s*-\s+\[[^\]]+\]\([^)]+\)\s*)$"
 )
 SOURCE_PART_RE = re.compile(r"<!--\s*source-part:(?P<part>\d+)\s+pages:(?P<start>\d+)-(?P<end>\d+)\s*-->")
+HTML_TABLE_LINE_RE = re.compile(r"^\s*<table\b[^>]*>.*?</table>\s*$", re.IGNORECASE | re.DOTALL)
+HTML_ROW_RE = re.compile(r"<tr\b[^>]*>(?P<body>.*?)</tr>", re.IGNORECASE | re.DOTALL)
+HTML_CELL_RE = re.compile(
+    r"<t[dh]\b(?P<attrs>[^>]*)>(?P<body>.*?)</t[dh]>",
+    re.IGNORECASE | re.DOTALL,
+)
+HTML_ROWSPAN_RE = re.compile(r"\browspan\s*=\s*[\"']?(?P<value>\d+)", re.IGNORECASE)
+HTML_COLSPAN_RE = re.compile(r"\bcolspan\s*=\s*[\"']?(?P<value>\d+)", re.IGNORECASE)
 
 
 def visible_label(line: str) -> str:
@@ -151,10 +159,199 @@ def detach_configured_role_roots(
                     )
 
 
-def split_inline_question_headers(
-    raw_lines: list[str], patterns: list[re.Pattern[str]]
+def _split_table_cell_boundaries(
+    text: str,
+    *,
+    raw_line: int,
+    raw_column: int,
+    table_row: int,
+    table_column: int,
+    patterns: list[re.Pattern[str]],
+    rules: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    virtual = split_virtual_lines(raw_lines, patterns)
+    """Split one HTML table cell at adapter-defined questions and roles."""
+    starts = {
+        match.start()
+        for pattern in patterns
+        for match in pattern.finditer(text)
+        if match.groupdict().get("number") is not None
+    }
+    # Role syntax remains adapter-owned. Testing suffixes recovers a label
+    # appended after a question or image without embedding publisher terms.
+    seen_role_kinds: set[str] = set()
+    for start in range(len(text)):
+        matched_role = match_role(text[start:].strip(), rules)
+        if matched_role and matched_role[0]["role"] not in seen_role_kinds:
+            starts.add(start)
+            seen_role_kinds.add(str(matched_role[0]["role"]))
+    starts = sorted(starts)
+    if not starts:
+        stripped = text.strip()
+        if not stripped:
+            return []
+        offset = text.index(stripped)
+        return [
+            {
+                "text": stripped,
+                "raw_line": raw_line,
+                "raw_column": raw_column + offset,
+                "subline": 0,
+                "table_row": table_row,
+                "table_column": table_column,
+            }
+        ]
+    if starts[0] > 0 and text[: starts[0]].strip():
+        starts.insert(0, 0)
+    elif starts[0] > 0:
+        starts[0] = 0
+    result: list[dict[str, Any]] = []
+    for index, start in enumerate(starts):
+        end = starts[index + 1] if index + 1 < len(starts) else len(text)
+        raw_segment = text[start:end]
+        segment = raw_segment.strip()
+        if not segment:
+            continue
+        leading = len(raw_segment) - len(raw_segment.lstrip())
+        result.append(
+            {
+                "text": segment,
+                "raw_line": raw_line,
+                "raw_column": raw_column + start + leading,
+                "subline": 0,
+                "table_row": table_row,
+                "table_column": table_column,
+            }
+        )
+    return result
+
+
+def _flatten_question_html_table(
+    text: str,
+    *,
+    raw_line: int,
+    patterns: list[re.Pattern[str]],
+    rules: list[dict[str, Any]],
+) -> list[dict[str, Any]] | None:
+    """Flatten a multi-column exercise table into semantic reading order."""
+    if not HTML_TABLE_LINE_RE.fullmatch(text):
+        return None
+    streams: dict[int, list[dict[str, Any]]] = {}
+    active_rowspans: dict[int, int] = {}
+    for row_number, row_match in enumerate(HTML_ROW_RE.finditer(text), 1):
+        row_body = row_match.group("body")
+        column = 0
+        for cell_match in HTML_CELL_RE.finditer(row_body):
+            while active_rowspans.get(column, 0) > 0:
+                column += 1
+            attrs = cell_match.group("attrs")
+            rowspan_match = HTML_ROWSPAN_RE.search(attrs)
+            colspan_match = HTML_COLSPAN_RE.search(attrs)
+            rowspan = int(rowspan_match.group("value")) if rowspan_match else 1
+            colspan = int(colspan_match.group("value")) if colspan_match else 1
+            cell_column = column
+            cell_raw_column = (
+                row_match.start("body") + cell_match.start("body") + 1
+            )
+            streams.setdefault(cell_column, []).extend(
+                _split_table_cell_boundaries(
+                    cell_match.group("body"),
+                    raw_line=raw_line,
+                    raw_column=cell_raw_column,
+                    table_row=row_number,
+                    table_column=cell_column,
+                    patterns=patterns,
+                    rules=rules,
+                )
+            )
+            if rowspan > 1:
+                for occupied_column in range(cell_column, cell_column + colspan):
+                    active_rowspans[occupied_column] = max(
+                        active_rowspans.get(occupied_column, 0), rowspan
+                    )
+            column += colspan
+        active_rowspans = {
+            occupied_column: remaining - 1
+            for occupied_column, remaining in active_rowspans.items()
+            if remaining - 1 > 0
+        }
+
+    if not any(
+        match_question(item["text"], patterns)
+        for stream in streams.values()
+        for item in stream
+    ):
+        return None
+
+    def is_boundary(item: dict[str, Any]) -> bool:
+        return bool(
+            match_question(item["text"], patterns)
+            or match_role(item["text"], rules)
+        )
+
+    def next_question_number(stream: list[dict[str, Any]], cursor: int) -> int:
+        for item in stream[cursor:]:
+            match = match_question(item["text"], patterns)
+            if match and str(match.group("number")).strip().isdecimal():
+                return int(str(match.group("number")).strip())
+        return 10**18
+
+    cursors = {column: 0 for column in streams}
+    ordered: list[dict[str, Any]] = []
+    while any(cursors[column] < len(streams[column]) for column in streams):
+        available = [
+            column
+            for column in streams
+            if cursors[column] < len(streams[column])
+        ]
+        selected = min(
+            available,
+            key=lambda column: (
+                next_question_number(streams[column], cursors[column]),
+                column,
+            ),
+        )
+        stream = streams[selected]
+        cursor = cursors[selected]
+        # One unit is optional preamble + one role/question + continuation.
+        # Thus an image remains with its question, while a new role is a hard
+        # boundary whose priority comes from the next question in its column.
+        while cursor < len(stream) and not is_boundary(stream[cursor]):
+            ordered.append(stream[cursor])
+            cursor += 1
+        if cursor < len(stream):
+            ordered.append(stream[cursor])
+            cursor += 1
+        while cursor < len(stream) and not is_boundary(stream[cursor]):
+            ordered.append(stream[cursor])
+            cursor += 1
+        cursors[selected] = cursor
+
+    for subline, item in enumerate(ordered):
+        item["subline"] = subline
+    return ordered
+
+
+def split_inline_question_headers(
+    raw_lines: list[str],
+    patterns: list[re.Pattern[str]],
+    rules: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    rules = rules or []
+    virtual: list[dict[str, Any]] = []
+    for raw_line, text in enumerate(raw_lines, 1):
+        table_items = _flatten_question_html_table(
+            text,
+            raw_line=raw_line,
+            patterns=patterns,
+            rules=rules,
+        )
+        if table_items is not None:
+            virtual.extend(table_items)
+            continue
+        line_items = split_virtual_lines([text], patterns)
+        for item in line_items:
+            item["raw_line"] = raw_line
+        virtual.extend(line_items)
     # MinerU occasionally repeats the same printed question header twice on
     # one OCR line, with the first occurrence containing only a truncated
     # prefix of the second. Keep all source text, but merge the two virtual
@@ -175,6 +372,128 @@ def split_inline_question_headers(
     return merged
 
 
+def apply_reviewed_virtual_span_relocations(
+    virtual_lines: list[dict[str, Any]],
+    raw_lines: list[str],
+    note_key: str,
+    adapter: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Apply source-anchored semantic reordering for OCR column spillovers."""
+    result = list(virtual_lines)
+    for item in adapter.get("content", {}).get("virtual_span_relocations", []):
+        if str(item.get("context")) != str(note_key):
+            continue
+        if item.get("reviewer_confirmed") is not True:
+            raise ConfigurationError("Virtual span relocation must be reviewer_confirmed")
+        start_line = int(item["start_line"])
+        end_before_line = int(item["end_before_line"])
+        before_line = int(item["before_line"])
+        for line_number, anchor_key, pattern_key in (
+            (start_line, "anchor_text", "anchor_pattern"),
+            (end_before_line, "end_anchor_text", "end_anchor_pattern"),
+            (before_line, "before_anchor_text", "before_anchor_pattern"),
+        ):
+            if line_number < 1 or line_number > len(raw_lines):
+                raise ConfigurationError("Virtual span relocation is outside its hierarchy note")
+            anchor_text = str(item.get(anchor_key, "")).strip()
+            if anchor_text and raw_lines[line_number - 1].strip() != anchor_text:
+                raise ConfigurationError(f"Virtual span relocation {anchor_key} drifted")
+            anchor_pattern = item.get(pattern_key)
+            if anchor_pattern and not re.search(str(anchor_pattern), raw_lines[line_number - 1]):
+                raise ConfigurationError(f"Virtual span relocation {pattern_key} drifted")
+
+        coordinates = {
+            "start": (start_line, int(item.get("start_column", 1))),
+            "end": (end_before_line, int(item.get("end_before_column", 1))),
+            "before": (before_line, int(item.get("before_column", 1))),
+        }
+
+        def locate(coordinate: tuple[int, int]) -> int:
+            matches = [
+                index
+                for index, line in enumerate(result)
+                if (int(line["raw_line"]), int(line["raw_column"])) == coordinate
+            ]
+            if len(matches) != 1:
+                raise ConfigurationError(
+                    f"Virtual span relocation coordinate must resolve once: {coordinate}"
+                )
+            return matches[0]
+
+        start_index = locate(coordinates["start"])
+        end_index = locate(coordinates["end"])
+        before_index = locate(coordinates["before"])
+        if start_index >= end_index or start_index <= before_index < end_index:
+            raise ConfigurationError("Virtual span relocation boundaries are invalid")
+        span = result[start_index:end_index]
+        del result[start_index:end_index]
+        if before_index > start_index:
+            before_index -= end_index - start_index
+        result[before_index:before_index] = span
+    return result
+
+
+def apply_reviewed_recovered_questions(
+    virtual_lines: list[dict[str, Any]],
+    raw_lines: list[str],
+    note_key: str,
+    adapter: dict[str, Any],
+    patterns: list[re.Pattern[str]],
+) -> list[dict[str, Any]]:
+    """Insert reviewer-transcribed PDF questions omitted from raw Markdown."""
+    result = list(virtual_lines)
+    recoveries = [
+        item
+        for item in adapter.get("content", {}).get("recovered_questions", [])
+        if str(item.get("context")) == str(note_key)
+    ]
+    for ordinal, item in enumerate(recoveries, 1):
+        if item.get("reviewer_confirmed") is not True:
+            raise ConfigurationError("Recovered question must be reviewer_confirmed")
+        after_line = int(item["after_line"])
+        if after_line < 1 or after_line > len(raw_lines):
+            raise ConfigurationError("Recovered question anchor is outside its hierarchy note")
+        anchor_text = str(item.get("anchor_text", "")).strip()
+        if anchor_text and raw_lines[after_line - 1].strip() != anchor_text:
+            raise ConfigurationError("Recovered question anchor_text drifted")
+        anchor_pattern = item.get("anchor_pattern")
+        if anchor_pattern and not re.search(str(anchor_pattern), raw_lines[after_line - 1]):
+            raise ConfigurationError("Recovered question anchor_pattern drifted")
+        body = str(item["body"]).strip()
+        match = match_question(body, patterns)
+        if match is None or str(match.group("number")).strip() != str(item["number"]).strip():
+            raise ConfigurationError("Recovered question body must start with its reviewed number")
+        insertion = max(
+            (
+                index + 1
+                for index, line in enumerate(result)
+                if int(line["raw_line"]) <= after_line
+            ),
+            default=0,
+        )
+        raw_column = max(
+            (
+                int(line["raw_column"])
+                for line in result
+                if int(line["raw_line"]) == after_line
+            ),
+            default=1,
+        ) + ordinal
+        result.insert(
+            insertion,
+            {
+                "text": body,
+                "raw_line": after_line,
+                "raw_column": raw_column,
+                "subline": ordinal,
+                "evidence": {
+                    "reviewed_pdf_recovery": str(item.get("source_page", "reviewed")),
+                },
+            },
+        )
+    return result
+
+
 def plan_note(
     note_entry: dict[str, Any],
     rules: list[dict[str, Any]],
@@ -185,7 +504,19 @@ def plan_note(
     content_source = Path(note_entry.get("content_source") or path)
     raw_lines = content_source.read_text(encoding="utf-8-sig").splitlines()
     virtual_lines = split_inline_question_headers(
-        raw_lines, compile_inline_question_patterns(adapter, question_patterns)
+        raw_lines,
+        compile_inline_question_patterns(adapter, question_patterns),
+        rules,
+    )
+    virtual_lines = apply_reviewed_virtual_span_relocations(
+        virtual_lines, raw_lines, str(note_entry["key"]), adapter
+    )
+    virtual_lines = apply_reviewed_recovered_questions(
+        virtual_lines,
+        raw_lines,
+        str(note_entry["key"]),
+        adapter,
+        question_patterns,
     )
     lines = [item["text"] for item in virtual_lines]
     number_overrides = {}
@@ -202,6 +533,25 @@ def plan_note(
         if anchor_pattern and not re.search(str(anchor_pattern), raw_lines[raw_line - 1]):
             raise ConfigurationError("Question number override anchor_pattern drifted")
         number_overrides[(raw_line, int(item.get("raw_column", 1)))] = str(item["number"])
+    number_shift_ranges: list[dict[str, Any]] = []
+    for item in adapter.get("content", {}).get("question_number_shift_ranges", []):
+        if str(item.get("context")) != str(note_entry.get("key")):
+            continue
+        start_line = int(item["start_line"])
+        end_line = int(item["end_line"])
+        for line_number, text_key, pattern_key in (
+            (start_line, "anchor_text", "anchor_pattern"),
+            (end_line, "end_anchor_text", "end_anchor_pattern"),
+        ):
+            if line_number < 1 or line_number > len(raw_lines):
+                raise ConfigurationError("Question number shift range is outside its hierarchy note")
+            anchor_text = str(item.get(text_key, "")).strip()
+            if anchor_text and raw_lines[line_number - 1].strip() != anchor_text:
+                raise ConfigurationError(f"Question number shift range {text_key} drifted")
+            anchor_pattern = item.get(pattern_key)
+            if anchor_pattern and not re.search(str(anchor_pattern), raw_lines[line_number - 1]):
+                raise ConfigurationError(f"Question number shift range {pattern_key} drifted")
+        number_shift_ranges.append(item)
     source_parts = [
         {
             "line": index,
@@ -326,6 +676,21 @@ def plan_note(
             number = number_overrides.get(
                 coordinate, str(match.group("number")).strip()
             )
+            for shift in number_shift_ranges:
+                start_coordinate = (
+                    int(shift["start_line"]),
+                    int(shift.get("start_column", 1)),
+                )
+                end_coordinate = (
+                    int(shift["end_line"]),
+                    int(shift.get("end_column", 2**31 - 1)),
+                )
+                if start_coordinate <= coordinate <= end_coordinate:
+                    if not number.isdecimal():
+                        raise ConfigurationError("Question number shift requires a decimal source number")
+                    number = str(int(number) + int(shift["offset"]))
+                    if int(number) < 1:
+                        raise ConfigurationError("Question number shift produced a non-positive number")
             if (
                 not adapter.get("content", {}).get("allow_zero_question_number", False)
                 and number.isdecimal()
@@ -365,6 +730,7 @@ def plan_note(
             for key, value in match.groupdict().items()
             if key != "number" and value is not None and str(value).strip()
         }
+        evidence.update(virtual_lines[start - 1].get("evidence", {}))
         if number != str(match.group("number")).strip():
             evidence["reviewed_number_override"] = str(match.group("number")).strip()
         label_by_key = {l["key"]: l for l in labels}
@@ -704,7 +1070,30 @@ def apply_content(profile_path: Path, adapter_path: Path, manifest_path: Path, o
         raw_lines = source_content.read_text(encoding="utf-8-sig").splitlines()
         question_patterns = compile_question_patterns(adapter)
         virtual_lines = split_inline_question_headers(
-            raw_lines, compile_inline_question_patterns(adapter, question_patterns)
+            raw_lines,
+            compile_inline_question_patterns(adapter, question_patterns),
+            compile_role_rules(adapter),
+        )
+        source_note_key = str(next(
+            (
+                item.get("source_note_key")
+                for item in [*values["questions"], *values["nodes"]]
+                if item.get("source_note_key")
+            ),
+            "",
+        ))
+        virtual_lines = apply_reviewed_virtual_span_relocations(
+            virtual_lines,
+            raw_lines,
+            source_note_key,
+            adapter,
+        )
+        virtual_lines = apply_reviewed_recovered_questions(
+            virtual_lines,
+            raw_lines,
+            source_note_key,
+            adapter,
+            question_patterns,
         )
         lines = [item["text"] for item in virtual_lines]
         nodes = values["nodes"]
@@ -789,6 +1178,52 @@ def apply_content(profile_path: Path, adapter_path: Path, manifest_path: Path, o
         if stale.is_file():
             stale.unlink()
             removed_stale.append(str(stale))
+    # Reconcile generated question notes left by an older report lineage. A
+    # graph root is agent-owned, but deletion is still restricted to files
+    # carrying both the generated question frontmatter and source sentinels.
+    expected_questions = {
+        str(Path(question["output"]).resolve()).casefold()
+        for question in questions
+    }
+    for candidate in graph_root.rglob("Q[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].md"):
+        resolved = candidate.resolve()
+        if str(resolved).casefold() in expected_questions:
+            continue
+        candidate_text = candidate.read_text(encoding="utf-8-sig")
+        if (
+            re.search(r"(?m)^question_id:\s*", candidate_text)
+            and "<!-- question-source:start -->" in candidate_text
+            and "<!-- question-source:end -->" in candidate_text
+        ):
+            candidate.unlink()
+            removed_stale.append(str(resolved))
+
+    # Reconcile legacy hierarchy/functional notes left behind by historical
+    # path-cleanup implementations. These generated notes predate ownership
+    # sentinels, so deletion is limited to the agent's self-titled note shape
+    # (folder/FOLDER.md) and excludes all Q/A artifacts. Current hierarchy and
+    # content manifests remain the source of truth.
+    hierarchy_coverage = load_json(Path(manifest["hierarchy_coverage"]))
+    expected_non_questions = {
+        str(Path(item["path"]).resolve()).casefold()
+        for item in hierarchy_coverage.get("notes", [])
+        if item.get("path")
+    }
+    expected_non_questions.update(
+        str(Path(item["output"]).resolve()).casefold()
+        for item in functional
+        if item.get("output")
+    )
+    for candidate in graph_root.rglob("*.md"):
+        resolved = candidate.resolve()
+        if str(resolved).casefold() in expected_non_questions:
+            continue
+        if re.fullmatch(r"Q\d{8}(?:A\d+)?\.md", candidate.name):
+            continue
+        if candidate.name != f"{candidate.parent.name}.md":
+            continue
+        candidate.unlink()
+        removed_stale.append(str(resolved))
 
     result = {
         "schema_version": 1,

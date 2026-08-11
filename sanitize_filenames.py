@@ -192,8 +192,8 @@ def main() -> int:
         print(f"错误：{error}", file=sys.stderr)
         return 2
 
-    changes = [entry for entry in entries if entry.changed]
     collisions = find_collisions(entries)
+    changes = [entry for entry in entries if entry.changed]
 
     print(f"扫描目录：{root}")
     print(f"扫描项目：{len(entries)}；需要改名：{len(changes)}")

@@ -16,6 +16,14 @@
     "status": {"enum": ["review_required", "passed"]},
     "reviewer_confirmed": {"type": "boolean"},
     "profile": {"type": "string", "minLength": 1},
+    "filename_policy": {
+      "type": "object",
+      "required": ["colon_replacement"],
+      "properties": {
+        "colon_replacement": {"const": "_"}
+      },
+      "additionalProperties": true
+    },
     "inventory": {
       "type": "object",
       "properties": {
@@ -88,6 +96,59 @@
             "additionalProperties": true
           }
         },
+        "question_number_shift_ranges": {
+          "$ref": "#/$defs/reviewed_number_shift_ranges"
+        },
+        "recovered_questions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["context", "number", "body", "after_line", "source_page", "reviewer_confirmed"],
+            "properties": {
+              "context": {"type": "string", "minLength": 1},
+              "number": {"type": ["string", "integer"]},
+              "body": {"type": "string", "minLength": 1},
+              "after_line": {"type": "integer", "minimum": 1},
+              "source_page": {"type": ["string", "integer"]},
+              "anchor_text": {"type": "string", "minLength": 1},
+              "anchor_pattern": {"type": "string", "minLength": 1},
+              "reviewer_confirmed": {"const": true}
+            },
+            "anyOf": [{"required": ["anchor_text"]}, {"required": ["anchor_pattern"]}],
+            "additionalProperties": true
+          }
+        },
+        "virtual_span_relocations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "context",
+              "start_line",
+              "end_before_line",
+              "before_line",
+              "reviewer_confirmed"
+            ],
+            "properties": {
+              "context": {"type": "string", "minLength": 1},
+              "start_line": {"type": "integer", "minimum": 1},
+              "start_column": {"type": "integer", "minimum": 1},
+              "end_before_line": {"type": "integer", "minimum": 1},
+              "end_before_column": {"type": "integer", "minimum": 1},
+              "before_line": {"type": "integer", "minimum": 1},
+              "before_column": {"type": "integer", "minimum": 1},
+              "anchor_text": {"type": "string", "minLength": 1},
+              "anchor_pattern": {"type": "string", "minLength": 1},
+              "end_anchor_text": {"type": "string", "minLength": 1},
+              "end_anchor_pattern": {"type": "string", "minLength": 1},
+              "before_anchor_text": {"type": "string", "minLength": 1},
+              "before_anchor_pattern": {"type": "string", "minLength": 1},
+              "reviewer_confirmed": {"const": true}
+            },
+            "anyOf": [{"required": ["anchor_text"]}, {"required": ["anchor_pattern"]}],
+            "additionalProperties": true
+          }
+        },
         "roles": {
           "type": "array",
           "items": {
@@ -111,6 +172,28 @@
         "source_role": {"type": "string", "minLength": 1},
         "answer_patterns": {"$ref": "#/$defs/number_patterns"},
         "inline_answer_patterns": {"$ref": "#/$defs/optional_number_patterns"},
+        "answer_number_shift_ranges": {
+          "$ref": "#/$defs/reviewed_number_shift_ranges"
+        },
+        "recovered_answers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["context", "number", "body", "after_line", "source_page", "reviewer_confirmed"],
+            "properties": {
+              "context": {"type": "string", "minLength": 1},
+              "number": {"type": ["string", "integer"]},
+              "body": {"type": "string", "minLength": 1},
+              "after_line": {"type": "integer", "minimum": 1},
+              "source_page": {"type": ["string", "integer"]},
+              "anchor_text": {"type": "string", "minLength": 1},
+              "anchor_pattern": {"type": "string", "minLength": 1},
+              "reviewer_confirmed": {"const": true}
+            },
+            "anyOf": [{"required": ["anchor_text"]}, {"required": ["anchor_pattern"]}],
+            "additionalProperties": true
+          }
+        },
         "contexts": {
           "type": "array",
           "items": {
@@ -191,6 +274,31 @@
     "optional_number_patterns": {
       "type": "array",
       "items": {"type": "string", "minLength": 1}
+    },
+    "reviewed_number_shift_ranges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["context", "start_line", "end_line", "offset", "reviewer_confirmed"],
+        "properties": {
+          "context": {"type": "string", "minLength": 1},
+          "start_line": {"type": "integer", "minimum": 1},
+          "start_column": {"type": "integer", "minimum": 1},
+          "end_line": {"type": "integer", "minimum": 1},
+          "end_column": {"type": "integer", "minimum": 1},
+          "offset": {"type": "integer", "not": {"const": 0}},
+          "anchor_text": {"type": "string", "minLength": 1},
+          "anchor_pattern": {"type": "string", "minLength": 1},
+          "end_anchor_text": {"type": "string", "minLength": 1},
+          "end_anchor_pattern": {"type": "string", "minLength": 1},
+          "reviewer_confirmed": {"const": true}
+        },
+        "allOf": [
+          {"anyOf": [{"required": ["anchor_text"]}, {"required": ["anchor_pattern"]}]},
+          {"anyOf": [{"required": ["end_anchor_text"]}, {"required": ["end_anchor_pattern"]}]}
+        ],
+        "additionalProperties": true
+      }
     }
   },
   "additionalProperties": true

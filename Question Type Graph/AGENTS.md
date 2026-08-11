@@ -29,6 +29,25 @@ freeze typed sources
   and output folder templates in a reviewed `format-adapter.json`, never in
   reusable compiler code.
 - Create one leaf note per top-level question and keep its subparts together.
+- Flatten question-bearing HTML tables into semantic column streams before
+  segmentation. Merge streams by the next printed question number, keep each
+  image or strategy with its column record, and expose adapter-matched labels
+  inside cells as their own nodes; never leave orphan `<td>` or `<tr>` tags in
+  an atomic question.
+- Final audit must require a continuous `1..N` question-number ledger inside
+  every reviewed answer context. Gaps, duplicates, and reordered numbers are
+  blocking errors rather than warnings.
+- Treat every authoritative `unmatched-answer` review record as a blocking
+  `answer-without-question` error. Reviewer confirmation cannot waive it,
+  because it may be the only evidence that a continuous-looking question
+  ledger lost its entire tail.
+- Preserve a publisher/OCR numbering reset in the immutable source body, but
+  use matching reviewed question/answer number-shift ranges when semantic
+  identity must remain continuous.
+- If visual PDF review proves that conversion omitted a complete question,
+  recover it only through a page-provenanced, reviewer-confirmed virtual
+  question entry anchored to the immutable hierarchy corpus; never reconstruct
+  a missing stem from the answer alone.
 - Preserve source text, formulas, images, tables, numbering, and order. Add
   Markdown structure and navigation only.
 - After content segmentation, clean every generated title and corresponding

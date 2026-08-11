@@ -289,6 +289,14 @@ def _validate_regex(value: Any, field: str, *, allow_empty_match: bool = False) 
 
 def validate_adapter_contract(adapter: dict[str, Any], profile: dict[str, Any]) -> None:
     """Validate the executable v1 adapter contract before any stage uses it."""
+    filename_policy = adapter.get("filename_policy")
+    if filename_policy is not None and (
+        not isinstance(filename_policy, dict)
+        or filename_policy.get("colon_replacement") != "_"
+    ):
+        raise ConfigurationError(
+            "format-adapter.filename_policy.colon_replacement must be '_'"
+        )
     for field in ("hierarchy", "content"):
         if not isinstance(adapter.get(field), dict):
             raise ConfigurationError(f"format-adapter.{field} must be an object")
@@ -401,6 +409,147 @@ def validate_adapter_contract(adapter: dict[str, Any], profile: dict[str, Any]) 
                 allow_empty_match=True,
             )
 
+    recovered_questions = content.get("recovered_questions", [])
+    if not isinstance(recovered_questions, list):
+        raise ConfigurationError("content.recovered_questions must be a list")
+    recovered_keys: set[tuple[str, str]] = set()
+    for index, item in enumerate(recovered_questions):
+        if not isinstance(item, dict):
+            raise ConfigurationError(f"content.recovered_questions[{index}] must be an object")
+        context = str(item.get("context", "")).strip()
+        number = str(item.get("number", "")).strip()
+        body = str(item.get("body", "")).strip()
+        source_page = str(item.get("source_page", "")).strip()
+        try:
+            after_line = int(item.get("after_line"))
+        except (TypeError, ValueError) as exc:
+            raise ConfigurationError(
+                f"content.recovered_questions[{index}].after_line must be positive"
+            ) from exc
+        identity = (context, number)
+        if (
+            not context
+            or not number
+            or not body
+            or not source_page
+            or after_line < 1
+            or identity in recovered_keys
+            or item.get("reviewer_confirmed") is not True
+        ):
+            raise ConfigurationError(
+                "recovered question identity, body, page provenance, anchor, and review are required"
+            )
+        recovered_keys.add(identity)
+        if not str(item.get("anchor_text", "")).strip() and not item.get("anchor_pattern"):
+            raise ConfigurationError(f"content.recovered_questions[{index}] requires a drift anchor")
+        if item.get("anchor_pattern") is not None:
+            _validate_regex(
+                item["anchor_pattern"],
+                f"content.recovered_questions[{index}].anchor_pattern",
+                allow_empty_match=True,
+            )
+
+    relocations = content.get("virtual_span_relocations", [])
+    if not isinstance(relocations, list):
+        raise ConfigurationError("content.virtual_span_relocations must be a list")
+    relocation_keys: set[tuple[str, int, int]] = set()
+    for index, item in enumerate(relocations):
+        if not isinstance(item, dict):
+            raise ConfigurationError(
+                f"content.virtual_span_relocations[{index}] must be an object"
+            )
+        context = str(item.get("context", "")).strip()
+        try:
+            start_line = int(item.get("start_line"))
+            start_column = int(item.get("start_column", 1))
+            end_before_line = int(item.get("end_before_line"))
+            end_before_column = int(item.get("end_before_column", 1))
+            before_line = int(item.get("before_line"))
+            before_column = int(item.get("before_column", 1))
+        except (TypeError, ValueError) as exc:
+            raise ConfigurationError(
+                f"content.virtual_span_relocations[{index}] coordinates must be positive integers"
+            ) from exc
+        key = (context, start_line, start_column)
+        if (
+            not context
+            or min(
+                start_line,
+                start_column,
+                end_before_line,
+                end_before_column,
+                before_line,
+                before_column,
+            )
+            < 1
+            or key in relocation_keys
+            or item.get("reviewer_confirmed") is not True
+        ):
+            raise ConfigurationError(
+                "virtual span relocation identity, coordinates, and review must be complete and unique"
+            )
+        relocation_keys.add(key)
+        if not str(item.get("anchor_text", "")).strip() and not item.get("anchor_pattern"):
+            raise ConfigurationError(
+                f"content.virtual_span_relocations[{index}] requires a start drift anchor"
+            )
+        for pattern_key in (
+            "anchor_pattern",
+            "end_anchor_pattern",
+            "before_anchor_pattern",
+        ):
+            if item.get(pattern_key) is not None:
+                _validate_regex(
+                    item[pattern_key],
+                    f"content.virtual_span_relocations[{index}].{pattern_key}",
+                    allow_empty_match=True,
+                )
+
+    for section_name, items in (
+        ("content.question_number_shift_ranges", content.get("question_number_shift_ranges", [])),
+        (
+            "answers.answer_number_shift_ranges",
+            (adapter.get("answers") or {}).get("answer_number_shift_ranges", []),
+        ),
+    ):
+        if not isinstance(items, list):
+            raise ConfigurationError(f"{section_name} must be a list")
+        seen_ranges: set[tuple[str, int, int, int, int]] = set()
+        for index, item in enumerate(items):
+            if not isinstance(item, dict):
+                raise ConfigurationError(f"{section_name}[{index}] must be an object")
+            context = str(item.get("context", "")).strip()
+            try:
+                start_line = int(item.get("start_line"))
+                start_column = int(item.get("start_column", 1))
+                end_line = int(item.get("end_line"))
+                end_column = int(item.get("end_column", 2**31 - 1))
+                offset = int(item.get("offset"))
+            except (TypeError, ValueError) as exc:
+                raise ConfigurationError(f"{section_name}[{index}] has invalid coordinates or offset") from exc
+            identity = (context, start_line, start_column, end_line, end_column)
+            if (
+                not context
+                or min(start_line, start_column, end_line, end_column) < 1
+                or (start_line, start_column) > (end_line, end_column)
+                or offset == 0
+                or identity in seen_ranges
+                or item.get("reviewer_confirmed") is not True
+            ):
+                raise ConfigurationError(f"{section_name}[{index}] must be reviewed, non-empty, ordered, and unique")
+            seen_ranges.add(identity)
+            if not str(item.get("anchor_text", "")).strip() and not item.get("anchor_pattern"):
+                raise ConfigurationError(f"{section_name}[{index}] requires a start drift anchor")
+            if not str(item.get("end_anchor_text", "")).strip() and not item.get("end_anchor_pattern"):
+                raise ConfigurationError(f"{section_name}[{index}] requires an end drift anchor")
+            for pattern_key in ("anchor_pattern", "end_anchor_pattern"):
+                if item.get(pattern_key) is not None:
+                    _validate_regex(
+                        item[pattern_key],
+                        f"{section_name}[{index}].{pattern_key}",
+                        allow_empty_match=True,
+                    )
+
     if profile.get("answers", {}).get("mode") == "unavailable":
         return
     answers = adapter.get("answers")
@@ -445,6 +594,45 @@ def validate_adapter_contract(adapter: dict[str, Any], profile: dict[str, Any]) 
             raise ConfigurationError(
                 f"answers.contexts[{index}].start_line must be a positive integer"
             ) from exc
+    recovered_answers = answers.get("recovered_answers", [])
+    if not isinstance(recovered_answers, list):
+        raise ConfigurationError("answers.recovered_answers must be a list")
+    recovered_answer_keys: set[tuple[str, str]] = set()
+    for index, item in enumerate(recovered_answers):
+        if not isinstance(item, dict):
+            raise ConfigurationError(f"answers.recovered_answers[{index}] must be an object")
+        context = str(item.get("context", "")).strip()
+        number = str(item.get("number", "")).strip()
+        body = str(item.get("body", "")).strip()
+        source_page = str(item.get("source_page", "")).strip()
+        try:
+            after_line = int(item.get("after_line"))
+        except (TypeError, ValueError) as exc:
+            raise ConfigurationError(
+                f"answers.recovered_answers[{index}].after_line must be positive"
+            ) from exc
+        identity = (context, number)
+        if (
+            not context
+            or not number
+            or not body
+            or not source_page
+            or after_line < 1
+            or identity in recovered_answer_keys
+            or item.get("reviewer_confirmed") is not True
+        ):
+            raise ConfigurationError(
+                "recovered answer identity, body, page provenance, anchor, and review are required"
+            )
+        recovered_answer_keys.add(identity)
+        if not str(item.get("anchor_text", "")).strip() and not item.get("anchor_pattern"):
+            raise ConfigurationError(f"answers.recovered_answers[{index}] requires a drift anchor")
+        if item.get("anchor_pattern") is not None:
+            _validate_regex(
+                item["anchor_pattern"],
+                f"answers.recovered_answers[{index}].anchor_pattern",
+                allow_empty_match=True,
+            )
     implicit = answers.get("implicit_answers", [])
     if not isinstance(implicit, list):
         raise ConfigurationError("answers.implicit_answers must be a list")

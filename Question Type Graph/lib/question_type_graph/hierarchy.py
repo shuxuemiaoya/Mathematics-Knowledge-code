@@ -15,11 +15,20 @@ from .common import (
     rebase_local_links,
     require_reviewed_adapter,
     resolve_inside,
+    safe_name,
     sha256_file,
     sha256_text,
     write_json_atomic,
     write_text_atomic,
 )
+
+
+def normalize_generated_output(value: str) -> str:
+    """Normalize every generated hierarchy path component to vault policy."""
+    path = Path(value)
+    if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
+        raise ConfigurationError(f"Hierarchy output must be a safe relative path: {value}")
+    return Path(*(safe_name(part) for part in path.parts)).as_posix()
 
 
 def normalize_heading(line: str) -> str:
@@ -189,6 +198,7 @@ def plan_hierarchy(profile_path: Path, adapter_path: Path) -> dict[str, Any]:
     review_items: list[dict[str, Any]] = list(authority_review)
     minimum = start_limit
     keys: set[str] = set()
+    outputs: set[str] = set()
     for raw in configured:
         key = str(raw.get("key", "")).strip()
         title = str(raw.get("title", "")).strip()
@@ -196,6 +206,10 @@ def plan_hierarchy(profile_path: Path, adapter_path: Path) -> dict[str, Any]:
         output = str(raw.get("output", "")).strip()
         if not key or key in keys or not title or level < 1 or level > 6 or not output.endswith(".md"):
             raise ConfigurationError(f"Invalid or duplicate hierarchy entry: {raw}")
+        output = normalize_generated_output(output)
+        if output.casefold() in outputs:
+            raise ConfigurationError(f"Hierarchy outputs collide after filename normalization: {output}")
+        outputs.add(output.casefold())
         line = find_entry_line(lines, raw, minimum, end_limit)
         if line is None:
             review_items.append({"kind": "unmatched-hierarchy-entry", "key": key, "title": title})
@@ -241,7 +255,7 @@ def plan_hierarchy(profile_path: Path, adapter_path: Path) -> dict[str, Any]:
         "source_markdown": str(markdown),
         "source_markdown_sha256": sha256_file(markdown),
         "line_count": len(lines),
-        "root_output": str(hierarchy.get("root_output", "index.md")),
+        "root_output": normalize_generated_output(str(hierarchy.get("root_output", "index.md"))),
         "navigation_embed_mode": "direct-children",
         "entries": entries,
         "review_items": review_items,

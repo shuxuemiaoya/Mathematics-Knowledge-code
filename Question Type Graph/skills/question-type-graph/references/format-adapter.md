@@ -13,6 +13,7 @@ Minimum shape:
   "schema_version": 1,
   "status": "passed",
   "reviewer_confirmed": true,
+  "filename_policy": {"colon_replacement": "_"},
   "profile": "C:/absolute/question-type-profile.json",
   "hierarchy": {
     "source_role": "questions",
@@ -63,10 +64,18 @@ Minimum shape:
     "implicit_answers": [
       {"context": "chapter-1", "number": "1", "start_line": 205, "anchor_text": "reviewed first answer body line"}
     ],
+    "recovered_answers": [
+      {"context": "chapter-1", "number": "2", "body": "【2】A\n解析：PDF-visible authoritative solution", "after_line": 210, "source_page": 8, "anchor_pattern": "^reviewed damaged raw block", "reviewer_confirmed": true}
+    ],
     "ignore_ranges": []
   }
 }
 ```
+
+`filename_policy.colon_replacement` records the mandatory generated-path rule.
+The runtime normalizes every component of `root_output` and `entries[].output`
+even when the reviewed adapter contains `:` or `：`; final audit treats either
+character in any generated file or directory path as a hard error.
 
 `question_patterns` and `answer_patterns` recognize a virtual line at its
 start. Their optional `inline_*_patterns` counterparts identify additional
@@ -79,6 +88,22 @@ record the reviewed correction in `content.question_number_overrides` using
 the hierarchy context, hierarchy-note raw line, optional one-based raw column,
 correct number, and a drift anchor. The original OCR text remains preserved in
 the atomic note while matching uses the corrected identity.
+If the source itself repeats or resets a printed number and every following
+record therefore needs the same semantic offset, use reviewed,
+source-anchored `content.question_number_shift_ranges` and matching
+`answers.answer_number_shift_ranges`. Both endpoints require drift anchors;
+the immutable source body retains its printed numbering.
+If an OCR column spillover places a complete source span after a later-numbered
+question, record a reviewer-confirmed `content.virtual_span_relocations` entry.
+Bind its start, exclusive end, and insertion point to hierarchy-note raw
+line/column coordinates and drift anchors. This changes semantic reading order
+without editing the frozen corpus; the continuous question-ledger audit must
+then pass.
+When the PDF visibly contains a complete question that the frozen raw Markdown
+omits, record a reviewer-transcribed `content.recovered_questions` entry with
+its context, printed number, exact body, PDF page, insertion anchor, and
+`reviewer_confirmed: true`. This is a provenance-marked virtual recovery; do
+not edit the raw Markdown or invent a question from its answer.
 
 For a content-derived no-TOC hierarchy, replace `primary_authority` with an
 explicit `no_toc_authority` object containing `status: passed`,
@@ -120,6 +145,12 @@ When OCR preserves a publisher solution but drops only its printed answer
 header, record it in `answers.implicit_answers` with the exact context, number,
 raw `start_line`, and an `anchor_text` or `anchor_pattern`. This is a reviewed
 recovery of authoritative content, not a supplemental solution.
+When the authoritative PDF visibly contains an answer block that raw Markdown
+omits or corrupts beyond safe parsing, use `answers.recovered_answers` instead.
+Transcribe the complete numbered answer and analysis, bind it to an exact raw
+insertion anchor with `after_line`, record the PDF `source_page`, and require
+`reviewer_confirmed: true`. Never use this field for an inferred or AI-authored
+answer.
 For an inline header omission or OCR-misread number, also record the one-based
 `raw_column` of the affected virtual line. Omitting `raw_column` means column 1
 and preserves the ordinary whole-line recovery behavior.

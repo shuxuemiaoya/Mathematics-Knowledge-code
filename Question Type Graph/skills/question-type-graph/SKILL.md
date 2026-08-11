@@ -55,15 +55,36 @@ persist the final checks with `audit --overwrite`.
 - Create one note per top-level question, named with a persistent 8-digit QID
   allocated through the locked vault registry. Seed a new registry from the
   vault and an optional adapter-configured central repository.
+- Flatten question-bearing HTML tables by semantic column streams before
+  splitting, recover adapter-defined roles embedded in table cells, and block
+  completion unless every answer context has a continuous `1..N` question
+  ledger with no gaps, duplicates, or reordering.
 - Immediately after content segmentation, clean every generated title and its
-  corresponding filename. Preserve only Unicode letters, digits, and `_`;
-  replace every other character (including whitespace, full-width punctuation
-  such as `：`, ASCII punctuation, symbols, and emoji) with `_`. Never apply
-  this cleanup to immutable OCR source text or question bodies.
+  corresponding filename through the shared filename policy. Replace unsafe
+  filesystem characters and always replace both `:` and `：` with `_`, while
+  preserving other reviewed title characters. Never apply this cleanup to
+  immutable OCR source text or question bodies. Route every hierarchy
+  `root_output` and `entries[].output` component through the same normalizer;
+  final audit must fail if `:` or `：` survives in any generated file or
+  directory path.
 - Save matched solutions as standalone answer notes named `<Question_ID>A<Index>.md` (e.g., `Q00004154A1.md`), and embed them in the question note via `![[Q00004154A1]]`. Pre-split adapter-recognized inline OCR question and answer headers while retaining raw-line and raw-column coordinates so concatenated records are parsed without shifting reviewed region or context anchors. Preserve mapped theory-guide content in place; knowledge linking remains deferred.
 - Format all answer notes into collapsable Callout blocks (`> [!faq]- <callout_title>`, e.g., `全练一本通解析`) with both `**【答案】**` and `**【解析】**`. Recover explicit publisher short-answer prefixes; use `详见解析` only for non-choice problems without a safely separable short result. Choice problems require exact option selections such as `**【答案】** A`. Preserve itemized bullet points and pedagogical sections (`💡 规律方法`, `📌 名师点拨`, `🔔 敲黑板`, `💡 点悟`, `🔗 链接教材`, `⚠️ 易错警示`).
 - Enforce zero-tolerance explanation validation: every atomic question note MUST embed a valid solution callout note (`![[Q*A1]]`). Any question lacking an explanation MUST trigger a blocking audit error (`question-lacking-explanation`) with its exact cause identified.
 - Require exact answer identity or blocking review. Never accept fuzzy evidence alone. A passed answer manifest must have unique `answer_id` AND unique `question_id` (one owner per answer block, one match per question).
+- Block every authoritative `unmatched-answer` as `answer-without-question`,
+  even when the remaining review queue was reviewer-confirmed; this is the
+  cross-source gate for detecting a wholly missing terminal question span.
+- When a verified publisher/OCR numbering reset requires a constant semantic
+  offset, require matching reviewed, source-anchored question and answer shift
+  ranges; preserve the printed number in immutable source bodies.
+- Recover a PDF-visible question omitted from raw Markdown only through a
+  reviewer-confirmed, page-provenanced virtual question entry anchored to the
+  immutable corpus; never infer the stem from an answer block.
+- Recover a PDF-visible authoritative answer omitted or corrupted in raw
+  Markdown only through a reviewer-confirmed `recovered_answers` entry carrying
+  context, number, exact body, PDF page, and a raw-source drift anchor. Keep it
+  distinct from AI supplementation and require both rendered `【答案】` and
+  `【解析】` fields after application.
 - Reconcile stale answer artifacts automatically from the application ownership
   report whenever matching changes.
 - Permit Markdown-only presentation changes and verify lexical preservation.
