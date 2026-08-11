@@ -20,7 +20,13 @@ from question_type_graph.audit import (
     question_sequence_errors,
     valid_solution_note,
 )
-from question_type_graph.common import ConfigurationError, safe_name, sha256_text, write_json_atomic
+from question_type_graph.common import (
+    ConfigurationError,
+    prune_empty_directories,
+    safe_name,
+    sha256_text,
+    write_json_atomic,
+)
 from question_type_graph.content import (
     apply_reviewed_recovered_questions,
     apply_reviewed_virtual_span_relocations,
@@ -106,10 +112,33 @@ class TestEdgeCases(unittest.TestCase):
     def test_full_width_colon_is_stable_in_generated_name(self) -> None:
         self.assertEqual(safe_name("角度3：公式法.md"), "角度3_公式法.md")
 
+    def test_generated_name_replaces_every_non_alphanumeric_character(self) -> None:
+        self.assertEqual(
+            safe_name("▶ 题型 1：（向量）+方法.md"),
+            "__题型_1__向量__方法.md",
+        )
+        self.assertEqual(safe_name("一.向量"), "一_向量")
+
+    def test_empty_generated_directories_are_pruned_without_deleting_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            empty_leaf = root / "stale" / "nested"
+            empty_leaf.mkdir(parents=True)
+            kept = root / "current"
+            kept.mkdir()
+            note = kept / "note.md"
+            note.write_text("keep", encoding="utf-8")
+
+            removed = prune_empty_directories(root)
+
+            self.assertFalse((root / "stale").exists())
+            self.assertTrue(note.is_file())
+            self.assertNotIn(str(root.resolve()), removed)
+
     def test_ascii_colon_is_removed_from_every_hierarchy_path_component(self) -> None:
         self.assertEqual(
             normalize_generated_output("第十节 专题:离心率/题型 1:定义.md"),
-            "第十节 专题_离心率/题型 1_定义.md",
+            "第十节_专题_离心率/题型_1_定义.md",
         )
 
     def test_final_path_guard_rejects_ascii_and_full_width_colons(self) -> None:

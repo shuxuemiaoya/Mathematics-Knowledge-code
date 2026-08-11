@@ -16,6 +16,7 @@ from .common import (
     load_profile,
     lexical_signature,
     obsidian_embed,
+    prune_empty_directories,
     rebase_local_links,
     require_reviewed_adapter,
     safe_name,
@@ -1225,6 +1226,8 @@ def apply_content(profile_path: Path, adapter_path: Path, manifest_path: Path, o
         candidate.unlink()
         removed_stale.append(str(resolved))
 
+    removed_empty_directories = prune_empty_directories(graph_root)
+
     result = {
         "schema_version": 1,
         "stage": "content-application",
@@ -1236,6 +1239,7 @@ def apply_content(profile_path: Path, adapter_path: Path, manifest_path: Path, o
         "questions": written_questions,
         "generated_outputs": generated_outputs,
         "removed_stale_outputs": removed_stale,
+        "removed_empty_directories": removed_empty_directories,
     }
     write_json_atomic(report_path, result, overwrite=overwrite)
     return result

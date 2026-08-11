@@ -12,6 +12,7 @@ from .common import (
     load_json,
     load_profile,
     obsidian_embed,
+    prune_empty_directories,
     rebase_local_links,
     require_reviewed_adapter,
     resolve_inside,
@@ -373,6 +374,7 @@ def apply_hierarchy(profile_path: Path, adapter_path: Path, manifest_path: Path,
         if stale.is_file():
             stale.unlink()
             removed_stale.append(str(stale))
+    removed_empty_directories = prune_empty_directories(graph_root)
     coverage = {
         "schema_version": 1,
         "stage": "hierarchy-coverage",
@@ -385,6 +387,7 @@ def apply_hierarchy(profile_path: Path, adapter_path: Path, manifest_path: Path,
         "line_owners": line_owners,
         "notes": written,
         "removed_stale_outputs": removed_stale,
+        "removed_empty_directories": removed_empty_directories,
     }
     write_json_atomic(coverage_path, coverage, overwrite=overwrite)
     return coverage

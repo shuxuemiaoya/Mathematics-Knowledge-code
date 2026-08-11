@@ -13,6 +13,7 @@ from .common import (
     load_json,
     load_profile,
     lexical_signature,
+    prune_empty_directories,
     rebase_local_links,
     require_reviewed_adapter,
     sha256_file,
@@ -963,6 +964,7 @@ def apply_matches(profile_path: Path, manifest_path: Path, overwrite: bool) -> d
             "questions": applied,
             "removed_stale_outputs": removed_stale,
         }
+    result["removed_empty_directories"] = prune_empty_directories(graph_root)
     write_json_atomic(output, result, overwrite=output.is_file() or overwrite)
     if supplement_output.is_file():
         write_json_atomic(

@@ -96,11 +96,51 @@ def resolve_inside(root: Path, relative: str | Path) -> Path:
 
 
 def safe_name(value: str, fallback: str = "node") -> str:
-    # Full-width colon is also rewritten because common vault file watchers
-    # normalize it after creation, which otherwise leaves manifests and
-    # generated embeds pointing at the pre-normalized filename.
-    value = re.sub(r"[<>:\"：/\\|?*\x00-\x1f]", "_", value).strip().rstrip(".")
-    return value[:120] or fallback
+    """Normalize one generated path component to the vault filename policy.
+
+    Generated titles may contain only Unicode letters, Unicode digits, and
+    underscores.  A conventional alphanumeric file suffix is preserved so
+    that Markdown, JSON, Canvas, and image artifacts remain usable.
+    """
+
+    def split_suffix(raw: str) -> tuple[str, str]:
+        suffix = Path(raw).suffix
+        if suffix and re.fullmatch(r"\.[A-Za-z0-9]{1,10}", suffix):
+            return raw[: -len(suffix)], suffix
+        return raw, ""
+
+    def normalize_stem(raw: str) -> str:
+        return "".join(character if character == "_" or character.isalnum() else "_" for character in raw)
+
+    stem, suffix = split_suffix(str(value))
+    normalized = normalize_stem(stem)
+    if not normalized.strip("_"):
+        fallback_stem, fallback_suffix = split_suffix(str(fallback))
+        normalized = normalize_stem(fallback_stem).strip("_") or "node"
+        if not suffix:
+            suffix = fallback_suffix
+    budget = max(1, 120 - len(suffix))
+    return f"{normalized[:budget]}{suffix}"
+
+
+def prune_empty_directories(root: Path) -> list[str]:
+    """Remove empty generated directories below ``root`` without deleting files."""
+    root = root.resolve()
+    if not root.is_dir():
+        return []
+    removed: list[str] = []
+    directories = sorted(
+        (path for path in root.rglob("*") if path.is_dir() and not path.is_symlink()),
+        key=lambda path: len(path.parts),
+        reverse=True,
+    )
+    for directory in directories:
+        try:
+            directory.rmdir()
+        except OSError:
+            continue
+        removed.append(str(directory.resolve()))
+    return removed
 
 
 def bounded_output_path(root: Path, desired: Path, max_length: int, identity: str) -> Path:
