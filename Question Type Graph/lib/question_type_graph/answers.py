@@ -77,7 +77,12 @@ def parse_answer_blocks(path: Path, adapter: dict[str, Any]) -> tuple[list[dict[
         else answer_patterns
     )
     raw_lines = path.read_text(encoding="utf-8-sig").splitlines()
-    for item in [*config.get("contexts", []), *config.get("implicit_answers", [])]:
+    for item in [
+        *config.get("contexts", []),
+        *config.get("implicit_answers", []),
+        *config.get("choice_answer_overrides", []),
+        *config.get("short_answer_overrides", []),
+    ]:
         if item.get("start_line") is None:
             continue
         anchor_line = int(item["start_line"])
@@ -92,11 +97,18 @@ def parse_answer_blocks(path: Path, adapter: dict[str, Any]) -> tuple[list[dict[
                 f"Answer boundary anchor_pattern drifted: {item.get('key') or item.get('context')}"
             )
     implicit_answers = {
-        int(item["start_line"]): item
+        (int(item["start_line"]), int(item.get("raw_column", 1))): item
         for item in config.get("implicit_answers", [])
         if item.get("start_line") is not None
     }
-    lines = split_virtual_lines(raw_lines, inline_patterns)
+    implicit_starts: dict[int, set[int]] = {}
+    for raw_line, raw_column in implicit_answers:
+        implicit_starts.setdefault(raw_line, set()).add(raw_column)
+    lines = split_virtual_lines(
+        raw_lines,
+        inline_patterns,
+        additional_starts=implicit_starts,
+    )
     region = config.get("region") or {}
     start_limit = int(region.get("start_line", 1))
     end_limit = int(region.get("end_line", len(raw_lines)))
@@ -127,7 +139,9 @@ def parse_answer_blocks(path: Path, adapter: dict[str, Any]) -> tuple[list[dict[
             context = matched_context
             events.append({"kind": "context", "line": line_number, "position": position, "context": context})
             continue
-        implicit = implicit_answers.get(line_number) if line_entry["subline"] == 0 else None
+        implicit = implicit_answers.get(
+            (line_number, int(line_entry["raw_column"]))
+        )
         if implicit:
             implicit_context = str(implicit.get("context") or context or "").strip()
             implicit_number = str(implicit.get("number", "")).strip()
@@ -439,20 +453,138 @@ def plan_matches(profile_path: Path, adapter_path: Path, content_manifest_path: 
     }
 
 
-def format_answer_callout(body: str, callout_title: str = "答案与解析") -> str:
+def extract_choice_answer(body: str) -> str | None:
+    """Extract a publisher-stated choice answer without guessing from prose.
+
+    OCR sometimes drops the leading ``【N】D`` record while preserving a
+    conclusive phrase such as ``故选:D`` at the end of the explanation.  The
+    conclusion is authoritative evidence and should still render as a
+    separate answer field.  Only explicit answer/conclusion phrases are
+    accepted; isolated capital letters in mathematical prose are ignored.
+    """
+    conclusion_pattern = re.compile(
+        r"(?:故\s*选|应\s*选|选|选项(?:为|是)?|答案(?:为|是)?)"
+        r"\s*[：:]?\s*([A-F]+)\b",
+        re.IGNORECASE,
+    )
+    matches = list(conclusion_pattern.finditer(body))
+    if matches:
+        # A worked conclusion is stronger evidence than an OCR-damaged
+        # leading header (which can retain the neighbouring question number
+        # and option after page/column interleaving).
+        return matches[-1].group(1).upper()
+
+    lines = body.strip().splitlines()
+    if lines:
+        first_line = lines[0].strip()
+        header = re.match(
+            r"^【?\d+】?[\.、\s]*([A-F]+)\b\s*(?:【解析】)?\s*",
+            first_line,
+        )
+        if header:
+            return header.group(1)
+    return None
+
+
+def extract_nonchoice_answer_prefix(body: str) -> tuple[str | None, str]:
+    """Split a publisher-stated short answer from the following analysis.
+
+    Common OCR blocks are shaped like ``【12】$\\frac12$ 解析：...`` or put
+    the short answer on several display-math lines before ``【解析】``.  This
+    helper accepts only that bounded, explicit prefix; it does not guess a
+    result from derivation prose.
+    """
+    text = re.sub(r"^【?\d+】?[\.、\s]*", "", body.strip(), count=1)
+    marker = re.search(r"【解析】|(?<!见)解析\s*[：:]", text)
+    if marker is None:
+        return None, text
+    prefix = text[:marker.start()].strip()
+    analysis = text[marker.end():].strip()
+    prefix = re.sub(r"^(?:【答案】|答案\s*[：:])\s*", "", prefix).strip()
+    prefix_lines = prefix.splitlines()
+    leading_assets = [
+        line.strip()
+        for line in prefix_lines
+        if re.fullmatch(r"!\[[^]]*\]\([^)]+\)", line.strip())
+    ]
+    prefix = "\n".join(
+        line for line in prefix_lines if line.strip() not in leading_assets
+    ).strip()
+    if leading_assets:
+        analysis = "\n".join([*leading_assets, analysis]).strip()
+    compact = re.sub(r"\s+", " ", prefix).strip()
+    if (
+        not compact
+        or len(compact) > 400
+        or re.match(r"^\(\d+\)\s*[×√]", compact)
+    ):
+        return None, text
+    return compact, analysis
+
+
+def format_answer_callout(
+    body: str,
+    callout_title: str = "答案与解析",
+    reviewed_choice_answer: str | None = None,
+    reviewed_short_answer: str | None = None,
+) -> str:
     lines = body.strip().splitlines()
     if not lines:
-        return f"> [!faq]- {callout_title}\n> "
+        return (
+            f"> [!faq]- {callout_title}\n"
+            "> **【答案】** 详见解析  \n"
+            "> \n"
+            "> **【解析】**  \n> "
+        )
 
-    option = None
+    # Prefer an explicit worked conclusion over an OCR header when both are
+    # present; a reviewed override remains the highest authority.
+    option = reviewed_choice_answer or extract_choice_answer(body)
+    explicit_nonchoice_answer = None
+    prepared_analysis = None
+    if option is None:
+        candidate_answer, candidate_analysis = extract_nonchoice_answer_prefix(body)
+        if candidate_answer is not None:
+            explicit_nonchoice_answer = candidate_answer
+            prepared_analysis = candidate_analysis
+            lines = prepared_analysis.splitlines() or [""]
     first_line = lines[0].strip()
-    m_opt = re.match(r"^【?\d+】?[\.、\s]*([A-Z]+)\b\s*(?:【解析】)?\s*", first_line)
+    m_opt = (
+        re.match(r"^【?\d+】?[\.、\s]*([A-F]+)\b\s*(?:【解析】)?\s*", first_line)
+        if prepared_analysis is None
+        else None
+    )
     if m_opt:
-        option = m_opt.group(1)
+        option = option or m_opt.group(1)
         first_line = first_line[m_opt.end():].strip()
     else:
-        first_line = re.sub(r"^【?\d+】?[\.、\s]*", "", first_line)
-        first_line = re.sub(r"^【解析】\s*", "", first_line).strip()
+        # 判断题答案形如 (1) ×; (2) √; ... —— 把整段判断结果作为【答案】。
+        # 答案可能跨行（如第一行 (1)…(7) ×;，第二行 (8) ×.），因此逐行收集
+        # 以 "(N) ×/√" 开头的延续行并入答案，直到遇到解析行。
+        # 与选择题选项提取互斥：先试 [A-Z]，再试 (N) ×/√ 序列。
+        judge_parts = []
+        judge_re = re.compile(r"^\(\d+\)\s*[×√]")
+        stripped_first = (
+            re.sub(r"^【?\d+】?[\s\.、]*", "", first_line)
+            if prepared_analysis is None
+            else first_line
+        )
+        if judge_re.match(stripped_first):
+            first_line = stripped_first
+            while first_line and judge_re.match(first_line):
+                judge_parts.append(first_line.strip())
+                lines = lines[1:]
+                first_line = (lines[0].strip() if lines else "")
+            option = " ".join(judge_parts).strip().rstrip(".").strip()
+            # 跳过答案与解析之间的空行，定位到解析正文
+            while lines and not lines[0].strip():
+                lines = lines[1:]
+            first_line = (lines[0].strip() if lines else "")
+            first_line = re.sub(r"^【解析】\s*", "", first_line).strip()
+        else:
+            if prepared_analysis is None:
+                first_line = re.sub(r"^【?\d+】?[\.、\s]*", "", first_line)
+                first_line = re.sub(r"^【解析】\s*", "", first_line).strip()
 
     rebuilt_lines = [first_line] + [l.strip() for l in lines[1:] if l.strip()]
 
@@ -495,9 +627,10 @@ def format_answer_callout(body: str, callout_title: str = "答案与解析") -> 
         blocks.append((current_type, current_extra_kw, "\n".join(current_block)))
 
     callout_lines = [f"> [!faq]- {callout_title}"]
-    if option:
-        callout_lines.append(f"> **【答案】** {option}  ")
-        callout_lines.append("> ")
+    answer_value = reviewed_short_answer or option or explicit_nonchoice_answer or "详见解析"
+    answer_value = re.sub(r"\s+", " ", answer_value).strip()
+    callout_lines.append(f"> **【答案】** {answer_value}  ")
+    callout_lines.append("> ")
 
     callout_lines.append("> **【解析】**  ")
 
@@ -508,17 +641,28 @@ def format_answer_callout(body: str, callout_title: str = "答案与解析") -> 
         sub_str = sub.strip()
         if not sub_str:
             continue
-        m_conc = re.search(r"(故选\s*[A-Z]+\b.*)$", sub_str)
+        m_conc = re.search(r"(故选\s*[：:]?\s*[A-F]+\b.*)$", sub_str)
         if m_conc:
             conclusion = m_conc.group(1).strip()
             sub_str = sub_str[:m_conc.start()].strip()
-            conclusion_line = re.sub(r"故选\s*([A-Z]+)\b", r"故选 **\1**", conclusion)
+            conclusion_line = re.sub(r"故选\s*[：:]?\s*([A-F]+)\b", r"故选 **\1**", conclusion)
 
         if re.match(r"^(?:对于\s*)?[①②③④⑤⑥⑦⑧⑨⑩]", sub_str):
             sub_str = re.sub(r"^(对于\s*[①②③④⑤⑥⑦⑧⑨⑩]|[①②③④⑤⑥⑦⑧⑨⑩])[\s：:]*", r"- **\1**：", sub_str)
-            callout_lines.append(f"> {sub_str}  ")
+            # ①② item block may itself contain continuation lines (e.g. a
+            # trailing 故选 line merged into the last item) — quote every line.
+            item_lines = sub_str.splitlines()
+            callout_lines.append(f"> {item_lines[0]}  ")
+            for extra_line in item_lines[1:]:
+                callout_lines.append(f"> {extra_line}  ")
         elif sub_str:
-            callout_lines.append(f"> {sub_str}  ")
+            # Multi-line sub-block: every line must keep the blockquote "> "
+            # prefix, otherwise Obsidian renders the continuation lines
+            # outside the callout (broken fold).
+            sub_lines = sub_str.splitlines()
+            callout_lines.append(f"> {sub_lines[0]}  ")
+            for extra_line in sub_lines[1:]:
+                callout_lines.append(f"> {extra_line}  ")
 
     if conclusion_line:
         callout_lines.append("> ")
@@ -530,7 +674,10 @@ def format_answer_callout(body: str, callout_title: str = "答案与解析") -> 
             callout_lines.append("> ---")
             header = emoji_map.get(kw, f"💡 {kw}")
             callout_lines.append(f"> **{header}**  ")
-            callout_lines.append(f"> {content.strip()}  ")
+            content_lines = content.strip().splitlines()
+            callout_lines.append(f"> {content_lines[0]}  ")
+            for extra_line in content_lines[1:]:
+                callout_lines.append(f"> {extra_line}  ")
 
     return "\n".join(callout_lines)
 
@@ -590,6 +737,22 @@ def apply_matches(profile_path: Path, manifest_path: Path, overwrite: bool) -> d
         adapter_path = Path(manifest.get("adapter", profile["format"]["adapter"]))
         adapter_data = load_json(adapter_path) if adapter_path.is_file() else {}
         callout_title = adapter_data.get("answers", {}).get("callout_title", "答案与解析")
+        choice_answer_overrides = {
+            (
+                str(item["context"]),
+                str(item["number"]),
+                int(item["start_line"]),
+            ): str(item["answer"]).strip().upper()
+            for item in adapter_data.get("answers", {}).get("choice_answer_overrides", [])
+        }
+        short_answer_overrides = {
+            (
+                str(item["context"]),
+                str(item["number"]),
+                int(item["start_line"]),
+            ): str(item["answer"]).strip()
+            for item in adapter_data.get("answers", {}).get("short_answer_overrides", [])
+        }
 
         question_paths = [str(item["output"]) for item in all_questions]
         if not question_paths:
@@ -622,7 +785,26 @@ def apply_matches(profile_path: Path, manifest_path: Path, overwrite: bool) -> d
                     [(answer_markdown.parent / "images", Path(profile["paths"]["graph_root"]) / "images")],
                 )
 
-                callout_text = format_answer_callout(rebased_body, callout_title=callout_title)
+                reviewed_choice_answer = choice_answer_overrides.get(
+                    (
+                        str(match.get("answer_context")),
+                        str(match.get("answer_number")),
+                        int(match.get("answer_start_line")),
+                    )
+                )
+                reviewed_short_answer = short_answer_overrides.get(
+                    (
+                        str(match.get("answer_context")),
+                        str(match.get("answer_number")),
+                        int(match.get("answer_start_line")),
+                    )
+                )
+                callout_text = format_answer_callout(
+                    rebased_body,
+                    callout_title=callout_title,
+                    reviewed_choice_answer=reviewed_choice_answer,
+                    reviewed_short_answer=reviewed_short_answer,
+                )
                 answer_text = "\n".join(
                     [
                         "---",

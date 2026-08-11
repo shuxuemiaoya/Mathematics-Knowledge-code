@@ -14,11 +14,14 @@ description: 专职负责将刷题库与教辅书（如必刷题）进行 OCR �
 1. `question-type-pdf-to-markdown`: 教辅 PDF 强制 OCR 转换
 2. `question-type-toc-segmentation`: 教辅目录与大纲层级分割
 3. `question-type-content-segmentation`: 功能块与原子题目切分
-4. `question-answer-matching`: 题目与答案自动精准匹配与审查
-5. `supplement-question-type-solutions`: 对权威答案缺失项生成并人工确认实质性解析
-6. `question-type-markdown`: Markdown 格式美化与统一
-7. `question-type-canvas`: 生成 Question Type Graph 结构化 Obsidian Canvas
-8. `question-type-graph`: 总体流水线调度与控制
+4. **标题清理**：编辑所有生成标题，仅保留 Unicode 字母、数字与下划线 `_`；将其余
+   每个特殊字符（包括空白、中文标点如全角冒号 `：`、英文标点、符号和 emoji）替换为
+   下划线 `_`。此步骤只清理生成标题及其对应文件名，不得改写 OCR 源文本或题目正文。
+5. `question-answer-matching`: 题目与答案自动精准匹配与审查
+6. `supplement-question-type-solutions`: 对权威答案缺失项生成并人工确认实质性解析
+7. `question-type-markdown`: Markdown 格式美化与统一
+8. `question-type-canvas`: 生成 Question Type Graph 结构化 Obsidian Canvas
+9. `question-type-graph`: 总体流水线调度与控制
 
 ---
 
@@ -71,5 +74,13 @@ description: 专职负责将刷题库与教辅书（如必刷题）进行 OCR �
    绝不强行模糊匹配、绝不编造缺失答案。若补充 AI 解析，必须提供实质性内容、
    `reviewer_confirmed: true` 和 `ai-generated-reviewed` 来源标记。最终仅以
    `final-audit-report.json` 的 `status=passed` 为完成标准。
-6. **知识点关联状态**：本阶段保持 `knowledge_linking: deferred`。`知识导学` 及其
+6. **答案字段一致性**：每个解析 Callout 必须同时包含 `【答案】` 与 `【解析】`。
+   优先提取答案块中位于明确 `解析:`/`【解析】` 标记之前的出版方短答案；普通
+   解答题无法可靠拆出短答案时写 `【答案】 详见解析`。选择题不得使用该占位，
+   必须从题头、明确结论或人工审阅覆盖中得到准确选项。
+7. **补充解析持久化**：审核通过的补充解析写入 staging 下的
+   `reviewed-supplement-overrides.json`，以 `question_id` 与
+   `question_body_sha256` 双重绑定。流水线重跑时仅在正文哈希一致时自动复用，
+   不再把人工审核内容只保存在会被覆盖的计划清单中。
+8. **知识点关联状态**：本阶段保持 `knowledge_linking: deferred`。`知识导学` 及其
    子标题、公式、图表原样保留，不在内容切分或 Markdown 标准化阶段隐式抽离或关联。

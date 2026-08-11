@@ -12,6 +12,7 @@ freeze typed sources
   -> format inventory and reviewed adapter
   -> hierarchy segmentation
   -> functional-block and atomic-question segmentation
+  -> generated-title cleanup
   -> optional authoritative answer matching
   -> reviewed supplementation for unresolved enabled answers
   -> markup-only Markdown standardization
@@ -30,6 +31,11 @@ freeze typed sources
 - Create one leaf note per top-level question and keep its subparts together.
 - Preserve source text, formulas, images, tables, numbering, and order. Add
   Markdown structure and navigation only.
+- After content segmentation, clean every generated title and corresponding
+  filename by preserving only Unicode letters, digits, and `_` and replacing
+  every other character (including whitespace, full-width punctuation such as
+  `：`, ASCII punctuation, symbols, and emoji) with `_`. Never rewrite frozen
+  OCR text or question bodies during title cleanup.
 - Never accept fuzzy answer similarity by itself. Route ambiguous or missing
   matches to a blocking review queue.
 - Assign each answer block to at most one question and each question to at most
@@ -43,10 +49,21 @@ freeze typed sources
 - Answer application is declarative: automatically remove owned answer notes
   and embeds when a question flips matched → unmatched, and record removals in
   `answer-application-report.json`.
+- Store reviewer-authored solutions that must survive pipeline regeneration in
+  staging `reviewed-supplement-overrides.json`, keyed by `question_id` and
+  `question_body_sha256`. Regenerated supplement plans must reuse only entries
+  whose body digest still matches, and the coordinator should reapply those
+  reviewed solutions without another manual copy/paste cycle.
 - Keep atomic questions off the structural Canvas.
 - Leave knowledge-point linking disabled until a later explicit stage.
 - Keep staging outside published vault roots and create no backup directories.
 - Use adapter-configured `answers.callout_title` for answer callouts rather than hardcoding publisher names.
+- When OCR drops a choice answer header but preserves an explicit authoritative conclusion such as `故选:D`, recover `D` into a separate `**【答案】** D` field. Never infer an option from isolated capital letters or mathematical prose. Choice-question audit must fail on a missing answer field, and authoritative notes must agree with the source conclusion.
+- Every generated solution callout must contain both `**【答案】**` and
+  `**【解析】**`. Recover a bounded publisher-stated result that appears before
+  an explicit `解析:`/`【解析】` marker. When a non-choice problem has no safely
+  separable short result, write `**【答案】** 详见解析`; never use that fallback
+  for a choice problem, whose exact option remains mandatory.
 - Ensure question and answer regex patterns use a single named group (e.g. `^【?(?P<number>\d+)[】.．、]?\s*`) to prevent Python regex duplicate group name errors.
 - Bound question `end_line` before any internal markdown heading (`^\s*#{1,6}\s+\S`) in `plan_note()`, preserving inline sub-classifications (`角度`/`类型`), strategy callout text, and figures inside the leaf Type note between question embeds.
 - Automatically deduplicate adjacent OCR duplicate answer header lines for the same `(context, number)` in `answers.py`.

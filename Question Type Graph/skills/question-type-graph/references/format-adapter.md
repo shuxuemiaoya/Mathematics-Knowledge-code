@@ -74,6 +74,11 @@ records concatenated onto one OCR line. If the inline field is absent, the
 corresponding ordinary patterns are reused; set an empty inline list to disable
 same-line splitting. Every pattern requires a named `number` group. The shared
 virtual-line parser preserves raw line, raw column, and subline provenance.
+If OCR changes a printed question number while preserving the question body,
+record the reviewed correction in `content.question_number_overrides` using
+the hierarchy context, hierarchy-note raw line, optional one-based raw column,
+correct number, and a drift anchor. The original OCR text remains preserved in
+the atomic note while matching uses the corrected identity.
 
 For a content-derived no-TOC hierarchy, replace `primary_authority` with an
 explicit `no_toc_authority` object containing `status: passed`,
@@ -115,6 +120,19 @@ When OCR preserves a publisher solution but drops only its printed answer
 header, record it in `answers.implicit_answers` with the exact context, number,
 raw `start_line`, and an `anchor_text` or `anchor_pattern`. This is a reviewed
 recovery of authoritative content, not a supplemental solution.
+For an inline header omission or OCR-misread number, also record the one-based
+`raw_column` of the affected virtual line. Omitting `raw_column` means column 1
+and preserves the ordinary whole-line recovery behavior.
+When the publisher block unambiguously proves a choice but OCR drops both the
+printed answer and the concluding `故选`, freeze the reviewer-confirmed option in
+`answers.choice_answer_overrides` with context, number, answer start line, and
+a drift anchor. This is a source-backed rendering correction; never derive it
+from isolated capital letters or use it to resolve uncertain mathematics.
+When an authoritative non-choice solution contains an unambiguous result but
+its OCR layout prevents safe automatic prefix extraction, freeze that exact
+result in `answers.short_answer_overrides` with context, number, answer start
+line, and a drift anchor. Use this only for source-backed results; otherwise
+retain `详见解析` rather than solving or guessing during answer rendering.
 Set `content.question_repository_root` only when a new vault registry must seed
 above an additional central QID repository; ongoing allocation uses the locked
 vault registry.

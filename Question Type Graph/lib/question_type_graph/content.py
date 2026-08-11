@@ -154,7 +154,25 @@ def detach_configured_role_roots(
 def split_inline_question_headers(
     raw_lines: list[str], patterns: list[re.Pattern[str]]
 ) -> list[dict[str, Any]]:
-    return split_virtual_lines(raw_lines, patterns)
+    virtual = split_virtual_lines(raw_lines, patterns)
+    # MinerU occasionally repeats the same printed question header twice on
+    # one OCR line, with the first occurrence containing only a truncated
+    # prefix of the second. Keep all source text, but merge the two virtual
+    # fragments so one physical top-level question cannot become two leaves.
+    merged: list[dict[str, Any]] = []
+    for item in virtual:
+        current = match_question(item["text"], patterns)
+        previous = match_question(merged[-1]["text"], patterns) if merged else None
+        if (
+            previous
+            and current
+            and merged[-1]["raw_line"] == item["raw_line"]
+            and previous.group("number") == current.group("number")
+        ):
+            merged[-1]["text"] = merged[-1]["text"].rstrip() + " " + item["text"].lstrip()
+            continue
+        merged.append(item)
+    return merged
 
 
 def plan_note(
@@ -170,6 +188,20 @@ def plan_note(
         raw_lines, compile_inline_question_patterns(adapter, question_patterns)
     )
     lines = [item["text"] for item in virtual_lines]
+    number_overrides = {}
+    for item in adapter.get("content", {}).get("question_number_overrides", []):
+        if str(item.get("context")) != str(note_entry.get("key")):
+            continue
+        raw_line = int(item["start_line"])
+        if raw_line < 1 or raw_line > len(raw_lines):
+            raise ConfigurationError("Question number override is outside its hierarchy note")
+        anchor_text = str(item.get("anchor_text", "")).strip()
+        if anchor_text and raw_lines[raw_line - 1].strip() != anchor_text:
+            raise ConfigurationError("Question number override anchor_text drifted")
+        anchor_pattern = item.get("anchor_pattern")
+        if anchor_pattern and not re.search(str(anchor_pattern), raw_lines[raw_line - 1]):
+            raise ConfigurationError("Question number override anchor_pattern drifted")
+        number_overrides[(raw_line, int(item.get("raw_column", 1)))] = str(item["number"])
     source_parts = [
         {
             "line": index,
@@ -283,11 +315,17 @@ def plan_note(
         path_by_label[label["key"]] = output.resolve()
 
     questions: list[dict[str, Any]] = []
-    starts: list[tuple[int, re.Match[str]]] = []
+    starts: list[tuple[int, re.Match[str], str]] = []
     for index, line in enumerate(lines, 1):
         match = match_question(line, question_patterns)
         if match:
-            number = str(match.group("number")).strip()
+            coordinate = (
+                int(virtual_lines[index - 1]["raw_line"]),
+                int(virtual_lines[index - 1]["raw_column"]),
+            )
+            number = number_overrides.get(
+                coordinate, str(match.group("number")).strip()
+            )
             if (
                 not adapter.get("content", {}).get("allow_zero_question_number", False)
                 and number.isdecimal()
@@ -303,10 +341,10 @@ def plan_note(
                     }
                 )
                 continue
-            starts.append((index, match))
+            starts.append((index, match, number))
     label_start_lines = {label["start_line"] for label in labels}
     question_file_template = str(adapter.get("content", {}).get("question_file_template", "{title}.md"))
-    for position, (start, match) in enumerate(starts):
+    for position, (start, match, number) in enumerate(starts):
         end = starts[position + 1][0] - 1 if position + 1 < len(starts) else len(lines)
         boundary = min((value for value in label_start_lines if start < value <= end), default=None)
         if boundary:
@@ -322,12 +360,13 @@ def plan_note(
             if label["start_line"] < start <= label["end_line"]:
                 if owner is None or label["depth"] >= owner["depth"]:
                     owner = label
-        number = str(match.group("number")).strip()
         evidence = {
             key: str(value).strip()
             for key, value in match.groupdict().items()
             if key != "number" and value is not None and str(value).strip()
         }
+        if number != str(match.group("number")).strip():
+            evidence["reviewed_number_override"] = str(match.group("number")).strip()
         label_by_key = {l["key"]: l for l in labels}
         resolved_context = None
         curr_label = owner

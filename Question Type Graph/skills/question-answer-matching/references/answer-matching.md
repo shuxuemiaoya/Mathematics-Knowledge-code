@@ -27,6 +27,26 @@ from the atomic question. Keep question and answer provenance independent. For
 answerless books, pass only when the profile explicitly declares
 `answers.mode: unavailable`.
 
+For choice questions, the callout must contain an explicit
+`**【答案】** <option>` field. If OCR drops the leading answer header but the
+authoritative block retains a conclusion such as `故选:D`, extract the option
+from that explicit conclusion. Do not infer it from isolated capital letters.
+The final audit rejects a missing choice-answer field and rejects an
+authoritative answer field that disagrees with the source conclusion.
+
+Every solution callout, including non-choice problems, must contain both an
+explicit `**【答案】**` field and `**【解析】**`. A bounded source prefix before an
+explicit `解析:` or `【解析】` marker may be promoted to the answer field. If a
+non-choice source provides no safely separable short result, render
+`**【答案】** 详见解析` while preserving the complete derivation under
+`【解析】`; this fallback is forbidden for choice questions.
+
+Reviewer-authored supplemental solutions must be durable. Store reusable
+entries in staging `reviewed-supplement-overrides.json`, bound to both
+`question_id` and `question_body_sha256`. Regenerated plans may automatically
+reuse and reapply an entry only when that digest still matches; a changed
+question body returns to review.
+
 ## Answer patterns: phantom guard vs real "N.M" answers
 
 `^(?P<number>\d+)[.．、](?!\d)\s*` was meant to reject section-number phantoms

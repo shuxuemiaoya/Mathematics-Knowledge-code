@@ -5,7 +5,9 @@ from typing import Any
 
 
 def split_virtual_lines(
-    raw_lines: list[str], marker_patterns: list[re.Pattern[str]]
+    raw_lines: list[str],
+    marker_patterns: list[re.Pattern[str]],
+    additional_starts: dict[int, set[int]] | None = None,
 ) -> list[dict[str, Any]]:
     """Expose inline record boundaries without changing the frozen raw text.
 
@@ -21,6 +23,11 @@ def split_virtual_lines(
                 for pattern in marker_patterns
                 for match in pattern.finditer(text)
                 if match.groupdict().get("number") is not None
+            }
+            | {
+                raw_column - 1
+                for raw_column in (additional_starts or {}).get(raw_line, set())
+                if 1 <= raw_column <= len(text)
             }
         )
         segments: list[tuple[str, int]] = []

@@ -7,12 +7,23 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .common import GraphError, lexical_signature, load_json, load_profile, sha256_file, write_json_atomic, write_text_atomic
+from .answers import format_answer_callout
+from .common import GraphError, lexical_signature, load_json, load_profile, sha256_file, sha256_text, write_json_atomic, write_text_atomic
 from .runtime import update_stage
 
 
 class SupplementError(GraphError):
     pass
+
+
+def has_substantive_reviewed_solution(item: dict[str, Any]) -> bool:
+    solution = str(item.get("solution") or item.get("solution_content") or "").strip()
+    compact = re.sub(r"\s+", "", solution)
+    return bool(
+        item.get("reviewer_confirmed") is True
+        and len(compact) >= 8
+        and not re.search(r"待.*生成|暂无解析|仅占位|placeholder", compact, re.IGNORECASE)
+    )
 
 
 def find_unmatched_questions(profile_path: Path) -> list[dict[str, Any]]:
@@ -46,6 +57,47 @@ def find_unmatched_questions(profile_path: Path) -> list[dict[str, Any]]:
 def plan_supplement(profile_path: Path, manifest_output: Path) -> dict[str, Any]:
     profile = load_profile(profile_path)
     items = find_unmatched_questions(profile_path)
+    previous_by_id: dict[str, dict[str, Any]] = {}
+    if manifest_output.is_file():
+        previous = load_json(manifest_output)
+        previous_by_id = {
+            str(item.get("question_id")): item
+            for item in previous.get("questions", [])
+            if item.get("question_id")
+        }
+    for item in items:
+        previous = previous_by_id.get(str(item.get("question_id")))
+        if (
+            previous
+            and previous.get("question_body") == item.get("question_body")
+            and has_substantive_reviewed_solution(previous)
+        ):
+            item["solution"] = str(
+                previous.get("solution") or previous.get("solution_content")
+            )
+            item["reviewer_confirmed"] = True
+    reviewed_ledger_path = (
+        Path(profile["paths"]["staging_root"]) / "reviewed-supplement-overrides.json"
+    )
+    if reviewed_ledger_path.is_file():
+        reviewed_ledger = load_json(reviewed_ledger_path)
+        overrides = {
+            str(item.get("question_id")): item
+            for item in reviewed_ledger.get("questions", [])
+            if item.get("question_id")
+        }
+        for item in items:
+            override = overrides.get(str(item.get("question_id")))
+            if (
+                override
+                and override.get("question_body_sha256")
+                == sha256_text(str(item.get("question_body", "")))
+                and has_substantive_reviewed_solution(override)
+            ):
+                item["solution"] = str(
+                    override.get("solution") or override.get("solution_content")
+                )
+                item["reviewer_confirmed"] = True
     report = {
         "schema_version": 1,
         "stage": "supplement-question-type-solutions",
@@ -107,12 +159,7 @@ def apply_supplement(
         q_stem = q_item["question_stem"]
         qid = q_item.get("question_id", q_stem)
         solution = str(q_item.get("solution") or q_item.get("solution_content") or "").strip()
-        compact_solution = re.sub(r"\s+", "", solution)
-        if (
-            q_item.get("reviewer_confirmed") is not True
-            or len(compact_solution) < 8
-            or re.search(r"待.*生成|暂无解析|仅占位|placeholder", compact_solution, re.IGNORECASE)
-        ):
+        if not has_substantive_reviewed_solution(q_item):
             review_items.append(
                 {
                     "kind": "supplemental-solution-review-required",
@@ -126,15 +173,12 @@ def apply_supplement(
         ans_file = ans_dir / f"{q_stem}A1.md"
 
         if not ans_file.exists() or overwrite:
-            quoted_solution = "\n".join(f"> {line}" for line in solution.splitlines())
             solution_content = (
                 "---\n"
                 f"answer_for: {json.dumps(q_stem)}\n"
                 "answer_provenance: ai-generated-reviewed\n"
                 "---\n"
-                f"> [!faq]- {callout_title}\n"
-                f"> **【解析】**  \n"
-                f"{quoted_solution}\n"
+                f"{format_answer_callout(solution, callout_title=callout_title)}\n"
             )
             write_text_atomic(ans_file, solution_content, overwrite=ans_file.exists())
 

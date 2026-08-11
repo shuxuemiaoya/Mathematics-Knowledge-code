@@ -17,7 +17,7 @@ from .inventory import build_adapter_draft, build_inventory
 from .mineru import DEFAULT_ENV_FILE, convert as convert_pdf
 from .profile import create_profile
 from .runtime import artifacts_current, init_state, input_fingerprint, status_state, update_stage
-from .supplement import plan_supplement
+from .supplement import apply_supplement, has_substantive_reviewed_solution, plan_supplement
 
 
 def artifact_paths(profile: dict[str, Any]) -> dict[str, Path]:
@@ -202,7 +202,7 @@ def _run_pipeline(profile_path: Path, args: argparse.Namespace) -> dict[str, Any
         for item in hierarchy_coverage.get("notes", [])
         if item.get("content_source")
     )
-    content_fingerprint = input_fingerprint(content_inputs, {"stage_contract": 3})
+    content_fingerprint = input_fingerprint(content_inputs, {"stage_contract": 4})
     content_reused = hierarchy_reused and artifacts_current(
         paths["state"], "content-segmentation", content_required, content_fingerprint
     )
@@ -243,7 +243,7 @@ def _run_pipeline(profile_path: Path, args: argparse.Namespace) -> dict[str, Any
             for source in profile["sources"]
             if source.get("role") == answer_role
         )
-    answer_fingerprint = input_fingerprint(answer_inputs, {"stage_contract": 3})
+    answer_fingerprint = input_fingerprint(answer_inputs, {"stage_contract": 6})
     answer_required = [paths["answers"], paths["answer_application"]]
     answer_reused = content_reused and artifacts_current(
         paths["state"], "answer-matching", answer_required, answer_fingerprint
@@ -313,21 +313,45 @@ def _run_pipeline(profile_path: Path, args: argparse.Namespace) -> dict[str, Any
         }
         unresolved_supplements = unmatched_ids - supplemented_ids
         if unresolved_supplements:
-            plan_supplement(profile_path, paths["supplement_plan"])
-            update_stage(
-                paths["state"],
-                "solution-supplement",
-                "review_required",
-                [paths["supplement_plan"]],
-                message=f"{len(unresolved_supplements)} questions require reviewed solutions",
-            )
-            return {
-                "schema_version": 1,
-                "status": "review_required",
-                "next_stage": "solution-supplement-review",
-                "manifest": str(paths["supplement_plan"]),
-                "unresolved_count": len(unresolved_supplements),
-            }
+            supplement_plan = plan_supplement(profile_path, paths["supplement_plan"])
+            planned_questions = supplement_plan.get("questions", [])
+            if planned_questions and all(
+                has_substantive_reviewed_solution(item)
+                for item in planned_questions
+            ):
+                adapter_data = load_json(paths["adapter"])
+                supplement_result = apply_supplement(
+                    profile_path,
+                    paths["supplement_plan"],
+                    callout_title=str(
+                        adapter_data.get("answers", {}).get(
+                            "supplement_callout_title", "AI生成解析"
+                        )
+                    ),
+                )
+                if supplement_result.get("status") != "completed":
+                    return {
+                        "schema_version": 1,
+                        "status": "review_required",
+                        "next_stage": "solution-supplement-review",
+                        "manifest": str(paths["supplement_plan"]),
+                        "unresolved_count": len(unresolved_supplements),
+                    }
+            else:
+                update_stage(
+                    paths["state"],
+                    "solution-supplement",
+                    "review_required",
+                    [paths["supplement_plan"]],
+                    message=f"{len(unresolved_supplements)} questions require reviewed solutions",
+                )
+                return {
+                    "schema_version": 1,
+                    "status": "review_required",
+                    "next_stage": "solution-supplement-review",
+                    "manifest": str(paths["supplement_plan"]),
+                    "unresolved_count": len(unresolved_supplements),
+                }
         supplement_status = load_json(paths["state"]).get("stages", {}).get("solution-supplement", {}).get("status")
         if not unmatched_ids and supplement_status not in {"completed", "skipped"}:
             update_stage(

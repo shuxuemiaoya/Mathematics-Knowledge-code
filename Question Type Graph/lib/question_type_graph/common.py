@@ -96,7 +96,10 @@ def resolve_inside(root: Path, relative: str | Path) -> Path:
 
 
 def safe_name(value: str, fallback: str = "node") -> str:
-    value = re.sub(r"[<>:\"/\\|?*\x00-\x1f]", "_", value).strip().rstrip(".")
+    # Full-width colon is also rewritten because common vault file watchers
+    # normalize it after creation, which otherwise leaves manifests and
+    # generated embeds pointing at the pre-normalized filename.
+    value = re.sub(r"[<>:\"：/\\|?*\x00-\x1f]", "_", value).strip().rstrip(".")
     return value[:120] or fallback
 
 
@@ -363,6 +366,40 @@ def validate_adapter_contract(adapter: dict[str, Any], profile: dict[str, Any]) 
             raise ConfigurationError(
                 f"content.roles[{index}].heading_only must be boolean"
             )
+    question_overrides = content.get("question_number_overrides", [])
+    if not isinstance(question_overrides, list):
+        raise ConfigurationError("content.question_number_overrides must be a list")
+    override_keys: set[tuple[str, int, int]] = set()
+    for index, item in enumerate(question_overrides):
+        if not isinstance(item, dict):
+            raise ConfigurationError(
+                f"content.question_number_overrides[{index}] must be an object"
+            )
+        context = str(item.get("context", "")).strip()
+        number = str(item.get("number", "")).strip()
+        try:
+            start_line = int(item.get("start_line"))
+            raw_column = int(item.get("raw_column", 1))
+        except (TypeError, ValueError) as exc:
+            raise ConfigurationError(
+                f"content.question_number_overrides[{index}] coordinates must be positive integers"
+            ) from exc
+        key = (context, start_line, raw_column)
+        if not context or not number or start_line < 1 or raw_column < 1 or key in override_keys:
+            raise ConfigurationError(
+                "question number override identity must be complete, positive, and unique"
+            )
+        override_keys.add(key)
+        if not str(item.get("anchor_text", "")).strip() and not item.get("anchor_pattern"):
+            raise ConfigurationError(
+                f"content.question_number_overrides[{index}] requires a drift anchor"
+            )
+        if item.get("anchor_pattern") is not None:
+            _validate_regex(
+                item["anchor_pattern"],
+                f"content.question_number_overrides[{index}].anchor_pattern",
+                allow_empty_match=True,
+            )
 
     if profile.get("answers", {}).get("mode") == "unavailable":
         return
@@ -411,7 +448,7 @@ def validate_adapter_contract(adapter: dict[str, Any], profile: dict[str, Any]) 
     implicit = answers.get("implicit_answers", [])
     if not isinstance(implicit, list):
         raise ConfigurationError("answers.implicit_answers must be a list")
-    implicit_keys: set[tuple[str, str, int]] = set()
+    implicit_keys: set[tuple[str, str, int, int]] = set()
     for index, item in enumerate(implicit):
         if not isinstance(item, dict):
             raise ConfigurationError(
@@ -425,8 +462,20 @@ def validate_adapter_contract(adapter: dict[str, Any], profile: dict[str, Any]) 
             raise ConfigurationError(
                 f"answers.implicit_answers[{index}].start_line must be a positive integer"
             ) from exc
-        key = (context, number, start_line)
-        if not context or not number or start_line < 1 or key in implicit_keys:
+        try:
+            raw_column = int(item.get("raw_column", 1))
+        except (TypeError, ValueError) as exc:
+            raise ConfigurationError(
+                f"answers.implicit_answers[{index}].raw_column must be a positive integer"
+            ) from exc
+        key = (context, number, start_line, raw_column)
+        if (
+            not context
+            or not number
+            or start_line < 1
+            or raw_column < 1
+            or key in implicit_keys
+        ):
             raise ConfigurationError(
                 "implicit answer identity must be complete, positive, and unique"
             )
@@ -441,6 +490,84 @@ def validate_adapter_contract(adapter: dict[str, Any], profile: dict[str, Any]) 
             _validate_regex(
                 item["anchor_pattern"],
                 f"answers.implicit_answers[{index}].anchor_pattern",
+                allow_empty_match=True,
+            )
+    choice_overrides = answers.get("choice_answer_overrides", [])
+    if not isinstance(choice_overrides, list):
+        raise ConfigurationError("answers.choice_answer_overrides must be a list")
+    override_keys: set[tuple[str, str, int]] = set()
+    for index, item in enumerate(choice_overrides):
+        if not isinstance(item, dict):
+            raise ConfigurationError(
+                f"answers.choice_answer_overrides[{index}] must be an object"
+            )
+        context = str(item.get("context", "")).strip()
+        number = str(item.get("number", "")).strip()
+        answer = str(item.get("answer", "")).strip().upper()
+        try:
+            start_line = int(item.get("start_line"))
+        except (TypeError, ValueError) as exc:
+            raise ConfigurationError(
+                f"answers.choice_answer_overrides[{index}].start_line must be a positive integer"
+            ) from exc
+        key = (context, number, start_line)
+        if (
+            not context
+            or not number
+            or start_line < 1
+            or not re.fullmatch(r"[A-F]+", answer)
+            or key in override_keys
+        ):
+            raise ConfigurationError(
+                "choice answer override identity and A-F answer must be complete and unique"
+            )
+        override_keys.add(key)
+        if not str(item.get("anchor_text", "")).strip() and not item.get(
+            "anchor_pattern"
+        ):
+            raise ConfigurationError(
+                f"answers.choice_answer_overrides[{index}] requires a drift anchor"
+            )
+        if item.get("anchor_pattern") is not None:
+            _validate_regex(
+                item["anchor_pattern"],
+                f"answers.choice_answer_overrides[{index}].anchor_pattern",
+                allow_empty_match=True,
+            )
+    short_answer_overrides = answers.get("short_answer_overrides", [])
+    if not isinstance(short_answer_overrides, list):
+        raise ConfigurationError("answers.short_answer_overrides must be a list")
+    short_override_keys: set[tuple[str, str, int]] = set()
+    for index, item in enumerate(short_answer_overrides):
+        if not isinstance(item, dict):
+            raise ConfigurationError(
+                f"answers.short_answer_overrides[{index}] must be an object"
+            )
+        context = str(item.get("context", "")).strip()
+        number = str(item.get("number", "")).strip()
+        answer = str(item.get("answer", "")).strip()
+        try:
+            start_line = int(item.get("start_line"))
+        except (TypeError, ValueError) as exc:
+            raise ConfigurationError(
+                f"answers.short_answer_overrides[{index}].start_line must be a positive integer"
+            ) from exc
+        key = (context, number, start_line)
+        if not context or not number or not answer or start_line < 1 or key in short_override_keys:
+            raise ConfigurationError(
+                "short answer override identity and answer must be complete and unique"
+            )
+        short_override_keys.add(key)
+        if not str(item.get("anchor_text", "")).strip() and not item.get(
+            "anchor_pattern"
+        ):
+            raise ConfigurationError(
+                f"answers.short_answer_overrides[{index}] requires a drift anchor"
+            )
+        if item.get("anchor_pattern") is not None:
+            _validate_regex(
+                item["anchor_pattern"],
+                f"answers.short_answer_overrides[{index}].anchor_pattern",
                 allow_empty_match=True,
             )
 

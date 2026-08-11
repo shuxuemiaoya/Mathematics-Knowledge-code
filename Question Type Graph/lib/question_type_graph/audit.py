@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from .answers import ANSWER_BODY_RE, QUESTION_BODY_RE
+from .answers import ANSWER_BODY_RE, QUESTION_BODY_RE, extract_choice_answer
 from .common import (
     lexical_signature,
     local_markdown_destinations,
@@ -42,7 +42,20 @@ def broken_local_links(
     return values
 
 
-def valid_solution_note(path: Path, record: dict[str, Any]) -> tuple[bool, str | None]:
+def question_requires_choice_answer(body: str) -> bool:
+    options = re.findall(r"(?m)(?:^|\s)([A-F])[.．、]\s*", body)
+    # Requiring the leading A/B pair avoids treating geometry prose such as
+    # “点 A、B 和点 C、D” as a multiple-choice option list.
+    return {"A", "B"}.issubset(set(options))
+
+
+def valid_solution_note(
+    path: Path,
+    record: dict[str, Any],
+    *,
+    require_choice_answer: bool = False,
+    expected_choice_answer: str | None = None,
+) -> tuple[bool, str | None]:
     if not path.is_file():
         return False, "solution-note-missing"
     text = path.read_text(encoding="utf-8-sig")
@@ -61,6 +74,20 @@ def valid_solution_note(path: Path, record: dict[str, Any]) -> tuple[bool, str |
             return False, "solution-source-provenance-drift"
     if not re.search(r"(?m)^> \[!faq\]-\s+\S", text):
         return False, "solution-callout-invalid"
+    answer_field = re.search(r"(?m)^> \*\*【答案】\*\*\s+(\S.*?)\s*$", text)
+    if answer_field is None:
+        return False, (
+            "solution-choice-answer-missing"
+            if require_choice_answer
+            else "solution-answer-field-missing"
+        )
+    answer_marker = re.search(r"(?m)^> \*\*【答案】\*\*\s+([A-F]+)\b", text)
+    if require_choice_answer and answer_marker is None:
+        return False, "solution-choice-answer-missing"
+    if expected_choice_answer is not None and (
+        answer_marker is None or answer_marker.group(1) != expected_choice_answer
+    ):
+        return False, "solution-choice-answer-mismatch"
     lexical = re.sub(r"\A---\n.*?\n---\n", "", text, flags=re.DOTALL)
     lexical = re.sub(r"(?m)^>\s*", "", lexical)
     lexical = re.sub(r"\[!faq\]-|\*\*【(?:答案|解析)】\*\*|[-*_#]", "", lexical)
@@ -240,12 +267,25 @@ def audit_graph(
                     application = app_by_question.get(str(question["id"]), {})
                     q_file = Path(question["output"])
                     text = q_file.read_text(encoding="utf-8-sig") if q_file.is_file() else ""
+                    question_body_match = QUESTION_BODY_RE.search(text)
+                    question_body = question_body_match.group(1) if question_body_match else ""
+                    require_choice_answer = question_requires_choice_answer(question_body)
+                    expected_choice_answer = (
+                        extract_choice_answer(str(match.get("answer_body", "")))
+                        if match is not None and require_choice_answer
+                        else None
+                    )
                     has_embed = bool(re.search(r"!\[\[Q\d+A\d+[^\]]*\]\]", text))
                     is_unmatched = "answer_status: unmatched" in text
                     records = application.get("answer_note_records", [])
                     record_errors = []
                     for record in records:
-                        valid, reason = valid_solution_note(Path(record.get("path", "")), record)
+                        valid, reason = valid_solution_note(
+                            Path(record.get("path", "")),
+                            record,
+                            require_choice_answer=require_choice_answer,
+                            expected_choice_answer=expected_choice_answer,
+                        )
                         if not valid:
                             record_errors.append(reason)
                     expected_provenance = "authoritative" if match is not None else "ai-generated-reviewed"

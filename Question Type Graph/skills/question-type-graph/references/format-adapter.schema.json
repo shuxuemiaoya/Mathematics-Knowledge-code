@@ -71,6 +71,23 @@
         "unknown_label_policy": {"enum": ["review", "retain"]},
         "question_patterns": {"$ref": "#/$defs/number_patterns"},
         "inline_question_patterns": {"$ref": "#/$defs/optional_number_patterns"},
+        "question_number_overrides": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["context", "number", "start_line"],
+            "properties": {
+              "context": {"type": "string", "minLength": 1},
+              "number": {"type": ["string", "integer"]},
+              "start_line": {"type": "integer", "minimum": 1},
+              "raw_column": {"type": "integer", "minimum": 1},
+              "anchor_text": {"type": "string", "minLength": 1},
+              "anchor_pattern": {"type": "string", "minLength": 1}
+            },
+            "anyOf": [{"required": ["anchor_text"]}, {"required": ["anchor_pattern"]}],
+            "additionalProperties": true
+          }
+        },
         "roles": {
           "type": "array",
           "items": {
@@ -118,6 +135,41 @@
             "properties": {
               "context": {"type": "string", "minLength": 1},
               "number": {"type": ["string", "integer"]},
+              "start_line": {"type": "integer", "minimum": 1},
+              "raw_column": {"type": "integer", "minimum": 1},
+              "anchor_text": {"type": "string", "minLength": 1},
+              "anchor_pattern": {"type": "string", "minLength": 1}
+            },
+            "anyOf": [{"required": ["anchor_text"]}, {"required": ["anchor_pattern"]}],
+            "additionalProperties": true
+          }
+        },
+        "choice_answer_overrides": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["context", "number", "answer", "start_line"],
+            "properties": {
+              "context": {"type": "string", "minLength": 1},
+              "number": {"type": ["string", "integer"]},
+              "answer": {"type": "string", "pattern": "^[A-F]+$"},
+              "start_line": {"type": "integer", "minimum": 1},
+              "anchor_text": {"type": "string", "minLength": 1},
+              "anchor_pattern": {"type": "string", "minLength": 1}
+            },
+            "anyOf": [{"required": ["anchor_text"]}, {"required": ["anchor_pattern"]}],
+            "additionalProperties": true
+          }
+        },
+        "short_answer_overrides": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["context", "number", "answer", "start_line"],
+            "properties": {
+              "context": {"type": "string", "minLength": 1},
+              "number": {"type": ["string", "integer"]},
+              "answer": {"type": "string", "minLength": 1},
               "start_line": {"type": "integer", "minimum": 1},
               "anchor_text": {"type": "string", "minLength": 1},
               "anchor_pattern": {"type": "string", "minLength": 1}

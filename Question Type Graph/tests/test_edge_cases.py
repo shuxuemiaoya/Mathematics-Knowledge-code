@@ -1,11 +1,19 @@
 from __future__ import annotations
 
+import re
 import tempfile
 import unittest
 from pathlib import Path
 
-from question_type_graph.answers import parse_answer_blocks, strategy_candidates
-from question_type_graph.common import ConfigurationError, write_json_atomic
+from question_type_graph.answers import (
+    extract_choice_answer,
+    extract_nonchoice_answer_prefix,
+    format_answer_callout,
+    parse_answer_blocks,
+    strategy_candidates,
+)
+from question_type_graph.audit import question_requires_choice_answer, valid_solution_note
+from question_type_graph.common import ConfigurationError, safe_name, sha256_text, write_json_atomic
 from question_type_graph.content import (
     compile_question_patterns,
     compile_role_rules,
@@ -16,10 +24,90 @@ from question_type_graph.content import (
 from question_type_graph.hierarchy import apply_hierarchy, plan_hierarchy
 from question_type_graph.inventory import build_adapter_draft, build_inventory, inventory_markdown, parse_index_entry
 from question_type_graph.profile import create_profile
-from question_type_graph.supplement import apply_supplement
+from question_type_graph.supplement import apply_supplement, plan_supplement
 
 
 class TestEdgeCases(unittest.TestCase):
+    def test_implicit_choice_answer_is_recovered_from_authoritative_conclusion(self) -> None:
+        body = (
+            "解析: A 与 D 表示同一集合，B、C 不满足题意。\n"
+            "所以 A=D, 故选:D"
+        )
+
+        self.assertEqual(extract_choice_answer(body), "D")
+        rendered = format_answer_callout(body, callout_title="全练一本通解析")
+        self.assertIn("> **【答案】** D", rendered)
+        self.assertIn("> **【解析】**", rendered)
+
+    def test_choice_answer_extraction_does_not_guess_from_capital_letters(self) -> None:
+        body = "解析: 集合 A 与集合 D 相等，但此处没有保留权威选项结论。"
+
+        self.assertIsNone(extract_choice_answer(body))
+        self.assertIn("**【答案】** 详见解析", format_answer_callout(body))
+
+    def test_choice_conclusion_wins_over_ocr_damaged_header(self) -> None:
+        body = "【21】D\n推导得到最小值为 4，故选：C。"
+
+        self.assertEqual(extract_choice_answer(body), "C")
+        self.assertIn("**【答案】** C", format_answer_callout(body))
+
+    def test_geometry_point_labels_are_not_choice_options(self) -> None:
+        body = "过点 P 作直线，分别交于点 A、B 和点 C、D，证明交点在定直线上。"
+
+        self.assertFalse(question_requires_choice_answer(body))
+
+    def test_full_width_colon_is_stable_in_generated_name(self) -> None:
+        self.assertEqual(safe_name("角度3：公式法.md"), "角度3_公式法.md")
+
+    def test_nonchoice_answer_prefix_is_split_from_analysis(self) -> None:
+        body = "【12】$$\n\\frac{3}{2}\n$$\n解析：由条件整理可得该结果。"
+
+        answer, analysis = extract_nonchoice_answer_prefix(body)
+
+        self.assertEqual(answer, "$$ \\frac{3}{2} $$")
+        self.assertEqual(analysis, "由条件整理可得该结果。")
+        rendered = format_answer_callout(body)
+        self.assertIn("**【答案】** $$ \\frac{3}{2} $$", rendered)
+        self.assertNotIn("> $$  ", rendered)
+
+    def test_answer_prefix_keeps_leading_asset_with_analysis(self) -> None:
+        body = "【12】$\\sqrt3$\n![](images/diagram.png)\n解析：由图可得。"
+
+        answer, analysis = extract_nonchoice_answer_prefix(body)
+
+        self.assertEqual(answer, "$\\sqrt3$")
+        self.assertTrue(analysis.startswith("![](images/diagram.png)"))
+
+    def test_nonchoice_without_separable_result_gets_explicit_fallback(self) -> None:
+        rendered = format_answer_callout("【8】证明过程从这里开始，最后得到结论。")
+
+        self.assertIn("**【答案】** 详见解析", rendered)
+        self.assertIn("**【解析】**", rendered)
+
+    def test_solution_audit_requires_explicit_choice_answer_field(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            note = Path(tmp_dir) / "Q00000001A1.md"
+            note.write_text(
+                "---\nanswer_for: Q00000001\nanswer_provenance: authoritative\n"
+                "answer_source_body_sha256: source-hash\n---\n"
+                "> [!faq]- 解析\n> **【解析】**  \n> 由条件可得应选 D。\n",
+                encoding="utf-8",
+            )
+            record = {
+                "provenance": "authoritative",
+                "source_body_sha256": "source-hash",
+            }
+
+            valid, reason = valid_solution_note(
+                note,
+                record,
+                require_choice_answer=True,
+                expected_choice_answer="D",
+            )
+
+            self.assertFalse(valid)
+            self.assertEqual(reason, "solution-choice-answer-missing")
+
     def test_adapter_draft_applies_frozen_preset_without_approving_it(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
@@ -101,6 +189,91 @@ class TestEdgeCases(unittest.TestCase):
             answer_text = (question.parent / "answers" / "Q00000001A1.md").read_text(encoding="utf-8")
             self.assertEqual(completed["status"], "completed")
             self.assertIn("answer_provenance: ai-generated-reviewed", answer_text)
+            self.assertIn("**【答案】** 详见解析", answer_text)
+
+    def test_supplement_plan_preserves_reviewed_solution_for_unchanged_question(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            source = root / "questions.md"
+            source.write_text("1. Question.\n", encoding="utf-8")
+            staging = root / "staging"
+            vault = root / "vault"
+            graph = vault / "graph"
+            profile_path = staging / "profile.json"
+            profile = create_profile(
+                [f"questions={source}"], "Supplement", staging, vault, graph, "en", None, False
+            )
+            write_json_atomic(profile_path, profile)
+            question = graph / "questions" / "Q00000001.md"
+            question.parent.mkdir(parents=True, exist_ok=True)
+            question.write_text(
+                "---\nquestion_id: q1\nquestion_number: 1\nanswer_status: unmatched\n---\n"
+                "<!-- question-source:start -->\n1. Question.\n<!-- question-source:end -->\n",
+                encoding="utf-8",
+            )
+            manifest_path = staging / "supplement.json"
+            write_json_atomic(
+                manifest_path,
+                {
+                    "questions": [
+                        {
+                            "question_id": "q1",
+                            "question_body": "1. Question.",
+                            "solution": "A reviewed and substantive worked solution.",
+                            "reviewer_confirmed": True,
+                        }
+                    ]
+                },
+            )
+
+            replanned = plan_supplement(profile_path, manifest_path)
+
+            self.assertTrue(replanned["questions"][0]["reviewer_confirmed"])
+            self.assertEqual(
+                replanned["questions"][0]["solution"],
+                "A reviewed and substantive worked solution.",
+            )
+
+    def test_supplement_plan_loads_durable_reviewed_ledger(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            source = root / "questions.md"
+            source.write_text("1. Question.\n", encoding="utf-8")
+            staging = root / "staging"
+            vault = root / "vault"
+            graph = vault / "graph"
+            profile_path = staging / "profile.json"
+            profile = create_profile(
+                [f"questions={source}"], "Supplement", staging, vault, graph, "en", None, False
+            )
+            write_json_atomic(profile_path, profile)
+            question = graph / "questions" / "Q00000001.md"
+            question.parent.mkdir(parents=True, exist_ok=True)
+            question.write_text(
+                "---\nquestion_id: q1\nquestion_number: 1\nanswer_status: unmatched\n---\n"
+                "<!-- question-source:start -->\n1. Question.\n<!-- question-source:end -->\n",
+                encoding="utf-8",
+            )
+            write_json_atomic(
+                staging / "reviewed-supplement-overrides.json",
+                {
+                    "questions": [
+                        {
+                            "question_id": "q1",
+                            "question_body_sha256": sha256_text("1. Question."),
+                            "solution": "A durable reviewed worked solution.",
+                            "reviewer_confirmed": True,
+                        }
+                    ]
+                },
+            )
+
+            replanned = plan_supplement(profile_path, staging / "supplement.json")
+
+            self.assertEqual(
+                replanned["questions"][0]["solution"],
+                "A durable reviewed worked solution.",
+            )
 
     def test_inline_answer_splitting_preserves_raw_context_boundaries(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -157,6 +330,122 @@ class TestEdgeCases(unittest.TestCase):
             self.assertEqual(
                 answers[0]["evidence"], {"implicit_header": "reviewed-ocr-omission"}
             )
+
+    def test_reviewed_implicit_answer_targets_inline_raw_column(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "answers.md"
+            raw = "【38】first 【38】second 【40】third"
+            path.write_text(f"# Unit\n{raw}\n", encoding="utf-8")
+            second_column = raw.index("【38】", 1) + 1
+            adapter = {
+                "answers": {
+                    "contexts": [{"key": "unit", "start_line": 1}],
+                    "implicit_answers": [
+                        {
+                            "context": "unit",
+                            "number": "39",
+                            "start_line": 2,
+                            "raw_column": second_column,
+                            "anchor_text": raw,
+                        }
+                    ],
+                    "answer_patterns": [r"^【(?P<number>\d+)】"],
+                    "inline_answer_patterns": [r"【(?P<number>\d+)】"],
+                }
+            }
+
+            answers, review = parse_answer_blocks(path, adapter)
+
+            self.assertEqual(review, [])
+            self.assertEqual(
+                [(item["number"], item["raw_column"]) for item in answers],
+                [("38", 1), ("39", second_column), ("40", raw.index("【40】") + 1)],
+            )
+
+    def test_reviewed_implicit_answer_can_split_unmarked_inline_body(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "answers.md"
+            raw = "【1】答案一。这里开始答案二，随后仍有解析。"
+            second_column = raw.index("这里开始答案二") + 1
+            path.write_text(raw, encoding="utf-8")
+            adapter = {
+                "answers": {
+                    "answer_patterns": [r"^【(?P<number>\d+)】"],
+                    "contexts": [{"key": "lesson", "start_line": 1}],
+                    "implicit_answers": [
+                        {
+                            "context": "lesson",
+                            "number": "2",
+                            "start_line": 1,
+                            "raw_column": second_column,
+                            "anchor_pattern": "这里开始答案二",
+                            "reviewer_confirmed": True,
+                        }
+                    ],
+                }
+            }
+
+            answers, review = parse_answer_blocks(path, adapter)
+
+            self.assertEqual(review, [])
+            self.assertEqual(
+                [(item["number"], item["raw_column"]) for item in answers],
+                [("1", 1), ("2", second_column)],
+            )
+            self.assertNotIn("这里开始答案二", answers[0]["body"])
+            self.assertIn("这里开始答案二", answers[1]["body"])
+
+    def test_reviewed_choice_answer_override_renders_explicit_field(self) -> None:
+        rendered = format_answer_callout(
+            "解析: the source derivation proves the first option.",
+            reviewed_choice_answer="A",
+        )
+
+        self.assertIn("**【答案】** A", rendered)
+
+    def test_reviewed_short_answer_override_renders_source_backed_result(self) -> None:
+        rendered = format_answer_callout(
+            "解析: 由条件计算可得最终结果。",
+            reviewed_short_answer=r"$2-4\mathrm{i}$",
+        )
+
+        self.assertIn(r"**【答案】** $2-4\mathrm{i}$", rendered)
+        self.assertIn("**【解析】**", rendered)
+
+    def test_reviewed_question_number_override_corrects_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            note = root / "unit.md"
+            note.write_text("heading\n【47】misread question\n", encoding="utf-8")
+            adapter = {
+                "_graph_root": str(root),
+                "content": {
+                    "question_folder": "questions",
+                    "question_title_template": "Question {number}",
+                    "question_number_overrides": [
+                        {
+                            "context": "unit",
+                            "number": "37",
+                            "start_line": 2,
+                            "anchor_text": "【47】misread question",
+                        }
+                    ],
+                },
+            }
+            note_entry = {
+                "key": "unit",
+                "path": str(note),
+                "content_source": str(note),
+                "title": "Unit",
+                "answer_context": "unit",
+            }
+            patterns = [re.compile(r"^【(?P<number>\d+)】")]
+
+            _, questions, review = plan_note(note_entry, [], patterns, adapter)
+
+            self.assertEqual(review, [])
+            self.assertEqual(questions[0]["number"], "37")
+            self.assertEqual(questions[0]["evidence"]["reviewed_number_override"], "47")
 
     def test_inventory_proposes_multiple_indexes_wrapped_entries_and_layout_review(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
