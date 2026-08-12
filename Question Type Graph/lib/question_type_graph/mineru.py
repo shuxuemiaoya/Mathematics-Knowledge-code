@@ -19,9 +19,10 @@ from urllib import request as urllib_request
 from urllib.parse import urlparse, urlsplit
 
 from .common import ConfigurationError, GraphError, load_profile, pdf_page_count, safe_name, sha256_file, write_json_atomic
+from .environment import parse_env_file, resolve_env_file
 
 
-DEFAULT_ENV_FILE = Path(os.environ.get("QUESTION_TYPE_GRAPH_ENV_FILE", ".env")).expanduser()
+DEFAULT_ENV_FILE = None
 DEFAULT_BASE_URL = "https://mineru.net"
 MAX_PAGES = 200
 MAX_BYTES = 200 * 1024 * 1024
@@ -56,20 +57,10 @@ class Settings:
     language: str
 
 
-def parse_env_file(path: Path) -> dict[str, str]:
-    if not path.is_file():
-        return {}
-    result: dict[str, str] = {}
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        line = raw.strip()
-        if line and not line.startswith("#") and "=" in line:
-            key, value = line.split("=", 1)
-            result[key.strip()] = value.strip().strip("\"'")
-    return result
-
-
 def load_settings(args: argparse.Namespace, profile: dict[str, Any]) -> Settings:
-    env = parse_env_file(Path(args.env_file).expanduser().resolve())
+    profile_path = Path(str(profile.get("_profile_path") or Path.cwd() / "profile.json"))
+    env_path = resolve_env_file(profile_path, getattr(args, "env_file", None))
+    env = parse_env_file(env_path) if env_path else {}
     api_key = os.environ.get("MINERU_API_KEY") or env.get("MINERU_API_KEY", "")
     if not api_key:
         raise ConfigurationError("MINERU_API_KEY is missing from the environment and configured .env")
@@ -423,6 +414,10 @@ def convert(profile_path: Path, role: str, args: argparse.Namespace) -> dict[str
                 markdown, count, provenance_files = extract_zip(
                     zip_path, namespace, staged_assets, staged_provenance
                 )
+                if not provenance_files:
+                    raise MineruError(
+                        f"MinerU part {part.index} has no content-list page provenance"
+                    )
                 marker = f"<!-- source-part:{part.index} pages:{part.start_page}-{part.end_page} -->"
                 markdown_parts[part.index] = f"{marker}\n\n{markdown.strip()}"
                 total_assets += count
@@ -512,7 +507,7 @@ def build_parser() -> argparse.ArgumentParser:
         item.add_argument("--output")
     convert_parser = sub.choices["convert"]
     convert_parser.add_argument("--report")
-    convert_parser.add_argument("--env-file", default=str(DEFAULT_ENV_FILE))
+    convert_parser.add_argument("--env-file")
     convert_parser.add_argument("--base-url")
     convert_parser.add_argument("--language")
     convert_parser.add_argument("--poll-interval", type=float, default=10.0)

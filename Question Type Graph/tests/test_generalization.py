@@ -16,12 +16,64 @@ from question_type_graph.common import (
 )
 from question_type_graph.content import plan_content
 from question_type_graph.hierarchy import plan_hierarchy
-from question_type_graph.inventory import build_inventory, inventory_markdown
+from question_type_graph.environment import resolve_env_file
+from question_type_graph.inventory import build_inventory, contiguous_index_runs, inventory_markdown
 from question_type_graph.mineru import PdfPart, build_payload, load_settings
 from question_type_graph.profile import create_profile
+from question_type_graph.provenance import map_markdown_lines
 
 
 class TestGeneralization(unittest.TestCase):
+    def test_env_discovery_is_independent_of_launch_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            profile = root / "staging" / "profile.json"
+            profile.parent.mkdir()
+            expected = root / ".env"
+            expected.write_text("MINERU_API_KEY=test-key\n", encoding="utf-8")
+
+            self.assertEqual(resolve_env_file(profile), expected.resolve())
+
+    def test_inventory_reconstructs_interleaved_multi_column_index(self) -> None:
+        candidates = contiguous_index_runs(
+            [
+                "1 First …… 1 3 Third …… 9 5 Fifth …… 17",
+                "2 Second …… 5 4 Fourth …… 13 6 Sixth …… 21",
+            ]
+        )
+
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0]["entry_count"], 6)
+        self.assertEqual(candidates[0]["recommended_reading_order"], "column-major")
+        self.assertEqual(
+            [item["printed_ordinal"] for item in candidates[0]["entries"]],
+            [1, 2, 3, 4, 5, 6],
+        )
+        self.assertEqual(candidates[0]["entries"][1]["source_line"], 2)
+
+    def test_page_bbox_index_maps_raw_lines_with_part_order(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            markdown = Path(tmp_dir) / "raw.md"
+            markdown.write_text(
+                "<!-- source-part:1 pages:1-2 -->\n\n## Unit\n1. Exact question text\n",
+                encoding="utf-8",
+            )
+            blocks = [
+                {
+                    "block_id": "questions:p2:b1",
+                    "part": 1,
+                    "source_page": 2,
+                    "type": "text",
+                    "bbox": [10, 20, 300, 80],
+                    "text": "1. Exact question text",
+                }
+            ]
+
+            line_map = map_markdown_lines(markdown, blocks)
+
+            self.assertEqual(line_map["4"][0]["source_page"], 2)
+            self.assertEqual(line_map["4"][0]["bbox"], [10, 20, 300, 80])
+
     def test_mineru_payload_is_forced_and_format_neutral(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)

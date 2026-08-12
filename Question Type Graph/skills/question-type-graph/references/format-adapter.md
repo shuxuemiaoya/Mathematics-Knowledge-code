@@ -49,6 +49,7 @@ Minimum shape:
     "question_title_template": "Question {number}",
     "question_patterns": ["^(?P<number>\\d+)[.．、]\\s*"],
     "inline_question_patterns": ["(?<!\\d)(?P<number>\\d+)[.．、]\\s*"],
+    "question_scopes": [{"roles": ["training-band"]}],
     "roles": [
       {"role": "training-band", "depth": 0, "pattern": "source-specific regex", "answer_context": true},
       {"role": "question-type", "depth": 1, "pattern": "source-specific regex"},
@@ -93,6 +94,14 @@ record therefore needs the same semantic offset, use reviewed,
 source-anchored `content.question_number_shift_ranges` and matching
 `answers.answer_number_shift_ranges`. Both endpoints require drift anchors;
 the immutable source body retains its printed numbering.
+
+Use `content.question_scopes` when the same numeric syntax occurs in theory,
+instructions, worked examples, and exercises. Each scope may select one
+`context`, several `contexts`, configured functional `roles`, and/or a local
+`start_line`/`end_line` range. A numeric candidate must match at least one
+scope. Prefer a role/context scope over adding book-specific exclusions to a
+global regex; line ranges remain raw hierarchy-snapshot lines and therefore
+require the same visual review discipline as other fixed boundaries.
 If an OCR column spillover places a complete source span after a later-numbered
 question, record a reviewer-confirmed `content.virtual_span_relocations` entry.
 Bind its start, exclusive end, and insertion point to hierarchy-note raw
@@ -104,6 +113,9 @@ omits, record a reviewer-transcribed `content.recovered_questions` entry with
 its context, printed number, exact body, PDF page, insertion anchor, and
 `reviewer_confirmed: true`. This is a provenance-marked virtual recovery; do
 not edit the raw Markdown or invent a question from its answer.
+Add `source_bbox: [x0, y0, x1, y1]` when the reviewed MinerU block is known.
+Ordinary detected questions receive page/bbox provenance automatically when
+the generated source-provenance index resolves their original Markdown line.
 
 For a content-derived no-TOC hierarchy, replace `primary_authority` with an
 explicit `no_toc_authority` object containing `status: passed`,

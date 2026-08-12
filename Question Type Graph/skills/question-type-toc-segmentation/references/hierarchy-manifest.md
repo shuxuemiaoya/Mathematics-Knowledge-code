@@ -7,6 +7,11 @@ source-exact titles, levels, and TOC source lines. The executable
 missing, extra, reordered, retitled, or relevelled primary entries. Additional
 front/back matter must be marked `supplemental: true`.
 
+When OCR flattens several printed columns into one row, inventory records every
+leader-delimited entry with its one-based raw column. Review both source-stream
+and column-major proposals; a continuous printed ordinal ledger is strong
+evidence for column-major order, but is not approval by itself.
+
 When the source truly has no usable printed TOC or index, the adapter must
 carry a reviewed `hierarchy.no_toc_authority` decision with a concrete reason.
 Do not treat a missing `primary_authority` field as evidence that no TOC exists.
@@ -24,7 +29,8 @@ standalone vault-relative `![[path/to/note.md]]` embed at that position, and
 places content outside top-level entries in the root note. Generated embeds
 have no list prefix, and each note embeds only its direct children so Obsidian
 does not render descendants twice. `hierarchy-coverage-manifest.json` records
-one owner for every raw Markdown line and a digest for every generated note.
+one owner for every raw Markdown line, a local-to-original `source_line_map`
+for each immutable hierarchy snapshot, and a digest for every generated note.
 
 Reject duplicate keys, unsafe outputs, incomplete authority coverage, order
 changes, invalid levels or anchors, source drift, or non-passed review state.

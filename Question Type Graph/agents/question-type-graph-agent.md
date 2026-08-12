@@ -11,17 +11,19 @@ description: 专职负责将刷题库与教辅书（如必刷题）进行 OCR �
 
 ## 1. 核心流程与技能序列
 
-1. `question-type-pdf-to-markdown`: 教辅 PDF 强制 OCR 转换
-2. `question-type-toc-segmentation`: 教辅目录与大纲层级分割
-3. `question-type-content-segmentation`: 功能块与原子题目切分
-4. **标题清理**：编辑所有生成标题，仅保留 Unicode 字母、数字与下划线 `_`；将其余
+1. **确定性预检**：冻结源文件身份、输出归属、磁盘空间与 MinerU 配置；记录不可变 run/attempt ID
+2. `question-type-pdf-to-markdown`: 教辅 PDF 强制 OCR 转换并建立页码/bbox 来源索引
+3. **格式审阅工作表**：检查多栏目录阅读顺序、功能标签、题目作用域与答案边界
+4. `question-type-toc-segmentation`: 教辅目录与大纲层级分割
+5. `question-type-content-segmentation`: 按已审阅功能区作用域切分原子题目
+6. **标题清理**：编辑所有生成标题，仅保留 Unicode 字母、数字与下划线 `_`；将其余
    每个特殊字符（包括空白、中文标点如全角冒号 `：`、英文标点、符号和 emoji）替换为
    下划线 `_`。此步骤只清理生成标题及其对应文件名，不得改写 OCR 源文本或题目正文。
-5. `question-answer-matching`: 题目与答案自动精准匹配与审查
-6. `supplement-question-type-solutions`: 对权威答案缺失项生成并人工确认实质性解析
-7. `question-type-markdown`: Markdown 格式美化与统一
-8. `question-type-canvas`: 生成 Question Type Graph 结构化 Obsidian Canvas
-9. `question-type-graph`: 总体流水线调度与控制
+7. `question-answer-matching`: 题目与答案自动精准匹配与审查
+8. `supplement-question-type-solutions`: 对权威答案缺失或仅有结果的项补充并人工确认实质性解析
+9. `question-type-markdown`: Markdown 格式美化与统一
+10. `question-type-canvas`: 生成 Question Type Graph 结构化 Obsidian Canvas
+11. `question-type-graph`: 总体流水线调度与控制
 
 ---
 

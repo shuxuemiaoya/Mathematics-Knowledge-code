@@ -43,6 +43,51 @@ from question_type_graph.supplement import apply_supplement, plan_supplement
 
 
 class TestEdgeCases(unittest.TestCase):
+    def test_reviewed_question_scope_ignores_numbered_theory_lines(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            graph = root / "graph"
+            graph.mkdir()
+            source = graph / "unit.md"
+            source.write_text(
+                "## Theory\n1. This is a numbered instruction.\n\n"
+                "## Practice\n1. This is the exercise.\n",
+                encoding="utf-8",
+            )
+            adapter = {
+                "_graph_root": str(graph),
+                "content": {
+                    "question_folder": "questions",
+                    "question_title_template": "Question {number}",
+                    "question_patterns": [r"^(?P<number>\d+)[.]\s*"],
+                    "roles": [
+                        {"role": "theory", "depth": 0, "pattern": r"^Theory$", "heading_only": True},
+                        {"role": "practice", "depth": 0, "pattern": r"^Practice$", "heading_only": True},
+                    ],
+                    "question_scopes": [{"roles": ["practice"]}],
+                    "unknown_label_policy": "retain",
+                },
+            }
+            note = {
+                "key": "unit",
+                "title": "Unit",
+                "path": str(source),
+                "content_source": str(source),
+                "answer_context": "unit",
+            }
+
+            _, questions, review = plan_note(
+                note,
+                compile_role_rules(adapter),
+                compile_question_patterns(adapter),
+                adapter,
+            )
+
+            self.assertEqual(review, [])
+            self.assertEqual(len(questions), 1)
+            self.assertIn("This is the exercise", source.read_text(encoding="utf-8"))
+            self.assertEqual(adapter["_scope_excluded_candidates"][0]["raw_line"], 2)
+
     def test_html_table_audit_allows_balanced_data_table_but_blocks_fragments(self) -> None:
         self.assertFalse(
             question_has_fragmented_html_table(

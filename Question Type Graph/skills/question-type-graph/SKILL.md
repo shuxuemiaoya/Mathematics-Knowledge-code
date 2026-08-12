@@ -37,18 +37,32 @@ Use one `combined=<path>` source for a combined book, or only `questions=<path>`
 python scripts/question_type_graph.py run "<profile>"
 ```
 
+The coordinator performs deterministic preflight automatically. Run
+`preflight <profile>` separately when diagnosing intake. It writes
+`preflight-report.json` without secrets, resolves `.env` independently of the
+launch directory, and blocks source drift, missing conversion credentials,
+unowned output collisions, and insufficient working space.
+
 The first run stops after `format-inventory.json` and creates a schema-shaped
-`format-adapter.draft.json` until a reviewer-confirmed `format-adapter.json`
+`format-adapter.draft.json` plus `format-review-worksheet.md` until a
+reviewer-confirmed `format-adapter.json`
 exists. Resume with `resume`; unchanged stages are reused by input fingerprint,
-while a drifted stage invalidates and rebuilds its descendants. Inspect durable
-stage attempts, durations, fingerprints, and artifacts with `status`; rerun and
+while a drifted stage invalidates and rebuilds its descendants. Every invocation
+and stage attempt receives an append-only ID. Inspect durable run/attempt IDs,
+durations, fingerprints, and artifacts with `status`; rerun and
 persist the final checks with `audit --overwrite`.
 
 ## Gates
 
 - Freeze every source path, digest, role, page count, and output root.
 - Force MinerU OCR for PDFs and stop on incomplete page or asset coverage.
+- Build `source-provenance-index.json` from MinerU content-list blocks and carry
+  raw-line ownership through hierarchy snapshots so resolvable questions record
+  exact PDF page/bbox evidence.
 - Require a reviewed adapter and complete primary-TOC authority ledger, or an explicit reviewed no-TOC authority decision, before physical hierarchy or content splitting.
+- Parse every leader-delimited index record even when several visual-column
+  entries share one OCR line. Show both source-stream and column-major orders in
+  the worksheet; never publish the recommended order without review.
 - Keep all source-label semantics and inline question/answer marker syntax in
   the frozen adapter or path-free series preset. Treat any new-book change to
   reusable recognition code as a generalization failure requiring review.
@@ -59,6 +73,9 @@ persist the final checks with `audit --overwrite`.
   splitting, recover adapter-defined roles embedded in table cells, and block
   completion unless every answer context has a continuous `1..N` question
   ledger with no gaps, duplicates, or reordering.
+- Prefer adapter `content.question_scopes` over expanding a global question
+  regex with book-specific negative lookaheads. Scope by reviewed functional
+  roles, hierarchy contexts, and/or local raw-line ranges.
 - Immediately after content segmentation, clean every generated title and its
   corresponding filename through the shared filename policy. Replace unsafe
   filesystem characters and always replace both `:` and `：` with `_`, while

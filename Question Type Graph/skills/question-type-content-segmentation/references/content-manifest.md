@@ -4,6 +4,12 @@ Adapter role regexes map source labels to semantic roles. A numeric `depth`
 expresses containment: a later block is a child of the nearest active block
 with lower depth. Question regexes require a named `number` capture.
 
+When numeric syntax also appears in theory or instructions, configure
+`content.question_scopes`. A candidate must lie inside at least one reviewed
+role, hierarchy context, or local source range. Record excluded numeric
+candidates in the manifest for auditability; do not hide false positives in an
+ever-growing global regex when a semantic section boundary exists.
+
 When OCR omits a printed training-band label and exercise roles would otherwise
 become children of a theory block, use `content.detached_role_folders`. Each
 reviewed rule names `from_ancestor_role`, a non-empty list of exercise `roles`,
@@ -28,7 +34,8 @@ The plan records for each functional node and question:
 
 - stable identity and semantic role;
 - exact source note and line range;
-- nearest frozen PDF-part/page-range marker plus preserved MinerU block artifacts;
+- original raw Markdown line and exact PDF page/bbox when the MinerU evidence
+  index resolves it, otherwise every retained candidate or nearest part range;
 - parent identity and answer context;
 - collision-free output path;
 - source-body SHA-256 for every atomic question.

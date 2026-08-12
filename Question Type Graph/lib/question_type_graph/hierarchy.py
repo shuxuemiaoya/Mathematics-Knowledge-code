@@ -314,18 +314,23 @@ def apply_hierarchy(profile_path: Path, adapter_path: Path, manifest_path: Path,
         children = sorted(direct_children(entries, entry["key"]), key=lambda item: item["start_line"])
         child_by_start = {child["start_line"]: child for child in children}
         output_lines: list[str] = []
+        output_source_lines: list[int | None] = []
         if entry.get("emit_title"):
             output_lines.extend([f"{'#' * min(int(entry['level']), 6)} {entry['title']}", ""])
+            output_source_lines.extend([None, None])
         line = entry["start_line"]
         while line <= entry["end_line"]:
             child = child_by_start.get(line)
             if child:
                 output_lines.append(obsidian_embed(output_by_key[child["key"]], vault_root))
+                output_source_lines.append(None)
                 line = child["end_line"] + 1
             else:
                 output_lines.append(lines[line - 1])
+                output_source_lines.append(line)
                 line += 1
         text = "\n".join(output_lines).rstrip() + "\n"
+        output_source_lines = output_source_lines[: len(text.splitlines())]
         text = rebase_local_links(text, markdown, note, relocations)
         content_source = corpus_root / f"{sha256_text(entry['key'])[:16]}.md"
         write_text_atomic(content_source, text, overwrite=True)
@@ -344,6 +349,7 @@ def apply_hierarchy(profile_path: Path, adapter_path: Path, manifest_path: Path,
                 "sha256": sha256_file(note),
                 "content_source": str(content_source.resolve()),
                 "content_sha256": sha256_file(content_source),
+                "source_line_map": output_source_lines,
             }
         )
 
@@ -351,18 +357,27 @@ def apply_hierarchy(profile_path: Path, adapter_path: Path, manifest_path: Path,
     top = sorted(direct_children(entries, None), key=lambda item: item["start_line"])
     top_by_start = {item["start_line"]: item for item in top}
     root_lines: list[str] = []
+    root_source_lines: list[int | None] = []
     line = 1
     while line <= len(lines):
         child = top_by_start.get(line)
         if child:
             root_lines.append(obsidian_embed(output_by_key[child["key"]], vault_root))
+            root_source_lines.append(None)
             line = child["end_line"] + 1
         else:
             root_lines.append(lines[line - 1])
+            root_source_lines.append(line)
             line += 1
     root_text = rebase_local_links("\n".join(root_lines).rstrip() + "\n", markdown, root_note, relocations)
+    root_source_lines = root_source_lines[: len(root_text.splitlines())]
     write_text_atomic(root_note, root_text, overwrite=overwrite)
-    written.append({"key": "root", "path": str(root_note), "sha256": sha256_file(root_note)})
+    written.append({
+        "key": "root",
+        "path": str(root_note),
+        "sha256": sha256_file(root_note),
+        "source_line_map": root_source_lines,
+    })
     current_notes = {str(Path(item["path"]).resolve()) for item in written if item.get("path")}
     removed_stale: list[str] = []
     for stale_name in sorted(previous_notes - current_notes):
@@ -380,6 +395,7 @@ def apply_hierarchy(profile_path: Path, adapter_path: Path, manifest_path: Path,
         "stage": "hierarchy-coverage",
         "status": "passed",
         "profile": profile["_profile_path"],
+        "source_role": manifest.get("source_role"),
         "source_markdown": str(markdown),
         "source_markdown_sha256": manifest["source_markdown_sha256"],
         "line_count": len(lines),

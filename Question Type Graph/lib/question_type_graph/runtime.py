@@ -11,6 +11,7 @@ from .common import ConfigurationError, load_json, load_profile, sha256_file, wr
 
 STAGES = [
     "intake",
+    "preflight",
     "pdf-conversion",
     "format-inventory",
     "hierarchy-segmentation",
@@ -42,16 +43,86 @@ def input_fingerprint(paths: list[Path], values: dict[str, Any] | None = None) -
 def init_state(profile_path: Path, output: Path, overwrite: bool = False) -> dict[str, Any]:
     profile = load_profile(profile_path)
     state = {
-        "schema_version": 1,
+        "schema_version": 2,
         "profile": profile["_profile_path"],
         "status": "active",
         "created_at": now(),
         "updated_at": now(),
+        "runs": [],
+        "active_run_id": None,
         "stages": {name: {"status": "pending", "attempts": 0} for name in STAGES},
     }
     state["stages"]["intake"] = {"status": "completed", "attempts": 1, "completed_at": now()}
     write_json_atomic(output, state, overwrite=overwrite)
     return state
+
+
+def begin_run(state_path: Path, command: str) -> str:
+    """Append a stable invocation record without rewriting completed runs."""
+    state = load_json(state_path)
+    runs = state.setdefault("runs", [])
+    run_id = f"run-{len(runs) + 1:06d}"
+    runs.append(
+        {
+            "run_id": run_id,
+            "command": command,
+            "status": "running",
+            "started_at": now(),
+            "stage_attempt_ids": [],
+        }
+    )
+    state["schema_version"] = max(int(state.get("schema_version", 1)), 2)
+    state["active_run_id"] = run_id
+    state["status"] = "active"
+    state["updated_at"] = now()
+    write_json_atomic(state_path, state, overwrite=True)
+    return run_id
+
+
+def finish_run(
+    state_path: Path,
+    run_id: str,
+    status: str,
+    result: dict[str, Any] | None = None,
+) -> None:
+    if status not in {"passed", "failed", "review_required"}:
+        raise ConfigurationError("Invalid run status")
+    state = load_json(state_path)
+    record = next(
+        (item for item in state.get("runs", []) if item.get("run_id") == run_id),
+        None,
+    )
+    if record is None or record.get("status") != "running":
+        raise ConfigurationError(f"Run is not active: {run_id}")
+    record["status"] = status
+    record["completed_at"] = now()
+    try:
+        started = datetime.fromisoformat(str(record["started_at"]))
+        completed = datetime.fromisoformat(str(record["completed_at"]))
+        record["duration_seconds"] = round((completed - started).total_seconds(), 3)
+    except ValueError:
+        pass
+    if result:
+        record["result"] = {
+            key: result[key]
+            for key in ("status", "next_stage", "graph_root", "pipeline_state")
+            if key in result
+        }
+    history_root = state_path.resolve().parent / "run-history"
+    run_manifest = history_root / f"{run_id}.json"
+    if run_manifest.exists():
+        raise ConfigurationError(f"Immutable run manifest already exists: {run_manifest}")
+    manifest_value = {
+        "schema_version": 1,
+        "profile": state.get("profile"),
+        **record,
+    }
+    write_json_atomic(run_manifest, manifest_value, overwrite=False)
+    record["manifest"] = str(run_manifest.resolve())
+    state["active_run_id"] = None
+    state["status"] = "completed" if status == "passed" else status
+    state["updated_at"] = now()
+    write_json_atomic(state_path, state, overwrite=True)
 
 
 def update_stage(
@@ -72,6 +143,22 @@ def update_stage(
         record["attempts"] = int(record.get("attempts", 0)) + 1
         record["started_at"] = now()
         record.pop("completed_at", None)
+        run_id = state.get("active_run_id") or "legacy-run"
+        attempt_id = f"{run_id}:{stage}:{int(record['attempts']):03d}"
+        record["active_attempt_id"] = attempt_id
+        record.setdefault("attempt_history", []).append(
+            {
+                "attempt_id": attempt_id,
+                "run_id": run_id,
+                "status": "running",
+                "started_at": record["started_at"],
+                **({"input_fingerprint": fingerprint} if fingerprint is not None else {}),
+            }
+        )
+        for run in state.get("runs", []):
+            if run.get("run_id") == run_id:
+                run.setdefault("stage_attempt_ids", []).append(attempt_id)
+                break
     record["status"] = status
     if status in {"completed", "failed", "review_required", "skipped"}:
         record["completed_at"] = now()
@@ -82,6 +169,22 @@ def update_stage(
                 record["duration_seconds"] = round((completed - started).total_seconds(), 3)
             except ValueError:
                 pass
+        active_attempt_id = record.pop("active_attempt_id", None)
+        attempt = next(
+            (
+                item
+                for item in reversed(record.get("attempt_history", []))
+                if item.get("attempt_id") == active_attempt_id
+            ),
+            None,
+        )
+        if attempt is not None:
+            attempt["status"] = status
+            attempt["completed_at"] = record["completed_at"]
+            if "duration_seconds" in record:
+                attempt["duration_seconds"] = record["duration_seconds"]
+            if message:
+                attempt["message"] = message
     if message:
         record["message"] = message
     elif status == "running":
@@ -89,10 +192,59 @@ def update_stage(
     if fingerprint is not None:
         record["input_fingerprint"] = fingerprint
     if artifacts is not None:
-        record["artifacts"] = [
+        recorded_artifacts = [
             {"path": str(path.resolve()), "sha256": sha256_file(path.resolve())}
             for path in artifacts
         ]
+        record["artifacts"] = recorded_artifacts
+        if status in {"completed", "failed", "review_required", "skipped"}:
+            active_attempt_id = record.get("active_attempt_id")
+            attempt = next(
+                (
+                    item
+                    for item in reversed(record.get("attempt_history", []))
+                    if item.get("attempt_id") == active_attempt_id
+                    or (
+                        active_attempt_id is None
+                        and item.get("completed_at") == record.get("completed_at")
+                    )
+                ),
+                None,
+            )
+            if attempt is not None:
+                attempt["artifacts"] = recorded_artifacts
+    if status in {"completed", "failed", "review_required", "skipped"}:
+        terminal_attempt = next(
+            (
+                item
+                for item in reversed(record.get("attempt_history", []))
+                if item.get("completed_at") == record.get("completed_at")
+            ),
+            None,
+        )
+        if terminal_attempt is not None and not terminal_attempt.get("manifest"):
+            attempt_id = str(terminal_attempt["attempt_id"])
+            manifest_path = (
+                state_path.resolve().parent
+                / "run-history"
+                / str(terminal_attempt.get("run_id", "legacy-run"))
+                / f"{attempt_id.replace(':', '__')}.json"
+            )
+            if manifest_path.exists():
+                raise ConfigurationError(
+                    f"Immutable stage-attempt manifest already exists: {manifest_path}"
+                )
+            write_json_atomic(
+                manifest_path,
+                {
+                    "schema_version": 1,
+                    "profile": state.get("profile"),
+                    "stage": stage,
+                    **terminal_attempt,
+                },
+                overwrite=False,
+            )
+            terminal_attempt["manifest"] = str(manifest_path.resolve())
     state["updated_at"] = now()
     if status == "failed":
         state["status"] = "failed"

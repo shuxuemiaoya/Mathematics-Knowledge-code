@@ -8,8 +8,9 @@ that agent while operating here.
 
 ```text
 freeze typed sources
+  -> deterministic preflight and immutable run record
   -> forced MinerU OCR for every PDF source
-  -> format inventory and reviewed adapter
+  -> page/bbox provenance index, format inventory, and reviewed adapter worksheet
   -> hierarchy segmentation
   -> functional-block and atomic-question segmentation
   -> generated-title cleanup
@@ -23,11 +24,27 @@ freeze typed sources
 ## Invariants
 
 - Treat every source PDF and registered raw Markdown file as immutable.
+- Run preflight before OCR or graph mutation. Resolve credentials from an
+  explicit path, process environment, or deterministic profile/project-root
+  search; never make launch-directory choice part of format behavior.
+- Append immutable run and stage-attempt IDs with input fingerprints and
+  artifact hashes. Never overwrite the history of a terminal attempt.
+- When one OCR row contains several leader-delimited TOC entries, inventory
+  every entry with its raw column and propose source-stream and column-major
+  orders. Prefer a continuous printed ordinal ledger only as a review proposal;
+  a reviewer still confirms authority and reading order.
+- Build a source-provenance index from MinerU content-list artifacts. Preserve
+  original Markdown line ownership through hierarchy snapshots and attach an
+  exact PDF page/bbox to atomic questions whenever evidence resolves; retain
+  all candidates when it does not.
 - Carry the same absolute profile path and frozen source hashes through every
   structured handoff.
 - Keep publisher labels, titles, page ranges, numbering rules, answer layouts,
   and output folder templates in a reviewed `format-adapter.json`, never in
   reusable compiler code.
+- Scope numeric question detection to reviewed question-bearing functional
+  roles, contexts, or source ranges before adding source-line exclusions for
+  isolated false positives.
 - Create one leaf note per top-level question and keep its subparts together.
 - Flatten question-bearing HTML tables into semantic column streams before
   segmentation. Merge streams by the next printed question number, keep each
@@ -50,6 +67,11 @@ freeze typed sources
   a missing stem from the answer alone.
 - Preserve source text, formulas, images, tables, numbering, and order. Add
   Markdown structure and navigation only.
+- Keep a chapter's explanatory introduction in the chapter note unless the
+  reviewed structure explicitly makes it an independent navigational node.
+  Move publisher-labeled chapter metadata into YAML frontmatter only through
+  adapter-declared `content.note_properties` rules with named `value` groups;
+  do not leave duplicate metadata lines in the rendered body.
 - After content segmentation, clean every generated title and corresponding
   filename by preserving only Unicode letters, digits, and `_` and replacing
   every other character (including whitespace, full-width punctuation such as

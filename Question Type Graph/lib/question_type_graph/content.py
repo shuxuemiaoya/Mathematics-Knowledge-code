@@ -97,6 +97,40 @@ def match_question(line: str, patterns: list[re.Pattern[str]]) -> re.Match[str] 
     return None
 
 
+def question_in_reviewed_scope(
+    note_key: str,
+    raw_line: int,
+    owner: dict[str, Any] | None,
+    labels: list[dict[str, Any]],
+    adapter: dict[str, Any],
+) -> bool:
+    """Restrict numeric detection to reviewer-selected functional sections."""
+    scopes = adapter.get("content", {}).get("question_scopes")
+    if scopes is None:
+        return True
+    by_key = {str(item["key"]): item for item in labels}
+    owner_roles: set[str] = set()
+    current = owner
+    while current:
+        owner_roles.add(str(current.get("role", "")))
+        current = by_key.get(str(current.get("parent"))) if current.get("parent") else None
+    for scope in scopes:
+        contexts = scope.get("contexts")
+        if contexts is None and scope.get("context") is not None:
+            contexts = [scope.get("context")]
+        if contexts is not None and note_key not in {str(value) for value in contexts}:
+            continue
+        if scope.get("start_line") is not None and raw_line < int(scope["start_line"]):
+            continue
+        if scope.get("end_line") is not None and raw_line > int(scope["end_line"]):
+            continue
+        roles = {str(value) for value in scope.get("roles", [])}
+        if roles and not roles.intersection(owner_roles):
+            continue
+        return True
+    return False
+
+
 def detach_configured_role_roots(
     labels: list[dict[str, Any]], adapter: dict[str, Any]
 ) -> None:
@@ -490,6 +524,12 @@ def apply_reviewed_recovered_questions(
                 "evidence": {
                     "reviewed_pdf_recovery": str(item.get("source_page", "reviewed")),
                 },
+                "source_provenance": {
+                    "source_page": item.get("source_page"),
+                    "bbox": item.get("source_bbox"),
+                    "type": "reviewed-recovery",
+                    "match": "reviewed-pdf-recovery",
+                },
             },
         )
     return result
@@ -707,6 +747,28 @@ def plan_note(
                     }
                 )
                 continue
+            scope_owner = None
+            for label in labels:
+                if label["start_line"] < index <= label["end_line"]:
+                    if scope_owner is None or label["depth"] >= scope_owner["depth"]:
+                        scope_owner = label
+            if not question_in_reviewed_scope(
+                str(note_entry["key"]),
+                int(virtual_lines[index - 1]["raw_line"]),
+                scope_owner,
+                labels,
+                adapter,
+            ):
+                adapter.setdefault("_scope_excluded_candidates", []).append(
+                    {
+                        "context": str(note_entry["key"]),
+                        "raw_line": int(virtual_lines[index - 1]["raw_line"]),
+                        "raw_column": int(virtual_lines[index - 1]["raw_column"]),
+                        "number": number,
+                        "text": line,
+                    }
+                )
+                continue
             starts.append((index, match, number))
     label_start_lines = {label["start_line"] for label in labels}
     question_file_template = str(adapter.get("content", {}).get("question_file_template", "{title}.md"))
@@ -762,6 +824,23 @@ def plan_note(
         body = "\n".join(lines[start - 1:end]).rstrip() + "\n"
         rendered_body = rebase_local_links(body, path, output)
         source_part = next((item for item in reversed(source_parts) if item["line"] <= start), None)
+        local_source_line = int(virtual_lines[start - 1]["raw_line"])
+        source_line_map = note_entry.get("source_line_map") or []
+        source_markdown_line = (
+            source_line_map[local_source_line - 1]
+            if 1 <= local_source_line <= len(source_line_map)
+            else None
+        )
+        provenance_candidates = []
+        virtual_provenance = virtual_lines[start - 1].get("source_provenance")
+        if source_markdown_line is not None:
+            provenance_candidates = (
+                adapter.get("_source_provenance_line_map", {}).get(
+                    str(source_markdown_line), []
+                )
+            )
+        if virtual_provenance:
+            provenance_candidates = [virtual_provenance]
         questions.append(
             {
                 "id": f"{note_entry['key']}:question:{number}:{start}",
@@ -778,6 +857,9 @@ def plan_note(
                 "source_start_line": virtual_lines[start - 1]["raw_line"],
                 "source_start_column": virtual_lines[start - 1]["raw_column"],
                 "source_end_line": virtual_lines[end - 1]["raw_line"],
+                "source_markdown_line": source_markdown_line,
+                "source_provenance": provenance_candidates[0] if len(provenance_candidates) == 1 else None,
+                "source_provenance_candidates": provenance_candidates,
                 "output": str(output.resolve()),
                 "body_sha256": sha256_text(body),
                 # The source digest remains bound to the immutable hierarchy
@@ -967,6 +1049,20 @@ def plan_content(profile_path: Path, adapter_path: Path, hierarchy_coverage_path
     if coverage.get("status") != "passed":
         raise ConfigurationError("Hierarchy coverage must pass before content planning")
     adapter["_graph_root"] = profile["paths"]["graph_root"]
+    provenance_path = Path(profile["paths"]["staging_root"]) / "source-provenance-index.json"
+    if provenance_path.is_file():
+        provenance = load_json(provenance_path)
+        source_role = str(coverage.get("source_role") or adapter.get("hierarchy", {}).get("source_role", ""))
+        source_provenance = next(
+            (
+                item
+                for item in provenance.get("sources", [])
+                if str(item.get("role")) == source_role
+            ),
+            None,
+        )
+        if source_provenance:
+            adapter["_source_provenance_line_map"] = source_provenance.get("line_map", {})
     rules = compile_role_rules(adapter)
     patterns = compile_question_patterns(adapter)
     labels: list[dict[str, Any]] = []
@@ -1005,6 +1101,7 @@ def plan_content(profile_path: Path, adapter_path: Path, hierarchy_coverage_path
         "hierarchy_coverage": str(hierarchy_coverage_path.resolve()),
         "functional_nodes": labels,
         "questions": questions,
+        "scope_excluded_candidates": adapter.get("_scope_excluded_candidates", []),
         "review_items": review,
     }
 
@@ -1025,13 +1122,72 @@ def render_question(question: dict[str, Any], body: str, answer_mode: str = "sep
         "",
     ]
     source_part = question.get("source_part")
-    if source_part:
+    source_provenance = question.get("source_provenance")
+    if source_provenance:
+        frontmatter[6:6] = [
+            f"source_pdf_page: {json.dumps(source_provenance.get('source_page'), ensure_ascii=False)}",
+            f"source_pdf_bbox: {json.dumps(source_provenance.get('bbox'), ensure_ascii=False)}",
+            f"source_provenance_match: {json.dumps(source_provenance.get('match'), ensure_ascii=False)}",
+            f"source_markdown_line: {json.dumps(question.get('source_markdown_line'), ensure_ascii=False)}",
+        ]
+    elif source_part:
         page_range = f"{source_part['start_page']}-{source_part['end_page']}"
         frontmatter[6:6] = [
             f"source_pdf_part: {source_part['part']}",
             f"source_page_range: {json.dumps(page_range)}",
         ]
     return "\n".join(frontmatter)
+
+
+def extract_note_properties(
+    lines: list[str], adapter: dict[str, Any]
+) -> tuple[list[str], set[int]]:
+    """Extract adapter-declared hierarchy-note properties without changing planning lines.
+
+    Property rules are intentionally format-adapter data: publisher labels vary,
+    while the compiler only guarantees that matched source lines move verbatim
+    into YAML frontmatter and disappear from the rendered note body.
+    """
+    properties: list[str] = []
+    removed_lines: set[int] = set()
+    seen_names: set[str] = set()
+    for rule in adapter.get("content", {}).get("note_properties", []):
+        name = str(rule.get("name", "")).strip()
+        pattern = str(rule.get("pattern", ""))
+        if not name or not pattern:
+            raise ConfigurationError("content.note_properties entries require name and pattern")
+        if name in seen_names:
+            raise ConfigurationError(f"Duplicate content.note_properties name: {name}")
+        seen_names.add(name)
+        compiled = re.compile(pattern)
+        if "value" not in compiled.groupindex:
+            raise ConfigurationError(
+                f"content.note_properties pattern for {name} requires a named value group"
+            )
+        matches: list[tuple[int, str]] = []
+        for line_number, line in enumerate(lines, 1):
+            match = compiled.match(line)
+            if match:
+                matches.append((line_number, str(match.group("value")).strip()))
+        if len(matches) > 1 and not rule.get("allow_multiple", False):
+            raise ConfigurationError(
+                f"content.note_properties pattern for {name} matched more than one line"
+            )
+        if not matches:
+            if rule.get("required", False):
+                raise ConfigurationError(f"Required note property not found: {name}")
+            continue
+        values = [value for _, value in matches]
+        value: Any = values if len(values) > 1 else values[0]
+        properties.append(f"{name}: {json.dumps(value, ensure_ascii=False)}")
+        removed_lines.update(line_number for line_number, _ in matches)
+    return properties, removed_lines
+
+
+def prepend_note_properties(body: str, properties: list[str]) -> str:
+    if not properties:
+        return body
+    return "\n".join(["---", *properties, "---", body.lstrip("\n")])
 
 
 def apply_content(profile_path: Path, adapter_path: Path, manifest_path: Path, overwrite: bool) -> dict[str, Any]:
@@ -1097,6 +1253,7 @@ def apply_content(profile_path: Path, adapter_path: Path, manifest_path: Path, o
             question_patterns,
         )
         lines = [item["text"] for item in virtual_lines]
+        note_properties, property_lines = extract_note_properties(lines, adapter)
         nodes = values["nodes"]
         note_by_key = {node["key"]: Path(node["output"]) for node in nodes}
         direct_questions: dict[str | None, list[dict[str, Any]]] = {}
@@ -1161,10 +1318,14 @@ def apply_content(profile_path: Path, adapter_path: Path, manifest_path: Path, o
             if replacement:
                 rendered.append(replacement[1])
                 line = replacement[0] + 1
+            elif line in property_lines:
+                line += 1
             else:
                 rendered.append(lines[line - 1])
                 line += 1
-        write_text_atomic(source, "\n".join(rendered).rstrip() + "\n", overwrite=True)
+        source_text = "\n".join(rendered).rstrip() + "\n"
+        source_text = prepend_note_properties(source_text, note_properties)
+        write_text_atomic(source, source_text, overwrite=True)
 
     generated_outputs.extend({"kind": "question", **item} for item in written_questions)
     current_generated = {str(item["path"]) for item in generated_outputs}

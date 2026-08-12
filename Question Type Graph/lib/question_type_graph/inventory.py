@@ -18,6 +18,11 @@ INDEX_LEADER_RE = re.compile(r"(?:\.{2,}|…{1,}|\s{2,})")
 INDEX_REFERENCE_SUFFIX_RE = re.compile(
     r"(?P<references>(?:\s*(?:[（(]\s*\d{1,4}\s*[）)]|\d{1,4})){1,4})\s*$"
 )
+INLINE_INDEX_ENTRY_RE = re.compile(
+    r"(?P<title>(?P<ordinal>\d{1,4})\s+\S.*?)[ \t]*"
+    r"(?:\.{2,}|…{1,})[ \t]*"
+    r"(?P<references>\d{1,4}(?:\s*[（(]\s*\d{1,4}\s*[）)])?)"
+)
 PAGE_MARKER_RE = re.compile(r"<!--\s*source-part:(?P<part>\d+)\s+pages:(?P<start>\d+)-(?P<end>\d+)\s*-->")
 
 
@@ -42,15 +47,64 @@ def parse_index_entry(line: str) -> dict[str, Any] | None:
     }
 
 
+def parse_index_entries(line: str) -> list[dict[str, Any]]:
+    """Parse one or more index records preserved on the same OCR row.
+
+    Multi-column printed indexes are commonly flattened row-by-row, producing
+    several complete leader-delimited records on one Markdown line. Preserve
+    each record's raw column and row position so inventory can propose visual
+    column order without silently choosing it.
+    """
+    inline = []
+    for row_position, match in enumerate(INLINE_INDEX_ENTRY_RE.finditer(line), 1):
+        inline.append(
+            {
+                "title": match.group("title").strip(),
+                "descriptor": "",
+                "references": [
+                    int(value)
+                    for value in re.findall(r"\d{1,4}", match.group("references"))
+                ],
+                "literal": match.group(0).strip(),
+                "source_column": match.start() + 1,
+                "row_position": row_position,
+                "printed_ordinal": int(match.group("ordinal")),
+            }
+        )
+    if len(inline) > 1:
+        return inline
+    parsed = parse_index_entry(line)
+    if parsed is None:
+        return []
+    if inline:
+        parsed.update(
+            {
+                "source_column": inline[0]["source_column"],
+                "row_position": 1,
+                "printed_ordinal": inline[0]["printed_ordinal"],
+            }
+        )
+    else:
+        parsed.update({"source_column": 1, "row_position": 1})
+    return [parsed]
+
+
+def _continuous_printed_ordinals(entries: list[dict[str, Any]]) -> bool:
+    values = [item.get("printed_ordinal") for item in entries]
+    return bool(values) and all(isinstance(value, int) for value in values) and values == list(
+        range(int(values[0]), int(values[0]) + len(values))
+    )
+
+
 def contiguous_index_runs(lines: list[str]) -> list[dict[str, Any]]:
     """Propose index-like runs from typography, without assuming literal TOC labels."""
-    entries = [
+    rows = [
         (number, parsed)
         for number, line in enumerate(lines, 1)
-        if (parsed := parse_index_entry(line)) is not None
+        if (parsed := parse_index_entries(line))
     ]
-    runs: list[list[tuple[int, dict[str, Any]]]] = []
-    for item in entries:
+    runs: list[list[tuple[int, list[dict[str, Any]]]]] = []
+    for item in rows:
         if not runs or item[0] - runs[-1][-1][0] > 2:
             runs.append([item])
         else:
@@ -62,18 +116,51 @@ def contiguous_index_runs(lines: list[str]) -> list[dict[str, Any]]:
         start = run[0][0]
         end = run[-1][0]
         parsed_lines = {number for number, _ in run}
+        source_order = [
+            {"source_line": number, **entry}
+            for number, row in run
+            for entry in row
+        ]
+        max_columns = max(len(row) for _, row in run)
+        column_major = [
+            {"source_line": number, **entry}
+            for column in range(1, max_columns + 1)
+            for number, row in run
+            for entry in row
+            if int(entry.get("row_position", 1)) == column
+        ]
+        source_continuous = _continuous_printed_ordinals(source_order)
+        column_continuous = _continuous_printed_ordinals(column_major)
+        recommended = (
+            "column-major"
+            if max_columns > 1 and column_continuous and not source_continuous
+            else "source-stream"
+        )
+        reviewed_order = column_major if recommended == "column-major" else source_order
         candidates.append(
             {
                 "start_line": start,
                 "end_line": end,
-                "entry_count": len(run),
-                "entries": [{"source_line": number, **parsed} for number, parsed in run],
+                "raw_row_count": len(run),
+                "entry_count": len(source_order),
+                "entries": reviewed_order,
+                "observed_source_order": source_order,
+                "reading_order_candidates": {
+                    "source-stream": source_order,
+                    **({"column-major": column_major} if max_columns > 1 else {}),
+                },
+                "recommended_reading_order": recommended,
+                "reading_order_evidence": {
+                    "records_per_row": max_columns,
+                    "source_stream_continuous": source_continuous,
+                    "column_major_continuous": column_continuous,
+                },
                 "unparsed_nonblank_lines": [
                     {"source_line": number, "literal": lines[number - 1].strip()}
                     for number in range(start, end + 1)
                     if number not in parsed_lines and lines[number - 1].strip()
                 ],
-                "sample": [parsed["title"] for _, parsed in run[:5]],
+                "sample": [entry["title"] for entry in reviewed_order[:5]],
                 "authority": None,
                 "status": "review_required",
             }
@@ -161,6 +248,11 @@ def inventory_markdown(
 
 def build_inventory(profile_path: Path) -> dict[str, Any]:
     profile = load_profile(profile_path)
+    provenance_path = Path(profile["paths"]["staging_root"]) / "source-provenance-index.json"
+    provenance = load_json(provenance_path) if provenance_path.is_file() else {"sources": []}
+    provenance_by_role = {
+        str(item.get("role")): item for item in provenance.get("sources", [])
+    }
     role_hints: list[dict[str, str]] = []
     preset_meta = profile.get("format", {}).get("preset")
     if preset_meta:
@@ -186,11 +278,26 @@ def build_inventory(profile_path: Path) -> dict[str, Any]:
         detail = inventory_markdown(markdown, role_hints)
         detail["role"] = source["role"]
         detail["status"] = "review_required"
+        source_provenance = provenance_by_role.get(str(source["role"]))
+        if source_provenance:
+            page_layout_evidence = source_provenance.get("page_layouts", [])
+            detail["page_provenance"] = {
+                "index": str(provenance_path.resolve()),
+                "block_count": source_provenance.get("block_count", 0),
+                "mapped_line_count": source_provenance.get("mapped_line_count", 0),
+                "page_count": len(page_layout_evidence),
+                "multi_column_risk_pages": [
+                    item.get("source_page")
+                    for item in page_layout_evidence
+                    if item.get("multi_column_risk") is True
+                ],
+            }
         unresolved += 1 + len(detail["repeated_label_candidates"]) + len(detail["index_candidates"])
         layout_candidates.append(
             {
                 "role": source["role"],
                 "signals": detail["layout_signals"],
+                "page_provenance": detail.get("page_provenance"),
                 "candidates": ["single-column", "multi-column", "scanned-spread"],
                 "classification": None,
                 "reading_order": None,
@@ -239,6 +346,39 @@ def build_adapter_draft(profile_path: Path, inventory: dict[str, Any] | None = N
         (item for item in inventory.get("sources", []) if item.get("role") == hierarchy_role),
         {},
     )
+    index_candidates = source_detail.get("index_candidates", [])
+    best_index = max(index_candidates, key=lambda item: int(item.get("entry_count", 0)), default=None)
+    proposed_authority = None
+    if best_index:
+        proposed_entries = []
+        proposed_key_counts: Counter[str] = Counter()
+        for ordinal, item in enumerate(best_index.get("entries", []), 1):
+            printed = item.get("printed_ordinal")
+            key_base = f"toc-{int(printed):03d}" if isinstance(printed, int) else f"toc-{ordinal:03d}"
+            proposed_key_counts[key_base] += 1
+            key = (
+                key_base
+                if proposed_key_counts[key_base] == 1
+                else f"{key_base}-{proposed_key_counts[key_base]:02d}"
+            )
+            proposed_entries.append(
+                {
+                    "key": key,
+                    "title": str(item.get("title", "")).strip(),
+                    "level": 1,
+                    "source_line": int(item["source_line"]),
+                    "source_column": int(item.get("source_column", 1)),
+                    "references": item.get("references", []),
+                }
+            )
+        proposed_authority = {
+            "status": "review_required",
+            "reviewer_confirmed": False,
+            "start_line": int(best_index["start_line"]),
+            "end_line": int(best_index["end_line"]),
+            "reading_order": best_index.get("recommended_reading_order", "source-stream"),
+            "entries": proposed_entries,
+        }
     draft = {
         "schema_version": 1,
         "status": "review_required",
@@ -253,7 +393,7 @@ def build_adapter_draft(profile_path: Path, inventory: dict[str, Any] | None = N
         "hierarchy": {
             "source_role": hierarchy_role,
             "root_output": "index.md",
-            "primary_authority": None,
+            "primary_authority": proposed_authority,
             "entries": [],
         },
         "content": {
@@ -308,6 +448,146 @@ def build_adapter_draft(profile_path: Path, inventory: dict[str, Any] | None = N
         draft["reviewer_confirmed"] = False
         draft["profile"] = profile["_profile_path"]
     return draft
+
+
+def build_review_worksheet(
+    profile_path: Path,
+    inventory: dict[str, Any] | None = None,
+    draft: dict[str, Any] | None = None,
+) -> str:
+    """Render an evidence-first checklist for unfamiliar-format review."""
+    profile = load_profile(profile_path)
+    inventory = inventory or build_inventory(profile_path)
+    draft = draft or build_adapter_draft(profile_path, inventory)
+
+    def cell(value: Any) -> str:
+        return str(value if value is not None else "").replace("|", "\\|").replace("\n", " ")
+
+    lines = [
+        f"# Format review worksheet: {profile['title']}",
+        "",
+        "This worksheet is generated evidence. Confirm decisions in `format-adapter.json`; do not mark this file as an adapter.",
+        "",
+        "## Frozen intake",
+        "",
+        "| Role | Kind | Pages | Bytes | SHA-256 | Source |",
+        "| --- | --- | ---: | ---: | --- | --- |",
+    ]
+    for source in profile["sources"]:
+        lines.append(
+            "| "
+            + " | ".join(
+                cell(value)
+                for value in (
+                    source.get("role"),
+                    source.get("kind"),
+                    source.get("page_count") or "—",
+                    source.get("size_bytes"),
+                    source.get("sha256"),
+                    source.get("path"),
+                )
+            )
+            + " |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Review decisions",
+            "",
+            "- [ ] Confirm source arrangement and any non-overlapping combined-source answer region.",
+            "- [ ] Confirm page layout and reading order for every multi-column region.",
+            "- [ ] Confirm the complete primary TOC/index ledger, or record a reviewed no-TOC decision.",
+            "- [ ] Confirm every hierarchy body anchor and output path.",
+            "- [ ] Scope question detection to question-bearing sections before adding line-specific exclusions.",
+            "- [ ] Confirm answer contexts against exact raw headings/boundaries and verify every continuous `1..N` ledger.",
+            "- [ ] Visually review at least one TOC page, one representative body page, every distinct question layout, every distinct answer layout, and the terminal answer page.",
+            "- [ ] After generation, open the Canvas and verify the root plus the first, middle, and final hierarchy branches; atomic questions must remain absent.",
+            "",
+            "## Layout evidence",
+            "",
+        ]
+    )
+    for item in inventory.get("layout_candidates", []):
+        signals = item.get("signals", {})
+        page_provenance = item.get("page_provenance") or {}
+        lines.extend(
+            [
+                f"### {cell(item.get('role'))}",
+                "",
+                f"Images: {signals.get('image_count', 0)}; table-like lines: {signals.get('table_line_count', 0)}; wide-spacing lines: {signals.get('wide_spacing_line_count', 0)}.",
+                f"Mapped raw lines: {page_provenance.get('mapped_line_count', 0)}; page/bbox blocks: {page_provenance.get('block_count', 0)}; layout-risk pages: {len(page_provenance.get('multi_column_risk_pages', []))}.",
+                "",
+            ]
+        )
+    lines.extend(["## Printed index candidates", ""])
+    found_index = False
+    for source in inventory.get("sources", []):
+        for candidate_number, candidate in enumerate(source.get("index_candidates", []), 1):
+            found_index = True
+            evidence = candidate.get("reading_order_evidence", {})
+            lines.extend(
+                [
+                    f"### {cell(source.get('role'))} candidate {candidate_number}",
+                    "",
+                    f"Raw lines {candidate.get('start_line')}–{candidate.get('end_line')}; {candidate.get('raw_row_count', candidate.get('entry_count', 0))} OCR rows; {candidate.get('entry_count', 0)} parsed entries.",
+                    "",
+                    f"Proposed reading order: `{candidate.get('recommended_reading_order', 'source-stream')}` (source continuous: {evidence.get('source_stream_continuous')}; column-major continuous: {evidence.get('column_major_continuous')}).",
+                    "",
+                    "| Order | Printed | Title | References | Raw line | Raw column |",
+                    "| ---: | ---: | --- | --- | ---: | ---: |",
+                ]
+            )
+            for position, entry in enumerate(candidate.get("entries", []), 1):
+                lines.append(
+                    "| "
+                    + " | ".join(
+                        cell(value)
+                        for value in (
+                            position,
+                            entry.get("printed_ordinal", ""),
+                            entry.get("title", ""),
+                            ", ".join(str(value) for value in entry.get("references", [])),
+                            entry.get("source_line", ""),
+                            entry.get("source_column", 1),
+                        )
+                    )
+                    + " |"
+                )
+            lines.append("")
+    if not found_index:
+        lines.extend(["No typography-derived index run was found. Review the rendered PDF before declaring no TOC.", ""])
+
+    lines.extend(["## Repeated label candidates", ""])
+    for source in inventory.get("sources", []):
+        repeated = source.get("repeated_label_candidates", [])
+        if not repeated:
+            continue
+        lines.extend(
+            [
+                f"### {cell(source.get('role'))}",
+                "",
+                "| Literal stem | Count | Preset-proposed role |",
+                "| --- | ---: | --- |",
+            ]
+        )
+        for item in repeated:
+            lines.append(
+                f"| {cell(item.get('literal'))} | {cell(item.get('count'))} | {cell(item.get('proposed_role') or '—')} |"
+            )
+        lines.append("")
+    lines.extend(
+        [
+            "## Draft handoff",
+            "",
+            f"Profile: `{profile['_profile_path']}`",
+            "",
+            f"Suggested authority entries: {len((draft.get('hierarchy', {}).get('primary_authority') or {}).get('entries', []))}.",
+            "",
+            "Copy only reviewer-confirmed decisions into `format-adapter.json`, set its status to `passed`, and resume the coordinator.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
 
 
 def main(argv: list[str] | None = None) -> int:

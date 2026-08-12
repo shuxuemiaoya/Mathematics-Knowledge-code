@@ -33,13 +33,17 @@ python skills/question-type-graph/scripts/question_type_graph.py init `
   --canvas --output "<staging>/question-type-profile.json"
 
 python skills/question-type-graph/scripts/question_type_graph.py run "<profile>"
+python skills/question-type-graph/scripts/question_type_graph.py preflight "<profile>"
 python skills/question-type-graph/scripts/question_type_graph.py resume "<profile>"
 python skills/question-type-graph/scripts/question_type_graph.py status "<profile>"
 python skills/question-type-graph/scripts/question_type_graph.py audit "<profile>" --overwrite
 ```
 
 Unknown formats always stop after `format-inventory.json` and receive an
-unapproved `format-adapter.draft.json`. Physical splitting begins only after
+unapproved `format-adapter.draft.json` plus an evidence-first
+`format-review-worksheet.md`. Multi-entry OCR rows include source-stream and
+column-major TOC proposals, while `source-provenance-index.json` maps resolvable
+raw lines to exact PDF pages and bounding boxes. Physical splitting begins only after
 `format-adapter.json` is explicitly marked `passed` and
 `reviewer_confirmed: true`. Missing, duplicate, weak, or conflicting answer
 evidence remains a blocking review queue; fuzzy similarity is advisory only.
@@ -67,6 +71,9 @@ cross-process lock so unchanged questions are not renumbered.
 Set `content.question_repository_root` in the reviewed adapter, or the
 `QUESTION_TYPE_REPOSITORY_ROOT` environment variable, when the initial registry
 must seed its numeric floor from an additional central question repository.
+Preflight resolves MinerU credentials independently of launch cwd and records
+source, storage, and output-ownership checks without secrets. Pipeline status
+keeps append-only run IDs and stage-attempt IDs with terminal artifact hashes.
 
 CLI commands return exit code `2` for `review_required`, `1` for failure, and
 `0` for completed or passed results.

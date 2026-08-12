@@ -79,6 +79,50 @@
         "unknown_label_policy": {"enum": ["review", "retain"]},
         "question_patterns": {"$ref": "#/$defs/number_patterns"},
         "inline_question_patterns": {"$ref": "#/$defs/optional_number_patterns"},
+        "note_properties": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "pattern"],
+            "properties": {
+              "name": {"type": "string", "minLength": 1},
+              "pattern": {"type": "string", "minLength": 1},
+              "required": {"type": "boolean"},
+              "allow_multiple": {"type": "boolean"}
+            },
+            "additionalProperties": false
+          }
+        },
+        "question_scopes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "properties": {
+              "context": {"type": "string", "minLength": 1},
+              "contexts": {
+                "type": "array",
+                "minItems": 1,
+                "items": {"type": "string", "minLength": 1}
+              },
+              "roles": {
+                "type": "array",
+                "minItems": 1,
+                "items": {"type": "string", "minLength": 1}
+              },
+              "start_line": {"type": "integer", "minimum": 1},
+              "end_line": {"type": "integer", "minimum": 1}
+            },
+            "anyOf": [
+              {"required": ["context"]},
+              {"required": ["contexts"]},
+              {"required": ["roles"]},
+              {"required": ["start_line"]},
+              {"required": ["end_line"]}
+            ],
+            "additionalProperties": false
+          }
+        },
         "question_number_overrides": {
           "type": "array",
           "items": {
@@ -110,6 +154,12 @@
               "body": {"type": "string", "minLength": 1},
               "after_line": {"type": "integer", "minimum": 1},
               "source_page": {"type": ["string", "integer"]},
+              "source_bbox": {
+                "type": "array",
+                "minItems": 4,
+                "maxItems": 4,
+                "items": {"type": "number"}
+              },
               "anchor_text": {"type": "string", "minLength": 1},
               "anchor_pattern": {"type": "string", "minLength": 1},
               "reviewer_confirmed": {"const": true}
@@ -186,6 +236,12 @@
               "body": {"type": "string", "minLength": 1},
               "after_line": {"type": "integer", "minimum": 1},
               "source_page": {"type": ["string", "integer"]},
+              "source_bbox": {
+                "type": "array",
+                "minItems": 4,
+                "maxItems": 4,
+                "items": {"type": "number"}
+              },
               "anchor_text": {"type": "string", "minLength": 1},
               "anchor_pattern": {"type": "string", "minLength": 1},
               "reviewer_confirmed": {"const": true}

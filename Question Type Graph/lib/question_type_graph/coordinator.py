@@ -13,10 +13,20 @@ from .common import ConfigurationError, load_json, load_profile, require_reviewe
 from .content import apply_content, plan_content
 from .formatting import standardize_corpus
 from .hierarchy import apply_hierarchy, plan_hierarchy
-from .inventory import build_adapter_draft, build_inventory
+from .inventory import build_adapter_draft, build_inventory, build_review_worksheet
 from .mineru import DEFAULT_ENV_FILE, convert as convert_pdf
+from .preflight import build_preflight_report
 from .profile import create_profile
-from .runtime import artifacts_current, init_state, input_fingerprint, status_state, update_stage
+from .provenance import write_provenance_index
+from .runtime import (
+    artifacts_current,
+    begin_run,
+    finish_run,
+    init_state,
+    input_fingerprint,
+    status_state,
+    update_stage,
+)
 from .supplement import (
     apply_supplement,
     find_questions_requiring_supplement,
@@ -32,6 +42,9 @@ def artifact_paths(profile: dict[str, Any]) -> dict[str, Path]:
         "inventory": Path(profile["format"]["inventory"]),
         "adapter": Path(profile["format"]["adapter"]),
         "adapter_draft": staging / "format-adapter.draft.json",
+        "review_worksheet": staging / "format-review-worksheet.md",
+        "preflight": staging / "preflight-report.json",
+        "provenance": staging / "source-provenance-index.json",
         "state": staging / "pipeline-state.json",
         "hierarchy": staging / "hierarchy-manifest.json",
         "hierarchy_coverage": staging / "hierarchy-coverage-manifest.json",
@@ -70,6 +83,10 @@ def ensure_raw_sources(profile_path: Path, profile: dict[str, Any], args: argpar
             overwrite=args.overwrite,
         )
         convert_pdf(profile_path, source["role"], conversion_args)
+    if any(source.get("kind") == "pdf" for source in profile["sources"]):
+        write_provenance_index(
+            profile_path, Path(profile["paths"]["staging_root"]) / "source-provenance-index.json"
+        )
 
 
 def stage_has_owned_outputs(state_path: Path, stage: str) -> bool:
@@ -86,14 +103,56 @@ def _run_pipeline(profile_path: Path, args: argparse.Namespace) -> dict[str, Any
     Path(profile["paths"]["staging_root"]).mkdir(parents=True, exist_ok=True)
     if not paths["state"].exists():
         init_state(profile_path, paths["state"])
+    preflight_fingerprint = input_fingerprint(
+        [profile_path, *[Path(source["path"]) for source in profile["sources"]]],
+        {
+            "stage_contract": 1,
+            "skip_conversion": bool(args.skip_conversion),
+            "overwrite": bool(args.overwrite),
+            "env_file": str(args.env_file) if args.env_file else None,
+        },
+    )
+    update_stage(paths["state"], "preflight", "running", fingerprint=preflight_fingerprint)
+    preflight = build_preflight_report(
+        profile_path,
+        env_file=args.env_file,
+        skip_conversion=args.skip_conversion,
+        overwrite=args.overwrite,
+    )
+    write_json_atomic(paths["preflight"], preflight, overwrite=True)
+    if preflight["status"] != "passed":
+        message = "; ".join(
+            str(item.get("message") or item.get("kind"))
+            for item in preflight.get("errors", [])
+        )
+        update_stage(
+            paths["state"],
+            "preflight",
+            "failed",
+            [paths["preflight"]],
+            message=message,
+            fingerprint=preflight_fingerprint,
+        )
+        raise ConfigurationError(f"Preflight failed: {message}")
+    update_stage(
+        paths["state"],
+        "preflight",
+        "completed",
+        [paths["preflight"]],
+        fingerprint=preflight_fingerprint,
+    )
+    if not args.env_file and preflight.get("credentials", {}).get("env_file"):
+        args.env_file = preflight["credentials"]["env_file"]
     conversion_artifacts = [Path(source["markdown_path"]) for source in profile["sources"]]
     conversion_artifacts.extend(
         Path(profile["paths"]["staging_root"]) / f"{source['role']}-conversion-report.json"
         for source in profile["sources"] if source.get("kind") == "pdf"
     )
+    if any(source.get("kind") == "pdf" for source in profile["sources"]):
+        conversion_artifacts.append(paths["provenance"])
     conversion_fingerprint = input_fingerprint(
         [profile_path, *[Path(source["path"]) for source in profile["sources"]]],
-        {"stage_contract": 2},
+        {"stage_contract": 3},
     )
     if not artifacts_current(paths["state"], "pdf-conversion", conversion_artifacts, conversion_fingerprint):
         update_stage(paths["state"], "pdf-conversion", "running", fingerprint=conversion_fingerprint)
@@ -106,9 +165,10 @@ def _run_pipeline(profile_path: Path, args: argparse.Namespace) -> dict[str, Any
             fingerprint=conversion_fingerprint,
         )
 
-    inventory_fingerprint = input_fingerprint([profile_path, *conversion_artifacts], {"stage_contract": 3})
+    inventory_fingerprint = input_fingerprint([profile_path, *conversion_artifacts], {"stage_contract": 4})
+    inventory_required = [paths["inventory"], paths["review_worksheet"]]
     inventory_reused = artifacts_current(
-        paths["state"], "format-inventory", [paths["inventory"]], inventory_fingerprint
+        paths["state"], "format-inventory", inventory_required, inventory_fingerprint
     )
     if inventory_reused:
         inventory = load_json(paths["inventory"])
@@ -116,17 +176,30 @@ def _run_pipeline(profile_path: Path, args: argparse.Namespace) -> dict[str, Any
         update_stage(paths["state"], "format-inventory", "running", fingerprint=inventory_fingerprint)
         inventory = build_inventory(profile_path)
         write_json_atomic(paths["inventory"], inventory, overwrite=True)
-    if not paths["adapter"].is_file():
-        write_json_atomic(
-            paths["adapter_draft"],
-            build_adapter_draft(profile_path, inventory),
+        draft = build_adapter_draft(profile_path, inventory)
+        write_text_atomic(
+            paths["review_worksheet"],
+            build_review_worksheet(profile_path, inventory, draft),
             overwrite=True,
         )
+    if not paths["adapter"].is_file():
+        draft = build_adapter_draft(profile_path, inventory)
+        write_json_atomic(
+            paths["adapter_draft"],
+            draft,
+            overwrite=True,
+        )
+        if not paths["review_worksheet"].is_file():
+            write_text_atomic(
+                paths["review_worksheet"],
+                build_review_worksheet(profile_path, inventory, draft),
+                overwrite=True,
+            )
         update_stage(
             paths["state"],
             "format-inventory",
             "review_required",
-            [paths["inventory"]],
+            [paths["inventory"], paths["adapter_draft"], paths["review_worksheet"]],
             "Create and review format-adapter.json",
             inventory_fingerprint,
         )
@@ -136,6 +209,7 @@ def _run_pipeline(profile_path: Path, args: argparse.Namespace) -> dict[str, Any
             "next_stage": "format-adapter-review",
             "inventory": str(paths["inventory"]),
             "adapter_draft": str(paths["adapter_draft"]),
+            "review_worksheet": str(paths["review_worksheet"]),
             "adapter": str(paths["adapter"]),
         }
     require_reviewed_adapter(profile, paths["adapter"])
@@ -144,7 +218,7 @@ def _run_pipeline(profile_path: Path, args: argparse.Namespace) -> dict[str, Any
             paths["state"],
             "format-inventory",
             "completed",
-            [paths["inventory"]],
+            inventory_required,
             fingerprint=inventory_fingerprint,
         )
 
@@ -158,7 +232,7 @@ def _run_pipeline(profile_path: Path, args: argparse.Namespace) -> dict[str, Any
         )
     hierarchy_fingerprint = input_fingerprint(
         [profile_path, paths["adapter"], *conversion_artifacts],
-        {"stage_contract": 2},
+        {"stage_contract": 3},
     )
     hierarchy_reused = artifacts_current(
         paths["state"], "hierarchy-segmentation", hierarchy_required, hierarchy_fingerprint
@@ -207,7 +281,7 @@ def _run_pipeline(profile_path: Path, args: argparse.Namespace) -> dict[str, Any
         for item in hierarchy_coverage.get("notes", [])
         if item.get("content_source")
     )
-    content_fingerprint = input_fingerprint(content_inputs, {"stage_contract": 4})
+    content_fingerprint = input_fingerprint(content_inputs, {"stage_contract": 5})
     content_reused = hierarchy_reused and artifacts_current(
         paths["state"], "content-segmentation", content_required, content_fingerprint
     )
@@ -433,17 +507,50 @@ def _run_pipeline(profile_path: Path, args: argparse.Namespace) -> dict[str, Any
 
 
 def run_pipeline(profile_path: Path, args: argparse.Namespace) -> dict[str, Any]:
+    run_id: str | None = None
+    state_path: Path | None = None
     try:
-        return _run_pipeline(profile_path, args)
+        resolved_profile = profile_path.resolve()
+        profile = load_profile(resolved_profile)
+        Path(profile["paths"]["staging_root"]).mkdir(parents=True, exist_ok=True)
+        state_path = artifact_paths(profile)["state"]
+        if not state_path.is_file():
+            init_state(resolved_profile, state_path)
+        run_id = begin_run(state_path, str(getattr(args, "command", "run")))
+        result = _run_pipeline(resolved_profile, args)
+        finish_run(
+            state_path,
+            run_id,
+            "review_required" if result.get("status") == "review_required" else "passed",
+            result,
+        )
+        return result
     except Exception as exc:
         try:
             profile = load_profile(profile_path.resolve())
-            state_path = artifact_paths(profile)["state"]
+            state_path = state_path or artifact_paths(profile)["state"]
             if state_path.is_file():
                 state = load_json(state_path)
                 running = [name for name, record in state.get("stages", {}).items() if record.get("status") == "running"]
                 if running:
                     update_stage(state_path, running[-1], "failed", message=f"{type(exc).__name__}: {exc}")
+                if run_id is not None:
+                    current = load_json(state_path)
+                    active = next(
+                        (
+                            item
+                            for item in current.get("runs", [])
+                            if item.get("run_id") == run_id and item.get("status") == "running"
+                        ),
+                        None,
+                    )
+                    if active is not None:
+                        finish_run(
+                            state_path,
+                            run_id,
+                            "failed",
+                            {"status": "failed"},
+                        )
         except Exception:
             pass
         raise
@@ -453,7 +560,7 @@ def add_run_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("profile", type=Path)
     parser.add_argument("--skip-conversion", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
-    parser.add_argument("--env-file", default=str(DEFAULT_ENV_FILE))
+    parser.add_argument("--env-file", default=DEFAULT_ENV_FILE)
     parser.add_argument("--base-url")
     parser.add_argument("--mineru-language")
     parser.add_argument("--poll-interval", type=float, default=10.0)
@@ -480,6 +587,8 @@ def build_parser() -> argparse.ArgumentParser:
     inventory.add_argument("profile", type=Path)
     inventory.add_argument("--output", type=Path)
     inventory.add_argument("--overwrite", action="store_true")
+    preflight = sub.add_parser("preflight")
+    add_run_arguments(preflight)
     for command in ("run", "resume"):
         add_run_arguments(sub.add_parser(command))
     status = sub.add_parser("status")
@@ -513,6 +622,24 @@ def main(argv: list[str] | None = None) -> int:
             output = args.output or Path(profile["format"]["inventory"])
             result = build_inventory(args.profile)
             write_json_atomic(output, result, overwrite=args.overwrite)
+            paths = artifact_paths(profile)
+            draft = build_adapter_draft(args.profile, result)
+            write_text_atomic(
+                paths["review_worksheet"],
+                build_review_worksheet(args.profile, result, draft),
+                overwrite=args.overwrite,
+            )
+        elif args.command == "preflight":
+            result = build_preflight_report(
+                args.profile,
+                env_file=args.env_file,
+                skip_conversion=args.skip_conversion,
+                overwrite=args.overwrite,
+            )
+            profile = load_profile(args.profile)
+            write_json_atomic(
+                artifact_paths(profile)["preflight"], result, overwrite=True
+            )
         elif args.command in {"run", "resume"}:
             result = run_pipeline(args.profile, args)
         elif args.command == "status":

@@ -75,6 +75,61 @@ def get_args(overwrite: bool = False) -> Namespace:
 
 
 class TestPipeline(unittest.TestCase):
+    def test_note_properties_move_to_frontmatter_and_retained_section_stays_inline(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            questions = root / "questions.md"
+            questions.write_text(
+                "# Unit One\n\nGuide Alice\n\nModules: Algebra, Geometry.\n\n"
+                "## Introduction\n\nThis introduction belongs to the unit.\n\n"
+                "## Training\n\n1. First question.\n",
+                encoding="utf-8",
+            )
+            staging = root / "staging"
+            vault = root / "vault"
+            graph = vault / "graph"
+            profile_path = staging / "profile.json"
+            profile = create_profile(
+                [f"questions={questions}"],
+                "InlineIntroduction",
+                staging,
+                vault,
+                graph,
+                "en",
+                None,
+                False,
+            )
+            write_json_atomic(profile_path, profile)
+            adapter = make_adapter(profile_path, answers=False)
+            adapter["hierarchy"]["entries"] = [
+                {"key": "u1", "title": "Unit One", "level": 1, "output": "Unit One/Unit One.md"}
+            ]
+            adapter["content"]["roles"] = [
+                {"role": "training-band", "depth": 0, "pattern": r"Training"}
+            ]
+            adapter["content"]["note_properties"] = [
+                {"name": "guide", "pattern": r"^Guide\s+(?P<value>.+)$", "required": True},
+                {
+                    "name": "modules",
+                    "pattern": r"^Modules:\s*(?P<value>.+?)\.$",
+                    "required": True,
+                },
+            ]
+            write_json_atomic(staging / "format-adapter.json", adapter)
+
+            args = get_args()
+            args.env_file = None
+            result = run_pipeline(profile_path, args)
+            unit = next(graph.rglob("Unit_One.md"))
+            text = unit.read_text(encoding="utf-8")
+
+            self.assertEqual(result["status"], "passed")
+            self.assertTrue(text.startswith('---\nguide: "Alice"\nmodules: "Algebra, Geometry"\n---\n'))
+            self.assertNotIn("Guide Alice", text)
+            self.assertNotIn("Modules:", text)
+            self.assertIn("## Introduction\n\nThis introduction belongs to the unit.", text)
+            self.assertFalse(any(path.name == "Introduction.md" for path in graph.rglob("*.md")))
+
     def test_first_run_creates_unapproved_adapter_draft(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
@@ -90,10 +145,19 @@ class TestPipeline(unittest.TestCase):
 
             result = run_pipeline(profile_path, get_args())
             draft = json.loads(Path(result["adapter_draft"]).read_text(encoding="utf-8"))
+            state = json.loads((staging / "pipeline-state.json").read_text(encoding="utf-8"))
 
             self.assertEqual(result["next_stage"], "format-adapter-review")
             self.assertEqual(draft["status"], "review_required")
             self.assertFalse(draft["reviewer_confirmed"])
+            self.assertTrue(Path(result["review_worksheet"]).is_file())
+            self.assertEqual(state["runs"][0]["run_id"], "run-000001")
+            self.assertEqual(state["runs"][0]["status"], "review_required")
+            self.assertTrue(Path(state["runs"][0]["manifest"]).is_file())
+            self.assertTrue(state["stages"]["preflight"]["attempt_history"])
+            self.assertTrue(
+                Path(state["stages"]["preflight"]["attempt_history"][0]["manifest"]).is_file()
+            )
 
     def test_missing_authoritative_answer_routes_through_reviewed_supplement(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -257,6 +321,7 @@ class TestPipeline(unittest.TestCase):
             self.assertEqual(result["status"], "passed")
             manifest = json.loads((staging / "question-type-manifest.json").read_text(encoding="utf-8"))
             self.assertEqual(len(manifest["questions"]), 3)
+            self.assertEqual(manifest["questions"][0]["source_markdown_line"], 9)
             self.assertTrue({node["role"] for node in manifest["functional_nodes"]} >= {
                 "training-band",
                 "question-type",

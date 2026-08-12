@@ -327,6 +327,19 @@ def _validate_regex(value: Any, field: str, *, allow_empty_match: bool = False) 
         raise ConfigurationError(f"{field} must not match an empty string")
 
 
+def _validate_optional_bbox(value: Any, field: str) -> None:
+    if value is None:
+        return
+    if not (
+        isinstance(value, list)
+        and len(value) == 4
+        and all(isinstance(item, (int, float)) and not isinstance(item, bool) for item in value)
+        and value[0] <= value[2]
+        and value[1] <= value[3]
+    ):
+        raise ConfigurationError(f"{field} must be [x0, y0, x1, y1]")
+
+
 def validate_adapter_contract(adapter: dict[str, Any], profile: dict[str, Any]) -> None:
     """Validate the executable v1 adapter contract before any stage uses it."""
     filename_policy = adapter.get("filename_policy")
@@ -414,6 +427,53 @@ def validate_adapter_contract(adapter: dict[str, Any], profile: dict[str, Any]) 
             raise ConfigurationError(
                 f"content.roles[{index}].heading_only must be boolean"
             )
+    question_scopes = content.get("question_scopes")
+    if question_scopes is not None:
+        if not isinstance(question_scopes, list) or not question_scopes:
+            raise ConfigurationError("content.question_scopes must be a non-empty list")
+        configured_roles = {str(rule.get("role")) for rule in roles}
+        for index, scope in enumerate(question_scopes):
+            if not isinstance(scope, dict):
+                raise ConfigurationError(f"content.question_scopes[{index}] must be an object")
+            if not any(
+                key in scope for key in ("context", "contexts", "roles", "start_line", "end_line")
+            ):
+                raise ConfigurationError(
+                    f"content.question_scopes[{index}] requires a context, role, or line range"
+                )
+            contexts = scope.get("contexts")
+            if contexts is not None and (
+                not isinstance(contexts, list)
+                or not contexts
+                or any(not str(value).strip() for value in contexts)
+            ):
+                raise ConfigurationError(
+                    f"content.question_scopes[{index}].contexts must be a non-empty list"
+                )
+            scoped_roles = scope.get("roles")
+            if scoped_roles is not None and (
+                not isinstance(scoped_roles, list)
+                or not scoped_roles
+                or any(str(value) not in configured_roles for value in scoped_roles)
+            ):
+                raise ConfigurationError(
+                    f"content.question_scopes[{index}].roles must name configured roles"
+                )
+            for key in ("start_line", "end_line"):
+                if key in scope and (
+                    not isinstance(scope[key], int) or isinstance(scope[key], bool) or scope[key] < 1
+                ):
+                    raise ConfigurationError(
+                        f"content.question_scopes[{index}].{key} must be a positive integer"
+                    )
+            if (
+                scope.get("start_line") is not None
+                and scope.get("end_line") is not None
+                and int(scope["start_line"]) > int(scope["end_line"])
+            ):
+                raise ConfigurationError(
+                    f"content.question_scopes[{index}] line range is reversed"
+                )
     question_overrides = content.get("question_number_overrides", [])
     if not isinstance(question_overrides, list):
         raise ConfigurationError("content.question_number_overrides must be a list")
@@ -480,6 +540,10 @@ def validate_adapter_contract(adapter: dict[str, Any], profile: dict[str, Any]) 
                 "recovered question identity, body, page provenance, anchor, and review are required"
             )
         recovered_keys.add(identity)
+        _validate_optional_bbox(
+            item.get("source_bbox"),
+            f"content.recovered_questions[{index}].source_bbox",
+        )
         if not str(item.get("anchor_text", "")).strip() and not item.get("anchor_pattern"):
             raise ConfigurationError(f"content.recovered_questions[{index}] requires a drift anchor")
         if item.get("anchor_pattern") is not None:
@@ -665,6 +729,10 @@ def validate_adapter_contract(adapter: dict[str, Any], profile: dict[str, Any]) 
                 "recovered answer identity, body, page provenance, anchor, and review are required"
             )
         recovered_answer_keys.add(identity)
+        _validate_optional_bbox(
+            item.get("source_bbox"),
+            f"answers.recovered_answers[{index}].source_bbox",
+        )
         if not str(item.get("anchor_text", "")).strip() and not item.get("anchor_pattern"):
             raise ConfigurationError(f"answers.recovered_answers[{index}] requires a drift anchor")
         if item.get("anchor_pattern") is not None:
