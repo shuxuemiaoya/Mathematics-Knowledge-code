@@ -17,7 +17,12 @@ from .inventory import build_adapter_draft, build_inventory
 from .mineru import DEFAULT_ENV_FILE, convert as convert_pdf
 from .profile import create_profile
 from .runtime import artifacts_current, init_state, input_fingerprint, status_state, update_stage
-from .supplement import apply_supplement, has_substantive_reviewed_solution, plan_supplement
+from .supplement import (
+    apply_supplement,
+    find_questions_requiring_supplement,
+    has_substantive_reviewed_solution,
+    plan_supplement,
+)
 
 
 def artifact_paths(profile: dict[str, Any]) -> dict[str, Path]:
@@ -294,11 +299,9 @@ def _run_pipeline(profile_path: Path, args: argparse.Namespace) -> dict[str, Any
         )
 
     if profile.get("answers", {}).get("mode") != "unavailable":
-        answer_application = load_json(paths["answer_application"])
-        unmatched_ids = {
-            str(item.get("question_id"))
-            for item in answer_application.get("questions", [])
-            if item.get("answer_status") == "unmatched"
+        supplement_candidates = find_questions_requiring_supplement(profile_path)
+        supplement_required_ids = {
+            str(item.get("question_id")) for item in supplement_candidates
         }
         supplemental_application = (
             load_json(paths["supplement_application"])
@@ -308,10 +311,9 @@ def _run_pipeline(profile_path: Path, args: argparse.Namespace) -> dict[str, Any
         supplemented_ids = {
             str(item.get("question_id"))
             for item in supplemental_application.get("questions", [])
-            if item.get("answer_status") == "ai-generated"
-            and item.get("answer_note_records")
+            if item.get("answer_note_records")
         }
-        unresolved_supplements = unmatched_ids - supplemented_ids
+        unresolved_supplements = supplement_required_ids - supplemented_ids
         if unresolved_supplements:
             supplement_plan = plan_supplement(profile_path, paths["supplement_plan"])
             planned_questions = supplement_plan.get("questions", [])
@@ -353,12 +355,12 @@ def _run_pipeline(profile_path: Path, args: argparse.Namespace) -> dict[str, Any
                     "unresolved_count": len(unresolved_supplements),
                 }
         supplement_status = load_json(paths["state"]).get("stages", {}).get("solution-supplement", {}).get("status")
-        if not unmatched_ids and supplement_status not in {"completed", "skipped"}:
+        if not supplement_required_ids and supplement_status not in {"completed", "skipped"}:
             update_stage(
                 paths["state"],
                 "solution-supplement",
                 "skipped",
-                message="All questions have authoritative solutions",
+                message="All questions have complete authoritative solutions",
             )
     else:
         supplement_status = load_json(paths["state"]).get("stages", {}).get("solution-supplement", {}).get("status")

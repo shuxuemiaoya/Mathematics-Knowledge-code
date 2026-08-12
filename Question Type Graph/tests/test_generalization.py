@@ -5,6 +5,7 @@ import json
 import re
 import tempfile
 import unittest
+from argparse import Namespace
 from pathlib import Path
 
 from question_type_graph.answers import parse_answer_blocks
@@ -16,7 +17,7 @@ from question_type_graph.common import (
 from question_type_graph.content import plan_content
 from question_type_graph.hierarchy import plan_hierarchy
 from question_type_graph.inventory import build_inventory, inventory_markdown
-from question_type_graph.mineru import PdfPart, build_payload
+from question_type_graph.mineru import PdfPart, build_payload, load_settings
 from question_type_graph.profile import create_profile
 
 
@@ -34,6 +35,23 @@ class TestGeneralization(unittest.TestCase):
                 "enable_formula": True,
                 "enable_table": True,
             })
+
+    def test_mineru_settings_accept_ch_and_zh_profile_aliases(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            env_file = Path(tmp_dir) / ".env"
+            env_file.write_text("MINERU_API_KEY=test-key\n", encoding="utf-8")
+            args = Namespace(
+                env_file=str(env_file),
+                base_url=None,
+                language=None,
+                poll_interval=1.0,
+                max_polls=1,
+                request_timeout=1.0,
+            )
+            for profile_language in ("ch", "zh", "zh-CN", "zh_CN"):
+                with self.subTest(profile_language=profile_language):
+                    settings = load_settings(args, {"language": profile_language})
+                    self.assertEqual(settings.language, "ch")
 
     def test_numbering_patterns_are_adapter_controlled(self) -> None:
         cases = [

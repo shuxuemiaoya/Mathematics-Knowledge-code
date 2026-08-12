@@ -155,6 +155,72 @@ class TestPipeline(unittest.TestCase):
             self.assertEqual(completed["status"], "passed")
             self.assertEqual(status_state(staging / "pipeline-state.json")["status"], "completed")
 
+    def test_result_only_authoritative_answer_keeps_source_note_and_adds_reviewed_explanation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            questions = root / "questions.md"
+            answers = root / "answers.md"
+            questions.write_text(
+                "# Unit One\n\n## Section 1\n\n#### Type Direct\n\n"
+                "1. Which ordering is correct?\nA. First ordering\nB. Second ordering\n",
+                encoding="utf-8",
+            )
+            answers.write_text(
+                "# Solutions\n\n## Section 1 Answers\n\n1. A\n",
+                encoding="utf-8",
+            )
+            staging = root / "staging"
+            vault = root / "vault"
+            graph = vault / "graph"
+            profile_path = staging / "profile.json"
+            profile = create_profile(
+                [f"questions={questions}", f"answers={answers}"],
+                "ResultOnly",
+                staging,
+                vault,
+                graph,
+                "en",
+                None,
+                False,
+            )
+            write_json_atomic(profile_path, profile)
+            adapter = make_adapter(profile_path)
+            adapter["content"]["roles"] = [
+                {"role": "question-type", "depth": 0, "pattern": r"Type (?P<title>.+)"}
+            ]
+            write_json_atomic(staging / "format-adapter.json", adapter)
+
+            supplement_review = run_pipeline(profile_path, get_args())
+            self.assertEqual(supplement_review["next_stage"], "solution-supplement-review")
+            supplement_path = Path(supplement_review["manifest"])
+            supplement = json.loads(supplement_path.read_text(encoding="utf-8"))
+            self.assertEqual(supplement["supplement_required_count"], 1)
+            self.assertEqual(
+                supplement["questions"][0]["supplement_reason"],
+                "authoritative-solution-incomplete",
+            )
+            supplement["questions"][0]["solution"] = (
+                "1. A 【解析】Compare the two stated orderings directly; only option A "
+                "satisfies every required relation."
+            )
+            supplement["questions"][0]["reviewer_confirmed"] = True
+            write_json_atomic(supplement_path, supplement, overwrite=True)
+
+            applied = apply_supplement(profile_path, supplement_path)
+            completed = run_pipeline(profile_path, get_args())
+            question = next(graph.rglob("Q[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].md"))
+            question_text = question.read_text(encoding="utf-8")
+            answer_dir = question.parent / "answers"
+
+            self.assertEqual(applied["status"], "completed")
+            self.assertEqual(completed["status"], "passed")
+            self.assertTrue((answer_dir / f"{question.stem}A1.md").is_file())
+            self.assertTrue((answer_dir / f"{question.stem}A2.md").is_file())
+            self.assertIn(f"![[{question.stem}A1]]", question_text)
+            self.assertIn(f"![[{question.stem}A2]]", question_text)
+            self.assertIn("answer_provenance: authoritative", (answer_dir / f"{question.stem}A1.md").read_text(encoding="utf-8"))
+            self.assertIn("answer_provenance: ai-generated-reviewed", (answer_dir / f"{question.stem}A2.md").read_text(encoding="utf-8"))
+
     def test_full_separate_question_and_answer_pipeline(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)

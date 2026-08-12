@@ -76,7 +76,10 @@ def load_settings(args: argparse.Namespace, profile: dict[str, Any]) -> Settings
     base_url = (args.base_url or env.get("MINERU_BASE_URL") or DEFAULT_BASE_URL).rstrip("/")
     if base_url.endswith("/api/v4"):
         base_url = base_url[:-7]
-    language = args.language or ("ch" if str(profile.get("language", "")).casefold().startswith("zh") else "en")
+    profile_language = str(profile.get("language", "")).strip().casefold().replace("_", "-")
+    language = args.language or (
+        "ch" if profile_language == "ch" or profile_language.startswith("zh") else "en"
+    )
     return Settings(api_key, base_url, args.poll_interval, args.max_polls, args.request_timeout, language)
 
 

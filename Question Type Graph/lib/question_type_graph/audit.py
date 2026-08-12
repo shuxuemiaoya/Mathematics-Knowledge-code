@@ -370,7 +370,7 @@ def audit_graph(
                     has_embed = bool(re.search(r"!\[\[Q\d+A\d+[^\]]*\]\]", text))
                     is_unmatched = "answer_status: unmatched" in text
                     records = application.get("answer_note_records", [])
-                    record_errors = []
+                    record_results: list[tuple[dict[str, Any], bool, str | None]] = []
                     for record in records:
                         valid, reason = valid_solution_note(
                             Path(record.get("path", "")),
@@ -378,17 +378,48 @@ def audit_graph(
                             require_choice_answer=require_choice_answer,
                             expected_choice_answer=expected_choice_answer,
                         )
-                        if not valid:
-                            record_errors.append(reason)
-                    expected_provenance = "authoritative" if match is not None else "ai-generated-reviewed"
-                    has_valid_solution = bool(records) and not record_errors and all(
-                        record.get("provenance") == expected_provenance for record in records
-                    )
+                        record_results.append((record, valid, reason))
+                    record_errors: list[str | None] = []
                     if match is not None:
-                        has_valid_solution = has_valid_solution and all(
+                        authoritative_results = [
+                            item
+                            for item in record_results
+                            if item[0].get("provenance") == "authoritative"
+                        ]
+                        supplemental_results = [
+                            item
+                            for item in record_results
+                            if item[0].get("provenance") == "ai-generated-reviewed"
+                        ]
+                        has_valid_supplement = any(valid for _, valid, _ in supplemental_results)
+                        for record, valid, reason in record_results:
+                            provenance = record.get("provenance")
+                            compensable_result_only = bool(
+                                provenance == "authoritative"
+                                and reason == "solution-content-incomplete"
+                                and has_valid_supplement
+                            )
+                            if not valid and not compensable_result_only:
+                                record_errors.append(reason)
+                            if provenance not in {"authoritative", "ai-generated-reviewed"}:
+                                record_errors.append("solution-provenance-unreviewed")
+                        authoritative_source_matches = bool(authoritative_results) and all(
                             record.get("source_body_sha256") == match.get("answer_body_sha256")
-                            for record in records
+                            for record, _, _ in authoritative_results
                         )
+                        if not authoritative_source_matches:
+                            record_errors.append("solution-source-provenance-drift")
+                        has_substantive_solution = any(
+                            valid for _, valid, _ in authoritative_results
+                        ) or has_valid_supplement
+                        has_valid_solution = bool(records) and not record_errors and has_substantive_solution
+                    else:
+                        for record, valid, reason in record_results:
+                            if not valid:
+                                record_errors.append(reason)
+                            if record.get("provenance") != "ai-generated-reviewed":
+                                record_errors.append("solution-provenance-unreviewed")
+                        has_valid_solution = bool(records) and not record_errors
                     if not has_embed or is_unmatched or not has_valid_solution:
                         review_item = review_by_question.get(str(question["id"]), {})
                         reason = (

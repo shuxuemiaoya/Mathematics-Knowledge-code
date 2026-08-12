@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .answers import format_answer_callout
+from .audit import valid_solution_note
 from .common import GraphError, lexical_signature, load_json, load_profile, sha256_file, sha256_text, write_json_atomic, write_text_atomic
 from .runtime import update_stage
 
@@ -26,37 +27,89 @@ def has_substantive_reviewed_solution(item: dict[str, Any]) -> bool:
     )
 
 
-def find_unmatched_questions(profile_path: Path) -> list[dict[str, Any]]:
+def find_questions_requiring_supplement(profile_path: Path) -> list[dict[str, Any]]:
     profile = load_profile(profile_path)
     graph_root = Path(profile["paths"]["graph_root"])
     if not graph_root.exists():
         raise SupplementError(f"Graph root does not exist: {graph_root}")
 
-    unmatched: list[dict[str, Any]] = []
+    application_path = (
+        Path(profile["paths"]["staging_root"]) / "answer-application-report.json"
+    )
+    application = (
+        load_json(application_path) if application_path.is_file() else {"questions": []}
+    )
+    application_by_id = {
+        str(item.get("question_id")): item
+        for item in application.get("questions", [])
+        if item.get("question_id")
+    }
+
+    required: list[dict[str, Any]] = []
     for q_path in sorted(graph_root.rglob("Q[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].md")):
         text = q_path.read_text(encoding="utf-8")
+        m_body = re.search(r"<!-- question-source:start -->([\s\S]*?)<!-- question-source:end -->", text)
+        body = m_body.group(1).strip() if m_body else ""
+        m_qnum = re.search(r"^question_number:\s*\"?([^\n\"]+)\"?", text, re.MULTILINE)
+        qnum = m_qnum.group(1) if m_qnum else q_path.stem
+        m_qid = re.search(r"^question_id:\s*\"?([^\n\"]+)\"?", text, re.MULTILINE)
+        qid = m_qid.group(1) if m_qid else q_path.stem
+
+        reason = None
+        existing_answer_notes: list[str] = []
+        authoritative_answer = None
         if re.search(r"^answer_status:\s*unmatched\b", text, re.MULTILINE):
-            m_body = re.search(r"<!-- question-source:start -->([\s\S]*?)<!-- question-source:end -->", text)
-            body = m_body.group(1).strip() if m_body else ""
-            m_qnum = re.search(r"^question_number:\s*\"?([^\n\"]+)\"?", text, re.MULTILINE)
-            qnum = m_qnum.group(1) if m_qnum else q_path.stem
-            m_qid = re.search(r"^question_id:\s*\"?([^\n\"]+)\"?", text, re.MULTILINE)
-            qid = m_qid.group(1) if m_qid else q_path.stem
-            unmatched.append(
+            reason = "missing-authoritative-answer"
+        elif re.search(r"^answer_status:\s*matched\b", text, re.MULTILINE):
+            application_item = application_by_id.get(qid, {})
+            records = application_item.get("answer_note_records", [])
+            reasons: list[str | None] = []
+            for record in records:
+                note_path = Path(str(record.get("path", "")))
+                valid, invalid_reason = valid_solution_note(note_path, record)
+                if not valid:
+                    reasons.append(invalid_reason)
+                if note_path.is_file():
+                    existing_answer_notes.append(str(note_path.resolve()))
+                    answer_text = note_path.read_text(encoding="utf-8-sig")
+                    match = re.search(
+                        r"(?m)^> \*\*【答案】\*\*\s+(\S.*?)\s*$", answer_text
+                    )
+                    if match and authoritative_answer is None:
+                        authoritative_answer = match.group(1).strip()
+            if records and reasons and all(
+                item == "solution-content-incomplete" for item in reasons
+            ):
+                reason = "authoritative-solution-incomplete"
+
+        if reason:
+            required.append(
                 {
                     "question_id": qid,
                     "question_stem": q_path.stem,
                     "question_number": qnum,
                     "file_path": str(q_path.resolve()),
                     "question_body": body,
+                    "supplement_reason": reason,
+                    "existing_answer_notes": existing_answer_notes,
+                    "authoritative_answer": authoritative_answer,
                 }
             )
-    return unmatched
+    return required
+
+
+def find_unmatched_questions(profile_path: Path) -> list[dict[str, Any]]:
+    """Compatibility view used by callers that need only missing answers."""
+    return [
+        item
+        for item in find_questions_requiring_supplement(profile_path)
+        if item.get("supplement_reason") == "missing-authoritative-answer"
+    ]
 
 
 def plan_supplement(profile_path: Path, manifest_output: Path) -> dict[str, Any]:
     profile = load_profile(profile_path)
-    items = find_unmatched_questions(profile_path)
+    items = find_questions_requiring_supplement(profile_path)
     previous_by_id: dict[str, dict[str, Any]] = {}
     if manifest_output.is_file():
         previous = load_json(manifest_output)
@@ -103,7 +156,11 @@ def plan_supplement(profile_path: Path, manifest_output: Path) -> dict[str, Any]
         "stage": "supplement-question-type-solutions",
         "status": "planned",
         "profile": profile["_profile_path"],
-        "unmatched_count": len(items),
+        "unmatched_count": sum(
+            item.get("supplement_reason") == "missing-authoritative-answer"
+            for item in items
+        ),
+        "supplement_required_count": len(items),
         "questions": items,
     }
     write_json_atomic(manifest_output, report, overwrite=True)
@@ -146,10 +203,20 @@ def apply_supplement(
             )
             continue
         q_current_text = q_file.read_text(encoding="utf-8-sig")
-        if not re.search(r"^answer_status:\s*unmatched\b", q_current_text, re.MULTILINE):
+        supplement_reason = str(
+            q_item.get("supplement_reason") or "missing-authoritative-answer"
+        )
+        is_unmatched = bool(
+            re.search(r"^answer_status:\s*unmatched\b", q_current_text, re.MULTILINE)
+        )
+        is_matched_incomplete = bool(
+            supplement_reason == "authoritative-solution-incomplete"
+            and re.search(r"^answer_status:\s*matched\b", q_current_text, re.MULTILINE)
+        )
+        if not is_unmatched and not is_matched_incomplete:
             review_items.append(
                 {
-                    "kind": "supplemental-question-no-longer-unmatched",
+                    "kind": "supplemental-question-no-longer-requires-supplement",
                     "question_id": q_item.get("question_id"),
                     "path": str(q_file),
                 }
@@ -170,7 +237,8 @@ def apply_supplement(
             continue
         ans_dir = q_file.parent / "answers"
         ans_dir.mkdir(parents=True, exist_ok=True)
-        ans_file = ans_dir / f"{q_stem}A1.md"
+        answer_index = 2 if is_matched_incomplete else 1
+        ans_file = ans_dir / f"{q_stem}A{answer_index}.md"
 
         if not ans_file.exists() or overwrite:
             solution_content = (
@@ -183,20 +251,26 @@ def apply_supplement(
             write_text_atomic(ans_file, solution_content, overwrite=ans_file.exists())
 
         q_text = q_current_text
-        q_text = re.sub(r"^answer_status:\s*unmatched\b", "answer_status: ai-generated", q_text, flags=re.MULTILINE)
-        embed_ref = f"![[{q_stem}A1]]"
+        if is_unmatched:
+            q_text = re.sub(r"^answer_status:\s*unmatched\b", "answer_status: ai-generated", q_text, flags=re.MULTILINE)
+        embed_ref = f"![[{q_stem}A{answer_index}]]"
         if embed_ref not in q_text:
             q_text = q_text.rstrip() + f"\n\n{embed_ref}\n"
 
         write_text_atomic(q_file, q_text, overwrite=True)
-        applied.append({"question_stem": q_stem, "answer_file": str(ans_file.resolve())})
+        applied.append({
+            "question_stem": q_stem,
+            "answer_file": str(ans_file.resolve()),
+            "supplement_reason": supplement_reason,
+        })
 
         # Update app_report expected notes
         if qid not in app_questions_by_id:
             app_questions_by_id[qid] = {
                 "question_id": qid,
                 "path": str(q_file.resolve()),
-                "answer_status": "ai-generated",
+                "answer_status": "ai-generated" if is_unmatched else "matched",
+                "supplement_reason": supplement_reason,
                 "answer_notes": [str(ans_file.resolve())],
                 "answer_note_records": [],
             }
@@ -214,7 +288,10 @@ def apply_supplement(
                 "provenance": "ai-generated-reviewed",
             }
         )
-        app_questions_by_id[qid]["answer_status"] = "ai-generated"
+        app_questions_by_id[qid]["answer_status"] = (
+            "ai-generated" if is_unmatched else "matched"
+        )
+        app_questions_by_id[qid]["supplement_reason"] = supplement_reason
 
     app_report["status"] = "review_required" if review_items else "passed"
     app_report["profile"] = profile["_profile_path"]
