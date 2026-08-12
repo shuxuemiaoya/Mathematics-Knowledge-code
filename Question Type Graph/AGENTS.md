@@ -46,6 +46,14 @@ freeze typed sources
   roles, contexts, or source ranges before adding source-line exclusions for
   isolated false positives.
 - Create one leaf note per top-level question and keep its subparts together.
+- Treat every adapter-recognized publisher worked example or variant as an
+  atomic question leaf. The compiler must globally add `重要程度: 重要`, retain
+  only the stem in that leaf, move the publisher's analysis into a separate
+  authoritative `<QID>A1.md` answer note, and embed it from the question. Keep
+  these leaves out of external answer matching. Recognition and exact solution
+  boundary syntax remain in `content.question_kind_rules` and
+  `content.worked_example_solution_patterns`, never in reusable compiler
+  vocabulary.
 - Flatten question-bearing HTML tables into semantic column streams before
   segmentation. Merge streams by the next printed question number, keep each
   image or strategy with its column record, and expose adapter-matched labels
@@ -100,13 +108,19 @@ freeze typed sources
 - Keep staging outside published vault roots and create no backup directories.
 - Use adapter-configured `answers.callout_title` for answer callouts rather than hardcoding publisher names.
 - When OCR drops a choice answer header but preserves an explicit authoritative conclusion such as `故选:D`, recover `D` into a separate `**【答案】** D` field. Never infer an option from isolated capital letters or mathematical prose. Choice-question audit must fail on a missing answer field, and authoritative notes must agree with the source conclusion.
-- Every generated solution callout must contain both `**【答案】**` and
-  `**【解析】**`. Recover a bounded publisher-stated result that appears before
+- Every generated solution note must use a collapsible outer
+  `> [!faq]- <title>` and three collapsible nested callouts:
+  `> > [!success]- **【答案】**`, `> > [!note]- **【分析】**`, and
+  `> > [!note]- **【解析】**`. All nested content lines must retain the `> >`
+  prefix. Recover a bounded publisher-stated result that appears before
   an explicit `解析:`/`【解析】` marker. When a non-choice problem has no safely
   separable short result, write `**【答案】** 详见解析`; never use that fallback
   for a choice problem, whose exact option remains mandatory.
 - Ensure question and answer regex patterns use a single named group (e.g. `^【?(?P<number>\d+)[】.．、]?\s*`) to prevent Python regex duplicate group name errors.
-- Bound question `end_line` before any internal markdown heading (`^\s*#{1,6}\s+\S`) in `plan_note()`, preserving inline sub-classifications (`角度`/`类型`), strategy callout text, and figures inside the leaf Type note between question embeds.
+- Bound ordinary question `end_line` before any internal markdown heading
+  (`^\s*#{1,6}\s+\S`) in `plan_note()`. A reviewed worked-example kind may set
+  `preserve_internal_headings: true` so publisher `分析/解析/评注` headings stay
+  inside the atomic leaf.
 - Automatically deduplicate adjacent OCR duplicate answer header lines for the same `(context, number)` in `answers.py`.
 - Allocate question sequence numbers through the locked vault registry
   `.question-type-graph/question-id-registry.json`. Seed a new registry from
@@ -115,7 +129,11 @@ freeze typed sources
 - Update `format_answer_callout()` option extraction regex (`^【?\d+】?[\.、\s]*([A-Z]+)`) to accept bracketed question numbers (`【N】A`) as well as plain numbers (`N. A`).
 - Validate and align `answers.contexts` `start_line` boundaries against exact section heading positions in `answers.raw.md` during format inventory to prevent cross-section answer block misattribution and duplicate-number collisions.
 - Preserve `## 知识导学` knowledge guide sections and all nested subheadings (`## 一. ...`, `## 1. ...`), formulas, diagram asset paths, and comparison tables within primary section notes without splitting them into separate question notes.
-- Enforce zero-tolerance validation for questions lacking explanations during graph audit: when answers are enabled, every atomic question note MUST embed a valid solution callout note (authoritative or AI-supplemented). Any question lacking an explanation MUST trigger a blocking audit error with its exact root cause identified (`ocr-header-missing`, `context-boundary-mismatch`, or `missing-answer-key`).
+- Enforce zero-tolerance validation for questions lacking explanations during
+  graph audit. External-answer exercises MUST embed a valid solution callout
+  note; publisher worked examples MUST embed a separate, provenance-marked
+  authoritative solution note and MUST NOT retain that solution inside the
+  question-source block. Any failure is blocking and reports the exact cause.
 - Treat this file and `skills/question-type-graph/references/pipeline-contract.md`
   as the canonical policy. Knowledge linking remains deferred; component skill
   documentation must not activate it implicitly.

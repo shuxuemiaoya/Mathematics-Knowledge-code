@@ -380,6 +380,11 @@ def plan_matches(profile_path: Path, adapter_path: Path, content_manifest_path: 
     profile = load_profile(profile_path)
     adapter = require_reviewed_adapter(profile, adapter_path)
     content = load_json(content_manifest_path)
+    external_questions = [
+        question
+        for question in content.get("questions", [])
+        if question.get("answer_handling", "external") == "external"
+    ]
     mode = profile.get("answers", {}).get("mode")
     if mode == "unavailable":
         return {
@@ -397,7 +402,7 @@ def plan_matches(profile_path: Path, adapter_path: Path, content_manifest_path: 
             "review_items": [],
             "review_summary": {},
             "review_groups": [],
-            "metrics": {"question_count": len(content.get("questions", [])), "matched_count": 0, "match_rate": None},
+            "metrics": {"question_count": len(external_questions), "separate_authoritative_count": len(content.get("questions", [])) - len(external_questions), "matched_count": 0, "match_rate": None},
         }
     answer_markdown, role = source_for_answers(profile, adapter)
     answers, review = parse_answer_blocks(answer_markdown, adapter)
@@ -405,7 +410,7 @@ def plan_matches(profile_path: Path, adapter_path: Path, content_manifest_path: 
     strategies = adapter.get("answers", {}).get("matching_strategies") or ["hierarchy-number"]
     matches: list[dict[str, Any]] = []
     used_answer_ids: set[str] = set()
-    for question in content.get("questions", []):
+    for question in external_questions:
         question_note = Path(question["output"])
         question_text = question_note.read_text(encoding="utf-8-sig") if question_note.is_file() else ""
         body_match = QUESTION_BODY_RE.search(question_text)
@@ -533,11 +538,12 @@ def plan_matches(profile_path: Path, adapter_path: Path, content_manifest_path: 
             for (kind, context, number), count in sorted(review_groups.items())
         ],
         "metrics": {
-            "question_count": len(content.get("questions", [])),
+            "question_count": len(external_questions),
+            "separate_authoritative_count": len(content.get("questions", [])) - len(external_questions),
             "answer_block_count": len(answers),
             "matched_count": len(matches),
-            "match_rate": round(len(matches) / len(content.get("questions", [])), 4)
-            if content.get("questions")
+            "match_rate": round(len(matches) / len(external_questions), 4)
+            if external_questions
             else 1.0,
         },
     }
@@ -618,22 +624,36 @@ def format_answer_callout(
     reviewed_choice_answer: str | None = None,
     reviewed_short_answer: str | None = None,
 ) -> str:
-    lines = body.strip().splitlines()
-    if not lines:
-        return (
-            f"> [!faq]- {callout_title}\n"
-            "> **【答案】** 详见解析  \n"
-            "> \n"
-            "> **【解析】**  \n> "
+    source_body = body.strip()
+    analysis_match = re.search(
+        r"(?m)^\s*(?:#{1,6}\s*)?【?分析】?(?:\s|[：:]|$)", source_body
+    )
+    analysis_text = "本题未单列分析。"
+    resolution_body = source_body
+    if analysis_match is not None:
+        resolution_match = re.search(
+            r"(?m)^\s*(?:#{1,6}\s*)?【?解析】?(?:\s|[：:]|$)",
+            source_body[analysis_match.end():],
         )
+        if resolution_match is not None:
+            resolution_start = analysis_match.end() + resolution_match.start()
+            analysis_text = source_body[analysis_match.start():resolution_start].strip()
+            resolution_body = source_body[resolution_start:].strip()
+        else:
+            analysis_text = source_body[analysis_match.start():].strip()
+            resolution_body = "本题未单列解析。"
+
+    lines = resolution_body.splitlines() or [""]
 
     # Prefer an explicit worked conclusion over an OCR header when both are
     # present; a reviewed override remains the highest authority.
-    option = reviewed_choice_answer or extract_choice_answer(body)
+    option = reviewed_choice_answer or extract_choice_answer(resolution_body)
     explicit_nonchoice_answer = None
     prepared_analysis = None
     if option is None:
-        candidate_answer, candidate_analysis = extract_nonchoice_answer_prefix(body)
+        candidate_answer, candidate_analysis = extract_nonchoice_answer_prefix(
+            resolution_body
+        )
         if candidate_answer is not None:
             explicit_nonchoice_answer = candidate_answer
             prepared_analysis = candidate_analysis
@@ -716,17 +736,12 @@ def format_answer_callout(
     if current_block:
         blocks.append((current_type, current_extra_kw, "\n".join(current_block)))
 
-    callout_lines = [f"> [!faq]- {callout_title}"]
     answer_value = reviewed_short_answer or option or explicit_nonchoice_answer or "详见解析"
     answer_value = re.sub(r"\s+", " ", answer_value).strip()
-    callout_lines.append(f"> **【答案】** {answer_value}  ")
-    callout_lines.append("> ")
-
-    callout_lines.append("> **【解析】**  ")
-
     main_text = blocks[0][2] if blocks and blocks[0][0] == "main" else ""
     raw_sub_items = re.split(r"\n(?=(?:对于\s*)?[①②③④⑤⑥⑦⑧⑨⑩])|(?<=[；;。])\s*(?=(?:对于\s*)?[①②③④⑤⑥⑦⑧⑨⑩])", main_text)
     conclusion_line = None
+    resolution_lines: list[str] = []
     for sub in raw_sub_items:
         sub_str = sub.strip()
         if not sub_str:
@@ -742,32 +757,40 @@ def format_answer_callout(
             # ①② item block may itself contain continuation lines (e.g. a
             # trailing 故选 line merged into the last item) — quote every line.
             item_lines = sub_str.splitlines()
-            callout_lines.append(f"> {item_lines[0]}  ")
+            resolution_lines.append(item_lines[0])
             for extra_line in item_lines[1:]:
-                callout_lines.append(f"> {extra_line}  ")
+                resolution_lines.append(extra_line)
         elif sub_str:
-            # Multi-line sub-block: every line must keep the blockquote "> "
-            # prefix, otherwise Obsidian renders the continuation lines
-            # outside the callout (broken fold).
             sub_lines = sub_str.splitlines()
-            callout_lines.append(f"> {sub_lines[0]}  ")
+            resolution_lines.append(sub_lines[0])
             for extra_line in sub_lines[1:]:
-                callout_lines.append(f"> {extra_line}  ")
+                resolution_lines.append(extra_line)
 
     if conclusion_line:
-        callout_lines.append("> ")
-        callout_lines.append(f"> {conclusion_line}  ")
+        resolution_lines.extend(["", conclusion_line])
 
     for btype, kw, content in blocks:
         if btype == "extra" and content.strip():
-            callout_lines.append("> ")
-            callout_lines.append("> ---")
+            resolution_lines.extend(["", "---"])
             header = emoji_map.get(kw, f"💡 {kw}")
-            callout_lines.append(f"> **{header}**  ")
+            resolution_lines.append(f"**{header}**")
             content_lines = content.strip().splitlines()
-            callout_lines.append(f"> {content_lines[0]}  ")
+            resolution_lines.append(content_lines[0])
             for extra_line in content_lines[1:]:
-                callout_lines.append(f"> {extra_line}  ")
+                resolution_lines.append(extra_line)
+
+    callout_lines = [
+        f"> [!faq]- {callout_title}",
+        ">",
+        f"> > [!success]- **【答案】** {answer_value}",
+        ">",
+        "> > [!note]- **【分析】**",
+    ]
+    for line in analysis_text.splitlines() or ["本题未单列分析。"]:
+        callout_lines.append(f"> > {line}" if line else "> >")
+    callout_lines.extend([">", "> > [!note]- **【解析】**"])
+    for line in resolution_lines or ["本题未单列解析。"]:
+        callout_lines.append(f"> > {line}" if line else "> >")
 
     return "\n".join(callout_lines)
 
@@ -786,6 +809,11 @@ def apply_matches(profile_path: Path, manifest_path: Path, overwrite: bool) -> d
     if manifest.get("content_manifest_sha256") and sha256_file(content_manifest_path) != manifest.get("content_manifest_sha256"):
         raise ConfigurationError("Content manifest changed after answer matching")
     all_questions = content.get("questions", [])
+    external_questions = [
+        question
+        for question in all_questions
+        if question.get("answer_handling", "external") == "external"
+    ]
     output = Path(profile["paths"]["staging_root"]) / "answer-application-report.json"
     previous = load_json(output) if output.is_file() else {"questions": []}
     supplement_output = Path(profile["paths"]["staging_root"]) / "supplemental-solution-application-report.json"
@@ -803,6 +831,12 @@ def apply_matches(profile_path: Path, manifest_path: Path, overwrite: bool) -> d
         if note
     )
     desired_answer_paths: set[str] = set()
+    desired_answer_paths.update(
+        str(Path(question["answer_output"]).resolve())
+        for question in all_questions
+        if question.get("answer_handling") == "separate-authoritative"
+        and question.get("answer_output")
+    )
     removed_stale: list[str] = []
     if manifest.get("mode") == "unavailable":
         result = {
@@ -844,7 +878,7 @@ def apply_matches(profile_path: Path, manifest_path: Path, overwrite: bool) -> d
             for item in adapter_data.get("answers", {}).get("short_answer_overrides", [])
         }
 
-        question_paths = [str(item["output"]) for item in all_questions]
+        question_paths = [str(item["output"]) for item in external_questions]
         if not question_paths:
             question_paths = sorted(matches_by_question)
         for q_path_str in question_paths:

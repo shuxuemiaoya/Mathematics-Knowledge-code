@@ -34,6 +34,8 @@ from question_type_graph.content import (
     compile_role_rules,
     plan_content,
     plan_note,
+    render_question,
+    split_worked_example_body,
     split_inline_question_headers,
 )
 from question_type_graph.hierarchy import apply_hierarchy, normalize_generated_output, plan_hierarchy
@@ -43,6 +45,81 @@ from question_type_graph.supplement import apply_supplement, plan_supplement
 
 
 class TestEdgeCases(unittest.TestCase):
+    def test_worked_examples_are_atomic_important_and_separate_analysis(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            graph = root / "graph"
+            graph.mkdir()
+            source = graph / "unit.md"
+            source.write_text(
+                "## 研究密钥\n公式结论。\n\n"
+                "例 1.1 求函数值。\n## 解析\n由定义计算，得到完整结论。\n\n"
+                "变式1: 求另一个函数值。\n分析：同理可得另一个完整结论。\n",
+                encoding="utf-8",
+            )
+            adapter = {
+                "_graph_root": str(graph),
+                "content": {
+                    "question_folder": "训练题",
+                    "question_title_template": "题 {number}",
+                    "question_patterns": [
+                        r"^(?P<number>例\s*\d+(?:\.\d+)?)\s*",
+                        r"^(?P<number>变式\s*\d+)\s*[：:]?\s*",
+                    ],
+                    "inline_question_patterns": [],
+                    "question_kind_rules": [
+                        {
+                            "kind": "worked-example",
+                            "pattern": r"^(?:例|变式)",
+                            "answer_handling": "separate-authoritative",
+                            "preserve_internal_headings": True,
+                            "folder": "例题",
+                        }
+                    ],
+                    "worked_example_solution_patterns": [
+                        r"^\s*(?:#{1,6}\s*)?(?:分析|解析)(?:\s|[：:]|$)"
+                    ],
+                    "question_scopes": [
+                        {"contexts": ["unit"], "kinds": ["worked-example"]}
+                    ],
+                    "roles": [],
+                    "unknown_label_policy": "retain",
+                },
+            }
+            note = {
+                "key": "unit",
+                "title": "Unit",
+                "path": str(source),
+                "content_source": str(source),
+                "answer_context": "unit",
+            }
+
+            _, questions, review = plan_note(
+                note,
+                compile_role_rules(adapter),
+                compile_question_patterns(adapter),
+                adapter,
+            )
+
+            self.assertEqual(review, [])
+            self.assertEqual(len(questions), 2)
+            self.assertTrue(all(q["question_kind"] == "worked-example" for q in questions))
+            self.assertTrue(all(q["answer_handling"] == "separate-authoritative" for q in questions))
+            self.assertTrue(all(q["metadata"] == {"重要程度": "重要"} for q in questions))
+            self.assertIn("/例题/", questions[0]["output"])
+            first_body = source.read_text(encoding="utf-8").split("变式1", 1)[0]
+            question_body, answer_body, solution_offset = split_worked_example_body(
+                first_body, adapter
+            )
+            rendered = render_question(questions[0], question_body)
+            self.assertIn('question_kind: "worked-example"', rendered)
+            self.assertIn('answer_handling: "separate-authoritative"', rendered)
+            self.assertIn('重要程度: "重要"', rendered)
+            self.assertIn("answer_status: matched", rendered)
+            self.assertNotIn("## 解析", rendered)
+            self.assertIn("## 解析", answer_body)
+            self.assertIsNotNone(solution_offset)
+
     def test_reviewed_question_scope_ignores_numbered_theory_lines(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
@@ -134,8 +211,23 @@ class TestEdgeCases(unittest.TestCase):
 
         self.assertEqual(extract_choice_answer(body), "D")
         rendered = format_answer_callout(body, callout_title="全练一本通解析")
-        self.assertIn("> **【答案】** D", rendered)
-        self.assertIn("> **【解析】**", rendered)
+        self.assertIn("> > [!success]- **【答案】** D", rendered)
+        self.assertIn("> > [!note]- **【分析】**", rendered)
+        self.assertIn("> > [!note]- **【解析】**", rendered)
+
+    def test_answer_analysis_and_explanation_are_nested_collapsible_callouts(self) -> None:
+        rendered = format_answer_callout(
+            "分析 考察奇函数在对称区间上的性质。\n\n"
+            "解析 令 $g(x)=f(x)-2$，则 $g(x)$ 为奇函数。",
+            callout_title="例题解析",
+        )
+
+        self.assertIn("> [!faq]- 例题解析", rendered)
+        self.assertIn("> > [!success]- **【答案】** 详见解析", rendered)
+        self.assertIn("> > [!note]- **【分析】**", rendered)
+        self.assertIn("> > 分析 考察奇函数在对称区间上的性质。", rendered)
+        self.assertIn("> > [!note]- **【解析】**", rendered)
+        self.assertIn("> > 解析 令 $g(x)=f(x)-2$，则 $g(x)$ 为奇函数。", rendered)
 
     def test_choice_answer_extraction_does_not_guess_from_capital_letters(self) -> None:
         body = "解析: 集合 A 与集合 D 相等，但此处没有保留权威选项结论。"

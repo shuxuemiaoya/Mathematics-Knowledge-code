@@ -12,3 +12,10 @@ and content manifest. Apply only a passed manifest. Accept exact reviewed
 identity evidence; keep fuzzy similarity advisory. Preserve raw-line coordinates
 when splitting inline OCR headers, enforce one owner per answer and question,
 and let application reconcile stale owned notes and embeds automatically.
+Questions marked `answer_handling: separate-authoritative` are publisher worked
+examples whose standalone answers are created during content segmentation; they
+remain outside this external matching ledger.
+
+All authoritative and reviewed supplemental answer notes share the same layout:
+a collapsible outer FAQ with collapsible nested success-answer, note-analysis,
+and note-explanation blocks. A flat `【答案】` or `【解析】` line is invalid.

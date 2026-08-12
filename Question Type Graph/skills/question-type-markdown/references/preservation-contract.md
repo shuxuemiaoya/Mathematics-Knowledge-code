@@ -7,7 +7,10 @@ Allowed changes:
 - bounded blank lines;
 - blank separation before headings and callouts;
 - generated non-atomic headings, provenance metadata, and standalone
-  vault-relative `![[...]]` navigation embeds.
+  vault-relative `![[...]]` navigation embeds;
+- generated answer presentation using one collapsible outer FAQ and nested
+  collapsible answer, analysis, and explanation Callouts, provided publisher
+  lexical content and order remain unchanged.
 
 Atomic question notes remain headingless before their source marker; an
 optional answer-section heading is permitted after the exact question body.

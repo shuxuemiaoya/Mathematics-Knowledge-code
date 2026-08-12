@@ -78,6 +78,94 @@ def compile_inline_question_patterns(
     )
 
 
+def compile_question_kind_rules(adapter: dict[str, Any]) -> list[dict[str, Any]]:
+    """Compile publisher-specific question classifications from the adapter.
+
+    Recognition remains book-specific, while the semantic consequences of a
+    ``worked-example`` classification are global: the example is an atomic
+    leaf, its publisher explanation stays inline, and it is marked important.
+    """
+    compiled: list[dict[str, Any]] = []
+    for index, rule in enumerate(
+        adapter.get("content", {}).get("question_kind_rules") or []
+    ):
+        kind = str(rule.get("kind", "")).strip()
+        pattern = str(rule.get("pattern", ""))
+        if not kind or not pattern:
+            raise ConfigurationError(
+                f"content.question_kind_rules[{index}] is incomplete"
+            )
+        compiled.append({**rule, "kind": kind, "_compiled": re.compile(pattern)})
+    return compiled
+
+
+def classify_question(
+    line: str, rules: list[dict[str, Any]]
+) -> dict[str, Any]:
+    for rule in rules:
+        if rule["_compiled"].search(line):
+            kind = str(rule["kind"])
+            result = {
+                "question_kind": kind,
+                "answer_handling": str(
+                    rule.get("answer_handling", "external")
+                ),
+                "preserve_internal_headings": bool(
+                    rule.get("preserve_internal_headings", False)
+                ),
+                "folder": str(rule.get("folder", "")).strip() or None,
+            }
+            if kind == "worked-example":
+                # Global graph contract: every publisher worked example is
+                # important and its printed analysis becomes a separate,
+                # provenance-marked authoritative answer note.
+                result["answer_handling"] = "separate-authoritative"
+                result["metadata"] = {"重要程度": "重要"}
+            return result
+    return {
+        "question_kind": "exercise",
+        "answer_handling": "external",
+        "preserve_internal_headings": False,
+        "metadata": {},
+        "folder": None,
+    }
+
+
+def split_worked_example_body(
+    body: str,
+    adapter: dict[str, Any],
+) -> tuple[str, str, int | None]:
+    """Split a worked example at a reviewed publisher-solution boundary.
+
+    Returns question body, solution body, and the zero-based source-line offset
+    where the solution begins. Patterns are adapter data because publisher
+    labels and unlabeled solution openers vary by series.
+    """
+    patterns = [
+        re.compile(str(pattern))
+        for pattern in adapter.get("content", {}).get(
+            "worked_example_solution_patterns", []
+        )
+    ]
+    lines = body.rstrip("\n").splitlines()
+    for index, line in enumerate(lines[1:], 1):
+        if not any(pattern.search(line) for pattern in patterns):
+            continue
+        solution_index = index
+        if (
+            adapter.get("content", {}).get(
+                "worked_example_solution_backtrack_fence", True
+            )
+            and solution_index > 0
+            and lines[solution_index - 1].strip() == "$$"
+        ):
+            solution_index -= 1
+        question_body = "\n".join(lines[:solution_index]).rstrip() + "\n"
+        solution_body = "\n".join(lines[solution_index:]).strip() + "\n"
+        return question_body, solution_body, solution_index
+    return body.rstrip() + "\n", "", None
+
+
 def match_role(line: str, rules: list[dict[str, Any]]) -> tuple[dict[str, Any], re.Match[str]] | None:
     title = visible_label(line)
     for rule in rules:
@@ -103,6 +191,7 @@ def question_in_reviewed_scope(
     owner: dict[str, Any] | None,
     labels: list[dict[str, Any]],
     adapter: dict[str, Any],
+    question_kind: str = "exercise",
 ) -> bool:
     """Restrict numeric detection to reviewer-selected functional sections."""
     scopes = adapter.get("content", {}).get("question_scopes")
@@ -115,6 +204,9 @@ def question_in_reviewed_scope(
         owner_roles.add(str(current.get("role", "")))
         current = by_key.get(str(current.get("parent"))) if current.get("parent") else None
     for scope in scopes:
+        kinds = {str(value) for value in scope.get("kinds", [])}
+        if kinds and question_kind not in kinds:
+            continue
         contexts = scope.get("contexts")
         if contexts is None and scope.get("context") is not None:
             contexts = [scope.get("context")]
@@ -560,6 +652,7 @@ def plan_note(
         question_patterns,
     )
     lines = [item["text"] for item in virtual_lines]
+    question_kind_rules = compile_question_kind_rules(adapter)
     number_overrides = {}
     for item in adapter.get("content", {}).get("question_number_overrides", []):
         if str(item.get("context")) != str(note_entry.get("key")):
@@ -706,10 +799,11 @@ def plan_note(
         path_by_label[label["key"]] = output.resolve()
 
     questions: list[dict[str, Any]] = []
-    starts: list[tuple[int, re.Match[str], str]] = []
+    starts: list[tuple[int, re.Match[str], str, dict[str, Any]]] = []
     for index, line in enumerate(lines, 1):
         match = match_question(line, question_patterns)
         if match:
+            question_config = classify_question(line, question_kind_rules)
             coordinate = (
                 int(virtual_lines[index - 1]["raw_line"]),
                 int(virtual_lines[index - 1]["raw_column"]),
@@ -758,6 +852,7 @@ def plan_note(
                 scope_owner,
                 labels,
                 adapter,
+                str(question_config["question_kind"]),
             ):
                 adapter.setdefault("_scope_excluded_candidates", []).append(
                     {
@@ -765,14 +860,15 @@ def plan_note(
                         "raw_line": int(virtual_lines[index - 1]["raw_line"]),
                         "raw_column": int(virtual_lines[index - 1]["raw_column"]),
                         "number": number,
+                        "question_kind": question_config["question_kind"],
                         "text": line,
                     }
                 )
                 continue
-            starts.append((index, match, number))
+            starts.append((index, match, number, question_config))
     label_start_lines = {label["start_line"] for label in labels}
     question_file_template = str(adapter.get("content", {}).get("question_file_template", "{title}.md"))
-    for position, (start, match, number) in enumerate(starts):
+    for position, (start, match, number, question_config) in enumerate(starts):
         end = starts[position + 1][0] - 1 if position + 1 < len(starts) else len(lines)
         boundary = min((value for value in label_start_lines if start < value <= end), default=None)
         if boundary:
@@ -780,9 +876,10 @@ def plan_note(
         embed_boundary = min((value for value in embed_barriers if start < value <= end), default=None)
         if embed_boundary is not None:
             end = embed_boundary - 1
-        heading_boundary = min((i for i in range(start + 1, end + 1) if re.match(r"^\s*#{1,6}\s+\S", lines[i - 1])), default=None)
-        if heading_boundary is not None:
-            end = heading_boundary - 1
+        if not question_config.get("preserve_internal_headings"):
+            heading_boundary = min((i for i in range(start + 1, end + 1) if re.match(r"^\s*#{1,6}\s+\S", lines[i - 1])), default=None)
+            if heading_boundary is not None:
+                end = heading_boundary - 1
         owner = None
         for label in labels:
             if label["start_line"] < start <= label["end_line"]:
@@ -812,7 +909,8 @@ def plan_note(
         base = Path(owner["output"]).parent if owner else path.parent
         title = str(adapter.get("content", {}).get("question_title_template", "Question {number}")).format(number=number)
         file_name = question_file_template.format(number=number, title=title, ordinal=position + 1, source_line=start)
-        output = base / safe_name(question_folder, "questions")[:component_limit] / safe_name(file_name, f"{number}.md")[:component_limit]
+        selected_question_folder = question_config.get("folder") or question_folder
+        output = base / safe_name(str(selected_question_folder), "questions")[:component_limit] / safe_name(file_name, f"{number}.md")[:component_limit]
         if output.suffix.casefold() != ".md":
             output = output.with_suffix(".md")
         output = bounded_output_path(
@@ -822,7 +920,24 @@ def plan_note(
             f"{note_entry['key']}:question:{number}:{start}",
         )
         body = "\n".join(lines[start - 1:end]).rstrip() + "\n"
-        rendered_body = rebase_local_links(body, path, output)
+        question_body = body
+        answer_body = ""
+        solution_offset = None
+        if question_config["answer_handling"] == "separate-authoritative":
+            question_body, answer_body, solution_offset = split_worked_example_body(
+                body, adapter
+            )
+            if solution_offset is None:
+                unknown.append(
+                    {
+                        "kind": "worked-example-solution-boundary-missing",
+                        "source_note": str(path),
+                        "line": start,
+                        "number": number,
+                        "text": line,
+                    }
+                )
+        rendered_body = rebase_local_links(question_body, path, output)
         source_part = next((item for item in reversed(source_parts) if item["line"] <= start), None)
         local_source_line = int(virtual_lines[start - 1]["raw_line"])
         source_line_map = note_entry.get("source_line_map") or []
@@ -845,6 +960,9 @@ def plan_note(
             {
                 "id": f"{note_entry['key']}:question:{number}:{start}",
                 "number": number,
+                "question_kind": question_config["question_kind"],
+                "answer_handling": question_config["answer_handling"],
+                "metadata": question_config.get("metadata", {}),
                 "evidence": evidence,
                 "title": title,
                 "source_note_key": note_entry["key"],
@@ -862,6 +980,13 @@ def plan_note(
                 "source_provenance_candidates": provenance_candidates,
                 "output": str(output.resolve()),
                 "body_sha256": sha256_text(body),
+                "question_body_sha256": sha256_text(question_body),
+                "answer_body_sha256": (
+                    sha256_text(answer_body) if answer_body else None
+                ),
+                "solution_start_line": (
+                    start + solution_offset if solution_offset is not None else None
+                ),
                 # The source digest remains bound to the immutable hierarchy
                 # corpus, while the lexical signature reflects the body as it
                 # is rendered at its relocated leaf path.  This matters for
@@ -1085,6 +1210,12 @@ def plan_content(profile_path: Path, adapter_path: Path, hierarchy_coverage_path
         review.extend(note_review)
 
     assign_question_codes(profile, adapter, questions)
+    for question in questions:
+        if question.get("answer_handling") == "separate-authoritative":
+            output = Path(question["output"])
+            question["answer_output"] = str(
+                output.parent / "answers" / f"{output.stem}A1.md"
+            )
 
     ids = [question["id"] for question in questions]
     outputs = [question["output"].casefold() for question in questions]
@@ -1107,14 +1238,25 @@ def plan_content(profile_path: Path, adapter_path: Path, hierarchy_coverage_path
 
 
 def render_question(question: dict[str, Any], body: str, answer_mode: str = "separate") -> str:
+    answer_status = (
+        "matched"
+        if question.get("answer_handling") == "separate-authoritative"
+        else ("unavailable" if answer_mode == "unavailable" else "unmatched")
+    )
     frontmatter = [
         "---",
         f"question_id: {json.dumps(question['id'], ensure_ascii=False)}",
         f"question_number: {json.dumps(question['number'], ensure_ascii=False)}",
         f"context_key: {json.dumps(question['context_key'], ensure_ascii=False)}",
         f"question_source: {json.dumps(question['source_note'], ensure_ascii=False)}",
-        f"question_body_sha256: {question['body_sha256']}",
-        f"answer_status: {'unavailable' if answer_mode == 'unavailable' else 'unmatched'}",
+        f"question_body_sha256: {question.get('question_body_sha256', question['body_sha256'])}",
+        f"question_kind: {json.dumps(question.get('question_kind', 'exercise'), ensure_ascii=False)}",
+        f"answer_handling: {json.dumps(question.get('answer_handling', 'external'), ensure_ascii=False)}",
+        *[
+            f"{key}: {json.dumps(value, ensure_ascii=False)}"
+            for key, value in question.get("metadata", {}).items()
+        ],
+        f"answer_status: {answer_status}",
         "---",
         "<!-- question-source:start -->",
         body.rstrip(),
@@ -1263,13 +1405,100 @@ def apply_content(profile_path: Path, adapter_path: Path, manifest_path: Path, o
             if sha256_text(body) != question["body_sha256"]:
                 raise ConfigurationError(f"Question source changed before apply: {question['id']}")
             output = Path(question["output"])
+            question_body = body
+            answer_body = ""
+            answer_note_records: list[dict[str, Any]] = []
+            answer_notes: list[str] = []
+            if question.get("answer_handling") == "separate-authoritative":
+                solution_start_line = question.get("solution_start_line")
+                if solution_start_line is None:
+                    raise ConfigurationError(
+                        f"Worked-example solution boundary is missing: {question['id']}"
+                    )
+                offset = int(solution_start_line) - int(question["start_line"])
+                body_lines = body.rstrip("\n").splitlines()
+                question_body = "\n".join(body_lines[:offset]).rstrip() + "\n"
+                answer_body = "\n".join(body_lines[offset:]).strip() + "\n"
+                if sha256_text(question_body) != question.get("question_body_sha256"):
+                    raise ConfigurationError(
+                        f"Worked-example question body changed before apply: {question['id']}"
+                    )
+                if sha256_text(answer_body) != question.get("answer_body_sha256"):
+                    raise ConfigurationError(
+                        f"Worked-example answer body changed before apply: {question['id']}"
+                    )
             rendered_question = rebase_local_links(
-                render_question(question, body, str(profile.get("answers", {}).get("mode", "separate"))),
+                render_question(question, question_body, str(profile.get("answers", {}).get("mode", "separate"))),
                 source,
                 output,
             )
+            if answer_body:
+                from .answers import format_answer_callout
+
+                answer_output = Path(question["answer_output"])
+                rebased_answer_body = rebase_local_links(
+                    answer_body, source, answer_output
+                )
+                callout_title = str(
+                    adapter.get("content", {}).get(
+                        "worked_example_callout_title", "例题解析"
+                    )
+                )
+                answer_text = "\n".join(
+                    [
+                        "---",
+                        f"answer_for: {json.dumps(output.stem)}",
+                        "answer_provenance: authoritative",
+                        "answer_source_kind: worked-example",
+                        f"answer_source_body_sha256: {question['answer_body_sha256']}",
+                        "---",
+                        format_answer_callout(
+                            rebased_answer_body, callout_title=callout_title
+                        ),
+                        "",
+                    ]
+                )
+                write_text_atomic(answer_output, answer_text, overwrite=overwrite)
+                rendered_question = (
+                    rendered_question.rstrip()
+                    + "\n\n"
+                    + obsidian_embed(answer_output, vault_root)
+                    + "\n"
+                )
+                answer_notes.append(str(answer_output.resolve()))
+                answer_note_records.append(
+                    {
+                        "path": str(answer_output.resolve()),
+                        "sha256": sha256_file(answer_output),
+                        "lexical_signature": lexical_signature(answer_text),
+                        "provenance": "authoritative",
+                        "source_body_sha256": question["answer_body_sha256"],
+                    }
+                )
+                generated_outputs.append(
+                    {
+                        "kind": "answer",
+                        "path": str(answer_output.resolve()),
+                        "sha256": sha256_file(answer_output),
+                    }
+                )
             write_text_atomic(output, rendered_question, overwrite=overwrite)
-            written_questions.append({"id": question["id"], "path": str(output), "sha256": sha256_file(output)})
+            written_questions.append(
+                {
+                    "id": question["id"],
+                    "question_id": question["id"],
+                    "path": str(output),
+                    "sha256": sha256_file(output),
+                    "answer_notes": answer_notes,
+                    "answer_note_records": answer_note_records,
+                    "answer_status": (
+                        "matched"
+                        if question.get("answer_handling")
+                        == "separate-authoritative"
+                        else None
+                    ),
+                }
+            )
 
         for node in sorted(nodes, key=lambda item: item["depth"], reverse=True):
             output = Path(node["output"])

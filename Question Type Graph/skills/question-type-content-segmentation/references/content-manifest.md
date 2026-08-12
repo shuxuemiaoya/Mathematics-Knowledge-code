@@ -10,6 +10,16 @@ role, hierarchy context, or local source range. Record excluded numeric
 candidates in the manifest for auditability; do not hide false positives in an
 ever-growing global regex when a semantic section boundary exists.
 
+Use `content.question_kind_rules` to classify publisher-specific worked-example
+headers after a question pattern matches. Scopes may name `kinds` so ordinary
+numbered exercises and worked examples can safely coexist in different
+hierarchy contexts. Every `worked-example` is globally emitted as an atomic
+leaf with `重要程度: 重要` and `answer_handling: separate-authoritative`. Its
+stem stays in the question leaf; the publisher's printed analysis moves to a
+standalone `<QID>A1.md` note embedded by the question. The reviewed solution
+boundary patterns, header regex, and optional output `folder` stay
+adapter-specific.
+
 When OCR omits a printed training-band label and exercise roles would otherwise
 become children of a theory block, use `content.detached_role_folders`. Each
 reviewed rule names `from_ancestor_role`, a non-empty list of exercise `roles`,
@@ -38,14 +48,18 @@ The plan records for each functional node and question:
   index resolves it, otherwise every retained candidate or nearest part range;
 - parent identity and answer context;
 - collision-free output path;
-- source-body SHA-256 for every atomic question.
+- full source-span SHA-256 for every atomic question and, for worked examples,
+  separate question-body and answer-body SHA-256 values plus the reviewed
+  solution start line.
 
 Application writes folder notes for functional nodes and one leaf per
-top-level question. Subparts remain inside their owning question. Exact source
-blocks are wrapped in provenance markers; parent notes receive one standalone,
-vault-relative `![[path/to/note.md]]` embed at the moved block's original
-position. Generated embeds are never list items. Atomic question leaves do not
-receive a generated question-title heading. Never duplicate a moved body.
+top-level question. Subparts remain inside their owning question. For worked
+examples it also writes one authoritative `<QID>A1.md` solution note and embeds
+it from the stem-only question leaf. Exact question source blocks are wrapped
+in provenance markers; parent notes receive one standalone, vault-relative
+`![[path/to/note.md]]` embed at the moved block's original position. Generated
+embeds are never list items. Atomic question leaves do not receive a generated
+question-title heading. Never duplicate a moved body.
 
 Application records every generated functional/question leaf and prunes only
 previously recorded leaves that are no longer in the new manifest. The final

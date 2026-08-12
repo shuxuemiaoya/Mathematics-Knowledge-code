@@ -34,8 +34,10 @@ from that explicit conclusion. Do not infer it from isolated capital letters.
 The final audit rejects a missing choice-answer field and rejects an
 authoritative answer field that disagrees with the source conclusion.
 
-Every solution callout, including non-choice problems, must contain both an
-explicit `**【答案】**` field and `**【解析】**`. A bounded source prefix before an
+Every solution note, including non-choice problems, must contain a collapsible
+outer FAQ callout and collapsible nested `【答案】`, `【分析】`, and `【解析】`
+callouts. The answer uses `success`; analysis and explanation use `note`; every
+nested content line keeps the `> >` prefix. A bounded source prefix before an
 explicit `解析:` or `【解析】` marker may be promoted to the answer field. If a
 non-choice source provides no safely separable short result, render
 `**【答案】** 详见解析` while preserving the complete derivation under

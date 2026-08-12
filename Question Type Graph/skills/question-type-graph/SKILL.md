@@ -76,6 +76,11 @@ persist the final checks with `audit --overwrite`.
 - Prefer adapter `content.question_scopes` over expanding a global question
   regex with book-specific negative lookaheads. Scope by reviewed functional
   roles, hierarchy contexts, and/or local raw-line ranges.
+- Classify publisher example/variant headers through reviewed
+  `content.question_kind_rules`. Every `worked-example` becomes an atomic leaf,
+  receives `重要程度: 重要`, moves its publisher solution to a standalone
+  provenance-marked `<QID>A1.md` note, embeds that answer from the stem-only
+  question note, and is excluded from external answer matching.
 - Immediately after content segmentation, clean every generated title and its
   corresponding filename through the shared filename policy. Replace unsafe
   filesystem characters and always replace both `:` and `：` with `_`, while
@@ -85,8 +90,21 @@ persist the final checks with `audit --overwrite`.
   final audit must fail if `:` or `：` survives in any generated file or
   directory path.
 - Save matched solutions as standalone answer notes named `<Question_ID>A<Index>.md` (e.g., `Q00004154A1.md`), and embed them in the question note via `![[Q00004154A1]]`. Pre-split adapter-recognized inline OCR question and answer headers while retaining raw-line and raw-column coordinates so concatenated records are parsed without shifting reviewed region or context anchors. Preserve mapped theory-guide content in place; knowledge linking remains deferred.
-- Format all answer notes into collapsable Callout blocks (`> [!faq]- <callout_title>`, e.g., `全练一本通解析`) with both `**【答案】**` and `**【解析】**`. Recover explicit publisher short-answer prefixes; use `详见解析` only for non-choice problems without a safely separable short result. Choice problems require exact option selections such as `**【答案】** A`. Preserve itemized bullet points and pedagogical sections (`💡 规律方法`, `📌 名师点拨`, `🔔 敲黑板`, `💡 点悟`, `🔗 链接教材`, `⚠️ 易错警示`).
-- Enforce zero-tolerance explanation validation: every atomic question note MUST embed a valid solution callout note (`![[Q*A1]]`). Any question lacking an explanation MUST trigger a blocking audit error (`question-lacking-explanation`) with its exact cause identified.
+- Format every answer note as a collapsible outer `> [!faq]- <title>` with
+  three collapsible nested blocks: `[!success]- **【答案】**`,
+  `[!note]- **【分析】**`, and `[!note]- **【解析】**`. Prefix every nested body
+  line with `> >`. If the publisher does not separately label analysis, write
+  `本题未单列分析。` without duplicating the derivation. Recover explicit
+  publisher short-answer prefixes; use `详见解析` only for non-choice problems
+  without a safely separable short result. Choice problems require exact option
+  selections such as `**【答案】** A`. Preserve itemized bullet points and
+  pedagogical sections (`💡 规律方法`, `📌 名师点拨`, `🔔 敲黑板`, `💡 点悟`,
+  `🔗 链接教材`, `⚠️ 易错警示`).
+- Enforce zero-tolerance explanation validation: external-answer exercises MUST
+  embed a valid solution callout note (`![[Q*A1]]`); worked examples MUST carry
+  required important/separated metadata and embed a valid standalone publisher
+  solution note. The question-source block must contain only the stem. Any
+  failure is blocking with its exact cause.
 - Require exact answer identity or blocking review. Never accept fuzzy evidence alone. A passed answer manifest must have unique `answer_id` AND unique `question_id` (one owner per answer block, one match per question).
 - Block every authoritative `unmatched-answer` as `answer-without-question`,
   even when the remaining review queue was reviewer-confirmed; this is the

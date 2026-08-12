@@ -32,6 +32,8 @@ def question_sequence_errors(questions: list[dict[str, Any]]) -> list[dict[str, 
     """Require each reviewed matching context to expose a complete 1..N ledger."""
     by_context: dict[str, list[dict[str, Any]]] = {}
     for question in questions:
+        if question.get("answer_handling", "external") != "external":
+            continue
         by_context.setdefault(str(question.get("context_key", "")), []).append(question)
     errors: list[dict[str, Any]] = []
     for context, items in by_context.items():
@@ -154,14 +156,20 @@ def valid_solution_note(
             return False, "solution-source-provenance-drift"
     if not re.search(r"(?m)^> \[!faq\]-\s+\S", text):
         return False, "solution-callout-invalid"
-    answer_field = re.search(r"(?m)^> \*\*【答案】\*\*\s+(\S.*?)\s*$", text)
+    answer_field = re.search(
+        r"(?m)^> > \[!success\]-\s+\*\*【答案】\*\*\s+(\S.*?)\s*$",
+        text,
+    )
     if answer_field is None:
         return False, (
             "solution-choice-answer-missing"
             if require_choice_answer
             else "solution-answer-field-missing"
         )
-    answer_marker = re.search(r"(?m)^> \*\*【答案】\*\*\s+([A-F]+)\b", text)
+    answer_marker = re.search(
+        r"(?m)^> > \[!success\]-\s+\*\*【答案】\*\*\s+([A-F]+)\b",
+        text,
+    )
     if require_choice_answer and answer_marker is None:
         return False, "solution-choice-answer-missing"
     if expected_choice_answer is not None and (
@@ -169,8 +177,14 @@ def valid_solution_note(
     ):
         return False, "solution-choice-answer-mismatch"
     lexical = re.sub(r"\A---\n.*?\n---\n", "", text, flags=re.DOTALL)
+    if not re.search(r"(?m)^> > \[!note\]-\s+\*\*【分析】\*\*\s*$", text):
+        return False, "solution-analysis-callout-missing"
+    if not re.search(r"(?m)^> > \[!note\]-\s+\*\*【解析】\*\*\s*$", text):
+        return False, "solution-explanation-callout-missing"
+    lexical = re.sub(r"(?m)^>\s*>\s*", "", lexical)
     lexical = re.sub(r"(?m)^>\s*", "", lexical)
-    lexical = re.sub(r"\[!faq\]-|\*\*【(?:答案|解析)】\*\*|[-*_#]", "", lexical)
+    lexical = re.sub(r"\[!(?:faq|success|note)\]-|\*\*【(?:答案|分析|解析)】\*\*|[-*_#]", "", lexical)
+    lexical = re.sub(r"本题未单列(?:分析|解析)[。.]?", "", lexical)
     lexical = re.sub(r"\s+", "", lexical)
     if len(lexical) < 8 or re.search(r"待.*生成|暂无解析|仅占位|placeholder", lexical, re.IGNORECASE):
         return False, "solution-content-incomplete"
@@ -334,6 +348,7 @@ def audit_graph(
                 match_by_question = {item["question_id"]: item for item in answer_matches}
                 app_by_question: dict[str, dict[str, Any]] = {}
                 for report_name in (
+                    "content-application-report.json",
                     "answer-application-report.json",
                     "supplemental-solution-application-report.json",
                 ):
@@ -361,6 +376,79 @@ def audit_graph(
                     text = q_file.read_text(encoding="utf-8-sig") if q_file.is_file() else ""
                     question_body_match = QUESTION_BODY_RE.search(text)
                     question_body = question_body_match.group(1) if question_body_match else ""
+                    if question.get("answer_handling") == "separate-authoritative":
+                        has_contract = all(
+                            marker in text
+                            for marker in (
+                                "question_kind: \"worked-example\"",
+                                "answer_handling: \"separate-authoritative\"",
+                                "重要程度: \"重要\"",
+                                "answer_status: matched",
+                            )
+                        )
+                        require_choice_answer = question_requires_choice_answer(
+                            question_body
+                        )
+                        records = application.get("answer_note_records", [])
+                        record_results = [
+                            (
+                                record,
+                                *valid_solution_note(
+                                    Path(record.get("path", "")),
+                                    record,
+                                    require_choice_answer=require_choice_answer,
+                                ),
+                            )
+                            for record in records
+                        ]
+                        valid_authoritative = [
+                            record
+                            for record, valid, _ in record_results
+                            if valid
+                            and record.get("provenance") == "authoritative"
+                            and record.get("source_body_sha256")
+                            == question.get("answer_body_sha256")
+                        ]
+                        answer_output = Path(str(question.get("answer_output", "")))
+                        has_embed = bool(answer_output.name) and (
+                            f"![[{answer_output.stem}]]" in text
+                            or re.search(
+                                rf"!\[\[[^\]]*{re.escape(answer_output.stem)}[^\]]*\]\]",
+                                text,
+                            )
+                            is not None
+                        )
+                        if (
+                            not has_contract
+                            or not has_embed
+                            or len(valid_authoritative) != 1
+                        ):
+                            record_reason = next(
+                                (
+                                    reason
+                                    for _, valid, reason in record_results
+                                    if not valid and reason
+                                ),
+                                None,
+                            )
+                            errors.append(
+                                {
+                                    "kind": "worked-example-contract-failure",
+                                    "question_id": question["id"],
+                                    "question_file": str(q_file),
+                                    "reason": (
+                                        "missing-important-separated-metadata"
+                                        if not has_contract
+                                        else (
+                                            "missing-separated-answer-embed"
+                                            if not has_embed
+                                            else record_reason
+                                            or "invalid-separated-authoritative-answer"
+                                        )
+                                    ),
+                                }
+                            )
+                        continue
                     require_choice_answer = question_requires_choice_answer(question_body)
                     expected_choice_answer = (
                         extract_choice_answer(str(match.get("answer_body", "")))
@@ -449,6 +537,7 @@ def audit_graph(
     expected_notes.update(str(Path(item["output"]).resolve()).casefold() for item in functional_nodes)
     expected_notes.update(str(Path(item["output"]).resolve()).casefold() for item in questions)
     for report_name in (
+        "content-application-report.json",
         "answer-application-report.json",
         "supplemental-solution-application-report.json",
     ):

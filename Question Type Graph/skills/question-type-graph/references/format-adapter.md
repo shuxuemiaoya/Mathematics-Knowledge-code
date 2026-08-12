@@ -184,3 +184,13 @@ For books with mixed theory sections, map the source-specific labels to a
 semantic role such as `knowledge_guide` in `content.roles`; the segmentation
 engine then extracts lightweight Functional Nodes without needing those label
 literals in reusable code.
+
+For publisher examples and variants, add `content.question_kind_rules` with
+`kind: worked-example` and a reviewed header regex. Use `question_scopes.kinds`
+to keep these candidates separate from ordinary exercises, and set an optional
+`folder` such as the publisher's example folder. Worked-example semantics are
+global: atomization, `重要程度: 重要`, a stem-only question note, a separate
+authoritative `<QID>A1.md` publisher-analysis note, and exclusion from external
+answer matching. Configure `worked_example_solution_patterns` for exact
+publisher solution boundaries. `preserve_internal_headings: true` is permitted
+only when solution headings belong to the example source span before splitting.

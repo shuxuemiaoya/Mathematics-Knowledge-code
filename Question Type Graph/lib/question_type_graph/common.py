@@ -404,6 +404,61 @@ def validate_adapter_contract(adapter: dict[str, Any], profile: dict[str, Any]) 
             "content.inline_question_patterns",
             required=False,
         )
+    question_kind_rules = content.get("question_kind_rules", [])
+    if not isinstance(question_kind_rules, list):
+        raise ConfigurationError("content.question_kind_rules must be a list")
+    configured_kinds = {"exercise"}
+    for index, rule in enumerate(question_kind_rules):
+        if not isinstance(rule, dict) or not str(rule.get("kind", "")).strip():
+            raise ConfigurationError(
+                f"content.question_kind_rules[{index}] requires a non-empty kind"
+            )
+        configured_kinds.add(str(rule["kind"]))
+        _validate_regex(
+            rule.get("pattern"), f"content.question_kind_rules[{index}].pattern"
+        )
+        handling = str(rule.get("answer_handling", "external"))
+        if handling not in {"external", "separate-authoritative"}:
+            raise ConfigurationError(
+                f"content.question_kind_rules[{index}].answer_handling is invalid"
+            )
+        if "preserve_internal_headings" in rule and not isinstance(
+            rule["preserve_internal_headings"], bool
+        ):
+            raise ConfigurationError(
+                f"content.question_kind_rules[{index}].preserve_internal_headings must be boolean"
+            )
+        if "folder" in rule and not str(rule["folder"]).strip():
+            raise ConfigurationError(
+                f"content.question_kind_rules[{index}].folder must be non-empty"
+            )
+    worked_kinds = {
+        str(rule.get("kind")) for rule in question_kind_rules
+    }
+    solution_patterns = content.get("worked_example_solution_patterns", [])
+    if "worked-example" in worked_kinds:
+        if not isinstance(solution_patterns, list) or not solution_patterns:
+            raise ConfigurationError(
+                "content.worked_example_solution_patterns is required for worked examples"
+            )
+        for index, pattern in enumerate(solution_patterns):
+            _validate_regex(
+                pattern, f"content.worked_example_solution_patterns[{index}]"
+            )
+    elif solution_patterns and not isinstance(solution_patterns, list):
+        raise ConfigurationError(
+            "content.worked_example_solution_patterns must be a list"
+        )
+    if "worked_example_solution_backtrack_fence" in content and not isinstance(
+        content["worked_example_solution_backtrack_fence"], bool
+    ):
+        raise ConfigurationError(
+            "content.worked_example_solution_backtrack_fence must be boolean"
+        )
+    if content.get("answer_callout_layout_version", 2) != 2:
+        raise ConfigurationError(
+            "content.answer_callout_layout_version must be 2"
+        )
     roles = content.get("roles")
     if not isinstance(roles, list):
         raise ConfigurationError("format-adapter.content.roles must be a list")
@@ -436,7 +491,7 @@ def validate_adapter_contract(adapter: dict[str, Any], profile: dict[str, Any]) 
             if not isinstance(scope, dict):
                 raise ConfigurationError(f"content.question_scopes[{index}] must be an object")
             if not any(
-                key in scope for key in ("context", "contexts", "roles", "start_line", "end_line")
+                key in scope for key in ("context", "contexts", "roles", "kinds", "start_line", "end_line")
             ):
                 raise ConfigurationError(
                     f"content.question_scopes[{index}] requires a context, role, or line range"
@@ -458,6 +513,15 @@ def validate_adapter_contract(adapter: dict[str, Any], profile: dict[str, Any]) 
             ):
                 raise ConfigurationError(
                     f"content.question_scopes[{index}].roles must name configured roles"
+                )
+            scoped_kinds = scope.get("kinds")
+            if scoped_kinds is not None and (
+                not isinstance(scoped_kinds, list)
+                or not scoped_kinds
+                or any(str(value) not in configured_kinds for value in scoped_kinds)
+            ):
+                raise ConfigurationError(
+                    f"content.question_scopes[{index}].kinds must name configured question kinds"
                 )
             for key in ("start_line", "end_line"):
                 if key in scope and (
