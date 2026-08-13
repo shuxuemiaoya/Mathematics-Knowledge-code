@@ -1,0 +1,4 @@
+interface:
+  display_name: "Exam Paper Parser"
+  short_description: "Fast audited parsing of standardized exam PDFs"
+  default_prompt: "Use $exam-paper-parser to split this standardized exam PDF into audited Obsidian question and solution notes."
