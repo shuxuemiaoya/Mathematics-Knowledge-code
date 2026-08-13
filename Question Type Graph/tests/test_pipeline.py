@@ -7,7 +7,7 @@ import unittest
 from argparse import Namespace
 from pathlib import Path
 
-from question_type_graph.coordinator import run_pipeline
+from question_type_graph.coordinator import artifact_paths, run_pipeline
 from question_type_graph.answers import apply_matches
 from question_type_graph.profile import create_profile
 from question_type_graph.common import write_json_atomic
@@ -75,6 +75,24 @@ def get_args(overwrite: bool = False) -> Namespace:
 
 
 class TestPipeline(unittest.TestCase):
+    def test_canvas_artifact_uses_generated_filename_policy(self) -> None:
+        profile = {
+            "title": "天津卷（解析版）",
+            "paths": {
+                "staging_root": "/tmp/staging",
+                "graph_root": "/tmp/graph",
+            },
+            "format": {
+                "inventory": "/tmp/staging/inventory.json",
+                "adapter": "/tmp/staging/adapter.json",
+            },
+        }
+
+        self.assertEqual(
+            artifact_paths(profile)["canvas"].name,
+            "天津卷_解析版_.canvas",
+        )
+
     def test_note_properties_move_to_frontmatter_and_retained_section_stays_inline(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)

@@ -120,6 +120,21 @@ class TestEdgeCases(unittest.TestCase):
             self.assertIn("## 解析", answer_body)
             self.assertIsNotNone(solution_offset)
 
+    def test_worked_example_stem_word_jiexishi_is_not_a_solution_boundary(self) -> None:
+        body = "4. 函数的解析式可能为（ ）\nA. 甲 B. 乙\n【答案】B\n【解析】由图可得。\n"
+        adapter = {
+            "content": {
+                "worked_example_solution_patterns": [r"^\s*【答案】"]
+            }
+        }
+
+        question, answer, offset = split_worked_example_body(body, adapter)
+
+        self.assertIn("解析式可能为", question)
+        self.assertIn("A. 甲 B. 乙", question)
+        self.assertTrue(answer.startswith("【答案】B"))
+        self.assertEqual(offset, 2)
+
     def test_reviewed_question_scope_ignores_numbered_theory_lines(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
@@ -228,6 +243,28 @@ class TestEdgeCases(unittest.TestCase):
         self.assertIn("> > 分析 考察奇函数在对称区间上的性质。", rendered)
         self.assertIn("> > [!note]- **【解析】**", rendered)
         self.assertIn("> > 解析 令 $g(x)=f(x)-2$，则 $g(x)$ 为奇函数。", rendered)
+
+    def test_bracketed_answer_prefix_and_later_detailed_solution_are_parsed(self) -> None:
+        rendered = format_answer_callout(
+            "【答案】C\n\n【解析】\n\n【分析】先判断奇偶性。\n\n"
+            "【详解】代入特殊点即可排除其余选项。"
+        )
+
+        self.assertIn("**【答案】** C", rendered)
+        analysis_block, explanation_block = rendered.split(
+            "> > [!note]- **【解析】**", 1
+        )
+        self.assertIn("> > 【分析】先判断奇偶性。", analysis_block)
+        self.assertIn("> > 【详解】代入特殊点即可排除其余选项。", explanation_block)
+
+    def test_long_bracketed_answer_prefix_is_not_duplicated(self) -> None:
+        long_answer = "推导步骤。" * 100
+        rendered = format_answer_callout(
+            f"【答案】{long_answer}\n【解析】\n【分析】先概括思路。\n详细推导。"
+        )
+
+        self.assertEqual(rendered.count(long_answer), 1)
+        self.assertIn("> > 【分析】先概括思路。", rendered)
 
     def test_choice_answer_extraction_does_not_guess_from_capital_letters(self) -> None:
         body = "解析: 集合 A 与集合 D 相等，但此处没有保留权威选项结论。"

@@ -9,7 +9,7 @@ from typing import Any
 from .answers import apply_matches, plan_matches
 from .audit import audit_graph
 from .canvas import build_canvas
-from .common import ConfigurationError, load_json, load_profile, require_reviewed_adapter, sha256_file, write_json_atomic, write_text_atomic
+from .common import ConfigurationError, load_json, load_profile, require_reviewed_adapter, safe_name, sha256_file, write_json_atomic, write_text_atomic
 from .content import apply_content, plan_content
 from .formatting import standardize_corpus
 from .hierarchy import apply_hierarchy, plan_hierarchy
@@ -56,7 +56,7 @@ def artifact_paths(profile: dict[str, Any]) -> dict[str, Path]:
         "supplement_application": staging / "supplemental-solution-application-report.json",
         "formatting": staging / "markdown-standardization-report.json",
         "graph_manifest": staging / "graph-manifest.json",
-        "canvas": graph / f"{profile['title']}.canvas",
+        "canvas": graph / safe_name(f"{profile['title']}.canvas", "graph.canvas"),
         "audit": staging / "final-audit-report.json",
     }
 

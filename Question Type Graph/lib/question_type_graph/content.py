@@ -148,6 +148,17 @@ def split_worked_example_body(
         )
     ]
     lines = body.rstrip("\n").splitlines()
+    if lines:
+        m = re.search(
+            r"(\s*(?:【解析】|解析\s*[：:▶]))",
+            lines[0],
+        )
+        if m and m.start() > 0:
+            lines = [
+                lines[0][:m.start()].strip(),
+                lines[0][m.start():].strip(),
+                *lines[1:],
+            ]
     for index, line in enumerate(lines[1:], 1):
         if not any(pattern.search(line) for pattern in patterns):
             continue
@@ -947,6 +958,16 @@ def plan_note(
             else None
         )
         provenance_candidates = []
+        source_solution_start_line = None
+        if solution_offset is not None:
+            solution_virtual_index = start + solution_offset - 1
+            solution_local_line = int(
+                virtual_lines[solution_virtual_index]["raw_line"]
+            )
+            if 1 <= solution_local_line <= len(source_line_map):
+                source_solution_start_line = source_line_map[
+                    solution_local_line - 1
+                ]
         virtual_provenance = virtual_lines[start - 1].get("source_provenance")
         if source_markdown_line is not None:
             provenance_candidates = (
@@ -987,6 +1008,7 @@ def plan_note(
                 "solution_start_line": (
                     start + solution_offset if solution_offset is not None else None
                 ),
+                "source_solution_start_line": source_solution_start_line,
                 # The source digest remains bound to the immutable hierarchy
                 # corpus, while the lexical signature reflects the body as it
                 # is rendered at its relocated leaf path.  This matters for
@@ -1396,6 +1418,26 @@ def apply_content(profile_path: Path, adapter_path: Path, manifest_path: Path, o
         )
         lines = [item["text"] for item in virtual_lines]
         note_properties, property_lines = extract_note_properties(lines, adapter)
+        choice_answer_overrides = {
+            (
+                str(item["context"]),
+                str(item["number"]),
+                int(item["start_line"]),
+            ): str(item["answer"]).strip().upper()
+            for item in adapter.get("answers", {}).get(
+                "choice_answer_overrides", []
+            )
+        }
+        short_answer_overrides = {
+            (
+                str(item["context"]),
+                str(item["number"]),
+                int(item["start_line"]),
+            ): str(item["answer"]).strip()
+            for item in adapter.get("answers", {}).get(
+                "short_answer_overrides", []
+            )
+        }
         nodes = values["nodes"]
         note_by_key = {node["key"]: Path(node["output"]) for node in nodes}
         direct_questions: dict[str | None, list[dict[str, Any]]] = {}
@@ -1410,15 +1452,7 @@ def apply_content(profile_path: Path, adapter_path: Path, manifest_path: Path, o
             answer_note_records: list[dict[str, Any]] = []
             answer_notes: list[str] = []
             if question.get("answer_handling") == "separate-authoritative":
-                solution_start_line = question.get("solution_start_line")
-                if solution_start_line is None:
-                    raise ConfigurationError(
-                        f"Worked-example solution boundary is missing: {question['id']}"
-                    )
-                offset = int(solution_start_line) - int(question["start_line"])
-                body_lines = body.rstrip("\n").splitlines()
-                question_body = "\n".join(body_lines[:offset]).rstrip() + "\n"
-                answer_body = "\n".join(body_lines[offset:]).strip() + "\n"
+                question_body, answer_body, _ = split_worked_example_body(body, adapter)
                 if sha256_text(question_body) != question.get("question_body_sha256"):
                     raise ConfigurationError(
                         f"Worked-example question body changed before apply: {question['id']}"
@@ -1453,7 +1487,28 @@ def apply_content(profile_path: Path, adapter_path: Path, manifest_path: Path, o
                         f"answer_source_body_sha256: {question['answer_body_sha256']}",
                         "---",
                         format_answer_callout(
-                            rebased_answer_body, callout_title=callout_title
+                            rebased_answer_body,
+                            callout_title=callout_title,
+                            reviewed_choice_answer=choice_answer_overrides.get(
+                                (
+                                    str(question.get("context_key")),
+                                    str(question.get("number")),
+                                    int(
+                                        question.get("source_solution_start_line")
+                                        or 0
+                                    ),
+                                )
+                            ),
+                            reviewed_short_answer=short_answer_overrides.get(
+                                (
+                                    str(question.get("context_key")),
+                                    str(question.get("number")),
+                                    int(
+                                        question.get("source_solution_start_line")
+                                        or 0
+                                    ),
+                                )
+                            ),
                         ),
                         "",
                     ]

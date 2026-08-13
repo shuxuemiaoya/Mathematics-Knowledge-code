@@ -559,7 +559,7 @@ def extract_choice_answer(body: str) -> str | None:
     accepted; isolated capital letters in mathematical prose are ignored.
     """
     conclusion_pattern = re.compile(
-        r"(?:故\s*选|应\s*选|选|选项(?:为|是)?|答案(?:为|是)?)"
+        r"(?:故\s*选|应\s*选|选|选项(?:为|是|有)?|答案(?:为|是)?)"
         r"\s*[：:]?\s*([A-F]+)\b",
         re.IGNORECASE,
     )
@@ -625,14 +625,32 @@ def format_answer_callout(
     reviewed_short_answer: str | None = None,
 ) -> str:
     source_body = body.strip()
+    explicit_answer = None
+    long_explicit_answer = None
+    if re.match(r"^\s*(?:#{1,6}\s*)?【答案】", source_body):
+        candidate_answer, _ = extract_nonchoice_answer_prefix(source_body)
+        if candidate_answer is not None:
+            explicit_answer = candidate_answer
+        else:
+            marker = re.search(r"【解析】|(?<!见)解析\s*[：:]", source_body)
+            if marker is not None:
+                prefix = re.sub(
+                    r"^\s*(?:#{1,6}\s*)?【答案】\s*",
+                    "",
+                    source_body[: marker.start()],
+                    count=1,
+                ).strip()
+                if prefix:
+                    long_explicit_answer = prefix
     analysis_match = re.search(
-        r"(?m)^\s*(?:#{1,6}\s*)?【?分析】?(?:\s|[：:]|$)", source_body
+        r"(?m)^\s*(?:#{1,6}\s*)?(?:【分析】|分析(?:\s|[：:]|▶|$))",
+        source_body,
     )
     analysis_text = "本题未单列分析。"
     resolution_body = source_body
     if analysis_match is not None:
         resolution_match = re.search(
-            r"(?m)^\s*(?:#{1,6}\s*)?【?解析】?(?:\s|[：:]|$)",
+            r"(?m)^\s*(?:#{1,6}\s*)?(?:【(?:解析|详解)】|(?:解析|详解)(?:\s|[：:]|▶|$))",
             source_body[analysis_match.end():],
         )
         if resolution_match is not None:
@@ -643,12 +661,29 @@ def format_answer_callout(
             analysis_text = source_body[analysis_match.start():].strip()
             resolution_body = "本题未单列解析。"
 
+    if long_explicit_answer:
+        resolution_body = "\n".join(
+            ["【答案】" + long_explicit_answer, resolution_body]
+        ).strip()
+
     lines = resolution_body.splitlines() or [""]
 
     # Prefer an explicit worked conclusion over an OCR header when both are
     # present; a reviewed override remains the highest authority.
-    option = reviewed_choice_answer or extract_choice_answer(resolution_body)
-    explicit_nonchoice_answer = None
+    explicit_choice_answer = (
+        explicit_answer.upper()
+        if explicit_answer and re.fullmatch(r"[A-F]+", explicit_answer, re.IGNORECASE)
+        else None
+    )
+    option = (
+        reviewed_choice_answer
+        or extract_choice_answer(resolution_body)
+        or extract_choice_answer(source_body)
+        or explicit_choice_answer
+    )
+    explicit_nonchoice_answer = (
+        explicit_answer if explicit_answer and explicit_choice_answer is None else None
+    )
     prepared_analysis = None
     if option is None:
         candidate_answer, candidate_analysis = extract_nonchoice_answer_prefix(
