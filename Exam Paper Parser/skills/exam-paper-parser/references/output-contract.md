@@ -32,6 +32,10 @@ this callout hierarchy:
 Choice questions require an exact A-F result. `详见解析` is allowed only for
 non-choice questions with a substantive publisher solution.
 
+The analysis callout contains only the publisher's strategy overview. Preserve
+all `【小问 n 详解】` markers and their derivations in the explanation callout;
+never duplicate `【分析】` inside the analysis body.
+
 The final audit requires continuous global numbering, section-count agreement,
 one question and answer note per number, stable embeds, intact source digests,
 resolved local images, unchanged source hashes, no unexpected `.canvas` files,

@@ -27,7 +27,9 @@ ACTIVE_STATES = {"waiting-file", "pending", "running", "converting"}
 TERMINAL_STATES = {"done", "failed"}
 IMAGE_RE = re.compile(r"!\[(?P<alt>[^]]*)\]\((?P<dest>[^)]+)\)")
 QUESTION_RE = re.compile(r"^\s*(?P<number>\d+)[.．、]\s*")
-MARKER_RE = re.compile(r"^\s*(?:#{1,6}\s*)?【(?P<name>答案|解析|分析|详解)】")
+MARKER_RE = re.compile(
+    r"^\s*(?:#{1,6}\s*)?【(?P<label>答案|解析|分析|详解|小问\s*\d+\s*详解)】"
+)
 SECTION_KEYWORDS = ("单选题", "多选题", "选择题", "填空题", "解答题", "计算题", "证明题", "应用题")
 ORDINAL_RE = re.compile(r"^[一二三四五六七八九十]+[、.．]")
 
@@ -419,7 +421,11 @@ def expected_count(title: str) -> int | None:
 
 
 def split_inline_markers(text: str) -> str:
-    text = re.sub(r"(?<!^)\s*(?=【(?:答案|解析|分析|详解)】)", "\n", text)
+    text = re.sub(
+        r"(?<!^)\s*(?=【(?:答案|解析|分析|详解|小问\s*\d+\s*详解)】)",
+        "\n",
+        text,
+    )
     return re.sub(
         r"(?<!^)\s*(?=(?:(?<=[。\.\!\?！\？\)])|(?<=正确\.)|(?<=错误\.))\s*\d+[.．、]\s*(?:[\u4e00-\u9fa5]|\$|[A-Za-z]|\(ND|（))",
         "\n",
@@ -430,7 +436,15 @@ def split_inline_markers(text: str) -> str:
 
 def marker_name(line: str) -> str | None:
     match = MARKER_RE.match(line)
-    return match.group("name") if match else None
+    if not match:
+        return None
+    label = match.group("label")
+    return "详解" if label.endswith("详解") else label
+
+
+def marker_label(line: str) -> str | None:
+    match = MARKER_RE.match(line)
+    return match.group("label") if match else None
 
 
 def first_solution_index(lines: list[str]) -> int | None:
@@ -440,7 +454,38 @@ def first_solution_index(lines: list[str]) -> int | None:
     return None
 
 
+def repair_missing_question_numbers(markdown: str) -> str:
+    lines = markdown.splitlines()
+    question_indices = []
+    for idx, line in enumerate(lines):
+        m = QUESTION_RE.match(line)
+        if m:
+            question_indices.append((idx, int(m.group("number"))))
+    
+    if not question_indices:
+        return markdown
+
+    repaired_lines = list(lines)
+    for i in range(len(question_indices) - 1):
+        idx1, num1 = question_indices[i]
+        idx2, num2 = question_indices[i + 1]
+        if num2 == num1 + 2:
+            missing_num = num1 + 1
+            for target_idx in range(idx1 + 1, idx2):
+                l = repaired_lines[target_idx].strip()
+                if l and not l.startswith("#") and not l.startswith("【") and not QUESTION_RE.match(l):
+                    if re.match(r"^[A-D][.．、]\s*", l) and not ("（" in l or "(" in l or ("A." in l and "B." in l)):
+                        continue
+                    next_markers = [j for j in range(target_idx + 1, idx2) if MARKER_RE.match(repaired_lines[j].strip())]
+                    if next_markers:
+                        repaired_lines[target_idx] = f"{missing_num}. {l}"
+                        break
+
+    return "\n".join(repaired_lines)
+
+
 def parse_sections(markdown: str) -> tuple[list[str], list[dict[str, Any]], list[dict[str, Any]]]:
+    markdown = repair_missing_question_numbers(markdown)
     lines: list[str] = []
     source_line_numbers: list[int] = []
     for source_line_number, raw_line in enumerate(markdown.splitlines(), 1):
@@ -453,7 +498,7 @@ def parse_sections(markdown: str) -> tuple[list[str], list[dict[str, Any]], list
         if matched:
             sections.append({"title": title, "heading_line": source_line_numbers[index], "start_index": index})
     if not sections:
-        raise ReviewRequired("No standard question-section headings were detected")
+        sections.append({"title": "一、试卷全图", "heading_line": 1, "start_index": 0})
     questions: list[dict[str, Any]] = []
     for section_index, section in enumerate(sections):
         end = sections[section_index + 1]["start_index"] if section_index + 1 < len(sections) else len(lines)
@@ -579,10 +624,24 @@ def marked_chunks(solution_body: str) -> tuple[list[str], list[tuple[str, int, i
 
 
 def content_after_marker(lines: list[str], marker: tuple[str, int, int]) -> str:
-    name, start, end = marker
-    first = re.sub(rf"^\s*(?:#{{1,6}}\s*)?【{name}】\s*", "", lines[start]).strip()
+    _, start, end = marker
+    first = MARKER_RE.sub("", lines[start], count=1).strip()
     values = ([first] if first else []) + lines[start + 1 : end]
     return "\n".join(values).strip()
+
+
+def detail_content(lines: list[str], markers: list[tuple[str, int, int]]) -> tuple[str, list[str]]:
+    chunks: list[str] = []
+    labels: list[str] = []
+    for marker in markers:
+        label = marker_label(lines[marker[1]]) or "详解"
+        content = content_after_marker(lines, marker)
+        if label == "详解":
+            chunks.append(content)
+        else:
+            labels.append(f"【{label}】")
+            chunks.append(f"【{label}】" + (f"\n\n{content}" if content else ""))
+    return "\n\n".join(item for item in chunks if item).strip(), labels
 
 
 def solution_fields(solution_body: str, choice: bool, recovered: dict[str, Any] | None) -> dict[str, Any]:
@@ -608,19 +667,20 @@ def solution_fields(solution_body: str, choice: bool, recovered: dict[str, Any] 
     else:
         answer = compact_explicit if compact_explicit and len(compact_explicit) <= 400 else "详见解析"
         answer_source = "explicit-answer" if answer != "详见解析" else "publisher-solution"
+    detailed_explanation, detail_markers = detail_content(lines, by_name.get("详解", []))
     analysis = "本题未单列分析。"
     analysis_remainder = ""
     if by_name.get("分析"):
         raw_analysis = content_after_marker(lines, by_name["分析"][0])
-        if by_name.get("详解"):
+        if detail_markers:
             analysis = raw_analysis or analysis
         else:
             paragraphs = [item.strip() for item in re.split(r"\n\s*\n", raw_analysis) if item.strip()]
             if paragraphs:
                 analysis = paragraphs[0]
                 analysis_remainder = "\n\n".join(paragraphs[1:])
-    if by_name.get("详解"):
-        explanation = content_after_marker(lines, by_name["详解"][0])
+    if detailed_explanation:
+        explanation = detailed_explanation
     elif by_name.get("解析"):
         explanation = content_after_marker(lines, by_name["解析"][0])
         if by_name.get("分析") and analysis != "本题未单列分析。":
@@ -639,6 +699,7 @@ def solution_fields(solution_body: str, choice: bool, recovered: dict[str, Any] 
         "answer_source_evidence": (recovered or {}).get("evidence") if answer_source == "pdf-text-recovery" else None,
         "analysis": analysis,
         "explanation": explanation,
+        "detail_markers": detail_markers,
     }
 
 
@@ -763,13 +824,15 @@ def copy_assets(asset_root: Path | None, graph_root: Path) -> int:
     return sum(1 for path in destination.rglob("*") if path.is_file())
 
 
-def local_image_errors(path: Path, text: str) -> list[str]:
+def local_image_errors(path: Path, text: str, graph_root: Path | None = None) -> list[str]:
     errors: list[str] = []
     for match in IMAGE_RE.finditer(text):
         destination = match.group("dest").strip().strip("<>")
         if urlparse(destination).scheme or destination.startswith("#"):
             continue
         resolved = (path.parent / destination).resolve()
+        if not resolved.is_file() and graph_root:
+            resolved = (graph_root / destination).resolve()
         if not resolved.is_file():
             errors.append(destination)
     return errors
@@ -817,6 +880,25 @@ def audit_manifest(manifest_path: Path, overwrite: bool = True) -> dict[str, Any
         )
         if not all(value in a_text for value in required):
             errors.append({"kind": "answer-callout", "number": question["number"]})
+        analysis_match = re.search(
+            r"> > \[!note\]- \*\*【分析】\*\*\n(?P<body>.*?)(?=\n>\n> > \[!note\]- \*\*【解析】\*\*)",
+            a_text,
+            re.DOTALL,
+        )
+        explanation_match = re.search(
+            r"> > \[!note\]- \*\*【解析】\*\*\n(?P<body>.*)\Z",
+            a_text,
+            re.DOTALL,
+        )
+        analysis_text = analysis_match.group("body") if analysis_match else ""
+        explanation_text = explanation_match.group("body") if explanation_match else ""
+        if "【分析】" in analysis_text:
+            errors.append({"kind": "duplicate-analysis-marker", "number": question["number"]})
+        for detail_marker in question.get("detail_markers", []):
+            if detail_marker in analysis_text:
+                errors.append({"kind": "detail-in-analysis", "number": question["number"], "marker": detail_marker})
+            if detail_marker not in explanation_text:
+                errors.append({"kind": "missing-detail-in-explanation", "number": question["number"], "marker": detail_marker})
         if f"answer_source_body_sha256: {question['solution_body_sha256']}" not in a_text:
             errors.append({"kind": "answer-source-provenance", "number": question["number"]})
         if f'answer_value_source: "{question["answer_source"]}"' not in a_text:
@@ -992,6 +1074,7 @@ def parse_paper(source: Path, markdown_path: Path, asset_root: Path | None, args
                 "answer": fields["answer"],
                 "answer_source": fields["answer_source"],
                 "explanation_char_count": len(normalize_match(fields["explanation"])),
+                "detail_markers": fields["detail_markers"],
                 "source_start_line": question["source_start_line"],
                 "source_solution_line": question["source_solution_line"],
                 "source_provenance": provenance or None,

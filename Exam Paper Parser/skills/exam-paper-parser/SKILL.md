@@ -34,6 +34,8 @@ Use `run` with `--markdown` to consume an existing MinerU result without another
 - Recognize standard question-section headings and a continuous global numeric ledger.
 - Split each top-level question once; keep subparts together.
 - Split at explicit `【答案】/【解析】/【分析】/【详解】` markers only.
+- Keep strategy summaries in `【分析】`; route every `【小问 n 详解】` block and
+  derivation to `【解析】`.
 - Reconcile OCR-dropped choice answers from the original PDF text layer; never infer an option from mathematical prose.
 - Allocate stable QIDs under the shared vault registry lock.
 - Emit one standalone authoritative answer note per question with nested collapsible answer, analysis, and explanation callouts.

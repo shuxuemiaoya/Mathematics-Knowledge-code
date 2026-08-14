@@ -18,6 +18,8 @@ source hash -> cached forced OCR -> fixed-profile section/question split
 - Never create a per-paper adapter when the fixed profile passes.
 - Preserve every question stem, formula, image, subpart, solution, and order.
 - Recover only explicit PDF-text choice answers; never solve or guess during parsing.
+- Keep strategy summaries in `【分析】`; place every `【小问 n 详解】` block and
+  derivation in `【解析】` without duplicating source marker labels.
 - Keep one top-level question per QID and one authoritative answer note per QID.
 - Never create `.canvas` files.
 - Share the vault QID registry lock to avoid collisions with Question Type Graph.

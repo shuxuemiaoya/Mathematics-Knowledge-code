@@ -46,7 +46,7 @@ A. 0  B. 1  C. 2  D. 3
 
 【分析】直接使用整数加法。
 
-【详解】由整数加法法则可得 $2+2=4$。
+【小问 1 详解】由整数加法法则可得 $2+2=4$。
 """
 
 
@@ -82,6 +82,36 @@ def test_analysis_marker_can_contain_summary_and_full_explanation() -> None:
     )
     assert fields["analysis"] == "先判断函数性质。"
     assert fields["explanation"] == "代入特殊点排除其余选项，故选择 C。"
+
+
+def test_subquestion_details_are_not_folded_into_analysis() -> None:
+    fields = parser.solution_fields(
+        """【答案】(1) $\\pi$ (2) 1
+
+【解析】
+
+【分析】（1）使用周期公式；
+
+（2）结合函数性质求最值。
+
+【小问 1 详解】
+
+由周期公式得 $T=\\pi$。
+
+【小问 2 详解】
+
+由函数性质可得最大值为 1。
+""",
+        False,
+        None,
+    )
+    assert fields["analysis"] == "（1）使用周期公式；\n\n（2）结合函数性质求最值。"
+    assert "【分析】" not in fields["analysis"]
+    assert "【小问 1 详解】" not in fields["analysis"]
+    assert fields["explanation"].startswith("【小问 1 详解】")
+    assert "由周期公式得 $T=\\pi$。" in fields["explanation"]
+    assert "【小问 2 详解】" in fields["explanation"]
+    assert fields["detail_markers"] == ["【小问 1 详解】", "【小问 2 详解】"]
 
 
 def test_inline_answer_marker_after_last_option_is_split() -> None:
@@ -157,6 +187,21 @@ def test_end_to_end_generation_and_tamper_audit(tmp_path: Path) -> None:
     assert not list(graph_root.rglob("*.canvas"))
     assert [item["answer"] for item in manifest["questions"]] == ["C", "4"]
     assert Path(manifest["sections"][0]["note_path"]).parent.name == "一_单选题"
+
+    second_answer = Path(manifest["questions"][1]["answer_path"])
+    original_answer = second_answer.read_text(encoding="utf-8")
+    parser.write_text(
+        second_answer,
+        original_answer.replace(
+            "> > 直接使用整数加法。",
+            "> > 直接使用整数加法。\n> > 【小问 1 详解】",
+            1,
+        ),
+    )
+    mixed_detail = parser.audit_manifest(Path(result["manifest"]), overwrite=False)
+    assert mixed_detail["status"] == "review_required"
+    assert any(item["kind"] == "detail-in-analysis" for item in mixed_detail["errors"])
+    parser.write_text(second_answer, original_answer)
 
     rogue_canvas = graph_root / "rogue.canvas"
     parser.write_text(rogue_canvas, "{}\n")
