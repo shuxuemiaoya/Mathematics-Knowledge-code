@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from question_type_graph.answers import (
+    extract_composite_short_answer,
     extract_choice_answer,
     extract_nonchoice_answer_prefix,
     format_answer_callout,
@@ -28,6 +29,7 @@ from question_type_graph.common import (
     write_json_atomic,
 )
 from question_type_graph.content import (
+    apply_reviewed_recovered_question_fragments,
     apply_reviewed_recovered_questions,
     apply_reviewed_virtual_span_relocations,
     compile_question_patterns,
@@ -35,6 +37,7 @@ from question_type_graph.content import (
     plan_content,
     plan_note,
     render_question,
+    split_authoritative_solution_body,
     split_worked_example_body,
     split_inline_question_headers,
 )
@@ -45,6 +48,77 @@ from question_type_graph.supplement import apply_supplement, plan_supplement
 
 
 class TestEdgeCases(unittest.TestCase):
+    def test_composite_short_answer_uses_ordered_explicit_headers(self) -> None:
+        body = "\n".join(
+            [
+                "答案 B 解析 第一问解析。",
+                "后续推导不作为答案。",
+                "答案 $[2,+\\infty)$ 解析 第二问解析。",
+            ]
+        )
+
+        self.assertEqual(
+            extract_composite_short_answer(body),
+            "(1) B；(2) $[2,+\\infty)$",
+        )
+        self.assertIsNone(extract_composite_short_answer("解析：没有显式答案"))
+
+    def test_recovered_question_fragments_enhance_virtual_copy_only(self) -> None:
+        raw_lines = [
+            "16. 分别求下列函数的导数:",
+            "y = e^x \\ln x; (2) y=x^2",
+            "14. 值为（ A.1 B.2 C.3 D.4",
+        ]
+        virtual_lines = [
+            {
+                "text": text,
+                "raw_line": index,
+                "raw_column": 1,
+                "subline": 0,
+            }
+            for index, text in enumerate(raw_lines, 1)
+        ]
+        q14_column = raw_lines[2].index("A.1") + 1
+        adapter = {
+            "content": {
+                "recovered_question_fragments": [
+                    {
+                        "context": "unit",
+                        "raw_line": 2,
+                        "raw_column": 1,
+                        "position": "before",
+                        "text": "(1) ",
+                        "source_page": 5,
+                        "source_bbox": [1, 2, 3, 4],
+                        "anchor_text": raw_lines[1],
+                        "reviewer_confirmed": True,
+                    },
+                    {
+                        "context": "unit",
+                        "raw_line": 3,
+                        "raw_column": q14_column,
+                        "position": "before",
+                        "text": "）",
+                        "source_page": 5,
+                        "source_bbox": [5, 6, 7, 8],
+                        "anchor_pattern": r"值为（ A\.1",
+                        "reviewer_confirmed": True,
+                    },
+                ]
+            }
+        }
+
+        enhanced = apply_reviewed_recovered_question_fragments(
+            virtual_lines, raw_lines, "unit", adapter
+        )
+
+        self.assertEqual(raw_lines[1], "y = e^x \\ln x; (2) y=x^2")
+        self.assertTrue(enhanced[1]["text"].startswith("(1) y = e^x"))
+        self.assertIn("值为（ ）A.1", enhanced[2]["text"])
+        recoveries = enhanced[1]["recovered_question_fragments"]
+        self.assertEqual(recoveries[0]["source_page"], 5)
+        self.assertEqual(recoveries[0]["source_bbox"], [1, 2, 3, 4])
+
     def test_worked_examples_are_atomic_important_and_separate_analysis(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
@@ -134,6 +208,116 @@ class TestEdgeCases(unittest.TestCase):
         self.assertIn("A. 甲 B. 乙", question)
         self.assertTrue(answer.startswith("【答案】B"))
         self.assertEqual(offset, 2)
+
+    def test_interleaved_teacher_edition_keeps_subpart_stems_together(self) -> None:
+        body = (
+            "[例2] (1) 求参数。\n"
+            "答案 1 解析：由条件可得。\n"
+            "(2) 选择正确结论（ ）\n"
+            "A. 甲 B. 乙\n"
+            "答案 B 解析：逐项验证。\n"
+        )
+        adapter = {"content": {"worked_example_solution_backtrack_fence": True}}
+        config = {
+            "solution_layout": "interleaved",
+            "solution_start_patterns": [r"^\s*答案\b"],
+            "solution_resume_patterns": [r"^\s*\(\d+\)"],
+        }
+
+        question, answer, offset = split_authoritative_solution_body(
+            body, adapter, config
+        )
+
+        self.assertIn("[例2] (1) 求参数。", question)
+        self.assertIn("(2) 选择正确结论", question)
+        self.assertIn("A. 甲 B. 乙", question)
+        self.assertNotIn("答案 1", question)
+        self.assertNotIn("答案 B", question)
+        self.assertIn("答案 1 解析：由条件可得。", answer)
+        self.assertIn("答案 B 解析：逐项验证。", answer)
+        self.assertNotIn("(2) 选择正确结论", answer)
+        self.assertEqual(offset, 1)
+
+    def test_inline_solved_exercise_can_be_authoritative_without_importance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            graph = root / "graph"
+            graph.mkdir()
+            source = graph / "unit.md"
+            source.write_text(
+                "## 对点训练\n"
+                "1. 求导数（ ）\nA. 甲 B. 乙\n"
+                "1. 答案 B 解析：直接求导。\n",
+                encoding="utf-8",
+            )
+            solution_line = "1. 答案 B 解析：直接求导。"
+            adapter = {
+                "_graph_root": str(graph),
+                "content": {
+                    "question_folder": "训练题",
+                    "question_title_template": "题 {number}",
+                    "question_patterns": [
+                        r"^(?P<number>\d+)[.．、](?!\s*(?:答案|解析)\b)\s*"
+                    ],
+                    "inline_question_patterns": [],
+                    "question_kind_rules": [
+                        {
+                            "kind": "inline-solved-exercise",
+                            "pattern": r"^\d+[.．、]",
+                            "answer_handling": "separate-authoritative",
+                            "solution_layout": "tail",
+                            "solution_start_patterns": [
+                                r"^\s*\d+[.．、]\s*(?:答案|解析)\b"
+                            ],
+                            "sequence_policy": "continuous",
+                        }
+                    ],
+                    "question_scopes": [
+                        {"contexts": ["unit"], "kinds": ["inline-solved-exercise"]}
+                    ],
+                    "recovered_question_fragments": [
+                        {
+                            "context": "unit",
+                            "raw_line": 4,
+                            "raw_column": len(solution_line),
+                            "position": "after",
+                            "text": "（PDF补全）",
+                            "source_page": 1,
+                            "anchor_text": solution_line,
+                            "reviewer_confirmed": True,
+                        }
+                    ],
+                    "roles": [],
+                    "unknown_label_policy": "retain",
+                },
+            }
+            note = {
+                "key": "unit",
+                "title": "Unit",
+                "path": str(source),
+                "content_source": str(source),
+                "answer_context": "unit",
+            }
+
+            _, questions, review = plan_note(
+                note,
+                compile_role_rules(adapter),
+                compile_question_patterns(adapter),
+                adapter,
+            )
+
+            self.assertEqual(review, [])
+            self.assertEqual(len(questions), 1)
+            self.assertEqual(questions[0]["question_kind"], "inline-solved-exercise")
+            self.assertEqual(questions[0]["answer_handling"], "separate-authoritative")
+            self.assertEqual(questions[0]["metadata"], {})
+            self.assertEqual(questions[0]["sequence_policy"], "continuous")
+            self.assertEqual(
+                questions[0]["recovered_question_fragments"][0]["destination"],
+                "answer",
+            )
+            self.assertIn("求导数", source.read_text(encoding="utf-8"))
+            self.assertIsNotNone(questions[0]["answer_body_sha256"])
 
     def test_reviewed_question_scope_ignores_numbered_theory_lines(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

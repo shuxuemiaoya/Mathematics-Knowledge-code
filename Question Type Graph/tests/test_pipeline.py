@@ -75,6 +75,64 @@ def get_args(overwrite: bool = False) -> Namespace:
 
 
 class TestPipeline(unittest.TestCase):
+    def test_adapter_output_policy_prunes_index_and_canvas(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            questions = root / "questions.md"
+            questions.write_text(
+                "# Unit One\n\n## Section 1\n\n1. Question only.\n",
+                encoding="utf-8",
+            )
+            staging = root / "staging"
+            vault = root / "vault"
+            graph = vault / "graph"
+            profile_path = staging / "profile.json"
+            profile = create_profile(
+                [f"questions={questions}"],
+                "NoIndexCanvas",
+                staging,
+                vault,
+                graph,
+                "en",
+                None,
+                True,
+            )
+            write_json_atomic(profile_path, profile)
+            adapter_path = staging / "format-adapter.json"
+            adapter = make_adapter(profile_path, answers=False)
+            adapter["content"]["roles"] = []
+            write_json_atomic(adapter_path, adapter)
+
+            first = run_pipeline(profile_path, get_args())
+            paths = artifact_paths(profile)
+            self.assertEqual(first["status"], "passed")
+            self.assertTrue((graph / "index.md").is_file())
+            self.assertTrue(paths["canvas"].is_file())
+            self.assertTrue(paths["graph_manifest"].is_file())
+
+            adapter["output_policy"] = {
+                "generate_index": False,
+                "generate_canvas": False,
+            }
+            write_json_atomic(adapter_path, adapter, overwrite=True)
+            second = run_pipeline(profile_path, get_args(overwrite=True))
+
+            self.assertEqual(second["status"], "passed")
+            self.assertIsNone(second["canvas"])
+            self.assertFalse((graph / "index.md").exists())
+            self.assertFalse(paths["canvas"].exists())
+            self.assertFalse(paths["graph_manifest"].exists())
+            coverage = json.loads(
+                paths["hierarchy_coverage"].read_text(encoding="utf-8")
+            )
+            self.assertFalse(coverage["generate_index"])
+            self.assertNotIn("root", {item["key"] for item in coverage["notes"]})
+            self.assertTrue(
+                Path(next(item["path"] for item in coverage["notes"] if item["key"] == "u1")).is_file()
+            )
+            state = json.loads(paths["state"].read_text(encoding="utf-8"))
+            self.assertEqual(state["stages"]["canvas"]["status"], "skipped")
+
     def test_canvas_artifact_uses_generated_filename_policy(self) -> None:
         profile = {
             "title": "天津卷（解析版）",

@@ -66,6 +66,10 @@ persist the final checks with `audit --overwrite`.
 - Keep all source-label semantics and inline question/answer marker syntax in
   the frozen adapter or path-free series preset. Treat any new-book change to
   reusable recognition code as a generalization failure requiring review.
+- Honor adapter `output_policy` after format review. `generate_index: false`
+  suppresses the synthetic root note, and `generate_canvas: false` suppresses
+  Canvas even when the profile requested it; disabled outputs must leave no
+  owned stale artifact or manifest.
 - Create one note per top-level question, named with a persistent 8-digit QID
   allocated through the locked vault registry. Seed a new registry from the
   vault and an optional adapter-configured central repository.
@@ -81,6 +85,20 @@ persist the final checks with `audit --overwrite`.
   receives `重要程度: 重要`, moves its publisher solution to a standalone
   provenance-marked `<QID>A1.md` note, embeds that answer from the stem-only
   question note, and is excluded from external answer matching.
+- Classify teacher-edition exercises whose publisher solutions are printed
+  immediately after each question as a non-worked-example
+  `separate-authoritative` kind. Use adapter-driven `tail` or `interleaved`
+  solution layouts; the latter must retain every subpart stem in its single
+  top-level question while collecting every publisher solution segment in the
+  unique A1 note. Such interleaved files are `questions` sources, not fake
+  combined sources with overlapping regions. Set `sequence_policy: continuous`
+  when their numeric ledger must still be audited.
+- For single-topic teacher-edition PDFs in this format, record
+  `generate_index: false` and `generate_canvas: false` in the reviewed adapter;
+  topic and functional notes remain available without synthetic overview files.
+- If the source is already inside a dedicated topic directory, make that
+  directory the graph root instead of appending a PDF-stem wrapper. Record this
+  reviewed direct-root decision in adapter inventory evidence.
 - Immediately after content segmentation, clean every generated title and its
   corresponding filename through the shared filename policy. Replace unsafe
   filesystem characters and always replace both `:` and `：` with `_`, while
@@ -115,6 +133,11 @@ persist the final checks with `audit --overwrite`.
 - Recover a PDF-visible question omitted from raw Markdown only through a
   reviewer-confirmed, page-provenanced virtual question entry anchored to the
   immutable corpus; never infer the stem from an answer block.
+- Recover a PDF-visible fragment omitted inside an existing question only
+  through `content.recovered_question_fragments`, using an exact hierarchy-note
+  raw line/column, before/after insertion position, drift anchor, PDF page/bbox,
+  and reviewer confirmation. The frozen OCR source remains unchanged and final
+  audit must retain the fragment provenance marker.
 - Recover a PDF-visible authoritative answer omitted or corrupted in raw
   Markdown only through a reviewer-confirmed `recovered_answers` entry carrying
   context, number, exact body, PDF page, and a raw-source drift anchor. Keep it

@@ -618,6 +618,26 @@ def extract_nonchoice_answer_prefix(body: str) -> tuple[str | None, str]:
     return compact, analysis
 
 
+def extract_composite_short_answer(body: str) -> str | None:
+    """Summarize ordered explicit headers from an interleaved solution."""
+    answers: list[str] = []
+    pattern = re.compile(
+        r"^\s*(?:\d+[.．、]\s*)?答案[.．、：:\s]*?(.*?)\s+解析\b"
+    )
+    for line in body.splitlines():
+        match = pattern.match(line)
+        if match is None:
+            continue
+        value = re.sub(r"\s+", " ", match.group(1)).strip()
+        if value:
+            answers.append(value)
+    if not answers:
+        return None
+    return "；".join(
+        f"({index}) {value}" for index, value in enumerate(answers, start=1)
+    )
+
+
 def format_answer_callout(
     body: str,
     callout_title: str = "答案与解析",

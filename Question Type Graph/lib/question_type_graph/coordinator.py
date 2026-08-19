@@ -9,7 +9,7 @@ from typing import Any
 from .answers import apply_matches, plan_matches
 from .audit import audit_graph
 from .canvas import build_canvas
-from .common import ConfigurationError, load_json, load_profile, require_reviewed_adapter, safe_name, sha256_file, write_json_atomic, write_text_atomic
+from .common import adapter_output_policy, ConfigurationError, load_json, load_profile, require_reviewed_adapter, safe_name, sha256_file, write_json_atomic, write_text_atomic
 from .content import apply_content, plan_content
 from .formatting import standardize_corpus
 from .hierarchy import apply_hierarchy, plan_hierarchy
@@ -23,6 +23,7 @@ from .runtime import (
     begin_run,
     finish_run,
     init_state,
+    implementation_paths,
     input_fingerprint,
     status_state,
     update_stage,
@@ -96,6 +97,36 @@ def stage_has_owned_outputs(state_path: Path, stage: str) -> bool:
     return bool(record.get("artifacts"))
 
 
+def remove_owned_stage_outputs(
+    state_path: Path, stage: str, candidates: list[Path]
+) -> list[str]:
+    """Remove disabled outputs only when the pipeline still owns their hashes."""
+    if not state_path.is_file():
+        return []
+    record = load_json(state_path).get("stages", {}).get(stage, {})
+    owned = {
+        str(Path(item["path"]).resolve()): item
+        for item in record.get("artifacts", [])
+    }
+    removed: list[str] = []
+    for candidate in candidates:
+        path = candidate.resolve()
+        if not path.exists():
+            continue
+        item = owned.get(str(path))
+        if item is None:
+            raise ConfigurationError(
+                f"Refusing to remove unowned disabled {stage} output: {path}"
+            )
+        if not path.is_file() or sha256_file(path) != item.get("sha256"):
+            raise ConfigurationError(
+                f"Refusing to remove drifted disabled {stage} output: {path}"
+            )
+        path.unlink()
+        removed.append(str(path))
+    return removed
+
+
 def _run_pipeline(profile_path: Path, args: argparse.Namespace) -> dict[str, Any]:
     profile_path = profile_path.resolve()
     profile = load_profile(profile_path)
@@ -165,7 +196,14 @@ def _run_pipeline(profile_path: Path, args: argparse.Namespace) -> dict[str, Any
             fingerprint=conversion_fingerprint,
         )
 
-    inventory_fingerprint = input_fingerprint([profile_path, *conversion_artifacts], {"stage_contract": 4})
+    inventory_fingerprint = input_fingerprint(
+        [
+            profile_path,
+            *conversion_artifacts,
+            *implementation_paths("inventory", "common"),
+        ],
+        {"stage_contract": 4},
+    )
     inventory_required = [paths["inventory"], paths["review_worksheet"]]
     inventory_reused = artifacts_current(
         paths["state"], "format-inventory", inventory_required, inventory_fingerprint
@@ -212,7 +250,8 @@ def _run_pipeline(profile_path: Path, args: argparse.Namespace) -> dict[str, Any
             "review_worksheet": str(paths["review_worksheet"]),
             "adapter": str(paths["adapter"]),
         }
-    require_reviewed_adapter(profile, paths["adapter"])
+    adapter = require_reviewed_adapter(profile, paths["adapter"])
+    output_policy = adapter_output_policy(adapter)
     if not inventory_reused:
         update_stage(
             paths["state"],
@@ -231,7 +270,12 @@ def _run_pipeline(profile_path: Path, args: argparse.Namespace) -> dict[str, Any
             if item.get("content_source")
         )
     hierarchy_fingerprint = input_fingerprint(
-        [profile_path, paths["adapter"], *conversion_artifacts],
+        [
+            profile_path,
+            paths["adapter"],
+            *conversion_artifacts,
+            *implementation_paths("hierarchy", "common"),
+        ],
         {"stage_contract": 3},
     )
     hierarchy_reused = artifacts_current(
@@ -281,6 +325,9 @@ def _run_pipeline(profile_path: Path, args: argparse.Namespace) -> dict[str, Any
         for item in hierarchy_coverage.get("notes", [])
         if item.get("content_source")
     )
+    content_inputs.extend(
+        implementation_paths("content", "answers", "spans", "common")
+    )
     content_fingerprint = input_fingerprint(content_inputs, {"stage_contract": 5})
     content_reused = hierarchy_reused and artifacts_current(
         paths["state"], "content-segmentation", content_required, content_fingerprint
@@ -315,13 +362,19 @@ def _run_pipeline(profile_path: Path, args: argparse.Namespace) -> dict[str, Any
         )
 
     answer_inputs = [profile_path, paths["adapter"], paths["content"]]
+    answer_markdown_path: Path | None = None
     if profile.get("answers", {}).get("mode") != "unavailable":
         answer_role = "combined" if profile["answers"]["mode"] == "embedded" else "answers"
-        answer_inputs.extend(
+        answer_markdown_inputs = [
             Path(source["markdown_path"])
             for source in profile["sources"]
             if source.get("role") == answer_role
+        ]
+        answer_inputs.extend(answer_markdown_inputs)
+        answer_markdown_path = (
+            answer_markdown_inputs[0] if answer_markdown_inputs else None
         )
+    answer_inputs.extend(implementation_paths("answers", "spans", "common"))
     answer_fingerprint = input_fingerprint(answer_inputs, {"stage_contract": 6})
     answer_required = [paths["answers"], paths["answer_application"]]
     answer_reused = content_reused and artifacts_current(
@@ -339,7 +392,11 @@ def _run_pipeline(profile_path: Path, args: argparse.Namespace) -> dict[str, Any
             and existing_answers.get("content_manifest_sha256") == sha256_file(paths["content"])
             and (
                 profile.get("answers", {}).get("mode") == "unavailable"
-                or existing_answers.get("answer_markdown_sha256") == sha256_file(answer_inputs[-1])
+                or (
+                    answer_markdown_path is not None
+                    and existing_answers.get("answer_markdown_sha256")
+                    == sha256_file(answer_markdown_path)
+                )
             )
         )
         if manually_reviewed_current:
@@ -447,7 +504,13 @@ def _run_pipeline(profile_path: Path, args: argparse.Namespace) -> dict[str, Any
             )
 
     graph_markdown = sorted(Path(profile["paths"]["graph_root"]).rglob("*.md"))
-    formatting_fingerprint = input_fingerprint(graph_markdown, {"stage_contract": 2})
+    formatting_inputs = [
+        *graph_markdown,
+        *implementation_paths("formatting", "common"),
+    ]
+    formatting_fingerprint = input_fingerprint(
+        formatting_inputs, {"stage_contract": 2}
+    )
     if not artifacts_current(
         paths["state"],
         "markdown-standardization",
@@ -458,7 +521,13 @@ def _run_pipeline(profile_path: Path, args: argparse.Namespace) -> dict[str, Any
         formatting = standardize_corpus(profile_path)
         write_json_atomic(paths["formatting"], formatting, overwrite=True)
         graph_markdown = sorted(Path(profile["paths"]["graph_root"]).rglob("*.md"))
-        formatting_fingerprint = input_fingerprint(graph_markdown, {"stage_contract": 2})
+        formatting_inputs = [
+            *graph_markdown,
+            *implementation_paths("formatting", "common"),
+        ]
+        formatting_fingerprint = input_fingerprint(
+            formatting_inputs, {"stage_contract": 2}
+        )
         update_stage(
             paths["state"],
             "markdown-standardization",
@@ -467,9 +536,19 @@ def _run_pipeline(profile_path: Path, args: argparse.Namespace) -> dict[str, Any
             fingerprint=formatting_fingerprint,
         )
 
-    if profile.get("canvas", {}).get("enabled"):
+    canvas_enabled = (
+        profile.get("canvas", {}).get("enabled") is True
+        and output_policy["generate_canvas"]
+    )
+    if canvas_enabled:
         canvas_fingerprint = input_fingerprint(
-            [profile_path, paths["hierarchy"], paths["content"]], {"stage_contract": 2}
+            [
+                profile_path,
+                paths["hierarchy"],
+                paths["content"],
+                *implementation_paths("canvas", "common"),
+            ],
+            {"stage_contract": 2},
         )
         canvas_required = [paths["graph_manifest"], paths["canvas"]]
         if not (content_reused and hierarchy_reused) or not artifacts_current(
@@ -497,12 +576,61 @@ def _run_pipeline(profile_path: Path, args: argparse.Namespace) -> dict[str, Any
                 fingerprint=canvas_fingerprint,
             )
     else:
-        update_stage(paths["state"], "canvas", "skipped", message="Canvas disabled in profile")
+        removed_canvas_outputs = remove_owned_stage_outputs(
+            paths["state"],
+            "canvas",
+            [paths["graph_manifest"], paths["canvas"]],
+        )
+        update_stage(
+            paths["state"],
+            "canvas",
+            "skipped",
+            artifacts=[],
+            message=(
+                "Canvas disabled by reviewed adapter output policy"
+                if not output_policy["generate_canvas"]
+                else "Canvas disabled in profile"
+            )
+            + (
+                f"; removed {len(removed_canvas_outputs)} owned outputs"
+                if removed_canvas_outputs
+                else ""
+            ),
+        )
 
-    update_stage(paths["state"], "final-audit", "running")
-    audit = audit_graph(profile_path, paths["hierarchy_coverage"], paths["content"], paths["answers"], paths["canvas"] if profile.get("canvas", {}).get("enabled") else None)
+    audit_inputs = [
+        profile_path,
+        paths["hierarchy_coverage"],
+        paths["content"],
+        paths["answers"],
+        *implementation_paths("audit", "answers", "common"),
+    ]
+    if canvas_enabled:
+        audit_inputs.append(paths["canvas"])
+    audit_fingerprint = input_fingerprint(
+        audit_inputs, {"stage_contract": 2}
+    )
+    update_stage(
+        paths["state"],
+        "final-audit",
+        "running",
+        fingerprint=audit_fingerprint,
+    )
+    audit = audit_graph(
+        profile_path,
+        paths["hierarchy_coverage"],
+        paths["content"],
+        paths["answers"],
+        paths["canvas"] if canvas_enabled else None,
+    )
     write_json_atomic(paths["audit"], audit, overwrite=True)
-    update_stage(paths["state"], "final-audit", "completed" if audit["status"] == "passed" else "failed", [paths["audit"]])
+    update_stage(
+        paths["state"],
+        "final-audit",
+        "completed" if audit["status"] == "passed" else "failed",
+        [paths["audit"]],
+        fingerprint=audit_fingerprint,
+    )
     return {**audit, "pipeline_state": str(paths["state"]), "graph_root": profile["paths"]["graph_root"]}
 
 

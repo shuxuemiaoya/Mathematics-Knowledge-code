@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-from .common import ConfigurationError, load_json, load_profile, write_json_atomic
+from .common import adapter_output_policy, ConfigurationError, load_json, load_profile, require_reviewed_adapter, write_json_atomic
 
 
 def stable_id(key: str) -> str:
@@ -33,6 +33,11 @@ def build_canvas(
     profile = load_profile(profile_path)
     if profile.get("canvas", {}).get("enabled") is not True:
         raise ConfigurationError("Canvas is disabled in the profile")
+    adapter = require_reviewed_adapter(
+        profile, Path(profile["format"]["adapter"])
+    )
+    if not adapter_output_policy(adapter)["generate_canvas"]:
+        raise ConfigurationError("Canvas is disabled by the reviewed adapter")
     hierarchy = load_json(hierarchy_manifest_path)
     content = load_json(content_manifest_path)
     if hierarchy.get("status") != "passed" or content.get("status") != "passed":

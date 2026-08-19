@@ -1,18 +1,18 @@
 ---
 name: exam-paper-parser
-description: Parse standardized combined exam-and-solution PDFs into audited Obsidian section notes, stable-QID atomic question notes, standalone authoritative solution callouts, and images without Canvas output. Use for Chinese high-school exam papers such as 高考真题解析版 when Codex needs a much faster, low-token alternative to Question Type Graph, including batch processing, cached MinerU OCR, deterministic question splitting, PDF-text answer recovery, or final output auditing.
+description: Parse standardized combined exam-and-solution PDFs and Word documents (.doc/.docx) into audited Obsidian section notes, stable-QID atomic question notes, standalone authoritative solution callouts, and images without Canvas output. Use for Chinese high-school exam papers such as 高考真题解析版 when Codex needs a much faster, low-token alternative to Question Type Graph, including batch processing, cached MinerU OCR, deterministic question splitting, PDF/Word text answer recovery, or final output auditing.
 ---
 
 # Exam Paper Parser
 
-Use the bundled deterministic coordinator. Do not create a per-paper adapter for a paper that passes the standard profile.
+Use the bundled deterministic coordinator for PDF and Word (.doc/.docx) exam papers. Do not create a per-paper adapter for a paper that passes the standard profile.
 
 ## Run
 
-Single paper:
+Single paper (PDF or Word):
 
 ```bash
-python scripts/exam_paper_parser.py run <paper.pdf> \
+python scripts/exam_paper_parser.py run <paper.doc / paper.docx / paper.pdf> \
   --vault-root <obsidian-vault> \
   --output-root <year-classified-root>
 ```
@@ -20,7 +20,7 @@ python scripts/exam_paper_parser.py run <paper.pdf> \
 Batch:
 
 ```bash
-python scripts/exam_paper_parser.py batch <paper-1.pdf> <paper-2.pdf> ... \
+python scripts/exam_paper_parser.py batch <paper-1.doc> <paper-2.docx> <paper-3.pdf> ... \
   --vault-root <obsidian-vault> \
   --output-root <year-classified-root> --jobs 4
 ```

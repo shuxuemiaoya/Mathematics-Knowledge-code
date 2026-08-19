@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .common import (
+    adapter_output_policy,
     ConfigurationError,
     load_json,
     load_profile,
@@ -169,6 +170,7 @@ def find_entry_line(lines: list[str], entry: dict[str, Any], minimum: int, maxim
 def plan_hierarchy(profile_path: Path, adapter_path: Path) -> dict[str, Any]:
     profile = load_profile(profile_path)
     adapter = require_reviewed_adapter(profile, adapter_path)
+    output_policy = adapter_output_policy(adapter)
     hierarchy = adapter.get("hierarchy") or {}
     role = str(hierarchy.get("source_role") or ("combined" if profile["answers"]["mode"] == "embedded" else "questions"))
     source = source_for_role(profile, role)
@@ -257,6 +259,7 @@ def plan_hierarchy(profile_path: Path, adapter_path: Path) -> dict[str, Any]:
         "source_markdown_sha256": sha256_file(markdown),
         "line_count": len(lines),
         "root_output": normalize_generated_output(str(hierarchy.get("root_output", "index.md"))),
+        "generate_index": output_policy["generate_index"],
         "navigation_embed_mode": "direct-children",
         "entries": entries,
         "review_items": review_items,
@@ -269,7 +272,8 @@ def direct_children(entries: list[dict[str, Any]], key: str | None) -> list[dict
 
 def apply_hierarchy(profile_path: Path, adapter_path: Path, manifest_path: Path, overwrite: bool) -> dict[str, Any]:
     profile = load_profile(profile_path)
-    require_reviewed_adapter(profile, adapter_path)
+    adapter = require_reviewed_adapter(profile, adapter_path)
+    output_policy = adapter_output_policy(adapter)
     manifest = load_json(manifest_path)
     if manifest.get("status") != "passed":
         raise ConfigurationError("Hierarchy manifest must pass before application")
@@ -353,31 +357,42 @@ def apply_hierarchy(profile_path: Path, adapter_path: Path, manifest_path: Path,
             }
         )
 
-    root_note = resolve_inside(graph_root, manifest["root_output"])
-    top = sorted(direct_children(entries, None), key=lambda item: item["start_line"])
-    top_by_start = {item["start_line"]: item for item in top}
-    root_lines: list[str] = []
-    root_source_lines: list[int | None] = []
-    line = 1
-    while line <= len(lines):
-        child = top_by_start.get(line)
-        if child:
-            root_lines.append(obsidian_embed(output_by_key[child["key"]], vault_root))
-            root_source_lines.append(None)
-            line = child["end_line"] + 1
-        else:
-            root_lines.append(lines[line - 1])
-            root_source_lines.append(line)
-            line += 1
-    root_text = rebase_local_links("\n".join(root_lines).rstrip() + "\n", markdown, root_note, relocations)
-    root_source_lines = root_source_lines[: len(root_text.splitlines())]
-    write_text_atomic(root_note, root_text, overwrite=overwrite)
-    written.append({
-        "key": "root",
-        "path": str(root_note),
-        "sha256": sha256_file(root_note),
-        "source_line_map": root_source_lines,
-    })
+    generate_index = (
+        manifest.get("generate_index", output_policy["generate_index"]) is True
+    )
+    if generate_index:
+        root_note = resolve_inside(graph_root, manifest["root_output"])
+        top = sorted(direct_children(entries, None), key=lambda item: item["start_line"])
+        top_by_start = {item["start_line"]: item for item in top}
+        root_lines: list[str] = []
+        root_source_lines: list[int | None] = []
+        line = 1
+        while line <= len(lines):
+            child = top_by_start.get(line)
+            if child:
+                root_lines.append(obsidian_embed(output_by_key[child["key"]], vault_root))
+                root_source_lines.append(None)
+                line = child["end_line"] + 1
+            else:
+                root_lines.append(lines[line - 1])
+                root_source_lines.append(line)
+                line += 1
+        root_text = rebase_local_links(
+            "\n".join(root_lines).rstrip() + "\n",
+            markdown,
+            root_note,
+            relocations,
+        )
+        root_source_lines = root_source_lines[: len(root_text.splitlines())]
+        write_text_atomic(root_note, root_text, overwrite=overwrite)
+        written.append(
+            {
+                "key": "root",
+                "path": str(root_note),
+                "sha256": sha256_file(root_note),
+                "source_line_map": root_source_lines,
+            }
+        )
     current_notes = {str(Path(item["path"]).resolve()) for item in written if item.get("path")}
     removed_stale: list[str] = []
     for stale_name in sorted(previous_notes - current_notes):
@@ -401,6 +416,7 @@ def apply_hierarchy(profile_path: Path, adapter_path: Path, manifest_path: Path,
         "line_count": len(lines),
         "owned_line_count": len(line_owners),
         "line_owners": line_owners,
+        "generate_index": generate_index,
         "notes": written,
         "removed_stale_outputs": removed_stale,
         "removed_empty_directories": removed_empty_directories,

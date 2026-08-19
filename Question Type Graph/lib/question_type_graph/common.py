@@ -342,6 +342,14 @@ def _validate_optional_bbox(value: Any, field: str) -> None:
 
 def validate_adapter_contract(adapter: dict[str, Any], profile: dict[str, Any]) -> None:
     """Validate the executable v1 adapter contract before any stage uses it."""
+    output_policy = adapter.get("output_policy", {})
+    if not isinstance(output_policy, dict):
+        raise ConfigurationError("format-adapter.output_policy must be an object")
+    for key in ("generate_index", "generate_canvas"):
+        if key in output_policy and not isinstance(output_policy[key], bool):
+            raise ConfigurationError(
+                f"format-adapter.output_policy.{key} must be boolean"
+            )
     filename_policy = adapter.get("filename_policy")
     if filename_policy is not None and (
         not isinstance(filename_policy, dict)
@@ -407,6 +415,15 @@ def validate_adapter_contract(adapter: dict[str, Any], profile: dict[str, Any]) 
     question_kind_rules = content.get("question_kind_rules", [])
     if not isinstance(question_kind_rules, list):
         raise ConfigurationError("content.question_kind_rules must be a list")
+    legacy_solution_patterns = content.get("worked_example_solution_patterns", [])
+    if not isinstance(legacy_solution_patterns, list):
+        raise ConfigurationError(
+            "content.worked_example_solution_patterns must be a list"
+        )
+    for index, pattern in enumerate(legacy_solution_patterns):
+        _validate_regex(
+            pattern, f"content.worked_example_solution_patterns[{index}]"
+        )
     configured_kinds = {"exercise"}
     for index, rule in enumerate(question_kind_rules):
         if not isinstance(rule, dict) or not str(rule.get("kind", "")).strip():
@@ -417,10 +434,61 @@ def validate_adapter_contract(adapter: dict[str, Any], profile: dict[str, Any]) 
         _validate_regex(
             rule.get("pattern"), f"content.question_kind_rules[{index}].pattern"
         )
-        handling = str(rule.get("answer_handling", "external"))
+        handling = (
+            "separate-authoritative"
+            if str(rule["kind"]) == "worked-example"
+            else str(rule.get("answer_handling", "external"))
+        )
         if handling not in {"external", "separate-authoritative"}:
             raise ConfigurationError(
                 f"content.question_kind_rules[{index}].answer_handling is invalid"
+            )
+        solution_layout = str(rule.get("solution_layout", "tail"))
+        if solution_layout not in {"tail", "interleaved"}:
+            raise ConfigurationError(
+                f"content.question_kind_rules[{index}].solution_layout is invalid"
+            )
+        answer_shape = str(rule.get("answer_shape", "auto"))
+        if answer_shape not in {"auto", "composite"}:
+            raise ConfigurationError(
+                f"content.question_kind_rules[{index}].answer_shape is invalid"
+            )
+        sequence_policy = str(rule.get("sequence_policy", "none"))
+        if sequence_policy not in {"none", "continuous"}:
+            raise ConfigurationError(
+                f"content.question_kind_rules[{index}].sequence_policy is invalid"
+            )
+        start_patterns = rule.get("solution_start_patterns", [])
+        resume_patterns = rule.get("solution_resume_patterns", [])
+        for field, values in (
+            ("solution_start_patterns", start_patterns),
+            ("solution_resume_patterns", resume_patterns),
+        ):
+            if not isinstance(values, list) or any(
+                not isinstance(value, str) or not value for value in values
+            ):
+                raise ConfigurationError(
+                    f"content.question_kind_rules[{index}].{field} must be a list of non-empty regex strings"
+                )
+            for pattern_index, pattern in enumerate(values):
+                _validate_regex(
+                    pattern,
+                    f"content.question_kind_rules[{index}].{field}[{pattern_index}]",
+                )
+        if handling == "separate-authoritative":
+            if not start_patterns and not legacy_solution_patterns:
+                raise ConfigurationError(
+                    f"content.question_kind_rules[{index}] requires solution_start_patterns for separate-authoritative answers"
+                )
+            if solution_layout == "interleaved" and not resume_patterns:
+                raise ConfigurationError(
+                    f"content.question_kind_rules[{index}] requires solution_resume_patterns for interleaved answers"
+                )
+        if "authoritative_callout_title" in rule and not str(
+            rule["authoritative_callout_title"]
+        ).strip():
+            raise ConfigurationError(
+                f"content.question_kind_rules[{index}].authoritative_callout_title must be non-empty"
             )
         if "preserve_internal_headings" in rule and not isinstance(
             rule["preserve_internal_headings"], bool
@@ -432,23 +500,6 @@ def validate_adapter_contract(adapter: dict[str, Any], profile: dict[str, Any]) 
             raise ConfigurationError(
                 f"content.question_kind_rules[{index}].folder must be non-empty"
             )
-    worked_kinds = {
-        str(rule.get("kind")) for rule in question_kind_rules
-    }
-    solution_patterns = content.get("worked_example_solution_patterns", [])
-    if "worked-example" in worked_kinds:
-        if not isinstance(solution_patterns, list) or not solution_patterns:
-            raise ConfigurationError(
-                "content.worked_example_solution_patterns is required for worked examples"
-            )
-        for index, pattern in enumerate(solution_patterns):
-            _validate_regex(
-                pattern, f"content.worked_example_solution_patterns[{index}]"
-            )
-    elif solution_patterns and not isinstance(solution_patterns, list):
-        raise ConfigurationError(
-            "content.worked_example_solution_patterns must be a list"
-        )
     if "worked_example_solution_backtrack_fence" in content and not isinstance(
         content["worked_example_solution_backtrack_fence"], bool
     ):
@@ -614,6 +665,60 @@ def validate_adapter_contract(adapter: dict[str, Any], profile: dict[str, Any]) 
             _validate_regex(
                 item["anchor_pattern"],
                 f"content.recovered_questions[{index}].anchor_pattern",
+                allow_empty_match=True,
+            )
+
+    recovered_fragments = content.get("recovered_question_fragments", [])
+    if not isinstance(recovered_fragments, list):
+        raise ConfigurationError(
+            "content.recovered_question_fragments must be a list"
+        )
+    fragment_keys: set[tuple[str, int, int, str]] = set()
+    for index, item in enumerate(recovered_fragments):
+        if not isinstance(item, dict):
+            raise ConfigurationError(
+                f"content.recovered_question_fragments[{index}] must be an object"
+            )
+        context = str(item.get("context", "")).strip()
+        text = str(item.get("text", ""))
+        position = str(item.get("position", ""))
+        source_page = str(item.get("source_page", "")).strip()
+        try:
+            raw_line = int(item.get("raw_line"))
+            raw_column = int(item.get("raw_column"))
+        except (TypeError, ValueError) as exc:
+            raise ConfigurationError(
+                f"content.recovered_question_fragments[{index}] coordinates must be positive integers"
+            ) from exc
+        identity = (context, raw_line, raw_column, position)
+        if (
+            not context
+            or not text
+            or position not in {"before", "after"}
+            or not source_page
+            or raw_line < 1
+            or raw_column < 1
+            or identity in fragment_keys
+            or item.get("reviewer_confirmed") is not True
+        ):
+            raise ConfigurationError(
+                "recovered question fragment identity, text, position, page provenance, and review are required"
+            )
+        fragment_keys.add(identity)
+        _validate_optional_bbox(
+            item.get("source_bbox"),
+            f"content.recovered_question_fragments[{index}].source_bbox",
+        )
+        if not str(item.get("anchor_text", "")).strip() and not item.get(
+            "anchor_pattern"
+        ):
+            raise ConfigurationError(
+                f"content.recovered_question_fragments[{index}] requires a drift anchor"
+            )
+        if item.get("anchor_pattern") is not None:
+            _validate_regex(
+                item["anchor_pattern"],
+                f"content.recovered_question_fragments[{index}].anchor_pattern",
                 allow_empty_match=True,
             )
 
@@ -930,6 +1035,15 @@ def validate_adapter_contract(adapter: dict[str, Any], profile: dict[str, Any]) 
                 f"answers.short_answer_overrides[{index}].anchor_pattern",
                 allow_empty_match=True,
             )
+
+
+def adapter_output_policy(adapter: dict[str, Any]) -> dict[str, bool]:
+    """Resolve optional adapter output switches with backward-compatible defaults."""
+    configured = adapter.get("output_policy") or {}
+    return {
+        "generate_index": configured.get("generate_index", True) is True,
+        "generate_canvas": configured.get("generate_canvas", True) is True,
+    }
 
 
 def require_reviewed_adapter(profile: dict[str, Any], adapter_path: Path) -> dict[str, Any]:

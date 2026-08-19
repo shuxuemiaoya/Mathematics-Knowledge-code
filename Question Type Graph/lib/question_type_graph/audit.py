@@ -8,12 +8,14 @@ from typing import Any
 
 from .answers import ANSWER_BODY_RE, QUESTION_BODY_RE, extract_choice_answer
 from .common import (
+    adapter_output_policy,
     lexical_signature,
     local_markdown_destinations,
     load_json,
     load_profile,
     obsidian_embed,
     obsidian_embed_destinations,
+    require_reviewed_adapter,
     sha256_file,
     sha256_text,
     write_json_atomic,
@@ -32,7 +34,10 @@ def question_sequence_errors(questions: list[dict[str, Any]]) -> list[dict[str, 
     """Require each reviewed matching context to expose a complete 1..N ledger."""
     by_context: dict[str, list[dict[str, Any]]] = {}
     for question in questions:
-        if question.get("answer_handling", "external") != "external":
+        if (
+            question.get("answer_handling", "external") != "external"
+            and question.get("sequence_policy", "none") != "continuous"
+        ):
             continue
         by_context.setdefault(str(question.get("context_key", "")), []).append(question)
     errors: list[dict[str, Any]] = []
@@ -154,6 +159,18 @@ def valid_solution_note(
         source_body_sha256 = str(record.get("source_body_sha256", ""))
         if not source_body_sha256 or f"answer_source_body_sha256: {source_body_sha256}" not in text:
             return False, "solution-source-provenance-drift"
+    fragment_recoveries = record.get("recovered_question_fragments", [])
+    if fragment_recoveries:
+        expected_fragment_marker = (
+            "answer_fragment_recoveries: "
+            + json.dumps(
+                fragment_recoveries,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+        )
+        if expected_fragment_marker not in text:
+            return False, "solution-fragment-provenance-drift"
     if not re.search(r"(?m)^> \[!faq\]-\s+\S", text):
         return False, "solution-callout-invalid"
     answer_field = re.search(
@@ -222,6 +239,14 @@ def audit_graph(
     canvas_path: Path | None,
 ) -> dict[str, Any]:
     profile = load_profile(profile_path)
+    adapter = require_reviewed_adapter(
+        profile, Path(profile["format"]["adapter"])
+    )
+    output_policy = adapter_output_policy(adapter)
+    canvas_enabled = (
+        profile.get("canvas", {}).get("enabled") is True
+        and output_policy["generate_canvas"]
+    )
     vault_root = Path(profile["paths"]["vault_root"]).resolve()
     vault_markdown = list(vault_root.rglob("*.md")) if vault_root.exists() else []
     obsidian_names = {path.stem.casefold() for path in vault_markdown}
@@ -230,6 +255,15 @@ def audit_graph(
     errors: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
     line_owners = hierarchy.get("line_owners") or []
+    if (
+        hierarchy.get("generate_index", True)
+        != output_policy["generate_index"]
+    ):
+        errors.append({"kind": "hierarchy-output-policy-drift"})
+    if not output_policy["generate_index"] and any(
+        str(item.get("key")) == "root" for item in hierarchy.get("notes", [])
+    ):
+        errors.append({"kind": "unexpected-index-note"})
     if (
         hierarchy.get("status") != "passed"
         or hierarchy.get("line_count") != hierarchy.get("owned_line_count")
@@ -269,8 +303,40 @@ def audit_graph(
         match = QUESTION_BODY_RE.search(text)
         if not match or lexical_signature(match.group(1).rstrip() + "\n") != question.get("body_lexical_signature"):
             errors.append({"kind": "question-content-drift", "question_id": question["id"], "path": str(note)})
+        fragment_recoveries = [
+            recovery
+            for recovery in question.get("recovered_question_fragments", [])
+            if recovery.get("destination", "question") == "question"
+        ]
+        if fragment_recoveries:
+            expected_fragment_marker = (
+                "question_fragment_recoveries: "
+                + json.dumps(
+                    fragment_recoveries,
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                )
+            )
+            if expected_fragment_marker not in text:
+                errors.append(
+                    {
+                        "kind": "recovered-question-fragment-provenance-drift",
+                        "question_id": question["id"],
+                        "path": str(note),
+                    }
+                )
         if match:
             body = match.group(1).strip()
+            for recovery in fragment_recoveries:
+                if str(recovery.get("text", "")) not in body:
+                    errors.append(
+                        {
+                            "kind": "recovered-question-fragment-missing",
+                            "question_id": question["id"],
+                            "raw_line": recovery.get("raw_line"),
+                            "raw_column": recovery.get("raw_column"),
+                        }
+                    )
             if question_has_fragmented_html_table(body):
                 errors.append(
                     {
@@ -377,17 +443,20 @@ def audit_graph(
                     question_body_match = QUESTION_BODY_RE.search(text)
                     question_body = question_body_match.group(1) if question_body_match else ""
                     if question.get("answer_handling") == "separate-authoritative":
-                        has_contract = all(
-                            marker in text
-                            for marker in (
-                                "question_kind: \"worked-example\"",
-                                "answer_handling: \"separate-authoritative\"",
-                                "重要程度: \"重要\"",
-                                "answer_status: matched",
-                            )
+                        question_kind = str(
+                            question.get("question_kind", "publisher-solution")
                         )
-                        require_choice_answer = question_requires_choice_answer(
-                            question_body
+                        contract_markers = [
+                            f"question_kind: {json.dumps(question_kind, ensure_ascii=False)}",
+                            "answer_handling: \"separate-authoritative\"",
+                            "answer_status: matched",
+                        ]
+                        if question_kind == "worked-example":
+                            contract_markers.append("重要程度: \"重要\"")
+                        has_contract = all(marker in text for marker in contract_markers)
+                        require_choice_answer = (
+                            question.get("answer_shape", "auto") != "composite"
+                            and question_requires_choice_answer(question_body)
                         )
                         records = application.get("answer_note_records", [])
                         record_results = [
@@ -433,11 +502,19 @@ def audit_graph(
                             )
                             errors.append(
                                 {
-                                    "kind": "worked-example-contract-failure",
+                                    "kind": (
+                                        "worked-example-contract-failure"
+                                        if question_kind == "worked-example"
+                                        else "separate-authoritative-contract-failure"
+                                    ),
                                     "question_id": question["id"],
                                     "question_file": str(q_file),
                                     "reason": (
-                                        "missing-important-separated-metadata"
+                                        (
+                                            "missing-important-separated-metadata"
+                                            if question_kind == "worked-example"
+                                            else "missing-separated-authoritative-metadata"
+                                        )
                                         if not has_contract
                                         else (
                                             "missing-separated-answer-embed"
@@ -563,7 +640,7 @@ def audit_graph(
         for destination in broken_local_links(note, text, vault_root, obsidian_names):
             errors.append({"kind": "broken-link", "path": str(note), "destination": destination})
     canvas_metrics: dict[str, Any] | None = None
-    if profile.get("canvas", {}).get("enabled"):
+    if canvas_enabled:
         if canvas_path is None or not canvas_path.is_file():
             errors.append({"kind": "missing-canvas"})
         else:
@@ -576,6 +653,22 @@ def audit_graph(
                 if edge.get("fromNode") not in id_set or edge.get("toNode") not in id_set:
                     errors.append({"kind": "invalid-canvas-edge", "edge": edge.get("id")})
             canvas_metrics = {"nodes": len(ids), "edges": len(canvas.get("edges", []))}
+    else:
+        for unexpected_canvas in graph_root.glob("*.canvas") if graph_root.exists() else []:
+            errors.append(
+                {
+                    "kind": "unexpected-canvas",
+                    "path": str(unexpected_canvas.resolve()),
+                }
+            )
+        graph_manifest = Path(profile["paths"]["staging_root"]) / "graph-manifest.json"
+        if graph_manifest.exists():
+            errors.append(
+                {
+                    "kind": "unexpected-canvas-manifest",
+                    "path": str(graph_manifest.resolve()),
+                }
+            )
     source_hashes_unchanged = all(sha256_file(Path(source["path"])) == source["sha256"] for source in profile["sources"])
     if not source_hashes_unchanged:
         errors.append({"kind": "source-drift"})

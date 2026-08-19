@@ -83,7 +83,9 @@ def compile_question_kind_rules(adapter: dict[str, Any]) -> list[dict[str, Any]]
 
     Recognition remains book-specific, while the semantic consequences of a
     ``worked-example`` classification are global: the example is an atomic
-    leaf, its publisher explanation stays inline, and it is marked important.
+    leaf, its publisher explanation is separated, and it is marked important.
+    Other publisher-solved kinds may also use ``separate-authoritative``
+    without inheriting worked-example importance metadata.
     """
     compiled: list[dict[str, Any]] = []
     for index, rule in enumerate(
@@ -110,6 +112,19 @@ def classify_question(
                 "answer_handling": str(
                     rule.get("answer_handling", "external")
                 ),
+                "solution_layout": str(rule.get("solution_layout", "tail")),
+                "solution_start_patterns": list(
+                    rule.get("solution_start_patterns", [])
+                ),
+                "solution_resume_patterns": list(
+                    rule.get("solution_resume_patterns", [])
+                ),
+                "authoritative_callout_title": str(
+                    rule.get("authoritative_callout_title", "")
+                ).strip()
+                or None,
+                "answer_shape": str(rule.get("answer_shape", "auto")),
+                "sequence_policy": str(rule.get("sequence_policy", "none")),
                 "preserve_internal_headings": bool(
                     rule.get("preserve_internal_headings", False)
                 ),
@@ -125,56 +140,129 @@ def classify_question(
     return {
         "question_kind": "exercise",
         "answer_handling": "external",
+        "solution_layout": "tail",
+        "solution_start_patterns": [],
+        "solution_resume_patterns": [],
+        "authoritative_callout_title": None,
+        "answer_shape": "auto",
+        "sequence_policy": "continuous",
         "preserve_internal_headings": False,
         "metadata": {},
         "folder": None,
     }
 
 
+def split_authoritative_solution_body(
+    body: str,
+    adapter: dict[str, Any],
+    question_config: dict[str, Any] | None = None,
+) -> tuple[str, str, int | None]:
+    """Separate a publisher solution using reviewed, format-specific rules.
+
+    ``tail`` keeps the historical one-boundary behavior. ``interleaved``
+    alternates between solution starts and reviewed subpart-resume patterns so
+    a top-level example can keep all of its subpart stems together even when a
+    teacher edition prints each solution immediately after its subpart.
+
+    Returns question body, solution body, and the zero-based original source
+    line offset where the first solution begins. Publisher syntax remains in
+    the adapter rule; this function only implements the layout semantics.
+    """
+    question_config = question_config or {}
+    content = adapter.get("content", {})
+    start_values = question_config.get("solution_start_patterns") or content.get(
+        "worked_example_solution_patterns", []
+    )
+    resume_values = question_config.get("solution_resume_patterns") or []
+    layout = str(question_config.get("solution_layout", "tail"))
+    patterns = [
+        re.compile(str(pattern))
+        for pattern in start_values
+    ]
+    resume_patterns = [re.compile(str(pattern)) for pattern in resume_values]
+    if not patterns:
+        return body.rstrip() + "\n", "", None
+
+    # Split an inline solution marker without losing the stem before it.  Keep
+    # the original line index on both virtual fragments for provenance.
+    tokens: list[tuple[int, str, bool]] = []
+    for original_index, line in enumerate(body.rstrip("\n").splitlines()):
+        matches = [match for pattern in patterns if (match := pattern.search(line))]
+        # Preserve the legacy inline worked-example behavior while newer
+        # adapters use an inline-capable solution_start_patterns expression.
+        if original_index == 0:
+            legacy_inline = re.search(
+                r"(\s*(?:【解析】|解析\s*[：:▶]))",
+                line,
+            )
+            if legacy_inline is not None:
+                matches.append(legacy_inline)
+        marker = min(matches, key=lambda match: match.start()) if matches else None
+        if marker is not None and marker.start() > 0 and line[: marker.start()].strip():
+            tokens.append((original_index, line[: marker.start()].rstrip(), False))
+            tokens.append((original_index, line[marker.start():].lstrip(), True))
+        else:
+            tokens.append((original_index, line, False))
+
+    question_lines: list[str] = []
+    solution_lines: list[str] = []
+    in_solution = False
+    first_solution_offset: int | None = None
+    for original_index, line, forced_start in tokens:
+        start_match = next(
+            (match for pattern in patterns if (match := pattern.search(line))),
+            None,
+        )
+        resume_match = (
+            next(
+                (
+                    match
+                    for pattern in resume_patterns
+                    if (match := pattern.search(line))
+                ),
+                None,
+            )
+            if in_solution and layout == "interleaved"
+            else None
+        )
+        if not in_solution and (forced_start or start_match is not None):
+            in_solution = True
+            first_solution_offset = (
+                original_index
+                if first_solution_offset is None
+                else first_solution_offset
+            )
+            if (
+                content.get("worked_example_solution_backtrack_fence", True)
+                and question_lines
+                and question_lines[-1].strip() == "$$"
+            ):
+                solution_lines.append(question_lines.pop())
+            solution_lines.append(line)
+            continue
+        if resume_match is not None:
+            if resume_match.start() > 0 and line[: resume_match.start()].strip():
+                solution_lines.append(line[: resume_match.start()].rstrip())
+                question_lines.append(line[resume_match.start():].lstrip())
+            else:
+                question_lines.append(line)
+            in_solution = False
+            continue
+        (solution_lines if in_solution else question_lines).append(line)
+
+    if first_solution_offset is not None:
+        question_body = "\n".join(question_lines).rstrip() + "\n"
+        solution_body = "\n".join(solution_lines).strip() + "\n"
+        return question_body, solution_body, first_solution_offset
+    return body.rstrip() + "\n", "", None
+
+
 def split_worked_example_body(
     body: str,
     adapter: dict[str, Any],
 ) -> tuple[str, str, int | None]:
-    """Split a worked example at a reviewed publisher-solution boundary.
-
-    Returns question body, solution body, and the zero-based source-line offset
-    where the solution begins. Patterns are adapter data because publisher
-    labels and unlabeled solution openers vary by series.
-    """
-    patterns = [
-        re.compile(str(pattern))
-        for pattern in adapter.get("content", {}).get(
-            "worked_example_solution_patterns", []
-        )
-    ]
-    lines = body.rstrip("\n").splitlines()
-    if lines:
-        m = re.search(
-            r"(\s*(?:【解析】|解析\s*[：:▶]))",
-            lines[0],
-        )
-        if m and m.start() > 0:
-            lines = [
-                lines[0][:m.start()].strip(),
-                lines[0][m.start():].strip(),
-                *lines[1:],
-            ]
-    for index, line in enumerate(lines[1:], 1):
-        if not any(pattern.search(line) for pattern in patterns):
-            continue
-        solution_index = index
-        if (
-            adapter.get("content", {}).get(
-                "worked_example_solution_backtrack_fence", True
-            )
-            and solution_index > 0
-            and lines[solution_index - 1].strip() == "$$"
-        ):
-            solution_index -= 1
-        question_body = "\n".join(lines[:solution_index]).rstrip() + "\n"
-        solution_body = "\n".join(lines[solution_index:]).strip() + "\n"
-        return question_body, solution_body, solution_index
-    return body.rstrip() + "\n", "", None
+    """Backward-compatible wrapper for legacy worked-example adapters."""
+    return split_authoritative_solution_body(body, adapter)
 
 
 def match_role(line: str, rules: list[dict[str, Any]]) -> tuple[dict[str, Any], re.Match[str]] | None:
@@ -638,6 +726,95 @@ def apply_reviewed_recovered_questions(
     return result
 
 
+def apply_reviewed_recovered_question_fragments(
+    virtual_lines: list[dict[str, Any]],
+    raw_lines: list[str],
+    note_key: str,
+    adapter: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Insert a PDF-visible fragment omitted inside an existing question.
+
+    The frozen OCR Markdown remains unchanged. Each insertion is bound to an
+    exact raw character coordinate, a drift anchor, and reviewed PDF
+    provenance. This is intentionally narrower than ``recovered_questions``:
+    it cannot replace or delete OCR text and therefore cannot silently rewrite
+    a damaged question.
+    """
+    result = [{**line} for line in virtual_lines]
+    recoveries = [
+        item
+        for item in adapter.get("content", {}).get(
+            "recovered_question_fragments", []
+        )
+        if str(item.get("context")) == str(note_key)
+    ]
+    for ordinal, item in enumerate(recoveries, 1):
+        if item.get("reviewer_confirmed") is not True:
+            raise ConfigurationError(
+                "Recovered question fragment must be reviewer_confirmed"
+            )
+        raw_line = int(item["raw_line"])
+        raw_column = int(item["raw_column"])
+        position = str(item["position"])
+        fragment = str(item["text"])
+        if raw_line < 1 or raw_line > len(raw_lines):
+            raise ConfigurationError(
+                "Recovered question fragment is outside its hierarchy note"
+            )
+        if position not in {"before", "after"}:
+            raise ConfigurationError(
+                "Recovered question fragment position must be before or after"
+            )
+        if not fragment:
+            raise ConfigurationError("Recovered question fragment text is empty")
+        anchor_text = str(item.get("anchor_text", "")).strip()
+        if anchor_text and raw_lines[raw_line - 1].strip() != anchor_text:
+            raise ConfigurationError(
+                "Recovered question fragment anchor_text drifted"
+            )
+        anchor_pattern = item.get("anchor_pattern")
+        if anchor_pattern and not re.search(
+            str(anchor_pattern), raw_lines[raw_line - 1]
+        ):
+            raise ConfigurationError(
+                "Recovered question fragment anchor_pattern drifted"
+            )
+        candidates = []
+        for index, line in enumerate(result):
+            if int(line["raw_line"]) != raw_line:
+                continue
+            start = int(line["raw_column"])
+            end = start + len(str(line["text"])) - 1
+            if start <= raw_column <= end:
+                candidates.append((index, start))
+        if len(candidates) != 1:
+            raise ConfigurationError(
+                "Recovered question fragment coordinate must resolve once: "
+                f"({raw_line}, {raw_column})"
+            )
+        index, virtual_start = candidates[0]
+        local_offset = raw_column - virtual_start
+        if position == "after":
+            local_offset += 1
+        text = str(result[index]["text"])
+        result[index]["text"] = (
+            text[:local_offset] + fragment + text[local_offset:]
+        )
+        evidence = {
+            "text": fragment,
+            "raw_line": raw_line,
+            "raw_column": raw_column,
+            "position": position,
+            "source_page": item.get("source_page"),
+            "source_bbox": item.get("source_bbox"),
+            "ordinal": ordinal,
+        }
+        result[index].setdefault("recovered_question_fragments", []).append(
+            evidence
+        )
+    return result
+
+
 def plan_note(
     note_entry: dict[str, Any],
     rules: list[dict[str, Any]],
@@ -653,6 +830,9 @@ def plan_note(
         rules,
     )
     virtual_lines = apply_reviewed_virtual_span_relocations(
+        virtual_lines, raw_lines, str(note_entry["key"]), adapter
+    )
+    virtual_lines = apply_reviewed_recovered_question_fragments(
         virtual_lines, raw_lines, str(note_entry["key"]), adapter
     )
     virtual_lines = apply_reviewed_recovered_questions(
@@ -935,13 +1115,17 @@ def plan_note(
         answer_body = ""
         solution_offset = None
         if question_config["answer_handling"] == "separate-authoritative":
-            question_body, answer_body, solution_offset = split_worked_example_body(
-                body, adapter
+            question_body, answer_body, solution_offset = split_authoritative_solution_body(
+                body, adapter, question_config
             )
             if solution_offset is None:
                 unknown.append(
                     {
-                        "kind": "worked-example-solution-boundary-missing",
+                        "kind": (
+                            "worked-example-solution-boundary-missing"
+                            if question_config["question_kind"] == "worked-example"
+                            else "separate-authoritative-solution-boundary-missing"
+                        ),
                         "source_note": str(path),
                         "line": start,
                         "number": number,
@@ -977,12 +1161,52 @@ def plan_note(
             )
         if virtual_provenance:
             provenance_candidates = [virtual_provenance]
+        question_body_lines = set(question_body.splitlines())
+        answer_body_lines = set(answer_body.splitlines())
+        recovered_question_fragments: list[dict[str, Any]] = []
+        for virtual_line in virtual_lines[start - 1:end]:
+            recoveries = virtual_line.get("recovered_question_fragments", [])
+            if not recoveries:
+                continue
+            virtual_text = str(virtual_line["text"])
+            destination = (
+                "question"
+                if virtual_text in question_body_lines
+                else ("answer" if virtual_text in answer_body_lines else None)
+            )
+            if destination is None:
+                unknown.append(
+                    {
+                        "kind": "recovered-question-fragment-destination-unresolved",
+                        "source_note": str(path),
+                        "line": start,
+                        "number": number,
+                        "text": virtual_text,
+                    }
+                )
+                destination = "unresolved"
+            recovered_question_fragments.extend(
+                {**recovery, "destination": destination}
+                for recovery in recoveries
+            )
         questions.append(
             {
                 "id": f"{note_entry['key']}:question:{number}:{start}",
                 "number": number,
                 "question_kind": question_config["question_kind"],
                 "answer_handling": question_config["answer_handling"],
+                "solution_layout": question_config.get("solution_layout", "tail"),
+                "solution_start_patterns": question_config.get(
+                    "solution_start_patterns", []
+                ),
+                "solution_resume_patterns": question_config.get(
+                    "solution_resume_patterns", []
+                ),
+                "authoritative_callout_title": question_config.get(
+                    "authoritative_callout_title"
+                ),
+                "answer_shape": question_config.get("answer_shape", "auto"),
+                "sequence_policy": question_config.get("sequence_policy", "none"),
                 "metadata": question_config.get("metadata", {}),
                 "evidence": evidence,
                 "title": title,
@@ -999,6 +1223,7 @@ def plan_note(
                 "source_markdown_line": source_markdown_line,
                 "source_provenance": provenance_candidates[0] if len(provenance_candidates) == 1 else None,
                 "source_provenance_candidates": provenance_candidates,
+                "recovered_question_fragments": recovered_question_fragments,
                 "output": str(output.resolve()),
                 "body_sha256": sha256_text(body),
                 "question_body_sha256": sha256_text(question_body),
@@ -1265,6 +1490,11 @@ def render_question(question: dict[str, Any], body: str, answer_mode: str = "sep
         if question.get("answer_handling") == "separate-authoritative"
         else ("unavailable" if answer_mode == "unavailable" else "unmatched")
     )
+    question_fragment_recoveries = [
+        recovery
+        for recovery in question.get("recovered_question_fragments", [])
+        if recovery.get("destination", "question") == "question"
+    ]
     frontmatter = [
         "---",
         f"question_id: {json.dumps(question['id'], ensure_ascii=False)}",
@@ -1274,6 +1504,18 @@ def render_question(question: dict[str, Any], body: str, answer_mode: str = "sep
         f"question_body_sha256: {question.get('question_body_sha256', question['body_sha256'])}",
         f"question_kind: {json.dumps(question.get('question_kind', 'exercise'), ensure_ascii=False)}",
         f"answer_handling: {json.dumps(question.get('answer_handling', 'external'), ensure_ascii=False)}",
+        *(
+            [
+                "question_fragment_recoveries: "
+                + json.dumps(
+                    question_fragment_recoveries,
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                )
+            ]
+            if question_fragment_recoveries
+            else []
+        ),
         *[
             f"{key}: {json.dumps(value, ensure_ascii=False)}"
             for key, value in question.get("metadata", {}).items()
@@ -1409,6 +1651,12 @@ def apply_content(profile_path: Path, adapter_path: Path, manifest_path: Path, o
             source_note_key,
             adapter,
         )
+        virtual_lines = apply_reviewed_recovered_question_fragments(
+            virtual_lines,
+            raw_lines,
+            source_note_key,
+            adapter,
+        )
         virtual_lines = apply_reviewed_recovered_questions(
             virtual_lines,
             raw_lines,
@@ -1452,14 +1700,16 @@ def apply_content(profile_path: Path, adapter_path: Path, manifest_path: Path, o
             answer_note_records: list[dict[str, Any]] = []
             answer_notes: list[str] = []
             if question.get("answer_handling") == "separate-authoritative":
-                question_body, answer_body, _ = split_worked_example_body(body, adapter)
+                question_body, answer_body, _ = split_authoritative_solution_body(
+                    body, adapter, question
+                )
                 if sha256_text(question_body) != question.get("question_body_sha256"):
                     raise ConfigurationError(
-                        f"Worked-example question body changed before apply: {question['id']}"
+                        f"Authoritative-solution question body changed before apply: {question['id']}"
                     )
                 if sha256_text(answer_body) != question.get("answer_body_sha256"):
                     raise ConfigurationError(
-                        f"Worked-example answer body changed before apply: {question['id']}"
+                        f"Authoritative-solution answer body changed before apply: {question['id']}"
                     )
             rendered_question = rebase_local_links(
                 render_question(question, question_body, str(profile.get("answers", {}).get("mode", "separate"))),
@@ -1467,24 +1717,68 @@ def apply_content(profile_path: Path, adapter_path: Path, manifest_path: Path, o
                 output,
             )
             if answer_body:
-                from .answers import format_answer_callout
+                from .answers import (
+                    extract_composite_short_answer,
+                    format_answer_callout,
+                )
 
                 answer_output = Path(question["answer_output"])
+                answer_fragment_recoveries = [
+                    recovery
+                    for recovery in question.get(
+                        "recovered_question_fragments", []
+                    )
+                    if recovery.get("destination") == "answer"
+                ]
                 rebased_answer_body = rebase_local_links(
                     answer_body, source, answer_output
                 )
                 callout_title = str(
-                    adapter.get("content", {}).get(
-                        "worked_example_callout_title", "例题解析"
+                    question.get("authoritative_callout_title")
+                    or adapter.get("content", {}).get(
+                        "worked_example_callout_title",
+                        (
+                            "例题解析"
+                            if question.get("question_kind") == "worked-example"
+                            else "权威解析"
+                        ),
                     )
                 )
+                answer_source_kind = str(
+                    question.get("question_kind", "publisher-solution")
+                )
+                override_key = (
+                    str(question.get("context_key")),
+                    str(question.get("number")),
+                    int(question.get("source_solution_start_line") or 0),
+                )
+                reviewed_short_answer = short_answer_overrides.get(override_key)
+                if (
+                    reviewed_short_answer is None
+                    and question.get("answer_shape") == "composite"
+                ):
+                    reviewed_short_answer = extract_composite_short_answer(
+                        rebased_answer_body
+                    )
                 answer_text = "\n".join(
                     [
                         "---",
                         f"answer_for: {json.dumps(output.stem)}",
                         "answer_provenance: authoritative",
-                        "answer_source_kind: worked-example",
+                        f"answer_source_kind: {json.dumps(answer_source_kind, ensure_ascii=False)}",
                         f"answer_source_body_sha256: {question['answer_body_sha256']}",
+                        *(
+                            [
+                                "answer_fragment_recoveries: "
+                                + json.dumps(
+                                    answer_fragment_recoveries,
+                                    ensure_ascii=False,
+                                    separators=(",", ":"),
+                                )
+                            ]
+                            if answer_fragment_recoveries
+                            else []
+                        ),
                         "---",
                         format_answer_callout(
                             rebased_answer_body,
@@ -1499,16 +1793,7 @@ def apply_content(profile_path: Path, adapter_path: Path, manifest_path: Path, o
                                     ),
                                 )
                             ),
-                            reviewed_short_answer=short_answer_overrides.get(
-                                (
-                                    str(question.get("context_key")),
-                                    str(question.get("number")),
-                                    int(
-                                        question.get("source_solution_start_line")
-                                        or 0
-                                    ),
-                                )
-                            ),
+                            reviewed_short_answer=reviewed_short_answer,
                         ),
                         "",
                     ]
@@ -1528,6 +1813,7 @@ def apply_content(profile_path: Path, adapter_path: Path, manifest_path: Path, o
                         "lexical_signature": lexical_signature(answer_text),
                         "provenance": "authoritative",
                         "source_body_sha256": question["answer_body_sha256"],
+                        "recovered_question_fragments": answer_fragment_recoveries,
                     }
                 )
                 generated_outputs.append(

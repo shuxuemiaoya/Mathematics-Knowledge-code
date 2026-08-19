@@ -14,6 +14,7 @@ Minimum shape:
   "status": "passed",
   "reviewer_confirmed": true,
   "filename_policy": {"colon_replacement": "_"},
+  "output_policy": {"generate_index": true, "generate_canvas": true},
   "profile": "C:/absolute/question-type-profile.json",
   "hierarchy": {
     "source_role": "questions",
@@ -73,6 +74,21 @@ Minimum shape:
 }
 ```
 
+`output_policy` is optional for backward compatibility and both switches
+default to `true`. Set `generate_index: false` when a reviewed format should
+publish its hierarchy entry notes without a synthetic `root_output` note. Set
+`generate_canvas: false` when the format should not publish a structural
+Canvas, even if the profile was initialized with Canvas enabled. On transition
+from enabled to disabled, the coordinator removes only hash-matching outputs
+owned by the relevant stage; audit rejects a stale index, `.canvas`, or
+`graph-manifest.json`. Single-topic teacher editions such as
+`专题01 导数的运算(教师版)` use both switches as `false`.
+For this format, when the source PDF already sits in a dedicated topic
+directory, bind the profile `graph_root` directly to that directory and record
+the reviewed direct-root layout in `inventory_evidence.output_layout`; do not
+append another PDF-title wrapper directory. Hierarchy outputs remain relative
+to that graph root.
+
 `filename_policy.colon_replacement` records the mandatory generated-path rule.
 The runtime normalizes every component of `root_output` and `entries[].output`
 even when the reviewed adapter contains `:` or `：`; final audit treats either
@@ -116,6 +132,20 @@ not edit the raw Markdown or invent a question from its answer.
 Add `source_bbox: [x0, y0, x1, y1]` when the reviewed MinerU block is known.
 Ordinary detected questions receive page/bbox provenance automatically when
 the generated source-provenance index resolves their original Markdown line.
+
+When the question exists but OCR omitted only PDF-visible text inside it, use
+`content.recovered_question_fragments` instead of duplicating the whole
+question. Each entry requires `context`, hierarchy-snapshot `raw_line` and
+one-based `raw_column`, `position: before|after`, exact `text`, `source_page`,
+optional `source_bbox`, a drift-resistant `anchor_text` or `anchor_pattern`, and
+`reviewer_confirmed: true`. The coordinate identifies the existing OCR
+character before or after which the fragment is inserted in the semantic
+virtual copy. Fragment recovery cannot replace or delete OCR text, leaves the
+frozen corpus unchanged, and is carried into question frontmatter and final
+audit provenance. The compiler assigns each recovery to the resulting
+`question` or `answer` span automatically: question fragments are recorded in
+the Q note, while fragments inside a separated publisher solution are recorded
+and audited in its A1 note. Do not encode that destination manually.
 
 For a content-derived no-TOC hierarchy, replace `primary_authority` with an
 explicit `no_toc_authority` object containing `status: passed`,
@@ -194,3 +224,31 @@ authoritative `<QID>A1.md` publisher-analysis note, and exclusion from external
 answer matching. Configure `worked_example_solution_patterns` for exact
 publisher solution boundaries. `preserve_internal_headings: true` is permitted
 only when solution headings belong to the example source span before splitting.
+
+Teacher editions may print an authoritative answer immediately after each
+exercise, or even between subparts of one top-level example. Do not register
+such a PDF as `combined` when question and answer spans overlap. Register it as
+`questions` and classify the solved items with
+`answer_handling: separate-authoritative`. A non-worked-example kind such as
+`inline-solved-exercise` gets the same standalone authoritative A1 behavior but
+does not inherit `重要程度: 重要`.
+
+Each separate-authoritative kind rule may define:
+
+- `solution_layout: tail` for one continuous solution suffix, or
+  `solution_layout: interleaved` for alternating subpart stems and solutions;
+- `solution_start_patterns` for publisher answer/analysis openers;
+- `solution_resume_patterns` for the next genuine subpart stem, required by
+  `interleaved` and deliberately narrow enough to reject numbered derivation
+  steps inside a solution;
+- `authoritative_callout_title` for its A1 outer callout;
+- `answer_shape: composite` when the top-level question has several subanswers
+  and must not be audited as one single-choice result;
+- `sequence_policy: continuous` when publisher-solved numeric exercises still
+  require a continuous `1..N` ledger even though external matching is skipped.
+
+When answer rows repeat the question number, make the ordinary question regex
+exclude publisher answer labels before consuming optional whitespace. For
+example, `^(?P<number>\d+)[.．、](?!\s*(?:答案|解析)\b)\s*` rejects
+`1. 答案...`; placing `\s*` before the negative lookahead permits regex
+backtracking and can accidentally create a duplicate question.

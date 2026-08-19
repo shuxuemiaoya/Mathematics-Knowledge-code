@@ -384,6 +384,10 @@ def build_adapter_draft(profile_path: Path, inventory: dict[str, Any] | None = N
         "status": "review_required",
         "reviewer_confirmed": False,
         "profile": profile["_profile_path"],
+        "output_policy": {
+            "generate_index": True,
+            "generate_canvas": True,
+        },
         "inventory_evidence": {
             "source_role": hierarchy_role,
             "markdown_sha256": source_detail.get("sha256"),
@@ -419,6 +423,7 @@ def build_adapter_draft(profile_path: Path, inventory: dict[str, Any] | None = N
             "Select a printed-TOC authority or provide a reviewed no-TOC decision.",
             "Confirm every hierarchy entry and exact source anchor.",
             "Confirm question patterns, functional roles, and output templates.",
+            "Confirm whether this format should generate a root index and Canvas.",
             *(
                 []
                 if profile["answers"]["mode"] == "unavailable"

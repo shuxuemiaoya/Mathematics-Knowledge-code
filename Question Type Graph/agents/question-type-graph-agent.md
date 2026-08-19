@@ -19,13 +19,20 @@ description: 专职负责将刷题库与教辅书（如必刷题）进行 OCR �
    - 出版方“例题/变式”由 adapter 的 `question_kind_rules` 识别后也必须逐题原子化；
      全局统一添加 `重要程度: 重要`；题干与书内解析必须分离，解析写入独立的
      `<QID>A1.md` 权威答案笔记并由题目嵌入。
+   - 教师版若在每道训练题后直接印刷答案/解析，使用独立的
+     `inline-solved-exercise + separate-authoritative` 类型；仍生成独立 A1 并执行
+     连续题号审计，但不得误加“重要”。答案区与题目区交错时把 PDF 注册为
+     `questions`，不要伪造互不重叠的 `combined` 区域。
+   - 顶层例题的小问与解析交错时使用 `solution_layout: interleaved`，由 adapter
+     的 `solution_start_patterns` 和 `solution_resume_patterns` 交替取段；所有小问
+     题干必须留在同一个顶层题笔记，所有出版方解析进入该题唯一的 A1。
 6. **标题清理**：编辑所有生成标题，仅保留 Unicode 字母、数字与下划线 `_`；将其余
    每个特殊字符（包括空白、中文标点如全角冒号 `：`、英文标点、符号和 emoji）替换为
    下划线 `_`。此步骤只清理生成标题及其对应文件名，不得改写 OCR 源文本或题目正文。
 7. `question-answer-matching`: 题目与答案自动精准匹配与审查
 8. `supplement-question-type-solutions`: 对权威答案缺失或仅有结果的项补充并人工确认实质性解析
 9. `question-type-markdown`: Markdown 格式美化与统一
-10. `question-type-canvas`: 生成 Question Type Graph 结构化 Obsidian Canvas
+10. `question-type-canvas`: 仅在 profile 与已审阅 adapter 均启用时生成结构化 Obsidian Canvas
 11. `question-type-graph`: 总体流水线调度与控制
 
 ---
@@ -92,7 +99,45 @@ description: 专职负责将刷题库与教辅书（如必刷题）进行 OCR �
 
 ---
 
-## 5. 本次修正记录与防复发检查（2026-08-12）
+## 5. 教师版“题后即解 + 小问交错解析”格式（2026-08-14）
+
+这类文件没有独立答案册，不能套用 combined 源的非重叠题目区/答案区模型。处理顺序：
+
+1. 以 `questions=<教师版.pdf>` 初始化；答案模式可为 `unavailable`，但所有书内已解题
+   必须通过 `separate-authoritative` 在内容阶段得到 `answer_status: matched` 与 A1。
+2. 无印刷目录时审核 `no_toc_authority`；知识公式、方法总结留在专题父笔记，只把
+   “例题选讲”“对点训练”等功能块建为结构节点。
+3. 题号正则必须排除同号答案行，并把否定前瞻放在可回退空白之前，例如
+   `^(?P<number>\d+)[.．、](?!\s*(?:答案|解析)\b)\s*`；否则 `1. 答案...`
+   会被错误切成第二道第 1 题。
+4. 普通题尾连续解析用 `solution_layout: tail`。例题小问交错解析用
+   `solution_layout: interleaved`，恢复题干的正则只能匹配下一小问的真实题干开头，
+   不能把解析内部的编号步骤当作新小问。
+5. 一个顶层例题含多个小问和多种答案形态时设 `answer_shape: composite`；若出版方
+   明确给出了所有小问结果，可用带原文锚点的 `short_answer_overrides` 汇总答案栏。
+6. 为题后即解训练题设 `sequence_policy: continuous`，即使它们不参加外部答案匹配，
+   最终审计仍必须证明题号连续、无重复、无答案行伪题。
+7. 若 PDF 可见但 OCR 只漏了题内局部字符（如小问编号或闭合括号），使用
+   `recovered_question_fragments` 在 hierarchy snapshot 的精确 raw line/column 前后
+   插入，并绑定原行 drift anchor、PDF page/bbox 与人工确认。不得手改 frozen raw，
+   也不得用仅适用于“整题完全缺失”的 `recovered_questions` 制造重复题。fragment
+   最终属于题干还是权威解析由编译器自动分流，禁止在 adapter 手写 destination。
+8. 这种单专题教师版不需要额外的根索引或 Canvas；adapter 必须显式写入
+   `"output_policy": {"generate_index": false, "generate_canvas": false}`。
+   profile 中的 `--canvas` 不能覆盖 adapter 的否决。重跑时只清理流水线仍拥有且
+   哈希未漂移的旧 `index.md`、`.canvas` 与 Canvas manifest。
+9. 若 PDF 本身已位于该专题的专属目录（例如 `专题01 导数的运算-导数`），该目录
+   直接作为 `graph_root`；不得再按 PDF 文件名追加一层“教师版”包装目录。adapter 的
+   inventory evidence 应记录这一已审阅输出布局，所有层级 entry 均相对该根目录生成。
+
+本次《专题01 导数的运算(教师版)》的视觉验收基线是：2 个顶层例题（例 1 的 4 个
+小问、例 2 的 5 个小问均不得拆散）和“对点训练”1–16 共 16 道顶层训练题，即
+18 个原子题；前置三段知识与“方法总结”留在专题正文。OCR 或版式证据改变时以
+`format-review-worksheet.md` 的审核结果为准，不得为了凑数补造题目。
+
+---
+
+## 6. 本次修正记录与防复发检查（2026-08-12）
 
 本次《高考数学培优40讲-01-函数与导数》处理暴露了三类流程缺陷：
 

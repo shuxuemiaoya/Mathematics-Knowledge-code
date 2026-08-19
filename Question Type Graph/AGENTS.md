@@ -17,7 +17,7 @@ freeze typed sources
   -> optional authoritative answer matching
   -> reviewed supplementation for unresolved enabled answers
   -> markup-only Markdown standardization
-  -> structural Canvas
+  -> optional structural Canvas
   -> final audit
 ```
 
@@ -29,6 +29,10 @@ freeze typed sources
   search; never make launch-directory choice part of format behavior.
 - Append immutable run and stage-attempt IDs with input fingerprints and
   artifact hashes. Never overwrite the history of a terminal attempt.
+- Bind every reusable compiler stage fingerprint to the concrete Python
+  modules that implement that stage. A resume after compiler changes must
+  invalidate stale stage artifacts and rebuild descendants without adapter
+  cachebuster edits.
 - When one OCR row contains several leader-delimited TOC entries, inventory
   every entry with its raw column and propose source-stream and column-major
   orders. Prefer a continuous printed ordinal ledger only as a review proposal;
@@ -42,6 +46,11 @@ freeze typed sources
 - Keep publisher labels, titles, page ranges, numbering rules, answer layouts,
   and output folder templates in a reviewed `format-adapter.json`, never in
   reusable compiler code.
+- Treat reviewed `output_policy.generate_index` and
+  `output_policy.generate_canvas` as authoritative output switches. When either
+  is false, do not publish that artifact and remove only hash-matching outputs
+  previously owned by its pipeline stage; final audit must reject stale root
+  index notes, `.canvas` files, or Canvas manifests.
 - Scope numeric question detection to reviewed question-bearing functional
   roles, contexts, or source ranges before adding source-line exclusions for
   isolated false positives.
@@ -54,6 +63,22 @@ freeze typed sources
   boundary syntax remain in `content.question_kind_rules` and
   `content.worked_example_solution_patterns`, never in reusable compiler
   vocabulary.
+- Treat teacher-edition exercises with publisher answers printed inside each
+  question span as adapter-recognized `separate-authoritative` kinds rather
+  than fake non-overlapping combined-source answer regions. Only the
+  `worked-example` kind receives `重要程度: 重要`; other publisher-solved kinds
+  retain their reviewed numbering policy. For interleaved subpart solutions,
+  use adapter-owned solution start/resume patterns, keep all subpart stems in
+  the one top-level question leaf, and move every solution segment into its
+  unique authoritative A1 note.
+- For the single-topic teacher-edition format represented by
+  `专题01 导数的运算(教师版)`, set both reviewed output switches to false: its
+  topic and functional notes are the navigation surface, so it must not create
+  a synthetic root `index.md` or structural Canvas.
+- When such a PDF already lives inside its dedicated source-topic directory,
+  use that directory itself as `graph_root`; do not append another wrapper
+  directory derived from the PDF filename. Record the reviewed direct-root
+  layout in adapter inventory evidence and keep entry outputs root-relative.
 - Flatten question-bearing HTML tables into semantic column streams before
   segmentation. Merge streams by the next printed question number, keep each
   image or strategy with its column record, and expose adapter-matched labels
@@ -73,6 +98,12 @@ freeze typed sources
   recover it only through a page-provenanced, reviewer-confirmed virtual
   question entry anchored to the immutable hierarchy corpus; never reconstruct
   a missing stem from the answer alone.
+- If visual PDF review proves that conversion omitted a fragment inside an
+  otherwise preserved question, use an adapter-owned
+  `recovered_question_fragments` insertion bound to the hierarchy snapshot's
+  exact raw line/column, before/after position, drift anchor, PDF page/bbox, and
+  reviewer confirmation. It may only insert PDF-visible text into the semantic
+  virtual copy; it must never edit, replace, or delete frozen OCR text.
 - Preserve source text, formulas, images, tables, numbering, and order. Add
   Markdown structure and navigation only.
 - Keep a chapter's explanatory introduction in the chapter note unless the

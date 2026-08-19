@@ -21,9 +21,19 @@ from question_type_graph.inventory import build_inventory, contiguous_index_runs
 from question_type_graph.mineru import PdfPart, build_payload, load_settings
 from question_type_graph.profile import create_profile
 from question_type_graph.provenance import map_markdown_lines
+from question_type_graph.runtime import implementation_paths, input_fingerprint
 
 
 class TestGeneralization(unittest.TestCase):
+    def test_stage_fingerprint_can_bind_compiler_implementation(self) -> None:
+        compiler_paths = implementation_paths("content", "answers", "common")
+
+        self.assertTrue(all(path.is_file() for path in compiler_paths))
+        self.assertNotEqual(
+            input_fingerprint([], {"stage_contract": 1}),
+            input_fingerprint(compiler_paths, {"stage_contract": 1}),
+        )
+
     def test_env_discovery_is_independent_of_launch_directory(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
@@ -219,6 +229,43 @@ class TestGeneralization(unittest.TestCase):
             },
         }
         validate_adapter_contract(base, profile)
+
+        output_disabled = copy.deepcopy(base)
+        output_disabled["output_policy"] = {
+            "generate_index": False,
+            "generate_canvas": False,
+        }
+        validate_adapter_contract(output_disabled, profile)
+
+        invalid_output_policy = copy.deepcopy(base)
+        invalid_output_policy["output_policy"] = {"generate_canvas": "no"}
+        with self.assertRaisesRegex(ConfigurationError, "must be boolean"):
+            validate_adapter_contract(invalid_output_policy, profile)
+
+        recovered_fragment = copy.deepcopy(base)
+        recovered_fragment["content"]["recovered_question_fragments"] = [
+            {
+                "context": "unit",
+                "raw_line": 2,
+                "raw_column": 1,
+                "position": "before",
+                "text": "(1) ",
+                "source_page": 5,
+                "source_bbox": [1, 2, 3, 4],
+                "anchor_pattern": r"^y =",
+                "reviewer_confirmed": True,
+            }
+        ]
+        validate_adapter_contract(recovered_fragment, profile)
+
+        unreviewed_fragment = copy.deepcopy(recovered_fragment)
+        unreviewed_fragment["content"]["recovered_question_fragments"][0][
+            "reviewer_confirmed"
+        ] = False
+        with self.assertRaisesRegex(
+            ConfigurationError, "fragment identity"
+        ):
+            validate_adapter_contract(unreviewed_fragment, profile)
 
         ambiguous = copy.deepcopy(base)
         ambiguous["hierarchy"]["primary_authority"] = {}

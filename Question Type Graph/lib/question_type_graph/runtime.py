@@ -40,6 +40,24 @@ def input_fingerprint(paths: list[Path], values: dict[str, Any] | None = None) -
     return digest.hexdigest()
 
 
+def implementation_paths(*module_names: str) -> list[Path]:
+    """Return local compiler modules that must participate in stage caching.
+
+    Stage contracts describe data-shape versions, but they do not change on
+    every implementation fix. Hashing the concrete modules prevents a resume
+    from reusing manifests produced by older compiler semantics.
+    """
+    package_root = Path(__file__).resolve().parent
+    paths = [package_root / f"{name}.py" for name in module_names]
+    missing = [path for path in paths if not path.is_file()]
+    if missing:
+        raise ConfigurationError(
+            "Compiler implementation module is missing: "
+            + ", ".join(str(path) for path in missing)
+        )
+    return paths
+
+
 def init_state(profile_path: Path, output: Path, overwrite: bool = False) -> dict[str, Any]:
     profile = load_profile(profile_path)
     state = {
