@@ -37,6 +37,15 @@ def normalize_heading(line: str) -> str:
     return re.sub(r"^\s*#{1,6}\s+", "", line).strip()
 
 
+def equivalent_boundary_title(line: str, title: str) -> bool:
+    def normalized(value: str) -> str:
+        value = normalize_heading(value)
+        value = re.sub(r"^[【\[]|[】\]]$", "", value).strip()
+        return re.sub(r"\s+", " ", value)
+
+    return normalized(line) == normalized(title)
+
+
 def source_for_role(profile: dict[str, Any], role: str) -> dict[str, Any]:
     values = [source for source in profile["sources"] if source.get("role") == role]
     if len(values) != 1:
@@ -330,6 +339,18 @@ def apply_hierarchy(profile_path: Path, adapter_path: Path, manifest_path: Path,
                 output_source_lines.append(None)
                 line = child["end_line"] + 1
             else:
+                if (
+                    entry.get("emit_title")
+                    and line == entry["start_line"]
+                    and (
+                        re.match(r"^\s*#{1,6}\s+\S", lines[line - 1])
+                        or equivalent_boundary_title(lines[line - 1], entry["title"])
+                    )
+                ):
+                    line += 1
+                    while line <= entry["end_line"] and not lines[line - 1].strip():
+                        line += 1
+                    continue
                 output_lines.append(lines[line - 1])
                 output_source_lines.append(line)
                 line += 1

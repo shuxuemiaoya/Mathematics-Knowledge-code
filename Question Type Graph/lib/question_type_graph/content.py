@@ -124,6 +124,15 @@ def classify_question(
                 ).strip()
                 or None,
                 "answer_shape": str(rule.get("answer_shape", "auto")),
+                "atomize_interleaved_subquestions": bool(
+                    rule.get("atomize_interleaved_subquestions", False)
+                ),
+                "atomized_subquestion_patterns": list(
+                    rule.get("atomized_subquestion_patterns", [])
+                ),
+                "atomized_number_template": str(
+                    rule.get("atomized_number_template", "{number}({part})")
+                ),
                 "sequence_policy": str(rule.get("sequence_policy", "none")),
                 "preserve_internal_headings": bool(
                     rule.get("preserve_internal_headings", False)
@@ -145,6 +154,9 @@ def classify_question(
         "solution_resume_patterns": [],
         "authoritative_callout_title": None,
         "answer_shape": "auto",
+        "atomize_interleaved_subquestions": False,
+        "atomized_subquestion_patterns": [],
+        "atomized_number_template": "{number}({part})",
         "sequence_policy": "continuous",
         "preserve_internal_headings": False,
         "metadata": {},
@@ -282,6 +294,122 @@ def match_question(line: str, patterns: list[re.Pattern[str]]) -> re.Match[str] 
         if match:
             return match
     return None
+
+
+class SyntheticQuestionMatch:
+    """Minimal match facade for adapter-reviewed subquestions.
+
+    The original Markdown remains untouched.  Only the candidate ledger is
+    expanded so each independently solved packet item becomes its own node.
+    """
+
+    def __init__(self, groups: dict[str, str]):
+        self._groups = dict(groups)
+
+    def groupdict(self) -> dict[str, str]:
+        return dict(self._groups)
+
+    def group(self, name: str) -> str:
+        return self._groups[name]
+
+
+def atomize_interleaved_question_starts(
+    starts: list[tuple[int, Any, str, dict[str, Any]]],
+    lines: list[str],
+) -> tuple[list[tuple[int, Any, str, dict[str, Any]]], list[dict[str, Any]]]:
+    """Expand reviewed interleaved example packets into atomic questions.
+
+    Packet syntax stays adapter-owned.  A new item is accepted only after an
+    authoritative solution opener, preventing ordinary numbered derivation
+    steps from becoming questions.
+    """
+
+    expanded: list[tuple[int, Any, str, dict[str, Any]]] = []
+    review: list[dict[str, Any]] = []
+    for position, (start, match, number, config) in enumerate(starts):
+        if not config.get("atomize_interleaved_subquestions"):
+            expanded.append((start, match, number, config))
+            continue
+        end = starts[position + 1][0] - 1 if position + 1 < len(starts) else len(lines)
+        item_patterns = [
+            re.compile(str(value))
+            for value in config.get("atomized_subquestion_patterns", [])
+        ]
+        solution_patterns = [
+            re.compile(str(value))
+            for value in config.get("solution_start_patterns", [])
+        ]
+        items: list[tuple[int, re.Match[str]]] = []
+        in_solution = False
+        pending_item: tuple[int, re.Match[str]] | None = None
+        for line_number in range(start, end + 1):
+            line = lines[line_number - 1]
+            item_match = next(
+                (candidate for pattern in item_patterns if (candidate := pattern.search(line))),
+                None,
+            )
+            solution_match = next(
+                (candidate for pattern in solution_patterns if (candidate := pattern.search(line))),
+                None,
+            )
+            if line_number == start:
+                if item_match is not None:
+                    items.append((line_number, item_match))
+                if solution_match is not None:
+                    in_solution = True
+                continue
+            if in_solution and item_match is not None:
+                pending_item = (line_number, item_match)
+                in_solution = False
+                if solution_match is not None:
+                    items.append(pending_item)
+                    pending_item = None
+                    in_solution = True
+                continue
+            if pending_item is not None:
+                if solution_match is not None:
+                    items.append(pending_item)
+                    pending_item = None
+                    in_solution = True
+                continue
+            if solution_match is not None:
+                in_solution = True
+        if not items:
+            review.append(
+                {
+                    "kind": "question-packet-atomization-missing-item",
+                    "line": start,
+                    "number": number,
+                    "text": lines[start - 1],
+                }
+            )
+            expanded.append((start, match, number, config))
+            continue
+        if len(items) == 1:
+            # A wrapper whose (1), (2), ... prompts all precede one shared
+            # solution is a genuine composite, not an interleaved packet.
+            # Atomization requires at least one later item after an
+            # authoritative solution boundary.
+            expanded.append((start, match, number, config))
+            continue
+        template = str(config.get("atomized_number_template", "{number}({part})"))
+        for item_start, item_match in items:
+            part = str(item_match.group("part")).strip()
+            item_number = template.format(number=number, part=part)
+            item_config = {
+                **config,
+                "solution_layout": "tail",
+                "answer_shape": "auto",
+            }
+            synthetic = SyntheticQuestionMatch(
+                {
+                    "number": item_number,
+                    "packet_number": number,
+                    "part": part,
+                }
+            )
+            expanded.append((item_start, synthetic, item_number, item_config))
+    return sorted(expanded, key=lambda item: item[0]), review
 
 
 def question_in_reviewed_scope(
@@ -815,6 +943,69 @@ def apply_reviewed_recovered_question_fragments(
     return result
 
 
+def apply_reviewed_semantic_line_exclusions(
+    virtual_lines: list[dict[str, Any]],
+    raw_lines: list[str],
+    note_key: str,
+    adapter: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Exclude a reviewer-confirmed duplicate OCR line from the semantic copy.
+
+    The frozen OCR Markdown remains unchanged. Exclusions are deliberately
+    line-granular and require an exact drift anchor plus PDF provenance so this
+    mechanism cannot become an unreviewed text-deletion shortcut.
+    """
+    result = [{**line} for line in virtual_lines]
+    exclusions = [
+        item
+        for item in adapter.get("content", {}).get(
+            "reviewed_semantic_line_exclusions", []
+        )
+        if str(item.get("context")) == str(note_key)
+    ]
+    for item in exclusions:
+        raw_line = int(item["raw_line"])
+        if raw_line < 1 or raw_line > len(raw_lines):
+            raise ConfigurationError(
+                "Reviewed semantic line exclusion is outside its hierarchy note"
+            )
+        anchor_text = str(item.get("anchor_text", "")).strip()
+        if anchor_text and raw_lines[raw_line - 1].strip() != anchor_text:
+            raise ConfigurationError(
+                "Reviewed semantic line exclusion anchor_text drifted"
+            )
+        anchor_pattern = item.get("anchor_pattern")
+        if anchor_pattern and not re.search(
+            str(anchor_pattern), raw_lines[raw_line - 1]
+        ):
+            raise ConfigurationError(
+                "Reviewed semantic line exclusion anchor_pattern drifted"
+            )
+        matched = [
+            line for line in result if int(line["raw_line"]) == raw_line
+        ]
+        if not matched:
+            raise ConfigurationError(
+                "Reviewed semantic line exclusion did not resolve"
+            )
+        result = [
+            line for line in result if int(line["raw_line"]) != raw_line
+        ]
+        evidence = {
+            "context": str(note_key),
+            "raw_line": raw_line,
+            "source_page": item.get("source_page"),
+            "source_bbox": item.get("source_bbox"),
+            "reason": str(item.get("reason")),
+        }
+        applied = adapter.setdefault(
+            "_reviewed_semantic_line_exclusions_applied", []
+        )
+        if evidence not in applied:
+            applied.append(evidence)
+    return result
+
+
 def plan_note(
     note_entry: dict[str, Any],
     rules: list[dict[str, Any]],
@@ -830,6 +1021,9 @@ def plan_note(
         rules,
     )
     virtual_lines = apply_reviewed_virtual_span_relocations(
+        virtual_lines, raw_lines, str(note_entry["key"]), adapter
+    )
+    virtual_lines = apply_reviewed_semantic_line_exclusions(
         virtual_lines, raw_lines, str(note_entry["key"]), adapter
     )
     virtual_lines = apply_reviewed_recovered_question_fragments(
@@ -1057,6 +1251,8 @@ def plan_note(
                 )
                 continue
             starts.append((index, match, number, question_config))
+    starts, atomization_review = atomize_interleaved_question_starts(starts, lines)
+    unknown.extend(atomization_review)
     label_start_lines = {label["start_line"] for label in labels}
     question_file_template = str(adapter.get("content", {}).get("question_file_template", "{title}.md"))
     for position, (start, match, number, question_config) in enumerate(starts):
@@ -1480,6 +1676,9 @@ def plan_content(profile_path: Path, adapter_path: Path, hierarchy_coverage_path
         "functional_nodes": labels,
         "questions": questions,
         "scope_excluded_candidates": adapter.get("_scope_excluded_candidates", []),
+        "reviewed_semantic_line_exclusions": adapter.get(
+            "_reviewed_semantic_line_exclusions_applied", []
+        ),
         "review_items": review,
     }
 
@@ -1646,6 +1845,12 @@ def apply_content(profile_path: Path, adapter_path: Path, manifest_path: Path, o
             "",
         ))
         virtual_lines = apply_reviewed_virtual_span_relocations(
+            virtual_lines,
+            raw_lines,
+            source_note_key,
+            adapter,
+        )
+        virtual_lines = apply_reviewed_semantic_line_exclusions(
             virtual_lines,
             raw_lines,
             source_note_key,

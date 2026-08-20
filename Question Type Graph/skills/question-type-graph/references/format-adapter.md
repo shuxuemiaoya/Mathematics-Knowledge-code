@@ -225,6 +225,32 @@ answer matching. Configure `worked_example_solution_patterns` for exact
 publisher solution boundaries. `preserve_internal_headings: true` is permitted
 only when solution headings belong to the example source span before splitting.
 
+Do not equate a publisher example label with an atomic question boundary.
+Review the whole example span. If `[例 n]` is immediately followed by `(1)`
+and every later `(k)` states a new problem after the previous item's publisher
+solution, treat it as an independently solved packet: set
+`solution_layout: interleaved`, enable
+`atomize_interleaved_subquestions: true`, provide narrow
+`atomized_subquestion_patterns` with a named `part` group, and use an
+`atomized_number_template` such as `{number}({part})`. If the numbered parts
+share text before `(1)`, reuse earlier results, or jointly answer one prompt,
+keep the composite node and do not enable atomization. Confirm the compiled
+packet item count against the visually reviewed source before accepting the
+content manifest. Persist that ledger in
+`content.question_count_expectations`, keyed by hierarchy context and question
+kind with the exact reviewed count, evidence, and `reviewer_confirmed: true`;
+final audit blocks any under- or over-segmentation, including a malformed
+publisher header that otherwise produces zero questions.
+
+When MinerU emits two overlapping text blocks for one printed source line, do
+not edit frozen raw Markdown and do not hide the duplicate with invented HTML.
+Record the exact duplicate line in
+`content.reviewed_semantic_line_exclusions` with its hierarchy context, local
+raw line, exact text or regex drift anchor, PDF page/bbox, reason, and
+`reviewer_confirmed: true`. This mechanism is only for visually confirmed OCR
+duplication; it removes the line from the semantic compilation copy and records
+the applied exclusion in the content manifest.
+
 Teacher editions may print an authoritative answer immediately after each
 exercise, or even between subparts of one top-level example. Do not register
 such a PDF as `combined` when question and answer spans overlap. Register it as
@@ -244,6 +270,12 @@ Each separate-authoritative kind rule may define:
 - `authoritative_callout_title` for its A1 outer callout;
 - `answer_shape: composite` when the top-level question has several subanswers
   and must not be audited as one single-choice result;
+- `atomize_interleaved_subquestions: true` when a publisher's `[例 n]`
+  wrapper contains independently stated and independently solved `(1)(2)…`
+  questions rather than a shared-stem composite. Pair it with reviewed
+  `atomized_subquestion_patterns` containing a named `part` group and an
+  optional `atomized_number_template`; the frozen source text is preserved
+  while each item receives its own original question node and A1;
 - `sequence_policy: continuous` when publisher-solved numeric exercises still
   require a continuous `1..N` ledger even though external matching is skipped.
 

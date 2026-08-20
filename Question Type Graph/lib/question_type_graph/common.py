@@ -453,6 +453,36 @@ def validate_adapter_contract(adapter: dict[str, Any], profile: dict[str, Any]) 
             raise ConfigurationError(
                 f"content.question_kind_rules[{index}].answer_shape is invalid"
             )
+        atomize = rule.get("atomize_interleaved_subquestions", False)
+        if not isinstance(atomize, bool):
+            raise ConfigurationError(
+                f"content.question_kind_rules[{index}].atomize_interleaved_subquestions must be boolean"
+            )
+        atomized_patterns = rule.get("atomized_subquestion_patterns", [])
+        if atomize:
+            if solution_layout != "interleaved":
+                raise ConfigurationError(
+                    f"content.question_kind_rules[{index}] atomization requires interleaved layout"
+                )
+            if not isinstance(atomized_patterns, list) or not atomized_patterns:
+                raise ConfigurationError(
+                    f"content.question_kind_rules[{index}] atomization requires atomized_subquestion_patterns"
+                )
+            for pattern_index, pattern in enumerate(atomized_patterns):
+                _validate_regex(
+                    pattern,
+                    f"content.question_kind_rules[{index}].atomized_subquestion_patterns[{pattern_index}]",
+                )
+                compiled = re.compile(pattern)
+                if "part" not in compiled.groupindex:
+                    raise ConfigurationError(
+                        f"content.question_kind_rules[{index}].atomized_subquestion_patterns[{pattern_index}] requires a named part group"
+                    )
+            template = str(rule.get("atomized_number_template", "{number}({part})"))
+            if "{part}" not in template:
+                raise ConfigurationError(
+                    f"content.question_kind_rules[{index}].atomized_number_template requires {{part}}"
+                )
         sequence_policy = str(rule.get("sequence_policy", "none"))
         if sequence_policy not in {"none", "continuous"}:
             raise ConfigurationError(
@@ -500,6 +530,33 @@ def validate_adapter_contract(adapter: dict[str, Any], profile: dict[str, Any]) 
             raise ConfigurationError(
                 f"content.question_kind_rules[{index}].folder must be non-empty"
             )
+    count_expectations = content.get("question_count_expectations", [])
+    if not isinstance(count_expectations, list):
+        raise ConfigurationError("content.question_count_expectations must be a list")
+    seen_count_expectations: set[tuple[str, str]] = set()
+    for index, item in enumerate(count_expectations):
+        if not isinstance(item, dict):
+            raise ConfigurationError(
+                f"content.question_count_expectations[{index}] must be an object"
+            )
+        context = str(item.get("context", "")).strip()
+        kind = str(item.get("kind", "")).strip()
+        count = item.get("count")
+        key = (context, kind)
+        if (
+            not context
+            or kind not in configured_kinds
+            or not isinstance(count, int)
+            or isinstance(count, bool)
+            or count < 0
+            or item.get("reviewer_confirmed") is not True
+            or not str(item.get("evidence", "")).strip()
+            or key in seen_count_expectations
+        ):
+            raise ConfigurationError(
+                f"Invalid content.question_count_expectations[{index}]"
+            )
+        seen_count_expectations.add(key)
     if "worked_example_solution_backtrack_fence" in content and not isinstance(
         content["worked_example_solution_backtrack_fence"], bool
     ):
@@ -719,6 +776,58 @@ def validate_adapter_contract(adapter: dict[str, Any], profile: dict[str, Any]) 
             _validate_regex(
                 item["anchor_pattern"],
                 f"content.recovered_question_fragments[{index}].anchor_pattern",
+                allow_empty_match=True,
+            )
+
+    semantic_exclusions = content.get(
+        "reviewed_semantic_line_exclusions", []
+    )
+    if not isinstance(semantic_exclusions, list):
+        raise ConfigurationError(
+            "content.reviewed_semantic_line_exclusions must be a list"
+        )
+    exclusion_keys: set[tuple[str, int]] = set()
+    for index, item in enumerate(semantic_exclusions):
+        if not isinstance(item, dict):
+            raise ConfigurationError(
+                f"content.reviewed_semantic_line_exclusions[{index}] must be an object"
+            )
+        context = str(item.get("context", "")).strip()
+        source_page = str(item.get("source_page", "")).strip()
+        reason = str(item.get("reason", "")).strip()
+        try:
+            raw_line = int(item.get("raw_line"))
+        except (TypeError, ValueError) as exc:
+            raise ConfigurationError(
+                f"content.reviewed_semantic_line_exclusions[{index}].raw_line must be positive"
+            ) from exc
+        identity = (context, raw_line)
+        if (
+            not context
+            or raw_line < 1
+            or not source_page
+            or not reason
+            or identity in exclusion_keys
+            or item.get("reviewer_confirmed") is not True
+        ):
+            raise ConfigurationError(
+                f"Invalid content.reviewed_semantic_line_exclusions[{index}]"
+            )
+        exclusion_keys.add(identity)
+        _validate_optional_bbox(
+            item.get("source_bbox"),
+            f"content.reviewed_semantic_line_exclusions[{index}].source_bbox",
+        )
+        if not str(item.get("anchor_text", "")).strip() and not item.get(
+            "anchor_pattern"
+        ):
+            raise ConfigurationError(
+                f"content.reviewed_semantic_line_exclusions[{index}] requires a drift anchor"
+            )
+        if item.get("anchor_pattern") is not None:
+            _validate_regex(
+                item["anchor_pattern"],
+                f"content.reviewed_semantic_line_exclusions[{index}].anchor_pattern",
                 allow_empty_match=True,
             )
 

@@ -81,18 +81,25 @@ persist the final checks with `audit --overwrite`.
   regex with book-specific negative lookaheads. Scope by reviewed functional
   roles, hierarchy contexts, and/or local raw-line ranges.
 - Classify publisher example/variant headers through reviewed
-  `content.question_kind_rules`. Every `worked-example` becomes an atomic leaf,
-  receives `重要程度: 重要`, moves its publisher solution to a standalone
+  `content.question_kind_rules`. Decide the source's actual question boundary
+  before compiling: a publisher wrapper such as `[例1]` is not automatically
+  one question. If it immediately contains independently stated and
+  independently solved `(1)(2)…` items, enable reviewed
+  `atomize_interleaved_subquestions` and create one original Q node plus one A1
+  per item. Keep a single composite node only when the items share a genuine
+  stem or depend on one another. Every resulting `worked-example` leaf receives
+  `重要程度: 重要`, moves its publisher solution to a standalone
   provenance-marked `<QID>A1.md` note, embeds that answer from the stem-only
   question note, and is excluded from external answer matching.
 - Classify teacher-edition exercises whose publisher solutions are printed
   immediately after each question as a non-worked-example
   `separate-authoritative` kind. Use adapter-driven `tail` or `interleaved`
-  solution layouts; the latter must retain every subpart stem in its single
-  top-level question while collecting every publisher solution segment in the
-  unique A1 note. Such interleaved files are `questions` sources, not fake
-  combined sources with overlapping regions. Set `sequence_policy: continuous`
-  when their numeric ledger must still be audited.
+  solution layouts. For a genuine shared-stem composite, retain every subpart
+  stem in one Q and collect every solution segment in one A1. For an
+  independently solved example packet, atomize at the reviewed item boundaries
+  instead. Such interleaved files are `questions` sources, not fake combined
+  sources with overlapping regions. Set `sequence_policy: continuous` when
+  their numeric ledger must still be audited.
 - For single-topic teacher-edition PDFs in this format, record
   `generate_index: false` and `generate_canvas: false` in the reviewed adapter;
   topic and functional notes remain available without synthetic overview files.
@@ -107,6 +114,11 @@ persist the final checks with `audit --overwrite`.
   `root_output` and `entries[].output` component through the same normalizer;
   final audit must fail if `:` or `：` survives in any generated file or
   directory path.
+- When `emit_title: true` is used at a source heading or reviewed heading
+  boundary, consume that source boundary instead of emitting it again. Reopen
+  the generated note and require its first two nonblank lines not to repeat the
+  same semantic heading; final audit treats a repeated leading hierarchy title
+  as blocking.
 - Save matched solutions as standalone answer notes named `<Question_ID>A<Index>.md` (e.g., `Q00004154A1.md`), and embed them in the question note via `![[Q00004154A1]]`. Pre-split adapter-recognized inline OCR question and answer headers while retaining raw-line and raw-column coordinates so concatenated records are parsed without shifting reviewed region or context anchors. Preserve mapped theory-guide content in place; knowledge linking remains deferred.
 - Format every answer note as a collapsible outer `> [!faq]- <title>` with
   three collapsible nested blocks: `[!success]- **【答案】**`,
@@ -147,4 +159,18 @@ persist the final checks with `audit --overwrite`.
   report whenever matching changes.
 - Permit Markdown-only presentation changes and verify lexical preservation.
 - Keep atomic questions off Canvas and knowledge linking deferred.
-- Complete only when `final-audit-report.json` reports `status: passed`.
+- Before accepting content segmentation, compare the reviewed source ledger to
+  the manifest: count ordinary questions and every independently solved packet
+  item. Freeze those reviewed per-context/per-kind totals in
+  `content.question_count_expectations`, require one Q and one authoritative A1
+  per expected item, and reject an
+  atomic Q whose body still contains two independently solved item starts.
+  Inspect at least the first, middle, and last generated hierarchy/Q/A1 notes;
+  do not treat a successful coordinator exit as semantic proof.
+- If overlapping OCR blocks duplicate one printed line, preserve frozen raw and
+  use only a reviewer-confirmed `reviewed_semantic_line_exclusions` entry bound
+  to the exact hierarchy-local line, drift anchor, PDF page/bbox, and reason.
+  Never use semantic exclusion to remove genuine source content.
+- Complete only when `final-audit-report.json` reports `status: passed` and the
+  independent ledger, duplicate-heading, Q/A1 parity, embed, disabled-output,
+  and representative source-versus-output checks all pass.

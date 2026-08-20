@@ -247,25 +247,36 @@ def upload_file(url: str, path: Path, timeout: float) -> None:
     parsed = urlsplit(url)
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         raise ParserError("MinerU returned an invalid signed upload URL")
-    connection_type = http.client.HTTPSConnection if parsed.scheme == "https" else http.client.HTTPConnection
-    connection = connection_type(parsed.hostname, parsed.port, timeout=timeout)
-    target = parsed.path or "/"
-    if parsed.query:
-        target += f"?{parsed.query}"
-    try:
-        connection.putrequest("PUT", target)
-        connection.putheader("Content-Length", str(path.stat().st_size))
-        connection.endheaders()
-        with path.open("rb") as stream:
-            for block in iter(lambda: stream.read(1024 * 1024), b""):
-                connection.send(block)
-        response = connection.getresponse()
-        status = response.status
-        response.read()
-    finally:
-        connection.close()
-    if status < 200 or status >= 300:
-        raise ParserError(f"MinerU upload failed with HTTP {status}")
+    
+    last_err: Exception | None = None
+    for attempt in range(3):
+        connection_type = http.client.HTTPSConnection if parsed.scheme == "https" else http.client.HTTPConnection
+        connection = connection_type(parsed.hostname, parsed.port, timeout=timeout)
+        target = parsed.path or "/"
+        if parsed.query:
+            target += f"?{parsed.query}"
+        try:
+            connection.putrequest("PUT", target)
+            connection.putheader("Content-Length", str(path.stat().st_size))
+            connection.endheaders()
+            with path.open("rb") as stream:
+                for block in iter(lambda: stream.read(1024 * 1024), b""):
+                    connection.send(block)
+            response = connection.getresponse()
+            status = response.status
+            response.read()
+            connection.close()
+            if 200 <= status < 300:
+                return
+            raise ParserError(f"MinerU upload failed with HTTP {status}")
+        except Exception as exc:
+            last_err = exc
+            try:
+                connection.close()
+            except Exception:
+                pass
+            time.sleep(2.0 * (attempt + 1))
+    raise ParserError(f"MinerU upload failed after 3 attempts: {last_err}")
 
 
 def safe_zip_member(value: str) -> Path:

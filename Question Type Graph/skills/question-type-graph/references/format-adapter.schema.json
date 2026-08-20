@@ -109,10 +109,59 @@
               },
               "authoritative_callout_title": {"type": "string", "minLength": 1},
               "answer_shape": {"enum": ["auto", "composite"]},
+              "atomize_interleaved_subquestions": {"type": "boolean"},
+              "atomized_subquestion_patterns": {
+                "type": "array",
+                "minItems": 1,
+                "items": {"type": "string", "minLength": 1}
+              },
+              "atomized_number_template": {"type": "string", "minLength": 1},
               "sequence_policy": {"enum": ["none", "continuous"]},
               "preserve_internal_headings": {"type": "boolean"},
               "folder": {"type": "string", "minLength": 1}
             },
+            "additionalProperties": false
+          }
+        },
+        "question_count_expectations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["context", "kind", "count", "evidence", "reviewer_confirmed"],
+            "properties": {
+              "context": {"type": "string", "minLength": 1},
+              "kind": {"type": "string", "minLength": 1},
+              "count": {"type": "integer", "minimum": 0},
+              "evidence": {"type": "string", "minLength": 1},
+              "reviewer_confirmed": {"const": true}
+            },
+            "additionalProperties": false
+          }
+        },
+        "reviewed_semantic_line_exclusions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["context", "raw_line", "source_page", "reason", "reviewer_confirmed"],
+            "properties": {
+              "context": {"type": "string", "minLength": 1},
+              "raw_line": {"type": "integer", "minimum": 1},
+              "source_page": {"type": "integer", "minimum": 1},
+              "source_bbox": {
+                "type": "array",
+                "minItems": 4,
+                "maxItems": 4,
+                "items": {"type": "number"}
+              },
+              "anchor_text": {"type": "string", "minLength": 1},
+              "anchor_pattern": {"type": "string", "minLength": 1},
+              "reason": {"type": "string", "minLength": 1},
+              "reviewer_confirmed": {"const": true}
+            },
+            "anyOf": [
+              {"required": ["anchor_text"]},
+              {"required": ["anchor_pattern"]}
+            ],
             "additionalProperties": false
           }
         },

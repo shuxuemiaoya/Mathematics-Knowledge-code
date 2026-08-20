@@ -30,6 +30,26 @@ def path_has_forbidden_colon(path: Path) -> bool:
     return any(":" in part or "：" in part for part in path.parts)
 
 
+def has_duplicate_leading_heading(path: Path) -> bool:
+    """Detect an emitted title immediately repeated by its source boundary."""
+    if not path.is_file():
+        return False
+    nonblank = [
+        line.strip()
+        for line in path.read_text(encoding="utf-8-sig").splitlines()
+        if line.strip()
+    ][:2]
+    if len(nonblank) < 2 or not re.match(r"^#{1,6}\s+\S", nonblank[0]):
+        return False
+
+    def normalized(value: str) -> str:
+        value = re.sub(r"^#{1,6}\s*", "", value.strip())
+        value = re.sub(r"^[【\[]|[】\]]$", "", value).strip()
+        return re.sub(r"\s+", " ", value)
+
+    return normalized(nonblank[0]) == normalized(nonblank[1])
+
+
 def question_sequence_errors(questions: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Require each reviewed matching context to expose a complete 1..N ledger."""
     by_context: dict[str, list[dict[str, Any]]] = {}
@@ -63,6 +83,34 @@ def question_sequence_errors(questions: list[dict[str, Any]]) -> list[dict[str, 
                 expected = actual + 1
             else:
                 expected += 1
+    return errors
+
+
+def question_count_expectation_errors(
+    questions: list[dict[str, Any]], expectations: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Enforce reviewer-counted source ledgers by context and question kind."""
+    errors: list[dict[str, Any]] = []
+    for item in expectations:
+        context = str(item["context"])
+        kind = str(item["kind"])
+        expected = int(item["count"])
+        actual = sum(
+            1
+            for question in questions
+            if str(question.get("context_key")) == context
+            and str(question.get("question_kind")) == kind
+        )
+        if actual != expected:
+            errors.append(
+                {
+                    "kind": "question-count-expectation-mismatch",
+                    "context": context,
+                    "question_kind": kind,
+                    "expected": expected,
+                    "actual": actual,
+                }
+            )
     return errors
 
 
@@ -278,6 +326,12 @@ def audit_graph(
     if len(question_ids) != len(set(question_ids)) or len(question_outputs) != len(set(question_outputs)):
         errors.append({"kind": "duplicate-question-ownership"})
     errors.extend(question_sequence_errors(questions))
+    errors.extend(
+        question_count_expectation_errors(
+            questions,
+            adapter.get("content", {}).get("question_count_expectations", []),
+        )
+    )
     ranges_by_source: dict[str, list[tuple[int, int, str]]] = {}
     for question in questions:
         ranges_by_source.setdefault(str(question.get("source_note")), []).append(
@@ -372,6 +426,15 @@ def audit_graph(
                     }
                 )
         key = str(item.get("key"))
+        note_path = Path(item["path"]) if item.get("path") else None
+        if note_path is not None and has_duplicate_leading_heading(note_path):
+            errors.append(
+                {
+                    "kind": "duplicate-leading-hierarchy-heading",
+                    "key": key,
+                    "path": str(note_path),
+                }
+            )
         if key == "root" or not item.get("path"):
             continue
         parent_key = item.get("parent")

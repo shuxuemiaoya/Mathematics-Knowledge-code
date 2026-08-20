@@ -15,8 +15,10 @@ from question_type_graph.answers import (
 )
 from question_type_graph.audit import (
     answer_without_question_errors,
+    has_duplicate_leading_heading,
     path_has_forbidden_colon,
     question_has_fragmented_html_table,
+    question_count_expectation_errors,
     question_requires_choice_answer,
     question_sequence_errors,
     valid_solution_note,
@@ -31,6 +33,7 @@ from question_type_graph.common import (
 from question_type_graph.content import (
     apply_reviewed_recovered_question_fragments,
     apply_reviewed_recovered_questions,
+    apply_reviewed_semantic_line_exclusions,
     apply_reviewed_virtual_span_relocations,
     compile_question_patterns,
     compile_role_rules,
@@ -48,6 +51,81 @@ from question_type_graph.supplement import apply_supplement, plan_supplement
 
 
 class TestEdgeCases(unittest.TestCase):
+    def test_reviewed_semantic_line_exclusion_preserves_frozen_raw(self) -> None:
+        raw_lines = [
+            "【例题选讲】",
+            "[例 1](1)重复的短文本块",
+            "[例1](1)完整题干 答案 2 解析 正文",
+        ]
+        virtual_lines = [
+            {"text": line, "raw_line": index, "raw_column": 1}
+            for index, line in enumerate(raw_lines, 1)
+        ]
+        adapter = {
+            "content": {
+                "reviewed_semantic_line_exclusions": [
+                    {
+                        "context": "examples-1",
+                        "raw_line": 2,
+                        "source_page": 6,
+                        "source_bbox": [1, 2, 3, 4],
+                        "anchor_text": "[例 1](1)重复的短文本块",
+                        "reason": "overlapping OCR duplicate",
+                        "reviewer_confirmed": True,
+                    }
+                ]
+            }
+        }
+        result = apply_reviewed_semantic_line_exclusions(
+            virtual_lines, raw_lines, "examples-1", adapter
+        )
+        self.assertEqual(
+            [line["text"] for line in result],
+            ["【例题选讲】", "[例1](1)完整题干 答案 2 解析 正文"],
+        )
+        self.assertEqual(raw_lines[1], "[例 1](1)重复的短文本块")
+        self.assertEqual(
+            adapter["_reviewed_semantic_line_exclusions_applied"][0][
+                "source_page"
+            ],
+            6,
+        )
+
+    def test_reviewed_question_count_expectation_blocks_missing_packet(self) -> None:
+        questions = [
+            {"context_key": "examples-2", "question_kind": "worked-example"}
+            for _ in range(7)
+        ]
+        expectations = [
+            {"context": "examples-2", "kind": "worked-example", "count": 8}
+        ]
+        self.assertEqual(
+            question_count_expectation_errors(questions, expectations),
+            [
+                {
+                    "kind": "question-count-expectation-mismatch",
+                    "context": "examples-2",
+                    "question_kind": "worked-example",
+                    "expected": 8,
+                    "actual": 7,
+                }
+            ],
+        )
+
+    def test_duplicate_leading_heading_is_blocking_audit_signal(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            note = Path(tmp_dir) / "topic.md"
+            note.write_text(
+                "# 专题01 五组秒杀公式模型\n\n## 专题01  五组秒杀公式模型\n正文。\n",
+                encoding="utf-8",
+            )
+            self.assertTrue(has_duplicate_leading_heading(note))
+            note.write_text(
+                "# 专题01 五组秒杀公式模型\n\n正文。\n",
+                encoding="utf-8",
+            )
+            self.assertFalse(has_duplicate_leading_heading(note))
+
     def test_composite_short_answer_uses_ordered_explicit_headers(self) -> None:
         body = "\n".join(
             [
@@ -237,6 +315,131 @@ class TestEdgeCases(unittest.TestCase):
         self.assertIn("答案 B 解析：逐项验证。", answer)
         self.assertNotIn("(2) 选择正确结论", answer)
         self.assertEqual(offset, 1)
+
+    def test_interleaved_example_packet_atomizes_independent_questions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            graph = Path(tmp_dir) / "graph"
+            graph.mkdir()
+            source = graph / "unit.md"
+            source.write_text(
+                "[例 1] (1) 第一题（ ）\nA. 甲 B. 乙\n"
+                "答案 A 解析：第一题解析。\n"
+                "(2) 第二题（ ）\nA. 丙 B. 丁\n"
+                "答案 B 解析：第二题解析。\n",
+                encoding="utf-8",
+            )
+            adapter = {
+                "_graph_root": str(graph),
+                "content": {
+                    "question_folder": "题目",
+                    "question_title_template": "题_{number}",
+                    "question_patterns": [r"^\[(?P<number>例\s*\d+)\]\s*"],
+                    "inline_question_patterns": [],
+                    "question_kind_rules": [
+                        {
+                            "kind": "worked-example",
+                            "pattern": r"^\[例\s*\d+\]",
+                            "answer_handling": "separate-authoritative",
+                            "solution_layout": "interleaved",
+                            "solution_start_patterns": [r"^\s*答案\b"],
+                            "solution_resume_patterns": [r"^\s*\(\d+\)"],
+                            "atomize_interleaved_subquestions": True,
+                            "atomized_subquestion_patterns": [
+                                r"^\s*(?:\[例\s*\d+\]\s*)?\((?P<part>\d+)\)"
+                            ],
+                            "atomized_number_template": "{number}({part})",
+                            "folder": "例题",
+                        }
+                    ],
+                    "question_scopes": [
+                        {"contexts": ["unit"], "kinds": ["worked-example"]}
+                    ],
+                    "roles": [],
+                    "unknown_label_policy": "retain",
+                },
+            }
+            note = {
+                "key": "unit",
+                "title": "Unit",
+                "path": str(source),
+                "content_source": str(source),
+                "answer_context": "unit",
+            }
+
+            _, questions, review = plan_note(
+                note,
+                compile_role_rules(adapter),
+                compile_question_patterns(adapter),
+                adapter,
+            )
+
+            self.assertEqual(review, [])
+            self.assertEqual([q["number"] for q in questions], ["例 1(1)", "例 1(2)"])
+            self.assertEqual(len(questions), 2)
+            self.assertTrue(all(q["answer_body_sha256"] for q in questions))
+            self.assertEqual(questions[0]["source_markdown_line"], None)
+
+    def test_shared_stem_example_with_one_solution_remains_composite(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            graph = Path(tmp_dir) / "graph"
+            graph.mkdir()
+            source = graph / "unit.md"
+            source.write_text(
+                "[例 8] (1) 求面积最大值。\n"
+                "(2) 求数量积范围。\n"
+                "解析 (1) 先求面积。\n"
+                "(2) 再求数量积。\n",
+                encoding="utf-8",
+            )
+            adapter = {
+                "_graph_root": str(graph),
+                "content": {
+                    "question_folder": "题目",
+                    "question_title_template": "题_{number}",
+                    "question_patterns": [r"^\[(?P<number>例\s*\d+)\]\s*"],
+                    "inline_question_patterns": [],
+                    "question_kind_rules": [
+                        {
+                            "kind": "worked-example",
+                            "pattern": r"^\[例\s*\d+\]",
+                            "answer_handling": "separate-authoritative",
+                            "solution_layout": "interleaved",
+                            "solution_start_patterns": [r"^\s*解析\b"],
+                            "solution_resume_patterns": [r"^\s*\(\d+\)"],
+                            "atomize_interleaved_subquestions": True,
+                            "atomized_subquestion_patterns": [
+                                r"^\s*(?:\[例\s*\d+\]\s*)?\((?P<part>\d+)\)"
+                            ],
+                            "atomized_number_template": "{number}({part})",
+                            "folder": "例题",
+                        }
+                    ],
+                    "question_scopes": [
+                        {"contexts": ["unit"], "kinds": ["worked-example"]}
+                    ],
+                    "roles": [],
+                    "unknown_label_policy": "retain",
+                },
+            }
+            note = {
+                "key": "unit",
+                "title": "Unit",
+                "path": str(source),
+                "content_source": str(source),
+                "answer_context": "unit",
+            }
+
+            _, questions, review = plan_note(
+                note,
+                compile_role_rules(adapter),
+                compile_question_patterns(adapter),
+                adapter,
+            )
+
+            self.assertEqual(review, [])
+            self.assertEqual([q["number"] for q in questions], ["例 8"])
+            self.assertIn("(2) 求数量积范围", questions[0]["body"])
+            self.assertEqual(questions[1]["source_start_line"], 4)
 
     def test_inline_solved_exercise_can_be_authoritative_without_importance(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
