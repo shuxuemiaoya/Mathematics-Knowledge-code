@@ -358,6 +358,12 @@ def atomize_interleaved_question_starts(
                 if solution_match is not None:
                     in_solution = True
                 continue
+            if not in_solution and not items and item_match is not None:
+                # The packet wrapper may occupy its own line, with (1) on the
+                # next line. Retain only that first pre-solution item. If all
+                # prompts precede one shared solution, len(items) remains one
+                # and the composite-preservation guard below still applies.
+                items.append((line_number, item_match))
             if in_solution and item_match is not None:
                 pending_item = (line_number, item_match)
                 in_solution = False
@@ -1006,6 +1012,95 @@ def apply_reviewed_semantic_line_exclusions(
     return result
 
 
+def apply_reviewed_semantic_line_splits(
+    virtual_lines: list[dict[str, Any]],
+    raw_lines: list[str],
+    note_key: str,
+    adapter: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Expose reviewer-confirmed inline boundaries in the semantic copy.
+
+    MinerU can place the end of one solved item and the next item header on the
+    same physical Markdown line. Reviewed one-based Unicode columns split only
+    the virtual representation; frozen OCR text and provenance remain intact.
+    """
+    result = [{**line} for line in virtual_lines]
+    entries = [
+        item
+        for item in adapter.get("content", {}).get(
+            "reviewed_semantic_line_splits", []
+        )
+        if str(item.get("context")) == str(note_key)
+    ]
+    for item in entries:
+        raw_line = int(item["raw_line"])
+        columns = sorted({int(value) for value in item["raw_columns"]})
+        if raw_line < 1 or raw_line > len(raw_lines):
+            raise ConfigurationError(
+                "Reviewed semantic line split is outside its hierarchy note"
+            )
+        anchor_text = str(item.get("anchor_text", "")).strip()
+        if anchor_text and raw_lines[raw_line - 1].strip() != anchor_text:
+            raise ConfigurationError(
+                "Reviewed semantic line split anchor_text drifted"
+            )
+        anchor_pattern = item.get("anchor_pattern")
+        if anchor_pattern and not re.search(
+            str(anchor_pattern), raw_lines[raw_line - 1]
+        ):
+            raise ConfigurationError(
+                "Reviewed semantic line split anchor_pattern drifted"
+            )
+        if any(column < 2 or column > len(raw_lines[raw_line - 1]) for column in columns):
+            raise ConfigurationError(
+                "Reviewed semantic line split column is outside its raw line"
+            )
+        for column in columns:
+            candidates = []
+            for index, line in enumerate(result):
+                if int(line["raw_line"]) != raw_line:
+                    continue
+                start = int(line["raw_column"])
+                end = start + len(str(line["text"])) - 1
+                if start < column <= end:
+                    candidates.append((index, start))
+            if len(candidates) != 1:
+                raise ConfigurationError(
+                    "Reviewed semantic line split coordinate must resolve once: "
+                    f"({raw_line}, {column})"
+                )
+            index, start = candidates[0]
+            original = result[index]
+            offset = column - start
+            left = str(original["text"])[:offset].rstrip()
+            right = str(original["text"])[offset:].lstrip()
+            if not left or not right:
+                raise ConfigurationError(
+                    "Reviewed semantic line split must produce two non-empty segments"
+                )
+            result[index : index + 1] = [
+                {**original, "text": left},
+                {
+                    **original,
+                    "text": right,
+                    "raw_column": column,
+                    "subline": int(original.get("subline", 0)) + 1,
+                },
+            ]
+        evidence = {
+            "context": str(note_key),
+            "raw_line": raw_line,
+            "raw_columns": columns,
+            "source_page": item.get("source_page"),
+            "source_bbox": item.get("source_bbox"),
+            "reason": str(item.get("reason")),
+        }
+        applied = adapter.setdefault("_reviewed_semantic_line_splits_applied", [])
+        if evidence not in applied:
+            applied.append(evidence)
+    return result
+
+
 def plan_note(
     note_entry: dict[str, Any],
     rules: list[dict[str, Any]],
@@ -1021,6 +1116,9 @@ def plan_note(
         rules,
     )
     virtual_lines = apply_reviewed_virtual_span_relocations(
+        virtual_lines, raw_lines, str(note_entry["key"]), adapter
+    )
+    virtual_lines = apply_reviewed_semantic_line_splits(
         virtual_lines, raw_lines, str(note_entry["key"]), adapter
     )
     virtual_lines = apply_reviewed_semantic_line_exclusions(
@@ -1679,6 +1777,9 @@ def plan_content(profile_path: Path, adapter_path: Path, hierarchy_coverage_path
         "reviewed_semantic_line_exclusions": adapter.get(
             "_reviewed_semantic_line_exclusions_applied", []
         ),
+        "reviewed_semantic_line_splits": adapter.get(
+            "_reviewed_semantic_line_splits_applied", []
+        ),
         "review_items": review,
     }
 
@@ -1845,6 +1946,12 @@ def apply_content(profile_path: Path, adapter_path: Path, manifest_path: Path, o
             "",
         ))
         virtual_lines = apply_reviewed_virtual_span_relocations(
+            virtual_lines,
+            raw_lines,
+            source_note_key,
+            adapter,
+        )
+        virtual_lines = apply_reviewed_semantic_line_splits(
             virtual_lines,
             raw_lines,
             source_note_key,

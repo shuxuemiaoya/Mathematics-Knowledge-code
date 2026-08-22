@@ -37,6 +37,22 @@ freeze typed sources
   every entry with its raw column and propose source-stream and column-major
   orders. Prefer a continuous printed ordinal ledger only as a review proposal;
   a reviewer still confirms authority and reading order.
+- Review a printed TOC from its first leader-delimited entry through its last
+  entry across every TOC page. The hierarchy planner must reject any
+  leader-delimited row before the first body anchor that is absent from the
+  primary ledger. A printed answer-key entry may be omitted from the content
+  hierarchy only through `primary_authority.excluded_entries` with its exact
+  source line, title, concrete reason, and reviewer confirmation.
+- Cross-check conventional printed numbering against hierarchy semantics. If a
+  book uses `第N讲` and `N.M`, each `N.M` node must be deeper than and directly
+  parented by the matching `第N讲`; a repeated `思考题` must be a child of the
+  nearest preceding lecture. Never flatten these titles into sibling folders.
+- When the first hierarchy level exists only to organize second-level files,
+  mark every first-level entry `structural_only: true`, scope questions only to
+  second-level leaf contexts, and verify that no generated Q file is owned by a
+  structural parent. Persist reviewed per-leaf question counts, including zero
+  counts for non-question sections, so a structurally valid but incomplete
+  split cannot pass final audit.
 - Build a source-provenance index from MinerU content-list artifacts. Preserve
   original Markdown line ownership through hierarchy snapshots and attach an
   exact PDF page/bbox to atomic questions whenever evidence resolves; retain
@@ -54,7 +70,9 @@ freeze typed sources
 - Scope numeric question detection to reviewed question-bearing functional
   roles, contexts, or source ranges before adding source-line exclusions for
   isolated false positives.
-- Create one leaf note per top-level question and keep its subparts together.
+- Create one leaf note per semantic question. Keep genuinely shared-stem or
+  dependent subparts together, but split publisher packet wrappers whose
+  independently stated items alternate with their own authoritative solutions.
 - Treat every adapter-recognized publisher worked example or variant as an
   atomic question leaf. The compiler must globally add `重要程度: 重要`, retain
   only the stem in that leaf, move the publisher's analysis into a separate
@@ -68,9 +86,9 @@ freeze typed sources
   than fake non-overlapping combined-source answer regions. Only the
   `worked-example` kind receives `重要程度: 重要`; other publisher-solved kinds
   retain their reviewed numbering policy. For interleaved subpart solutions,
-  use adapter-owned solution start/resume patterns, keep all subpart stems in
-  the one top-level question leaf, and move every solution segment into its
-  unique authoritative A1 note.
+  use adapter-owned solution start/resume patterns. Atomize independently
+  stated and independently solved packet items into separate Q/A1 pairs; keep
+  only genuine shared-stem or dependent subparts in one composite leaf.
 - For the single-topic teacher-edition format represented by
   `专题01 导数的运算(教师版)`, set both reviewed output switches to false: its
   topic and functional notes are the navigation surface, so it must not create
@@ -104,6 +122,15 @@ freeze typed sources
   exact raw line/column, before/after position, drift anchor, PDF page/bbox, and
   reviewer confirmation. It may only insert PDF-visible text into the semantic
   virtual copy; it must never edit, replace, or delete frozen OCR text.
+- If visual PDF review proves that OCR joined the end of one solved item and
+  the next question header on one physical line, split only the semantic copy
+  through adapter-owned `reviewed_semantic_line_splits` with exact
+  hierarchy-local Unicode columns, drift anchor, PDF page/bbox, reason, and
+  reviewer confirmation. Never edit the frozen raw line.
+- Also use a reviewed semantic line split when OCR joins a worked-example stem
+  and its publisher `分析/解答` on one line. Before delivery, scan every generated
+  worked-example question source block; any remaining publisher solution marker
+  in the Q body is a blocking boundary defect, even if an A1 note exists.
 - Preserve source text, formulas, images, tables, numbering, and order. Add
   Markdown structure and navigation only.
 - Keep a chapter's explanatory introduction in the chapter note unless the

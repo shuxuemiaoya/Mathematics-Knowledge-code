@@ -148,6 +148,107 @@ def reviewed_hierarchy_entries(
     return merged, review
 
 
+PRINTED_TOC_LEADER_RE = re.compile(r"(?:…{2,}|\.{4,})\s*\d+\s*$")
+LECTURE_TITLE_RE = re.compile(r"^第\s*(\d+)\s*讲(?:\s|$)")
+NUMBERED_SUBSECTION_RE = re.compile(r"^(\d+)\.(\d+)(?:\s|$)")
+
+
+def reviewed_printed_toc_coverage(
+    hierarchy: dict[str, Any], lines: list[str], first_body_line: int
+) -> list[dict[str, Any]]:
+    """Reject a reviewed ledger that silently covers only part of a printed TOC."""
+    authority = hierarchy.get("primary_authority")
+    if not isinstance(authority, dict):
+        return []
+    registered_lines: set[int] = set()
+    for item in authority.get("entries") or []:
+        start = int(item.get("source_line", 0))
+        end = int(item.get("source_end_line", start))
+        registered_lines.update(range(start, end + 1))
+
+    excluded_lines: set[int] = set()
+    for item in authority.get("excluded_entries") or []:
+        line = int(item.get("source_line", 0))
+        if (
+            line < 1
+            or line >= first_body_line
+            or item.get("reviewer_confirmed") is not True
+            or not str(item.get("title", "")).strip()
+            or not str(item.get("reason", "")).strip()
+        ):
+            raise ConfigurationError(f"Invalid excluded printed TOC entry: {item}")
+        excluded_lines.add(line)
+
+    review: list[dict[str, Any]] = []
+    for line_number in range(1, min(first_body_line, len(lines) + 1)):
+        text = lines[line_number - 1].strip()
+        if not PRINTED_TOC_LEADER_RE.search(text):
+            continue
+        if line_number not in registered_lines and line_number not in excluded_lines:
+            review.append(
+                {
+                    "kind": "unregistered-printed-toc-entry",
+                    "line": line_number,
+                    "text": text,
+                }
+            )
+    return review
+
+
+def conventional_numbering_structure_review(
+    entries: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Cross-check conventional 第N讲 / N.M / 思考题 hierarchy semantics."""
+    if not any(LECTURE_TITLE_RE.match(str(entry.get("title", "")).strip()) for entry in entries):
+        return []
+    lectures: dict[str, dict[str, Any]] = {}
+    review: list[dict[str, Any]] = []
+    for entry in entries:
+        title = str(entry.get("title", "")).strip()
+        lecture_match = LECTURE_TITLE_RE.match(title)
+        if lecture_match:
+            lectures[lecture_match.group(1)] = entry
+            continue
+        subsection_match = NUMBERED_SUBSECTION_RE.match(title)
+        if subsection_match:
+            lecture = lectures.get(subsection_match.group(1))
+            if lecture is None:
+                review.append(
+                    {
+                        "kind": "orphan-numbered-subsection",
+                        "key": entry.get("key"),
+                        "title": title,
+                    }
+                )
+            elif (
+                int(entry.get("level", 0)) <= int(lecture.get("level", 0))
+                or entry.get("parent") != lecture.get("key")
+            ):
+                review.append(
+                    {
+                        "kind": "numbered-subsection-parent-mismatch",
+                        "key": entry.get("key"),
+                        "title": title,
+                        "expected_parent": lecture.get("key"),
+                    }
+                )
+            continue
+        if re.fullmatch(r"思考题\s*", title):
+            lecture = next(reversed(list(lectures.values())), None)
+            if lecture is not None and (
+                int(entry.get("level", 0)) <= int(lecture.get("level", 0))
+                or entry.get("parent") != lecture.get("key")
+            ):
+                review.append(
+                    {
+                        "kind": "thought-exercises-parent-mismatch",
+                        "key": entry.get("key"),
+                        "expected_parent": lecture.get("key"),
+                    }
+                )
+    return review
+
+
 def find_entry_line(lines: list[str], entry: dict[str, Any], minimum: int, maximum: int) -> int | None:
     anchor = entry.get("body_anchor")
     if isinstance(anchor, dict):
@@ -257,6 +358,15 @@ def plan_hierarchy(profile_path: Path, adapter_path: Path) -> dict[str, Any]:
                 parent = previous["key"]
                 break
         entry["parent"] = parent
+    if entries:
+        review_items.extend(
+            reviewed_printed_toc_coverage(
+                hierarchy,
+                lines,
+                min(int(entry["start_line"]) for entry in entries),
+            )
+        )
+        review_items.extend(conventional_numbering_structure_review(entries))
     return {
         "schema_version": 1,
         "stage": "hierarchy-segmentation",

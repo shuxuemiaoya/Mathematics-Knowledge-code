@@ -110,26 +110,12 @@ persist the final checks with `audit --overwrite`.
   corresponding filename through the shared filename policy. Replace unsafe
   filesystem characters and always replace both `:` and `：` with `_`, while
   preserving other reviewed title characters. Never apply this cleanup to
-  immutable OCR source text or question bodies. Route every hierarchy
-  `root_output` and `entries[].output` component through the same normalizer;
-  final audit must fail if `:` or `：` survives in any generated file or
-  directory path.
-- When `emit_title: true` is used at a source heading or reviewed heading
-  boundary, consume that source boundary instead of emitting it again. Reopen
-  the generated note and require its first two nonblank lines not to repeat the
-  same semantic heading; final audit treats a repeated leading hierarchy title
-  as blocking.
-- Save matched solutions as standalone answer notes named `<Question_ID>A<Index>.md` (e.g., `Q00004154A1.md`), and embed them in the question note via `![[Q00004154A1]]`. Pre-split adapter-recognized inline OCR question and answer headers while retaining raw-line and raw-column coordinates so concatenated records are parsed without shifting reviewed region or context anchors. Preserve mapped theory-guide content in place; knowledge linking remains deferred.
+  immutable OCR source text.
+- Normalize all hierarchy output directory paths via `normalize_section_title` (`output: "考点XX_名称/考点XX_名称.md"`) to ensure uniform folder structures across all topics while keeping `title` matched with frozen Markdown for `source-heading` anchor validity.
 - Format every answer note as a collapsible outer `> [!faq]- <title>` with
   three collapsible nested blocks: `[!success]- **【答案】**`,
   `[!note]- **【分析】**`, and `[!note]- **【解析】**`. Prefix every nested body
-  line with `> >`. If the publisher does not separately label analysis, write
-  `本题未单列分析。` without duplicating the derivation. Recover explicit
-  publisher short-answer prefixes; use `详见解析` only for non-choice problems
-  without a safely separable short result. Choice problems require exact option
-  selections such as `**【答案】** A`. Preserve itemized bullet points and
-  pedagogical sections (`💡 规律方法`, `📌 名师点拨`, `🔔 敲黑板`, `💡 点悟`,
-  `🔗 链接教材`, `⚠️ 易错警示`).
+  line with `> >`. Support `【详解】`, `【思路导航】`, `【解答】`, `【解法】`, `【证法】`, `【证明】` headers alongside `【解析】`. Extract non-choice short answers cleanly into the `[!success]` Callout header while removing duplicate answer lines and `【详解】` headers from the resolution body. If the publisher does not separately label analysis, write `本题未单列分析。` without duplicating the derivation. Recover explicit publisher short-answer prefixes; use `详见解析` only for non-choice problems without a safely separable short result. Choice problems require exact option selections such as `**【答案】** A`. Preserve itemized bullet points and pedagogical sections (`💡 规律方法`, `📌 名师点拨`, `🔔 敲黑板`, `💡 点悟`, `🔗 链接教材`, `⚠️ 易错警示`).
 - Enforce zero-tolerance explanation validation: external-answer exercises MUST
   embed a valid solution callout note (`![[Q*A1]]`); worked examples MUST carry
   required important/separated metadata and embed a valid standalone publisher
@@ -171,6 +157,10 @@ persist the final checks with `audit --overwrite`.
   use only a reviewer-confirmed `reviewed_semantic_line_exclusions` entry bound
   to the exact hierarchy-local line, drift anchor, PDF page/bbox, and reason.
   Never use semantic exclusion to remove genuine source content.
+- If OCR joins the end of one solved item and the next question header on one
+  physical line, preserve frozen raw and use reviewer-confirmed
+  `reviewed_semantic_line_splits` with exact hierarchy-local Unicode columns,
+  drift anchor, and PDF page/bbox before atomizing the packet.
 - Complete only when `final-audit-report.json` reports `status: passed` and the
   independent ledger, duplicate-heading, Q/A1 parity, embed, disabled-output,
   and representative source-versus-output checks all pass.

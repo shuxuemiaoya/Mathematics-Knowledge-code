@@ -559,8 +559,7 @@ def extract_choice_answer(body: str) -> str | None:
     accepted; isolated capital letters in mathematical prose are ignored.
     """
     conclusion_pattern = re.compile(
-        r"(?:故\s*选|应\s*选|选|选项(?:为|是|有)?|答案(?:为|是)?)"
-        r"\s*[：:]?\s*([A-F]+)\b",
+        r"(?:故\s*选|应\s*选|选|选项(?:为|是|有)?|答案(?:为|是)?|也就是|即)\s*[：:]?\s*([A-F]+)\b|\b([A-F])\s*选项\b",
         re.IGNORECASE,
     )
     matches = list(conclusion_pattern.finditer(body))
@@ -568,7 +567,9 @@ def extract_choice_answer(body: str) -> str | None:
         # A worked conclusion is stronger evidence than an OCR-damaged
         # leading header (which can retain the neighbouring question number
         # and option after page/column interleaving).
-        return matches[-1].group(1).upper()
+        val = matches[-1].group(1) or matches[-1].group(2)
+        if val:
+            return val.upper()
 
     lines = body.strip().splitlines()
     if lines:
@@ -583,19 +584,18 @@ def extract_choice_answer(body: str) -> str | None:
 
 
 def extract_nonchoice_answer_prefix(body: str) -> tuple[str | None, str]:
-    """Split a publisher-stated short answer from the following analysis.
-
-    Common OCR blocks are shaped like ``【12】$\\frac12$ 解析：...`` or put
-    the short answer on several display-math lines before ``【解析】``.  This
-    helper accepts only that bounded, explicit prefix; it does not guess a
-    result from derivation prose.
-    """
+    """Split a publisher-stated short answer from the following analysis."""
     text = re.sub(r"^【?\d+】?[\.、\s]*", "", body.strip(), count=1)
-    marker = re.search(r"【解析】|(?<!见)解析\s*[：:]", text)
+    marker = re.search(r"【(?:解析|详解|分析|思路导航|解答|解法|证法|证明)】|(?<!见)(?:解析|详解)\s*[：:]", text)
     if marker is None:
         return None, text
     prefix = text[:marker.start()].strip()
-    analysis = text[marker.end():].strip()
+    analysis = text[marker.start():].strip()
+    analysis = re.sub(
+        r"^\s*(?:【(?:解析|详解|分析|思路导航|解答|解法|证法|证明)】|(?:解析|详解)\s*[：:])\s*",
+        "",
+        analysis,
+    ).strip()
     prefix = re.sub(r"^(?:【答案】|答案\s*[：:])\s*", "", prefix).strip()
     prefix_lines = prefix.splitlines()
     leading_assets = [
@@ -622,7 +622,7 @@ def extract_composite_short_answer(body: str) -> str | None:
     """Summarize ordered explicit headers from an interleaved solution."""
     answers: list[str] = []
     pattern = re.compile(
-        r"^\s*(?:\d+[.．、]\s*)?答案[.．、：:\s]*?(.*?)\s+解析\b"
+        r"^\s*(?:\d+[.．、]\s*)?答案[.．、：:\s]*?(.*?)\s+(?:解析|详解)\b"
     )
     for line in body.splitlines():
         match = pattern.match(line)
@@ -652,7 +652,7 @@ def format_answer_callout(
         if candidate_answer is not None:
             explicit_answer = candidate_answer
         else:
-            marker = re.search(r"【解析】|(?<!见)解析\s*[：:]", source_body)
+            marker = re.search(r"【(?:解析|详解|分析|思路导航|解答|解法|证法|证明)】|(?<!见)(?:解析|详解)\s*[：:]", source_body)
             if marker is not None:
                 prefix = re.sub(
                     r"^\s*(?:#{1,6}\s*)?【答案】\s*",
@@ -662,23 +662,26 @@ def format_answer_callout(
                 ).strip()
                 if prefix:
                     long_explicit_answer = prefix
+
     analysis_match = re.search(
-        r"(?m)^\s*(?:#{1,6}\s*)?(?:【分析】|分析(?:\s|[：:]|▶|$))",
+        r"(?m)^\s*(?:#{1,6}\s*)?(?:【(?:分析|思路导航)】|(?:分析|思路导航)(?:\s|[：:]|▶|$))",
         source_body,
     )
     analysis_text = "本题未单列分析。"
     resolution_body = source_body
     if analysis_match is not None:
         resolution_match = re.search(
-            r"(?m)^\s*(?:#{1,6}\s*)?(?:【(?:解析|详解)】|(?:解析|详解)(?:\s|[：:]|▶|$))",
+            r"(?m)^\s*(?:#{1,6}\s*)?(?:【(?:解析|详解|解答|解法)】|(?:解析|详解|解答|解法)(?:\s|[：:]|▶|$))",
             source_body[analysis_match.end():],
         )
         if resolution_match is not None:
             resolution_start = analysis_match.end() + resolution_match.start()
-            analysis_text = source_body[analysis_match.start():resolution_start].strip()
+            raw_analysis = source_body[analysis_match.start():resolution_start].strip()
+            analysis_text = re.sub(r"^\s*(?:#{1,6}\s*)?(?:【(?:分析|思路导航)】|(?:分析|思路导航)\s*[：:]?)\s*", "", raw_analysis).strip()
             resolution_body = source_body[resolution_start:].strip()
         else:
-            analysis_text = source_body[analysis_match.start():].strip()
+            raw_analysis = source_body[analysis_match.start():].strip()
+            analysis_text = re.sub(r"^\s*(?:#{1,6}\s*)?(?:【(?:分析|思路导航)】|(?:分析|思路导航)\s*[：:]?)\s*", "", raw_analysis).strip()
             resolution_body = "本题未单列解析。"
 
     if long_explicit_answer:
@@ -715,7 +718,7 @@ def format_answer_callout(
             lines = prepared_analysis.splitlines() or [""]
     first_line = lines[0].strip()
     m_opt = (
-        re.match(r"^【?\d+】?[\.、\s]*([A-F]+)\b\s*(?:【解析】)?\s*", first_line)
+        re.match(r"^【?\d+】?[\.、\s]*([A-F]+)\b\s*(?:【(?:解析|详解)】)?\s*", first_line)
         if prepared_analysis is None
         else None
     )
@@ -724,9 +727,6 @@ def format_answer_callout(
         first_line = first_line[m_opt.end():].strip()
     else:
         # 判断题答案形如 (1) ×; (2) √; ... —— 把整段判断结果作为【答案】。
-        # 答案可能跨行（如第一行 (1)…(7) ×;，第二行 (8) ×.），因此逐行收集
-        # 以 "(N) ×/√" 开头的延续行并入答案，直到遇到解析行。
-        # 与选择题选项提取互斥：先试 [A-Z]，再试 (N) ×/√ 序列。
         judge_parts = []
         judge_re = re.compile(r"^\(\d+\)\s*[×√]")
         stripped_first = (
@@ -741,15 +741,14 @@ def format_answer_callout(
                 lines = lines[1:]
                 first_line = (lines[0].strip() if lines else "")
             option = " ".join(judge_parts).strip().rstrip(".").strip()
-            # 跳过答案与解析之间的空行，定位到解析正文
             while lines and not lines[0].strip():
                 lines = lines[1:]
             first_line = (lines[0].strip() if lines else "")
-            first_line = re.sub(r"^【解析】\s*", "", first_line).strip()
+            first_line = re.sub(r"^【(?:解析|详解|解答|解法)】\s*", "", first_line).strip()
         else:
             if prepared_analysis is None:
                 first_line = re.sub(r"^【?\d+】?[\.、\s]*", "", first_line)
-                first_line = re.sub(r"^【解析】\s*", "", first_line).strip()
+                first_line = re.sub(r"^【(?:解析|详解|解答|解法)】\s*", "", first_line).strip()
 
     rebuilt_lines = [first_line] + [l.strip() for l in lines[1:] if l.strip()]
 

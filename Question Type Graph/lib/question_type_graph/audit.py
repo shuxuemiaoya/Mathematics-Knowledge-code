@@ -54,10 +54,7 @@ def question_sequence_errors(questions: list[dict[str, Any]]) -> list[dict[str, 
     """Require each reviewed matching context to expose a complete 1..N ledger."""
     by_context: dict[str, list[dict[str, Any]]] = {}
     for question in questions:
-        if (
-            question.get("answer_handling", "external") != "external"
-            and question.get("sequence_policy", "none") != "continuous"
-        ):
+        if question.get("sequence_policy", "none") != "continuous":
             continue
         by_context.setdefault(str(question.get("context_key", "")), []).append(question)
     errors: list[dict[str, Any]] = []

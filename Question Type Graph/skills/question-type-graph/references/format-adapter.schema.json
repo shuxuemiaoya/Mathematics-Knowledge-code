@@ -165,6 +165,39 @@
             "additionalProperties": false
           }
         },
+        "reviewed_semantic_line_splits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["context", "raw_line", "raw_columns", "source_page", "reason", "reviewer_confirmed"],
+            "properties": {
+              "context": {"type": "string", "minLength": 1},
+              "raw_line": {"type": "integer", "minimum": 1},
+              "raw_columns": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {"type": "integer", "minimum": 2}
+              },
+              "source_page": {"type": "integer", "minimum": 1},
+              "source_bbox": {
+                "type": "array",
+                "minItems": 4,
+                "maxItems": 4,
+                "items": {"type": "number"}
+              },
+              "anchor_text": {"type": "string", "minLength": 1},
+              "anchor_pattern": {"type": "string", "minLength": 1},
+              "reason": {"type": "string", "minLength": 1},
+              "reviewer_confirmed": {"const": true}
+            },
+            "anyOf": [
+              {"required": ["anchor_text"]},
+              {"required": ["anchor_pattern"]}
+            ],
+            "additionalProperties": false
+          }
+        },
         "worked_example_solution_patterns": {
           "type": "array",
           "minItems": 1,

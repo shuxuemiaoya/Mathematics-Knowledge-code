@@ -34,6 +34,7 @@ from question_type_graph.content import (
     apply_reviewed_recovered_question_fragments,
     apply_reviewed_recovered_questions,
     apply_reviewed_semantic_line_exclusions,
+    apply_reviewed_semantic_line_splits,
     apply_reviewed_virtual_span_relocations,
     compile_question_patterns,
     compile_role_rules,
@@ -51,6 +52,39 @@ from question_type_graph.supplement import apply_supplement, plan_supplement
 
 
 class TestEdgeCases(unittest.TestCase):
+    def test_reviewed_semantic_line_split_preserves_frozen_raw(self) -> None:
+        raw_lines = ["(2) 第二题。解析 第二题。 (3) 第三题。"]
+        column = raw_lines[0].index("(3)") + 1
+        virtual = split_inline_question_headers(raw_lines, [])
+        adapter = {
+            "content": {
+                "reviewed_semantic_line_splits": [
+                    {
+                        "context": "examples",
+                        "raw_line": 1,
+                        "raw_columns": [column],
+                        "source_page": 2,
+                        "source_bbox": [10, 20, 30, 40],
+                        "anchor_text": raw_lines[0],
+                        "reason": "Two printed packet records share one OCR line.",
+                        "reviewer_confirmed": True,
+                    }
+                ]
+            }
+        }
+
+        result = apply_reviewed_semantic_line_splits(
+            virtual, raw_lines, "examples", adapter
+        )
+
+        self.assertEqual(raw_lines, ["(2) 第二题。解析 第二题。 (3) 第三题。"])
+        self.assertEqual(
+            [line["text"] for line in result],
+            ["(2) 第二题。解析 第二题。", "(3) 第三题。"],
+        )
+        self.assertEqual(result[1]["raw_column"], column)
+        self.assertEqual(len(adapter["_reviewed_semantic_line_splits_applied"]), 1)
+
     def test_reviewed_semantic_line_exclusion_preserves_frozen_raw(self) -> None:
         raw_lines = [
             "【例题选讲】",
@@ -438,8 +472,71 @@ class TestEdgeCases(unittest.TestCase):
 
             self.assertEqual(review, [])
             self.assertEqual([q["number"] for q in questions], ["例 8"])
-            self.assertIn("(2) 求数量积范围", questions[0]["body"])
-            self.assertEqual(questions[1]["source_start_line"], 4)
+            self.assertEqual(questions[0]["start_line"], 1)
+            self.assertEqual(questions[0]["end_line"], 4)
+
+    def test_interleaved_packet_atomizes_when_wrapper_precedes_first_item(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            graph = Path(tmp_dir) / "graph"
+            graph.mkdir()
+            source = graph / "unit.md"
+            source.write_text(
+                "[例 2] 求下列各题。\n"
+                "(1) 第一题。\n"
+                "解析 第一题解析。\n"
+                "(2) 第二题。\n"
+                "解析 第二题解析。\n",
+                encoding="utf-8",
+            )
+            adapter = {
+                "_graph_root": str(graph),
+                "content": {
+                    "question_folder": "题目",
+                    "question_title_template": "题_{number}",
+                    "question_patterns": [r"^\[(?P<number>例\s*\d+)\]\s*"],
+                    "inline_question_patterns": [],
+                    "question_kind_rules": [
+                        {
+                            "kind": "worked-example",
+                            "pattern": r"^\[例\s*\d+\]",
+                            "answer_handling": "separate-authoritative",
+                            "solution_layout": "interleaved",
+                            "solution_start_patterns": [r"^\s*解析\b"],
+                            "solution_resume_patterns": [r"^\s*\(\d+\)"],
+                            "atomize_interleaved_subquestions": True,
+                            "atomized_subquestion_patterns": [
+                                r"^\s*(?:\[例\s*\d+\]\s*)?\((?P<part>\d+)\)"
+                            ],
+                            "atomized_number_template": "{number}({part})",
+                            "folder": "例题",
+                        }
+                    ],
+                    "question_scopes": [
+                        {"contexts": ["unit"], "kinds": ["worked-example"]}
+                    ],
+                    "roles": [],
+                    "unknown_label_policy": "retain",
+                },
+            }
+            note = {
+                "key": "unit",
+                "title": "Unit",
+                "path": str(source),
+                "content_source": str(source),
+                "answer_context": "unit",
+            }
+
+            _, questions, review = plan_note(
+                note,
+                compile_role_rules(adapter),
+                compile_question_patterns(adapter),
+                adapter,
+            )
+
+            self.assertEqual(review, [])
+            self.assertEqual([q["number"] for q in questions], ["例 2(1)", "例 2(2)"])
+            self.assertEqual(len(questions), 2)
+            self.assertTrue(all(q["answer_body_sha256"] for q in questions))
 
     def test_inline_solved_exercise_can_be_authoritative_without_importance(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -627,7 +724,7 @@ class TestEdgeCases(unittest.TestCase):
         self.assertIn("> [!faq]- 例题解析", rendered)
         self.assertIn("> > [!success]- **【答案】** 详见解析", rendered)
         self.assertIn("> > [!note]- **【分析】**", rendered)
-        self.assertIn("> > 分析 考察奇函数在对称区间上的性质。", rendered)
+        self.assertIn("> > 考察奇函数在对称区间上的性质。", rendered)
         self.assertIn("> > [!note]- **【解析】**", rendered)
         self.assertIn("> > 解析 令 $g(x)=f(x)-2$，则 $g(x)$ 为奇函数。", rendered)
 
@@ -641,8 +738,8 @@ class TestEdgeCases(unittest.TestCase):
         analysis_block, explanation_block = rendered.split(
             "> > [!note]- **【解析】**", 1
         )
-        self.assertIn("> > 【分析】先判断奇偶性。", analysis_block)
-        self.assertIn("> > 【详解】代入特殊点即可排除其余选项。", explanation_block)
+        self.assertIn("> > 先判断奇偶性。", analysis_block)
+        self.assertIn("> > 代入特殊点即可排除其余选项。", explanation_block)
 
     def test_long_bracketed_answer_prefix_is_not_duplicated(self) -> None:
         long_answer = "推导步骤。" * 100
@@ -651,7 +748,7 @@ class TestEdgeCases(unittest.TestCase):
         )
 
         self.assertEqual(rendered.count(long_answer), 1)
-        self.assertIn("> > 【分析】先概括思路。", rendered)
+        self.assertIn("> > 先概括思路。", rendered)
 
     def test_choice_answer_extraction_does_not_guess_from_capital_letters(self) -> None:
         body = "解析: 集合 A 与集合 D 相等，但此处没有保留权威选项结论。"
@@ -1334,6 +1431,111 @@ class TestEdgeCases(unittest.TestCase):
                 {"kind": "missing-primary-authority-entry", "key": "topic", "title": "1.1 Topic"}
             ])
 
+    def test_printed_toc_coverage_blocks_partial_reviewed_page_range(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            source = tmp_path / "source.md"
+            source.write_text(
+                "目录\n第1讲 基础 …… 1\n1.1 概念 …… 2\n第2讲 进阶 …… 8\n2.1 方法 …… 9\n\n# 第1讲 基础\n## 1.1 概念\n1. Q\n",
+                encoding="utf-8",
+            )
+            staging = tmp_path / "staging"
+            profile_path = staging / "profile.json"
+            profile = create_profile(
+                [f"questions={source}"], "Partial TOC", staging, tmp_path, tmp_path / "graph", "zh-CN", None, False
+            )
+            write_json_atomic(profile_path, profile)
+            raw = Path(profile["sources"][0]["markdown_path"])
+            raw.parent.mkdir(parents=True, exist_ok=True)
+            raw.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+            adapter = {
+                "schema_version": 1,
+                "status": "passed",
+                "reviewer_confirmed": True,
+                "profile": str(profile_path.resolve()),
+                "hierarchy": {
+                    "source_role": "questions",
+                    "root_output": "index.md",
+                    "primary_authority": {
+                        "status": "passed",
+                        "reviewer_confirmed": True,
+                        "start_line": 2,
+                        "end_line": 3,
+                        "entries": [
+                            {"key": "l1", "title": "第1讲 基础", "level": 1, "source_line": 2},
+                            {"key": "s11", "title": "1.1 概念", "level": 2, "source_line": 3},
+                        ],
+                    },
+                    "entries": [
+                        {"key": "l1", "title": "第1讲 基础", "level": 1, "start_line": 7, "output": "l1.md"},
+                        {"key": "s11", "title": "1.1 概念", "level": 2, "start_line": 8, "output": "l1/s11.md"},
+                    ],
+                },
+                "content": {"question_patterns": [r"^(?P<number>\d+)[.]\s+"], "roles": []},
+            }
+            adapter_path = staging / "adapter.json"
+            write_json_atomic(adapter_path, adapter)
+
+            manifest = plan_hierarchy(profile_path, adapter_path)
+
+            missing_lines = {
+                item["line"]
+                for item in manifest["review_items"]
+                if item["kind"] == "unregistered-printed-toc-entry"
+            }
+            self.assertEqual(missing_lines, {4, 5})
+
+    def test_conventional_lecture_numbering_blocks_flattened_subsections(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            source = tmp_path / "source.md"
+            source.write_text(
+                "目录\n第1讲 基础 …… 1\n1.1 概念 …… 2\n\n# 第1讲 基础\n## 1.1 概念\n1. Q\n",
+                encoding="utf-8",
+            )
+            staging = tmp_path / "staging"
+            profile_path = staging / "profile.json"
+            profile = create_profile(
+                [f"questions={source}"], "Flat TOC", staging, tmp_path, tmp_path / "graph", "zh-CN", None, False
+            )
+            write_json_atomic(profile_path, profile)
+            raw = Path(profile["sources"][0]["markdown_path"])
+            raw.parent.mkdir(parents=True, exist_ok=True)
+            raw.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+            adapter = {
+                "schema_version": 1,
+                "status": "passed",
+                "reviewer_confirmed": True,
+                "profile": str(profile_path.resolve()),
+                "hierarchy": {
+                    "source_role": "questions",
+                    "root_output": "index.md",
+                    "primary_authority": {
+                        "status": "passed",
+                        "reviewer_confirmed": True,
+                        "start_line": 2,
+                        "end_line": 3,
+                        "entries": [
+                            {"key": "l1", "title": "第1讲 基础", "level": 1, "source_line": 2},
+                            {"key": "s11", "title": "1.1 概念", "level": 1, "source_line": 3},
+                        ],
+                    },
+                    "entries": [
+                        {"key": "l1", "title": "第1讲 基础", "level": 1, "start_line": 5, "output": "l1.md"},
+                        {"key": "s11", "title": "1.1 概念", "level": 1, "start_line": 6, "output": "s11.md"},
+                    ],
+                },
+                "content": {"question_patterns": [r"^(?P<number>\d+)[.]\s+"], "roles": []},
+            }
+            adapter_path = staging / "adapter.json"
+            write_json_atomic(adapter_path, adapter)
+
+            manifest = plan_hierarchy(profile_path, adapter_path)
+
+            self.assertTrue(
+                any(item["kind"] == "numbered-subsection-parent-mismatch" for item in manifest["review_items"])
+            )
+
     def test_hierarchy_cannot_bypass_authority_review(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)
@@ -1653,10 +1855,10 @@ class TestEdgeCases(unittest.TestCase):
 
     def test_question_sequence_audit_blocks_gaps_duplicates_and_reordering(self) -> None:
         questions = [
-            {"id": "q1", "context_key": "unit", "number": "1"},
-            {"id": "q3", "context_key": "unit", "number": "3"},
-            {"id": "q2", "context_key": "unit", "number": "2"},
-            {"id": "q2b", "context_key": "unit", "number": "2"},
+            {"id": "q1", "context_key": "unit", "number": "1", "sequence_policy": "continuous"},
+            {"id": "q3", "context_key": "unit", "number": "3", "sequence_policy": "continuous"},
+            {"id": "q2", "context_key": "unit", "number": "2", "sequence_policy": "continuous"},
+            {"id": "q2b", "context_key": "unit", "number": "2", "sequence_policy": "continuous"},
         ]
 
         errors = question_sequence_errors(questions)

@@ -831,6 +831,60 @@ def validate_adapter_contract(adapter: dict[str, Any], profile: dict[str, Any]) 
                 allow_empty_match=True,
             )
 
+    semantic_splits = content.get("reviewed_semantic_line_splits", [])
+    if not isinstance(semantic_splits, list):
+        raise ConfigurationError(
+            "content.reviewed_semantic_line_splits must be a list"
+        )
+    split_keys: set[tuple[str, int]] = set()
+    for index, item in enumerate(semantic_splits):
+        if not isinstance(item, dict):
+            raise ConfigurationError(
+                f"content.reviewed_semantic_line_splits[{index}] must be an object"
+            )
+        context = str(item.get("context", "")).strip()
+        source_page = str(item.get("source_page", "")).strip()
+        reason = str(item.get("reason", "")).strip()
+        try:
+            raw_line = int(item.get("raw_line"))
+            raw_columns = [int(value) for value in item.get("raw_columns", [])]
+        except (TypeError, ValueError) as exc:
+            raise ConfigurationError(
+                f"content.reviewed_semantic_line_splits[{index}] coordinates must be positive integers"
+            ) from exc
+        identity = (context, raw_line)
+        if (
+            not context
+            or raw_line < 1
+            or not raw_columns
+            or any(value < 2 for value in raw_columns)
+            or len(set(raw_columns)) != len(raw_columns)
+            or not source_page
+            or not reason
+            or identity in split_keys
+            or item.get("reviewer_confirmed") is not True
+        ):
+            raise ConfigurationError(
+                f"Invalid content.reviewed_semantic_line_splits[{index}]"
+            )
+        split_keys.add(identity)
+        _validate_optional_bbox(
+            item.get("source_bbox"),
+            f"content.reviewed_semantic_line_splits[{index}].source_bbox",
+        )
+        if not str(item.get("anchor_text", "")).strip() and not item.get(
+            "anchor_pattern"
+        ):
+            raise ConfigurationError(
+                f"content.reviewed_semantic_line_splits[{index}] requires a drift anchor"
+            )
+        if item.get("anchor_pattern") is not None:
+            _validate_regex(
+                item["anchor_pattern"],
+                f"content.reviewed_semantic_line_splits[{index}].anchor_pattern",
+                allow_empty_match=True,
+            )
+
     relocations = content.get("virtual_span_relocations", [])
     if not isinstance(relocations, list):
         raise ConfigurationError("content.virtual_span_relocations must be a list")

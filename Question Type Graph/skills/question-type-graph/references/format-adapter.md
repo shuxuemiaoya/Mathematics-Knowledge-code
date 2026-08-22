@@ -26,6 +26,9 @@ Minimum shape:
       "end_line": 40,
       "entries": [
         {"key": "chapter-1", "title": "authoritative source title", "level": 1, "source_line": 12}
+      ],
+      "excluded_entries": [
+        {"source_line": 40, "title": "Answer Key", "reason": "parsed only as authoritative answers", "reviewer_confirmed": true}
       ]
     },
     "entries": [
@@ -93,6 +96,15 @@ to that graph root.
 The runtime normalizes every component of `root_output` and `entries[].output`
 even when the reviewed adapter contains `:` or `：`; final audit treats either
 character in any generated file or directory path as a hard error.
+
+For a printed TOC, the primary ledger must cover every leader-delimited row on
+all TOC pages before the first body anchor. `primary_authority.excluded_entries`
+is the only reviewed escape hatch for a printed answer/index row that should
+not become a content hierarchy node; each exclusion requires its exact source
+line, title, concrete reason, and `reviewer_confirmed: true`. Conventional
+`第N讲` and `N.M` titles are cross-checked so numbered subsections and repeated
+`思考题` cannot be flattened into root siblings. Use `structural_only: true`
+for lecture parents that only organize second-level leaf notes.
 
 `question_patterns` and `answer_patterns` recognize a virtual line at its
 start. Their optional `inline_*_patterns` counterparts identify additional
@@ -250,6 +262,15 @@ raw line, exact text or regex drift anchor, PDF page/bbox, reason, and
 `reviewer_confirmed: true`. This mechanism is only for visually confirmed OCR
 duplication; it removes the line from the semantic compilation copy and records
 the applied exclusion in the content manifest.
+
+When MinerU joins multiple printed records on one Markdown line, use
+`content.reviewed_semantic_line_splits` rather than editing frozen raw. Record
+the hierarchy context, local raw line, every one-based Unicode split column,
+an exact drift anchor, PDF page/bbox, reason, and `reviewer_confirmed: true`.
+The compiler exposes those boundaries only in the semantic virtual copy and
+records the applied splits in the content manifest. Use this for visually
+confirmed record boundaries, especially an inline publisher solution followed
+by the next independently stated packet item.
 
 Teacher editions may print an authoritative answer immediately after each
 exercise, or even between subparts of one top-level example. Do not register
