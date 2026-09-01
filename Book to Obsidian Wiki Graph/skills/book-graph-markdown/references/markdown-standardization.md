@@ -16,6 +16,14 @@ functional heading/label, exposition or definition cue, worked-example label,
 or practice heading that begins a reviewed block also terminates the preceding
 block.
 
+Treat the split manifest's reviewed node architecture as equally protected.
+Source atoms and second-layer theme/practice/section-exercise organizers with
+`emit_title: false` remain without artificial filename headings. Formatting
+must not change organizer ownership or move a worked example away from its
+knowledge atom.
+Treat `![标题](目标.md)` as an embedded note ownership link, not as an image.
+Keep it outside any callout and preserve its destination exactly.
+
 ## Protected content
 
 Preserve content and source order. Never change H1-H3 headings, table data,

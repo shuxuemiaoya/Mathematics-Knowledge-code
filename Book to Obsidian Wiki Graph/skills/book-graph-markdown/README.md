@@ -28,6 +28,9 @@ Process every generated note in source order:
 1. Read the passed lesson-flow manifest first. Preserve its entry/topic
    ownership, hard functional boundaries, and block order; do not rebuild
    teaching hierarchy from keywords or merge adjacent blocks.
+   Also preserve the reviewed node architecture: do not move examples out of
+   their knowledge atoms, mix section exercises into practice organizers, or
+   add headings to title-free source atoms and second-layer organizers.
 2. Preserve content before improving presentation.
 3. Normalize paragraph spacing, lists, question choices, and formula blocks.
 4. Convert only functionally appropriate H4-H6 headings and worked-example
@@ -60,7 +63,10 @@ Process every generated note in source order:
     new worked-example markers.
 14. Render a source functional label once. When the reviewed block already
     supplies `思考`, `观察`, or a similar label as its callout title, do not
-    repeat that label as the first quoted body line.
+   repeat that label as the first quoted body line.
+15. Keep `emit_title: false` nodes title-free. Do not synthesize `# <filename>`
+    for a scenario, knowledge, example, question, knowledge-theme, practice, or
+    section-exercise note.
 
 Do not create backups when the profile says `none`. Use task-scoped staging and atomic writes.
 

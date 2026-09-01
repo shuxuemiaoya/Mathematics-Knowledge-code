@@ -24,6 +24,9 @@ if str(LESSON_FLOW_SCRIPT_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(LESSON_FLOW_SCRIPT_DIRECTORY))
 
 from lesson_flow_manifest import validate as validate_lesson_flow
+from textbook_node_architecture import audit_corpus as audit_node_architecture
+from textbook_node_architecture import category_map as architecture_category_map
+from textbook_node_architecture import node_path as architecture_node_path
 
 
 MARKDOWN_LINK_RE = re.compile(
@@ -31,6 +34,9 @@ MARKDOWN_LINK_RE = re.compile(
 )
 MARKDOWN_IMAGE_RE = re.compile(
     r"!\[[^\]]*\]\(((?:[^()]|\([^()]*\))*)\)"
+)
+MARKDOWN_NOTE_EMBED_RE = re.compile(
+    r"!\[([^\]]+)\]\(((?:[^()]|\([^()]*\))*)\)"
 )
 HTML_IMAGE_RE = re.compile(
     r"""<img\b[^>]*?\bsrc=["']([^"']+)["']""", re.IGNORECASE
@@ -100,6 +106,18 @@ PLAIN_RUNNING_CHAPTER_RE = re.compile(
 )
 SPACED_DIGITS_RE = re.compile(r"(?<![\d.])\d(?:[ \t]+\d)+(?![\d.])")
 HTML_TABLE_RE = re.compile(r"<table\b.*?</table\s*>", re.IGNORECASE | re.DOTALL)
+
+
+def strip_yaml_frontmatter(text: str) -> str:
+    """Return Markdown body text while preserving files without frontmatter."""
+
+    lines = text.splitlines(keepends=True)
+    if not lines or lines[0].strip() != "---":
+        return text
+    for index, line in enumerate(lines[1:], start=1):
+        if line.strip() in {"---", "..."}:
+            return "".join(lines[index + 1 :])
+    return text
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"}
 ALLOWED_NODE_TYPES = {"group", "text", "file", "link"}
 DEFAULT_NODE_COLORS = {None, "1", "2", "3", "4", "5", "6", "#c800ff"}
@@ -183,6 +201,20 @@ def target_exists(path: Path) -> bool:
     if not path.suffix and path.with_suffix(".md").exists():
         return True
     return False
+
+
+def is_markdown_note_target(href: str, target: Path | None) -> bool:
+    path_text = urllib.parse.unquote(
+        href.strip().strip("<>").split("#", 1)[0].split("?", 1)[0]
+    )
+    suffix = Path(path_text).suffix.casefold()
+    if suffix == ".md":
+        return True
+    return bool(
+        not suffix
+        and target is not None
+        and (target.suffix.casefold() == ".md" or target.with_suffix(".md").exists())
+    )
 
 
 def is_unstandardized_worked_example(line: str) -> bool:
@@ -1110,6 +1142,9 @@ def audit_book(
     require_standardized_markdown = stage in {"formatting", "pre-canvas", "final"}
     require_lesson_flow = False
     lesson_flow_summary: dict[str, Any] | None = None
+    node_architecture_summary: dict[str, Any] | None = None
+    split_manifest_payload: dict[str, Any] | None = None
+    untitled_architecture_paths: set[Path] = set()
 
     if profile_path is not None:
         profile, profile_errors = load_profile(profile_path)
@@ -1200,14 +1235,18 @@ def audit_book(
                 lesson_flow_payload = json.loads(
                     lesson_flow_manifest.read_text(encoding="utf-8-sig")
                 )
+                split_manifest_path = Path(
+                    lesson_flow_payload["split_manifest"]
+                ).resolve()
+                split_manifest_payload = json.loads(
+                    split_manifest_path.read_text(encoding="utf-8-sig")
+                )
                 lesson_flow_summary = validate_lesson_flow(
                     lesson_flow_payload,
                     formatted_markdown=Path(
                         lesson_flow_payload["formatted_markdown"]
                     ).resolve(),
-                    split_manifest_path=Path(
-                        lesson_flow_payload["split_manifest"]
-                    ).resolve(),
+                    split_manifest_path=split_manifest_path,
                     profile_path=profile_path.resolve(),
                 )
                 lesson_flow_summary["path"] = str(
@@ -1251,6 +1290,29 @@ def audit_book(
                 "vault_root": str(vault_root),
             }
         )
+
+    if profile is not None and split_manifest_payload is not None:
+        try:
+            node_architecture_summary = audit_node_architecture(
+                book_root,
+                vault_root,
+                split_manifest_payload,
+                profile,
+            )
+            errors.extend(node_architecture_summary.get("errors", []))
+            categories = architecture_category_map(profile)
+            untitled_architecture_paths = {
+                architecture_node_path(node, book_root, categories).resolve()
+                for node in split_manifest_payload.get("nodes", [])
+                if isinstance(node, dict) and node.get("emit_title") is False
+            }
+        except Exception as exc:
+            errors.append(
+                {
+                    "code": "textbook-node-architecture-invalid",
+                    "detail": f"{type(exc).__name__}: {exc}",
+                }
+            )
 
     source_summary = None
     if source is not None:
@@ -1320,6 +1382,7 @@ def audit_book(
         else []
     )
     standard_links = 0
+    embedded_note_links = 0
     wikilinks = 0
     image_references = 0
     missing_markdown_links = 0
@@ -1346,7 +1409,8 @@ def audit_book(
         source_category = category(path, book_root)
         category_files[source_category] += 1
         text = path.read_text(encoding="utf-8-sig")
-        if not text.strip():
+        body_text = strip_yaml_frontmatter(text)
+        if not body_text.strip():
             empty_notes += 1
             errors.append(
                 {
@@ -1355,11 +1419,15 @@ def audit_book(
                 }
             )
         first_nonblank = next(
-            (line.strip() for line in text.splitlines() if line.strip()),
+            (line.strip() for line in body_text.splitlines() if line.strip()),
             "",
         )
         is_concept = bool(concept_directory and source_category == concept_directory)
-        if not is_concept and not ENTRY_HEADING_RE.match(first_nonblank):
+        if (
+            not is_concept
+            and path.resolve() not in untitled_architecture_paths
+            and not ENTRY_HEADING_RE.match(first_nonblank)
+        ):
             invalid_entry_headings += 1
             errors.append(
                 {
@@ -1511,9 +1579,21 @@ def audit_book(
                     }
                 )
 
-        for link_match in matches_outside_math(MARKDOWN_LINK_RE, sanitized):
+        note_link_matches = [
+            (match, False)
+            for match in matches_outside_math(MARKDOWN_LINK_RE, sanitized)
+        ]
+        note_link_matches.extend(
+            (match, True)
+            for match in matches_outside_math(MARKDOWN_NOTE_EMBED_RE, sanitized)
+            if is_markdown_note_target(
+                match.group(2), resolve_href(match.group(2), path, vault_root)
+            )
+        )
+        for link_match, is_embed in note_link_matches:
             href = link_match.group(2)
             standard_links += 1
+            embedded_note_links += int(is_embed)
             target = resolve_href(href, path, vault_root)
             if target is None:
                 transitions[f"{source_category}-><external-url>"] += 1
@@ -1545,9 +1625,13 @@ def audit_book(
             ):
                 referenced_concepts.add(str(target).casefold())
 
-        image_hrefs = MARKDOWN_IMAGE_RE.findall(sanitized) + HTML_IMAGE_RE.findall(
-            sanitized
-        )
+        image_hrefs = [
+            href
+            for href in MARKDOWN_IMAGE_RE.findall(sanitized)
+            if not is_markdown_note_target(
+                href, resolve_href(href, path, vault_root)
+            )
+        ] + HTML_IMAGE_RE.findall(sanitized)
         image_references += len(image_hrefs)
         for href in image_hrefs:
             target = resolve_href(href, path, vault_root)
@@ -1566,7 +1650,9 @@ def audit_book(
                 )
 
     for concept in concept_files if require_concepts else []:
-        text = concept.read_text(encoding="utf-8-sig").strip()
+        text = strip_yaml_frontmatter(
+            concept.read_text(encoding="utf-8-sig")
+        ).strip()
         lines = text.splitlines()
         first_nonblank = next((line.strip() for line in lines if line.strip()), "")
         has_definition_heading = any(
@@ -1680,12 +1766,14 @@ def audit_book(
         "coverage": coverage_summary,
         "concept_manifest": concept_summary,
         "lesson_flow": lesson_flow_summary,
+        "node_architecture": node_architecture_summary,
         "counts": {
             "markdown_files": len(markdown_files),
             "category_files": dict(sorted(category_files.items())),
             "concept_files": len(concept_files),
             "images": len(all_images),
             "standard_links": standard_links,
+            "embedded_note_links": embedded_note_links,
             "wikilinks": wikilinks,
             "image_references": image_references,
             "missing_markdown_links": missing_markdown_links,

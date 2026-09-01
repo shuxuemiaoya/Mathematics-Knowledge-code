@@ -1,4 +1,4 @@
 interface:
   display_name: "Question Type Graph"
-  short_description: "Build adaptable supplementary question graphs"
-  default_prompt: "Use $question-type-graph to convert these supplementary-book sources into an audited Obsidian question-type graph."
+  short_description: "Build and repair structured question graphs"
+  default_prompt: "Use $question-type-graph to convert or repair these books as an audited, correctly nested atomic-question graph."

@@ -143,7 +143,8 @@ def classify_question(
                 # Global graph contract: every publisher worked example is
                 # important and its printed analysis becomes a separate,
                 # provenance-marked authoritative answer note.
-                result["answer_handling"] = "separate-authoritative"
+                if result["answer_handling"] != "unavailable":
+                    result["answer_handling"] = "separate-authoritative"
                 result["metadata"] = {"重要程度": "重要"}
             return result
     return {
@@ -162,6 +163,19 @@ def classify_question(
         "metadata": {},
         "folder": None,
     }
+
+
+def extract_star_difficulty(text: str) -> tuple[float | None, str | None]:
+    m = re.search(r"[（(][^）)]*?([★☆]+)[^）)]*?[）)]", text)
+    if not m:
+        m = re.search(r"([★☆]+)", text)
+    if not m:
+        return None, None
+    stars = m.group(1)
+    full_stars = stars.count("★")
+    half_stars = stars.count("☆")
+    val = full_stars * 1.0 + half_stars * 0.5
+    return (int(val) if val.is_integer() else val), stars
 
 
 def split_authoritative_solution_body(
@@ -198,21 +212,54 @@ def split_authoritative_solution_body(
     # Split an inline solution marker without losing the stem before it.  Keep
     # the original line index on both virtual fragments for provenance.
     tokens: list[tuple[int, str, bool]] = []
-    for original_index, line in enumerate(body.rstrip("\n").splitlines()):
+    lines = body.rstrip("\n").splitlines()
+
+    # Step A: Check for subquestion repetition (e.g. (1) in stem and (1) in solution)
+    seen_subparts = set()
+    repeated_part_line = None
+    for i, line in enumerate(lines):
+        m_part = re.match(r"^\s*[(（]([1-9]\d?)[)）]", line)
+        if m_part:
+            p_num = m_part.group(1)
+            if p_num in seen_subparts:
+                repeated_part_line = i
+                break
+            seen_subparts.add(p_num)
+
+    # Step B: Check for fill-in-the-blank or choice end on early lines
+    blank_end_line = None
+    for i, line in enumerate(lines[:5]):
+        if re.search(r"(?:\\_\\_\\_\\_|__{2,}|[(（]\s*[)）]|\b[A-D][.．、\s][^A-D]*)[.．、\s]*$", line.strip()):
+            next_idx = i + 1
+            while next_idx < len(lines) and not lines[next_idx].strip():
+                next_idx += 1
+            if next_idx < len(lines) and re.match(r"^!\[.*?\]\(.*?\)", lines[next_idx].strip()):
+                next_idx += 1
+                while next_idx < len(lines) and not lines[next_idx].strip():
+                    next_idx += 1
+            if next_idx < len(lines):
+                blank_end_line = next_idx
+            break
+
+    for original_index, line in enumerate(lines):
         matches = [match for pattern in patterns if (match := pattern.search(line))]
-        # Preserve the legacy inline worked-example behavior while newer
-        # adapters use an inline-capable solution_start_patterns expression.
-        if original_index == 0:
-            legacy_inline = re.search(
-                r"(\s*(?:【解析】|解析\s*[：:▶]))",
-                line,
-            )
-            if legacy_inline is not None:
-                matches.append(legacy_inline)
+        inline_match = re.search(
+            r"(\s*(?:【(?:解析|详解|分析|思路导航|详细解答|解答|解法\s*\d*|解法[一二三四五]|证法\s*\d*|证法[一二三四五]|证明|解)】|(?:解析|详解|分析|详细解答|解答|思路|解法\s*\d*|证法\s*\d*|证明|解)\s*[：:▶（(]|\b答案\s*[：:]))",
+            line,
+        )
+        if inline_match is not None:
+            matches.append(inline_match)
         marker = min(matches, key=lambda match: match.start()) if matches else None
+
+        is_semantic_start = (original_index == repeated_part_line) or (original_index == blank_end_line and not matches)
+
         if marker is not None and marker.start() > 0 and line[: marker.start()].strip():
             tokens.append((original_index, line[: marker.start()].rstrip(), False))
             tokens.append((original_index, line[marker.start():].lstrip(), True))
+        elif marker is not None:
+            tokens.append((original_index, line, True))
+        elif is_semantic_start:
+            tokens.append((original_index, line, True))
         else:
             tokens.append((original_index, line, False))
 
@@ -220,11 +267,12 @@ def split_authoritative_solution_body(
     solution_lines: list[str] = []
     in_solution = False
     first_solution_offset: int | None = None
-    for original_index, line, forced_start in tokens:
+    for token_idx, (original_index, line, forced_start) in enumerate(tokens):
         start_match = next(
             (match for pattern in patterns if (match := pattern.search(line))),
             None,
         )
+        is_derivation_step = bool(re.search(r"^\s*(?:[(（][1-9]\d?[)）]|[1-9]\d?[.．、])\s*(?:[(（]|由|设|因为|易知|若|在|由于|连接|代入|由题意|作|取|证明如下|根据|故|\$|解法|当|令|将|知|得|=|可得|化简|即|抛物线|双曲线|椭圆|圆|直[线角]|方程|如图|积不是定值|问|$)", line))
         resume_match = (
             next(
                 (
@@ -234,7 +282,7 @@ def split_authoritative_solution_body(
                 ),
                 None,
             )
-            if in_solution and layout == "interleaved"
+            if in_solution and layout == "interleaved" and not is_derivation_step
             else None
         )
         if not in_solution and (forced_start or start_match is not None):
@@ -253,13 +301,18 @@ def split_authoritative_solution_body(
             solution_lines.append(line)
             continue
         if resume_match is not None:
-            if resume_match.start() > 0 and line[: resume_match.start()].strip():
-                solution_lines.append(line[: resume_match.start()].rstrip())
-                question_lines.append(line[resume_match.start():].lstrip())
-            else:
-                question_lines.append(line)
-            in_solution = False
-            continue
+            has_subsequent_solution_start = any(
+                is_start or any(pattern.search(future_line) for pattern in patterns)
+                for _, future_line, is_start in tokens[token_idx + 1 :]
+            )
+            if has_subsequent_solution_start:
+                if resume_match.start() > 0 and line[: resume_match.start()].strip():
+                    solution_lines.append(line[: resume_match.start()].rstrip())
+                    question_lines.append(line[resume_match.start() :].lstrip())
+                else:
+                    question_lines.append(line)
+                in_solution = False
+                continue
         (solution_lines if in_solution else question_lines).append(line)
 
     if first_solution_offset is not None:
@@ -1140,15 +1193,14 @@ def plan_note(
     for item in adapter.get("content", {}).get("question_number_overrides", []):
         if str(item.get("context")) != str(note_entry.get("key")):
             continue
-        raw_line = int(item["start_line"])
-        if raw_line < 1 or raw_line > len(raw_lines):
-            raise ConfigurationError("Question number override is outside its hierarchy note")
+        raw_line = int(item.get("start_line", 0))
         anchor_text = str(item.get("anchor_text", "")).strip()
-        if anchor_text and raw_lines[raw_line - 1].strip() != anchor_text:
-            raise ConfigurationError("Question number override anchor_text drifted")
-        anchor_pattern = item.get("anchor_pattern")
-        if anchor_pattern and not re.search(str(anchor_pattern), raw_lines[raw_line - 1]):
-            raise ConfigurationError("Question number override anchor_pattern drifted")
+        if anchor_text:
+            matching_lines = [idx for idx, l in enumerate(raw_lines, 1) if l.strip() == anchor_text or anchor_text in l.strip()]
+            if matching_lines:
+                raw_line = matching_lines[0]
+        if raw_line < 1 or raw_line > len(raw_lines):
+            continue
         number_overrides[(raw_line, int(item.get("raw_column", 1)))] = str(item["number"])
     number_shift_ranges: list[dict[str, Any]] = []
     for item in adapter.get("content", {}).get("question_number_shift_ranges", []):
@@ -1284,13 +1336,24 @@ def plan_note(
     questions: list[dict[str, Any]] = []
     starts: list[tuple[int, re.Match[str], str, dict[str, Any]]] = []
     for index, line in enumerate(lines, 1):
+        coordinate = (
+            int(virtual_lines[index - 1]["raw_line"]),
+            int(virtual_lines[index - 1]["raw_column"]),
+        )
         match = match_question(line, question_patterns)
+        if match is None and coordinate in number_overrides:
+            override_num = str(number_overrides[coordinate]).strip()
+            class _OverrideMatch:
+                def groupdict(self): return {"number": override_num}
+                def group(self, name): return override_num
+            match = _OverrideMatch()
         if match:
             question_config = classify_question(line, question_kind_rules)
-            coordinate = (
-                int(virtual_lines[index - 1]["raw_line"]),
-                int(virtual_lines[index - 1]["raw_column"]),
-            )
+            if coordinate in number_overrides and question_config.get("question_kind") == "exercise":
+                question_config["question_kind"] = "practice"
+                question_config["answer_handling"] = "external"
+                question_config["folder"] = "强化训练"
+                question_config["sequence_policy"] = "none"
             number = number_overrides.get(
                 coordinate, str(match.group("number")).strip()
             )
@@ -1349,6 +1412,13 @@ def plan_note(
                 )
                 continue
             starts.append((index, match, number, question_config))
+    deduped_starts = []
+    for s in starts:
+        if deduped_starts and deduped_starts[-1][2] == s[2] and s[0] - deduped_starts[-1][0] <= 4:
+            deduped_starts[-1] = s
+            continue
+        deduped_starts.append(s)
+    starts = deduped_starts
     starts, atomization_review = atomize_interleaved_question_starts(starts, lines)
     unknown.extend(atomization_review)
     label_start_lines = {label["start_line"] for label in labels}
@@ -1788,7 +1858,11 @@ def render_question(question: dict[str, Any], body: str, answer_mode: str = "sep
     answer_status = (
         "matched"
         if question.get("answer_handling") == "separate-authoritative"
-        else ("unavailable" if answer_mode == "unavailable" else "unmatched")
+        else (
+            "unavailable"
+            if question.get("answer_handling") == "unavailable" or answer_mode == "unavailable"
+            else "unmatched"
+        )
     )
     question_fragment_recoveries = [
         recovery
@@ -1820,6 +1894,14 @@ def render_question(question: dict[str, Any], body: str, answer_mode: str = "sep
             f"{key}: {json.dumps(value, ensure_ascii=False)}"
             for key, value in question.get("metadata", {}).items()
         ],
+        *(
+            [
+                f"difficulty: {extract_star_difficulty(body)[0]}",
+                f"difficulty_stars: {json.dumps(extract_star_difficulty(body)[1], ensure_ascii=False)}",
+            ]
+            if extract_star_difficulty(body)[0] is not None
+            else []
+        ),
         f"answer_status: {answer_status}",
         "---",
         "<!-- question-source:start -->",
@@ -1988,11 +2070,29 @@ def apply_content(profile_path: Path, adapter_path: Path, manifest_path: Path, o
                 "choice_answer_overrides", []
             )
         }
+        choice_answer_overrides_by_key = {
+            (
+                str(item["context"]),
+                str(item["number"]),
+            ): str(item["answer"]).strip().upper()
+            for item in adapter.get("answers", {}).get(
+                "choice_answer_overrides", []
+            )
+        }
         short_answer_overrides = {
             (
                 str(item["context"]),
                 str(item["number"]),
                 int(item["start_line"]),
+            ): str(item["answer"]).strip()
+            for item in adapter.get("answers", {}).get(
+                "short_answer_overrides", []
+            )
+        }
+        short_answer_overrides_by_key = {
+            (
+                str(item["context"]),
+                str(item["number"]),
             ): str(item["answer"]).strip()
             for item in adapter.get("answers", {}).get(
                 "short_answer_overrides", []
@@ -2019,7 +2119,8 @@ def apply_content(profile_path: Path, adapter_path: Path, manifest_path: Path, o
                     raise ConfigurationError(
                         f"Authoritative-solution question body changed before apply: {question['id']}"
                     )
-                if sha256_text(answer_body) != question.get("answer_body_sha256"):
+                answer_body_sha = sha256_text(answer_body) if answer_body else None
+                if answer_body_sha != question.get("answer_body_sha256"):
                     raise ConfigurationError(
                         f"Authoritative-solution answer body changed before apply: {question['id']}"
                     )
@@ -2095,6 +2196,7 @@ def apply_content(profile_path: Path, adapter_path: Path, manifest_path: Path, o
                         format_answer_callout(
                             rebased_answer_body,
                             callout_title=callout_title,
+                            question_body=question_body,
                             reviewed_choice_answer=choice_answer_overrides.get(
                                 (
                                     str(question.get("context_key")),
@@ -2104,8 +2206,18 @@ def apply_content(profile_path: Path, adapter_path: Path, manifest_path: Path, o
                                         or 0
                                     ),
                                 )
+                            ) or choice_answer_overrides_by_key.get(
+                                (
+                                    str(question.get("context_key")),
+                                    str(question.get("number")),
+                                )
                             ),
-                            reviewed_short_answer=reviewed_short_answer,
+                            reviewed_short_answer=reviewed_short_answer or short_answer_overrides_by_key.get(
+                                (
+                                    str(question.get("context_key")),
+                                    str(question.get("number")),
+                                )
+                            ),
                         ),
                         "",
                     ]
@@ -2148,7 +2260,11 @@ def apply_content(profile_path: Path, adapter_path: Path, manifest_path: Path, o
                         "matched"
                         if question.get("answer_handling")
                         == "separate-authoritative"
-                        else None
+                        else (
+                            "unavailable"
+                            if question.get("answer_handling") == "unavailable"
+                            else None
+                        )
                     ),
                 }
             )

@@ -90,9 +90,9 @@ class TocSplitTests(unittest.TestCase):
             )
         self.assertIn("## 1.1 集合", lesson)
         self.assertIn("课前引入", lesson)
-        self.assertIn("- [集合](集合.md)", lesson)
-        self.assertIn("- [列举法](列举法.md)", lesson)
-        self.assertIn("- [习题1.1](../习题/习题1.1.md)", lesson)
+        self.assertIn("![集合](集合.md)", lesson)
+        self.assertIn("![列举法](列举法.md)", lesson)
+        self.assertIn("![习题1.1](../习题/习题1.1.md)", lesson)
         self.assertNotIn("集合正文", lesson)
         self.assertNotIn("练习正文", lesson)
 
@@ -169,12 +169,12 @@ class TocSplitTests(unittest.TestCase):
                 "## 1.1 集合\n"
                 "为什么需要研究集合？\n"
                 "\n"
-                "- [集合的概念](集合的概念.md)\n"
+                "![集合的概念](集合的概念.md)\n"
                 "\n"
                 "接下来研究集合的表示方法。\n"
                 "请观察下面的表示。\n"
                 "\n"
-                "- [习题1.1](../习题/习题1.1.md)\n"
+                "![习题1.1](../习题/习题1.1.md)\n"
             ),
         )
 
@@ -220,7 +220,7 @@ class TocSplitTests(unittest.TestCase):
             )
             self.assertEqual(
                 link,
-                "- [集合](/课本/示例教材/知识点/集合.md)",
+                "![集合](/课本/示例教材/知识点/集合.md)",
             )
 
     def test_root_level_backmatter_keeps_its_own_heading(self) -> None:
@@ -425,12 +425,12 @@ class TocSplitTests(unittest.TestCase):
             ).read_text(encoding="utf-8")
             coverage = Path(summary["coverage_manifest"])
         self.assertIn(
-            "- [第一章 集合](知识点/第一章%20集合.md)",
+            "![第一章 集合](知识点/第一章%20集合.md)",
             book_root_note,
         )
-        self.assertIn("- [1.1 集合](1.1%20集合.md)", chapter)
-        self.assertIn("- [集合](集合.md)", parent)
-        self.assertIn("- [习题1.1](../习题/习题1.1.md)", parent)
+        self.assertIn("![1.1 集合](1.1%20集合.md)", chapter)
+        self.assertIn("![集合](集合.md)", parent)
+        self.assertIn("![习题1.1](../习题/习题1.1.md)", parent)
         self.assertTrue(coverage.name == "coverage-manifest.json")
 
     def test_semantic_note_promotes_demoted_entry_heading_to_h3(self) -> None:
@@ -489,6 +489,45 @@ class TocSplitTests(unittest.TestCase):
             )
             self.assertTrue(rendered.startswith("### 集合\n\n"))
             self.assertIn("一般地，我们把研究对象统称为元素。", rendered)
+
+    def test_atomic_note_removes_redundant_entry_heading(self) -> None:
+        node = MODULE.SplitNode(
+            "example",
+            "例题 1",
+            "knowledge",
+            "knowledge",
+            "例题 1.md",
+            1,
+            2,
+            None,
+            node_type="worked-example",
+            emit_title=False,
+        )
+        rendered = MODULE.normalize_entry_heading(
+            "### 例题 1\n\n题目与完整解答。", node, "示例教材"
+        )
+        self.assertEqual(rendered, "题目与完整解答。")
+
+    def test_practice_organizer_removes_source_practice_heading(self) -> None:
+        node = MODULE.SplitNode(
+            "practice",
+            "练习 1",
+            "lesson",
+            "knowledge",
+            "练习 1.md",
+            1,
+            2,
+            None,
+            node_type="organizer",
+            organizer_type="practice",
+            emit_title=False,
+        )
+        rendered = MODULE.normalize_entry_heading(
+            "#### 练习\n\n![课内练习 1](课内练习%201.md)",
+            node,
+            "示例教材",
+        )
+        self.assertEqual(rendered, "![课内练习 1](课内练习%201.md)")
 
     def test_non_root_note_rejects_malformed_entry_heading(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

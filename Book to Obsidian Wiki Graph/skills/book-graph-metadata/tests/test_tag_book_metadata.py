@@ -13,6 +13,7 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 from tag_book_metadata import (
+    architecture_metadata_map,
     derive_metadata_for_file,
     format_frontmatter,
     infer_chapter,
@@ -80,6 +81,43 @@ class TestTagBookMetadata(unittest.TestCase):
         errors = validate_file_metadata(invalid_meta)
         self.assertEqual(len(errors), 1)
         self.assertIn("invalid 时长", errors[0])
+
+    def test_architecture_metadata_overrides_directory_category(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            book_root = Path(tmpdir) / "book"
+            profile = {
+                "categories": [
+                    {"role": "knowledge", "directory": "知识点", "enabled": True}
+                ]
+            }
+            manifest = {
+                "nodes": [
+                    {
+                        "key": "example-1",
+                        "title": "例题 1",
+                        "filename": "例题 1.md",
+                        "category": "knowledge",
+                        "node_type": "worked-example",
+                    },
+                    {
+                        "key": "theme",
+                        "title": "集合的表达方式",
+                        "filename": "集合的表达方式.md",
+                        "category": "knowledge",
+                        "node_type": "organizer",
+                        "organizer_type": "knowledge-theme",
+                    },
+                ]
+            }
+            mapped = architecture_metadata_map(manifest, profile, book_root)
+            self.assertEqual(
+                mapped[(book_root / "知识点" / "例题 1.md").resolve()]["节点类型"],
+                "例题",
+            )
+            self.assertEqual(
+                mapped[(book_root / "知识点" / "集合的表达方式.md").resolve()],
+                {"节点类型": "目录", "组织类型": "知识主题"},
+            )
 
     def test_process_book_metadata_end_to_end(self):
         with tempfile.TemporaryDirectory() as tmpdir:

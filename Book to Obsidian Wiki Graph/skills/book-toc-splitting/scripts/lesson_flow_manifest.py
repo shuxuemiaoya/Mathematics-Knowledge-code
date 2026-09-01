@@ -13,6 +13,9 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from textbook_node_architecture import architecture_required
+from textbook_node_architecture import validate_manifest as validate_node_architecture
+
 
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
@@ -161,6 +164,19 @@ def lesson_nodes(split_manifest: dict[str, Any]) -> list[dict[str, Any]]:
     for node in lookup.values():
         title = str(node.get("title", "")).strip()
         if node.get("category") != "knowledge":
+            continue
+        # Under the reviewed textbook architecture, numbered knowledge atoms
+        # (for example 1.4.1) are rendered recursively inside their owning
+        # knowledge theme.  Lesson-flow owns only first-layer section
+        # organizers; treating atoms as lesson pages duplicates retained source
+        # blocks and makes a link-only organizer contract impossible.
+        if (
+            node.get("node_type") is not None
+            and not (
+                node.get("node_type") == "organizer"
+                and node.get("organizer_type") == "section"
+            )
+        ):
             continue
         if node.get("parent_key") is None:
             continue
@@ -411,6 +427,7 @@ def plan(
 
     lines = formatted_markdown.read_text(encoding="utf-8-sig").splitlines()
     decomposition = profile.get("decomposition", {})
+    strict_architecture = architecture_required(profile)
     max_retained = (
         decomposition.get(
             "max_retained_teaching_block_nonblank_lines",
@@ -451,7 +468,11 @@ def plan(
                 int(first_child_preview.get("end_line", -1)),
             )
         )
-        if opening_nonblank < 2 and not opening_supplied_by_first_child:
+        if (
+            not strict_architecture
+            and opening_nonblank < 2
+            and not opening_supplied_by_first_child
+        ):
             findings.append(
                 {
                     "code": "opening-preview-missing",
@@ -730,6 +751,8 @@ def validate(
     profile = read_json(profile_path)
     split_manifest = read_json(split_manifest_path)
     validate_same_book_reference_review(split_manifest, profile)
+    architecture_summary = validate_node_architecture(split_manifest, profile)
+    strict_architecture = architecture_required(profile)
     lookup = node_lookup(split_manifest)
     expected_lessons = {
         node["key"]: node for node in lesson_nodes(split_manifest)
@@ -1025,6 +1048,24 @@ def validate(
                         f"retained block cannot name a child: {node_key}"
                     )
                 block_nonblank = nonblank_count(lines, start_line, end_line)
+                if strict_architecture and role not in {
+                    "entry-context",
+                    "navigation",
+                    "section-heading",
+                }:
+                    raise LessonFlowError(
+                        "architecture-required section organizer retains "
+                        f"teaching role {role!r}: {node_key}"
+                    )
+                if (
+                    strict_architecture
+                    and role == "entry-context"
+                    and block_nonblank > 1
+                ):
+                    raise LessonFlowError(
+                        "architecture-required entry-context must contain only "
+                        f"the section heading: {node_key}"
+                    )
                 retained_nonblank += block_nonblank
                 if before_first_child:
                     opening_retained_nonblank += block_nonblank
@@ -1103,6 +1144,8 @@ def validate(
                 f"missing={missing}, extra={extra}"
             )
         if (
+            not strict_architecture
+            and
             entry_context_nonblank < 2
             and opening_retained_nonblank < 2
             and first_child_preview_nonblank < 1
@@ -1111,7 +1154,11 @@ def validate(
                 "lesson entry would begin link-only and has no retained "
                 f"opening preview: {node_key}"
             )
-        if child_keys and retained_nonblank + rendered_preview_nonblank < 2:
+        if (
+            not strict_architecture
+            and child_keys
+            and retained_nonblank + rendered_preview_nonblank < 2
+        ):
             raise LessonFlowError(
                 f"lesson entry would be link-only and has no retained preview: "
                 f"{node_key}"
@@ -1157,6 +1204,7 @@ def validate(
         "logical_block_count": sum(
             len(lesson["blocks"]) for lesson in raw_lessons
         ),
+        "node_architecture": architecture_summary,
     }
 
 

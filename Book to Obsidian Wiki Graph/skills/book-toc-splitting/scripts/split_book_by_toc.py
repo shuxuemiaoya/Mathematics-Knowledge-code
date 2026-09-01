@@ -23,6 +23,7 @@ if str(SCRIPT_DIRECTORY) not in sys.path:
 
 from lesson_flow_manifest import functional_boundary
 from lesson_flow_manifest import validate as validate_lesson_flow
+from textbook_node_architecture import validate_manifest as validate_node_architecture
 
 
 for _stream in (sys.stdout, sys.stderr):
@@ -58,6 +59,9 @@ class SplitNode:
     end_line: int
     toc_key: str | None
     parent_preview: dict[str, Any] | None = None
+    node_type: str | None = None
+    organizer_type: str | None = None
+    emit_title: bool | None = None
 
 
 def sha256_file(path: Path) -> str:
@@ -69,12 +73,21 @@ def sha256_file(path: Path) -> str:
 
 
 def clean_filename(filename: str) -> str:
-    cleaned = INVALID_FILENAME_RE.sub("_", filename).strip().rstrip(".")
-    if not cleaned:
+    raw = filename.replace("\\", "/").strip()
+    if raw.startswith("/"):
+        raise SplitError("Split filename must be relative")
+    parts = raw.split("/")
+    if not parts or any(part in {"", ".", ".."} for part in parts):
+        raise SplitError("Split filename contains an unsafe path segment")
+    cleaned_parts = [
+        INVALID_FILENAME_RE.sub("_", part).strip().rstrip(".")
+        for part in parts
+    ]
+    if any(not part for part in cleaned_parts):
         raise SplitError("Split filename cannot be empty")
-    if not cleaned.lower().endswith(".md"):
-        cleaned += ".md"
-    return cleaned
+    if not cleaned_parts[-1].lower().endswith(".md"):
+        cleaned_parts[-1] += ".md"
+    return "/".join(cleaned_parts)
 
 
 def category_map(profile: dict[str, Any]) -> dict[str, str]:
@@ -166,6 +179,21 @@ def load_nodes(
             end_line=end,
             toc_key=toc_key,
             parent_preview=parent_preview,
+            node_type=(
+                str(raw["node_type"])
+                if isinstance(raw.get("node_type"), str)
+                else None
+            ),
+            organizer_type=(
+                str(raw["organizer_type"])
+                if isinstance(raw.get("organizer_type"), str)
+                else None
+            ),
+            emit_title=(
+                raw.get("emit_title")
+                if isinstance(raw.get("emit_title"), bool)
+                else None
+            ),
         )
 
     roots = [node for node in nodes.values() if node.parent_key is None]
@@ -242,7 +270,7 @@ def note_link(
     else:
         href = os.path.relpath(child_target, parent_target.parent).replace("\\", "/")
     href = encode_path(href, bool(links.get("encode_spaces", False)))
-    return f"- [{child.title}]({href})"
+    return f"![{child.title}]({href})"
 
 
 def normalize_entry_heading(text: str, node: SplitNode, book_title: str) -> str:
@@ -252,6 +280,41 @@ def normalize_entry_heading(text: str, node: SplitNode, book_title: str) -> str:
     reviewed range becomes an independent note, its entry heading is promoted
     to H3, matching the textbook example's chapter/lesson/subsection grammar.
     """
+
+    if node.emit_title is False:
+        lines = text.splitlines()
+        first_index = next(
+            (index for index, line in enumerate(lines) if line.strip()),
+            None,
+        )
+        if first_index is None:
+            raise SplitError(f"Rendered note {node.key!r} is empty")
+        match = ANY_HEADING_RE.match(lines[first_index])
+        title_matches = match and re.sub(r"\s+", "", match.group(2)) in {
+            re.sub(r"\s+", "", node.title),
+            re.sub(r"\s+", "", Path(node.filename).stem),
+        }
+        second_layer_organizer_heading = bool(
+            match
+            and node.node_type == "organizer"
+            and node.organizer_type
+            in {"knowledge-theme", "practice", "section-exercise"}
+        )
+        source_question_heading = bool(
+            match
+            and node.node_type == "section-exercise-question"
+            and re.match(r"^\d+\.(?:\s|[（(])", match.group(2).strip())
+        )
+        if source_question_heading:
+            lines[first_index] = match.group(2).strip()
+        elif title_matches or second_layer_organizer_heading:
+            lines.pop(first_index)
+            while lines and not lines[0].strip():
+                lines.pop(0)
+        result = "\n".join(lines).strip()
+        if not result:
+            raise SplitError(f"Rendered note {node.key!r} is empty after title removal")
+        return result
 
     if node.parent_key is None:
         expected = f"# {book_title}".strip()
@@ -935,7 +998,17 @@ def validate_lesson_flow_presence(
 
 
 def local_asset_hrefs(markdown: str) -> list[str]:
-    return MARKDOWN_IMAGE_RE.findall(markdown) + HTML_IMAGE_RE.findall(markdown)
+    markdown_images = [
+        href
+        for href in MARKDOWN_IMAGE_RE.findall(markdown)
+        if Path(
+            urllib.parse.unquote(
+                href.strip().strip("<>").split("#", 1)[0].split("?", 1)[0]
+            )
+        ).suffix.casefold()
+        != ".md"
+    ]
+    return markdown_images + HTML_IMAGE_RE.findall(markdown)
 
 
 def materialize_assets(
@@ -990,7 +1063,9 @@ def materialize_assets(
         if links.get("asset_mode") == "vault-root":
             final_destination = (final_parent / output_relative).resolve()
             try:
-                vault_relative = final_destination.relative_to(vault_root).as_posix()
+                vault_relative = final_destination.relative_to(
+                    vault_root.resolve()
+                ).as_posix()
             except ValueError as exc:
                 raise SplitError(
                     "Split asset target lies outside the configured vault"
@@ -1031,6 +1106,7 @@ def write_split(
         for item in toc_manifest.get("entries", [])
         if isinstance(item, dict) and isinstance(item.get("key"), str)
     }
+    architecture_summary = validate_node_architecture(split_manifest, profile)
     nodes, root = load_nodes(split_manifest, profile, len(lines), toc_keys)
     categories = category_map(profile)
     vault_root = Path(profile["paths"]["vault_root"]).resolve()
@@ -1126,6 +1202,7 @@ def write_split(
         "categories": categories,
         "coverage_manifest": str(coverage_path),
         "root_note": str(target_path(root, output_root, categories)),
+        "node_architecture": architecture_summary,
     }
 
 

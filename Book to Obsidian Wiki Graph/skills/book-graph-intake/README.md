@@ -83,9 +83,12 @@ semantic categories before validation. Adapt link, formatting, asset, or
 canvas policies through the same profile.
 
 For new textbook profiles, keep
-`decomposition.require_lesson_flow_manifest: true`. This makes the complete
-lesson-flow review a required split-stage artifact and prevents later stages
-from substituting keyword-based logical grouping.
+`decomposition.require_lesson_flow_manifest: true` and
+`decomposition.require_textbook_node_architecture: true`. These make complete
+lesson-flow and node-ownership review required at the split stage. The latter
+separates source atoms from section, knowledge-theme, practice, and
+section-exercise organizers and prevents later stages from rebuilding
+hierarchy from keywords.
 
 ```powershell
 python scripts\make_book_profile.py validate "<staging_root>\book-profile.json"

@@ -245,7 +245,7 @@ def valid_solution_note(
         return False, "solution-explanation-callout-missing"
     lexical = re.sub(r"(?m)^>\s*>\s*", "", lexical)
     lexical = re.sub(r"(?m)^>\s*", "", lexical)
-    lexical = re.sub(r"\[!(?:faq|success|note)\]-|\*\*【(?:答案|分析|解析)】\*\*|[-*_#]", "", lexical)
+    lexical = re.sub(r"\[!(?:faq|success|note|tip|warning|info)\]-|\*\*【.*?】\*\*|[-*_#]", "", lexical)
     lexical = re.sub(r"本题未单列(?:分析|解析)[。.]?", "", lexical)
     lexical = re.sub(r"\s+", "", lexical)
     if len(lexical) < 8 or re.search(r"待.*生成|暂无解析|仅占位|placeholder", lexical, re.IGNORECASE):
@@ -273,6 +273,30 @@ def validate_embed(parent: Path, child: Path, vault_root: Path, kind: str, ident
         )
     if any(line.strip().startswith((f"- {embed}", f"* {embed}", f"+ {embed}")) for line in text.splitlines()):
         errors.append({"kind": "embed-has-list-prefix", "relation": kind, "identity": identity, "parent": str(parent)})
+    return errors
+
+
+def global_question_embed_errors(
+    questions: list[dict[str, Any]], navigation_paths: list[Path], vault_root: Path
+) -> list[dict[str, Any]]:
+    """Require one global navigation owner for every atomic question."""
+    texts = [
+        path.read_text(encoding="utf-8-sig")
+        for path in {item.resolve() for item in navigation_paths}
+        if path.is_file()
+    ]
+    errors: list[dict[str, Any]] = []
+    for question in questions:
+        embed = obsidian_embed(Path(question["output"]), vault_root)
+        count = sum(text.count(embed) for text in texts)
+        if count != 1:
+            errors.append(
+                {
+                    "kind": "global-question-embed-count",
+                    "question_id": question.get("id"),
+                    "embed_count": count,
+                }
+            )
     return errors
 
 
@@ -408,6 +432,46 @@ def audit_graph(
 
     hierarchy_notes = {str(item.get("key")): Path(item["path"]) for item in hierarchy.get("notes", []) if item.get("path")}
     root_note = hierarchy_notes.get("root")
+    if (
+        adapter.get("hierarchy", {}).get(
+            "question_ownership_policy", "non-structural"
+        )
+        == "leaf-only"
+    ):
+        hierarchy_items = [
+            item for item in hierarchy.get("notes", []) if item.get("key") != "root"
+        ]
+        parent_keys = {
+            str(item.get("parent"))
+            for item in hierarchy_items
+            if item.get("parent") is not None
+        }
+        leaf_keys = {
+            str(item.get("key"))
+            for item in hierarchy_items
+            if str(item.get("key")) not in parent_keys
+        }
+        for question in questions:
+            if str(question.get("source_note_key")) not in leaf_keys:
+                errors.append(
+                    {
+                        "kind": "question-owned-by-nonleaf",
+                        "question_id": question.get("id"),
+                        "source_note_key": question.get("source_note_key"),
+                    }
+                )
+        navigation_paths = [
+            Path(item["path"])
+            for item in hierarchy_items
+            if item.get("path")
+        ] + [
+            Path(item["output"])
+            for item in functional_nodes
+            if item.get("output")
+        ]
+        errors.extend(
+            global_question_embed_errors(questions, navigation_paths, vault_root)
+        )
     for item in hierarchy.get("notes", []):
         if item.get("content_source"):
             content_source = Path(item["content_source"])
@@ -502,6 +566,32 @@ def audit_graph(
                     text = q_file.read_text(encoding="utf-8-sig") if q_file.is_file() else ""
                     question_body_match = QUESTION_BODY_RE.search(text)
                     question_body = question_body_match.group(1) if question_body_match else ""
+                    if question.get("answer_handling") == "unavailable":
+                        unavailable_markers = [
+                            'answer_handling: "unavailable"',
+                            "answer_status: unavailable",
+                        ]
+                        has_answer_embed = bool(re.search(r"!\[\[Q\d+A\d+[^\]]*\]\]", text))
+                        has_answer_records = bool(application.get("answer_note_records", []))
+                        if (
+                            not all(marker in text for marker in unavailable_markers)
+                            or match is not None
+                            or has_answer_embed
+                            or has_answer_records
+                        ):
+                            errors.append(
+                                {
+                                    "kind": "unavailable-answer-contract-failure",
+                                    "question_id": question["id"],
+                                    "question_file": str(q_file),
+                                    "reason": (
+                                        "unexpected-answer-for-unavailable-question"
+                                        if match is not None or has_answer_embed or has_answer_records
+                                        else "missing-unavailable-answer-metadata"
+                                    ),
+                                }
+                            )
+                        continue
                     if question.get("answer_handling") == "separate-authoritative":
                         question_kind = str(
                             question.get("question_kind", "publisher-solution")

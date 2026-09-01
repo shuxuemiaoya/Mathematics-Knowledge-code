@@ -25,8 +25,8 @@ Each stage skill is authoritative for its own rules. Do not copy its implementat
 source and profile
   -> book PDF conversion when needed
   -> TOC heading formatting
-  -> split-manifest, same-book reference-range review when configured, and lesson-flow review
-  -> TOC splitting immediately after both pass
+  -> split-manifest, same-book reference-range review when configured, node-architecture review, and lesson-flow review
+  -> TOC splitting immediately after all required reviews pass
   -> split audit
   -> concept extraction
   -> concept audit
@@ -49,6 +49,7 @@ Do not insert `mathos-pdf-to-md`, `mathos-formatting`, or `mathos-segmentation`.
 - TOC-formatted Markdown and `toc-format-report.json`
 - `split-manifest.json`
 - `lesson-flow-manifest.json` for new textbook profiles
+- reviewed `node_architecture` inside `split-manifest.json` for new textbook profiles
 - categorized notes and `coverage-manifest.json`
 - `concept-manifest.json`
 - audit reports
@@ -84,15 +85,16 @@ from another book or an older run.
   whose split manifest lacks identity-bound reference-review evidence.
 - Review every numbered lesson and numbered in-lesson subsection as contiguous
   source-ordered logical blocks before splitting. Resolve every automatic
-  lesson-flow finding. Keep situation introductions and transitions in the
-  lesson entry, move independent topics to child notes, route exercises
-  intentionally, and give every retained worked example its own logical
-  block. Treat functional headings or labels, worked-example labels, formal
-  definition/exposition cues, and practice headings as hard boundaries: one
-  reviewed block may not cross the next boundary.
-- Reject lesson entries that contain only links or that retain an oversized
-  independent teaching block. Require the same passed lesson-flow manifest in
-  splitting, Markdown standardization, and progressive audits.
+  lesson-flow finding and the complete textbook node architecture. A section
+  organizer owns only ordered links. Route source-backed situation
+  introductions and complete exposition to `scenario` and `knowledge` atoms;
+  nest each worked example under its corresponding knowledge atom; route each
+  printed `练习 N` to a practice organizer; and keep the section exercise
+  aggregate separate. Treat every functional boundary as a hard boundary.
+- Reject a section organizer with teaching prose, a direct example/question
+  link, or an oversized retained teaching block. Require the same passed
+  lesson-flow and node-architecture decisions in splitting, Markdown
+  standardization, and progressive audits.
 - Replace each moved child range with a resolving Markdown link at that same source position in the parent.
 - Ensure generic nodes receive contextual titles and filenames: `小结` → `<章名> 小结`, `复习参考题` → `<章名> 复习参考题`, `习题` → `习题<编号> <对应小节标题>` (例如: `习题10.1 随机事件与概率`).
 
@@ -117,6 +119,18 @@ For non-textbooks, inspect the book and let the LLM propose useful categories. R
 - Treat the source PDF or source Markdown as immutable.
 - Keep staging outside the final book directory.
 - Preserve complete content, source order, formulas, tables, links, images, examples, proofs, and exercises.
+- Preserve existing complete source atoms during refinement. Freeze their
+  inventory before editing, reuse them, and stage ownership-only changes
+  transactionally; do not recreate the corpus from OCR when the old atoms
+  already exist.
+- Mirror reviewed ownership in the physical Markdown tree. Every node that
+  owns lower-level notes is a same-named folder-index note; place each leaf in
+  its direct owner's folder. Category roots remain the top-level partition,
+  while embedded note links remain authoritative for source order.
+- Original `scenario`, `knowledge`, `worked-example`, and question atoms do not
+  start with an artificial heading that repeats the filename. Second-layer
+  knowledge-theme/practice/exercise organizers are link-only and likewise do
+  not receive a redundant file-title heading.
 - For textbooks, default note links to vault-root form and materialize image links from `links.asset_mode`.
 - Do not let pre-canvas audit pass while functional headings or raw worked-example markers remain unstandardized.
 - For textbook callouts, use quoted-body containers. Every body line, formula,
@@ -126,7 +140,9 @@ For non-textbooks, inspect the book and let the LLM propose useful categories. R
   question callout that swallows a new functional heading, formal definition,
   worked example, or practice block; reject a second example or practice block
   nested under an earlier example solution.
-- Never infer replacement of an existing target.
+- Never infer replacement of an existing target. Scope new link failures to
+  changed files and links; report unrelated pre-existing broken links
+  separately without rewriting untouched atoms.
 - Under a no-backup policy, use staging and atomic writes rather than backup directories.
 - Route low-confidence or ambiguous decisions to a blocking review queue.
 - Parallelize only independent notes from a frozen workplan with one owner per note and output path.

@@ -163,9 +163,9 @@ def adopt(
         proposal_report,
         review_decisions,
     )
-    if Path(str(report.get("formatted_markdown", ""))).resolve() != formatted_markdown:
+    if Path(str(report.get("formatted_markdown", ""))).resolve() != formatted_markdown.resolve():
         raise AdoptionError("proposal formatted Markdown does not match")
-    if Path(str(report.get("split_manifest", ""))).resolve() != split_manifest:
+    if Path(str(report.get("split_manifest", ""))).resolve() != split_manifest.resolve():
         raise AdoptionError("proposal split manifest does not match")
     reference = report.get("reference")
     if not isinstance(reference, dict):

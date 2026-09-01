@@ -24,7 +24,7 @@ from .environment import parse_env_file, resolve_env_file
 
 DEFAULT_ENV_FILE = None
 DEFAULT_BASE_URL = "https://mineru.net"
-MAX_PAGES = 200
+MAX_PAGES = 50
 MAX_BYTES = 200 * 1024 * 1024
 BATCH_SIZE = 50
 ACTIVE_STATES = {"waiting-file", "pending", "running", "converting"}
@@ -86,16 +86,41 @@ def profile_source(profile: dict[str, Any], role: str) -> dict[str, Any]:
 
 def write_pdf_range(source: Path, target: Path, start_page: int, end_page: int) -> None:
     try:
+        import pymupdf
+        doc = pymupdf.open(str(source))
+        new_doc = pymupdf.open()
+        new_doc.insert_pdf(doc, from_page=start_page - 1, to_page=end_page - 1)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        new_doc.save(str(target))
+        new_doc.close()
+        doc.close()
+        return
+    except Exception:
+        pass
+    try:
+        import fitz
+        doc = fitz.open(str(source))
+        new_doc = fitz.open()
+        new_doc.insert_pdf(doc, from_page=start_page - 1, to_page=end_page - 1)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        new_doc.save(str(target))
+        new_doc.close()
+        doc.close()
+        return
+    except Exception:
+        pass
+    try:
         from pypdf import PdfReader, PdfWriter
+        reader = PdfReader(str(source))
+        writer = PdfWriter()
+        for index in range(start_page - 1, end_page):
+            writer.add_page(reader.pages[index])
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with target.open("wb") as stream:
+            writer.write(stream)
     except Exception as exc:
-        raise ConfigurationError("pypdf is required for PDF splitting") from exc
-    reader = PdfReader(str(source))
-    writer = PdfWriter()
-    for index in range(start_page - 1, end_page):
-        writer.add_page(reader.pages[index])
-    target.parent.mkdir(parents=True, exist_ok=True)
-    with target.open("wb") as stream:
-        writer.write(stream)
+        raise ConfigurationError(f"Cannot split PDF {source}: {exc}") from exc
+
 
 
 def fit_ranges(source: Path, initial: list[tuple[int, int]], temp: Path) -> list[tuple[int, int]]:

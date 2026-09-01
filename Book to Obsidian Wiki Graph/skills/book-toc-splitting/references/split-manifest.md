@@ -1,6 +1,9 @@
 # TOC-Based Split Manifest
 
-Create `split-manifest.json` after TOC heading formatting. The TOC defines the parent hierarchy; the LLM may add nested semantic child ranges inside each TOC section.
+Create `split-manifest.json` after TOC heading formatting. The TOC defines the
+book/chapter/section hierarchy; reviewed node architecture defines theme,
+practice, exercise, knowledge, example, and question ownership inside each
+section.
 
 For textbooks, the split manifest is not sufficient by itself. After its
 ranges stabilize, create and pass the source-ordered
@@ -19,6 +22,15 @@ unnumbered independent teaching arc before running the splitter.
   "profile": "C:/.../book-profile.json",
   "source_sha256": "<frozen book digest>",
   "input_markdown_sha256": "<formatted Markdown digest>",
+  "node_architecture": {
+    "status": "passed",
+    "reviewed_entire_book": true,
+    "source_order_expansion": "passed",
+    "source_content_preservation": "passed",
+    "source_names_preserved": "passed",
+    "physical_hierarchy": "passed",
+    "atomic_source_order": ["topic-set"]
+  },
   "semantic_review": {
     "reference": {
       "status": "passed",
@@ -88,6 +100,9 @@ unnumbered independent teaching arc before running the splitter.
       "title": "书名",
       "parent_key": null,
       "category": "root",
+      "node_type": "organizer",
+      "organizer_type": "book",
+      "emit_title": true,
       "filename": "书名.md",
       "start_line": 1,
       "end_line": 8000,
@@ -98,7 +113,10 @@ unnumbered independent teaching arc before running the splitter.
       "title": "1.1 集合的概念",
       "parent_key": "chapter-1",
       "category": "knowledge",
-      "filename": "1.1 集合的概念.md",
+      "node_type": "organizer",
+      "organizer_type": "section",
+      "emit_title": true,
+      "filename": "第一章 集合与常用逻辑用语/1.1 集合的概念/1.1 集合的概念.md",
       "start_line": 200,
       "end_line": 410,
       "toc_key": "lesson-1-1"
@@ -108,7 +126,9 @@ unnumbered independent teaching arc before running the splitter.
       "title": "集合",
       "parent_key": "lesson-1-1",
       "category": "knowledge",
-      "filename": "集合.md",
+      "node_type": "knowledge",
+      "emit_title": false,
+      "filename": "第一章 集合与常用逻辑用语/1.1 集合的概念/集合.md",
       "start_line": 215,
       "end_line": 280,
       "toc_key": null
@@ -121,6 +141,15 @@ unnumbered independent teaching arc before running the splitter.
 
 - Include exactly one parentless `root` node covering the complete formatted
   Markdown.
+- For new textbook profiles, add `node_type`, `organizer_type` when applicable,
+  and `emit_title` to every node. Set source atoms and second-layer
+  knowledge-theme/practice/section-exercise organizers to `emit_title: false`.
+  Complete `node_architecture` only after whole-book semantic and source-order
+  review.
+- After ownership is final, run `apply_textbook_note_hierarchy.py`. Treat each
+  owner as a same-named folder-index note and place leaves in their direct
+  owner's folder. The manifest `filename` is category-relative and includes
+  this hierarchy; a flat filename under a reviewed owner is invalid.
 - Additional child nodes may use category `root` only for book-wide standalone
   back matter such as an index or glossary; write them at book root and retain
   their own TOC heading.
@@ -164,10 +193,18 @@ unnumbered independent teaching arc before running the splitter.
   `decision: retain`, `structural_container: true`, `promote_to_h3: true`,
   with the promoted `child_node_keys`.
 - Section exercises (`习题6.1`, `习题8.4`, and so on) are mandatory `exercise` nodes and must use contextual titles combining section number and section topic text (e.g., `习题6.1 平面向量的概念`, `习题10.1 随机事件与概率`).
-- Leave introductions, transitions, and ordinary lesson practice in the parent unless intentionally split.
+- Each section or review exercise organizer owns one atom per complete,
+  sequential top-level printed question. Keep `复习巩固`、`综合运用`、`拓广探索`
+  as source-order organizer labels. Review internal `(1)…(n)` subparts against
+  the PDF whenever OCR interleaves columns, drops a label, or emits a list
+  number as `\tag{n}`; do not infer a repaired order without source evidence.
+- A section organizer retains no teaching body. Move complete introductions,
+  transitions, exposition, examples, and questions into the reviewed nodes
+  that own them; its rendered body is its source heading and ordered links.
 - The splitter replaces every direct child range with a Markdown link in the parent at that exact source position.
-- Parent navigation links are bullet items. A reviewed H4-H6 range that becomes
-  its own note is promoted to an H3 entry heading.
+- Parent ownership links use embedded Markdown-note syntax
+  `![标题](目标.md)` without a bullet. A reviewed H4-H6 range that becomes its
+  own note is promoted to an H3 entry heading.
 - A promoted knowledge topic may record one `parent_preview` containing a
   concise source-derived question, thought, exploration prompt, or short idea
   of at most 180 characters. Prefer a concise question even when it occurs
@@ -210,10 +247,12 @@ For non-textbooks, let the LLM propose semantic categories, then record those ro
 
 ## Example behavior
 
-A lesson parent should retain its heading, introduction, transition text, ordinary practice, and exercise links. A moved topic body becomes a child note, while the parent contains a link such as:
+A lesson parent retains its source heading and ordered second-layer links. A
+moved knowledge theme becomes a child organizer, while the parent contains a
+link such as:
 
 ```markdown
-- [集合](集合.md)
+![集合](集合.md)
 ```
 
 or the profile-equivalent vault-root target. The link must appear where that child block originally occurred.

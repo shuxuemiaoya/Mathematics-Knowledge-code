@@ -18,4 +18,4 @@ remain outside this external matching ledger.
 
 All authoritative and reviewed supplemental answer notes share the same layout:
 a collapsible outer FAQ with collapsible nested success-answer, note-analysis,
-and note-explanation blocks. A flat `【答案】` or `【解析】` line is invalid.
+and note-explanation blocks, plus dedicated nested sub-callouts for 【反思】/【总结】/【规律方法】/【名师点睛】/【易错警示】. A flat `【答案】` or `【解析】` line is invalid.

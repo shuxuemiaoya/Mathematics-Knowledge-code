@@ -225,6 +225,9 @@ def build_manifest(
             "title": book_title,
             "parent_key": None,
             "category": "root",
+            "node_type": "organizer",
+            "organizer_type": "book",
+            "emit_title": True,
             "filename": safe_filename(book_title),
             "start_line": 1,
             "end_line": len(lines),
@@ -242,16 +245,37 @@ def build_manifest(
         if heading.level == 1 and str(entry.get("category")) == "knowledge":
             active_chapter_title = heading.title
         title = contextual_toc_title(heading.title, active_chapter_title)
+        category = str(entry.get("category", "knowledge"))
+        if category == "knowledge":
+            node_type = "organizer"
+            organizer_type = "chapter" if heading.level == 1 else "section"
+            emit_title = True
+        elif category == "exercise":
+            node_type = "organizer"
+            organizer_type = "section-exercise"
+            emit_title = False
+        elif category == "concept":
+            node_type = "concept"
+            organizer_type = None
+            emit_title = True
+        else:
+            node_type = category
+            organizer_type = None
+            emit_title = False
         node = {
             "key": f"node-{entry['key']}",
             "title": title,
             "parent_key": parent_key,
-            "category": entry.get("category", "knowledge"),
+            "category": category,
+            "node_type": node_type,
+            "emit_title": emit_title,
             "filename": safe_filename(title),
             "start_line": heading.line,
             "end_line": ranges[heading.line],
             "toc_key": entry["key"],
         }
+        if organizer_type is not None:
+            node["organizer_type"] = organizer_type
         nodes.append(node)
         toc_nodes_by_line[heading.line] = node
         toc_stack.append((heading.level, node["key"]))
@@ -382,6 +406,8 @@ def build_manifest(
                     "title": heading.title,
                     "parent_key": parent_key,
                     "category": category,
+                    "node_type": "review-required",
+                    "emit_title": False,
                     "filename": safe_filename(heading.title),
                     "start_line": heading.line,
                     "end_line": end_line,
@@ -442,6 +468,15 @@ def build_manifest(
             "headings": reviews,
             "sections": section_reviews,
             "ranges": [],
+        },
+        "node_architecture": {
+            "status": "review_required",
+            "reviewed_entire_book": False,
+            "source_order_expansion": "review_required",
+            "source_content_preservation": "review_required",
+            "source_names_preserved": "review_required",
+            "physical_hierarchy": "review_required",
+            "atomic_source_order": [],
         },
         "nodes": nodes,
     }

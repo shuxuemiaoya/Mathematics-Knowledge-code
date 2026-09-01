@@ -1,6 +1,6 @@
 ---
 name: book-to-obsidian-wiki-graph
-description: Coordinate the standalone conversion of a PDF or long Markdown book into a validated Obsidian Wiki-style knowledge graph through book-specific forced-OCR conversion, TOC-authoritative heading formatting, immediate TOC-based splitting with parent links, concept extraction, Markdown standardization, audits, and an optional logic canvas. Use for complete conversions, resumes, or audits; never route these stages through MathOS Agent.
+description: Coordinate conversion or source-faithful refinement of a PDF, long Markdown book, or existing textbook corpus into a validated Obsidian Wiki graph. Use for complete conversions, resumes, audits, or restructuring that must preserve existing source atoms, distinguish section/theme/practice/exercise organizers from scenario/knowledge/example/question atoms, reproduce source order after recursive expansion, standardize Markdown, and optionally build a logic canvas. Never route these stages through MathOS Agent.
 ---
 
 # Book To Obsidian Wiki Graph
@@ -11,6 +11,8 @@ Coordinate component skills and enforce artifact gates. Do not absorb stage-spec
 
 - Read `references/pipeline-contract.md` for stage ownership and handoffs.
 - Read `references/runtime-contract.md` before starting or resuming a run.
+- Read `references/textbook-node-architecture.md` for every textbook split or
+  existing-corpus refinement.
 - Read `references/example-architecture.md` when comparing with the 人教版高中必修第一册 example.
 - Load each component skill only when entering its stage.
 
@@ -33,6 +35,23 @@ completed stage and use `restore-checkpoint` to resume from one of those
 identity-bound snapshots. When disabled or absent, keep the existing
 final-result-only behavior. Never treat test checkpoints as cross-book reuse.
 
+## Existing Corpus Refinement
+
+When the user asks to refine an existing book tree, do not run the new-output
+splitter against that tree and do not regenerate its source atoms. Freeze an
+inventory of existing Markdown paths and hashes, bind the original PDF or
+source Markdown as evidence, and copy the intended files to task-scoped
+staging. Build the reviewed node architecture from the existing atoms, create
+only missing organizers, and edit only ownership links, exact source-name
+corrections, or explicitly source-verified content defects.
+
+Audit staged recursive order, organizer purity, atom titles, links, and the
+inventory diff. Publish only the reviewed file-level changes atomically. Do not
+delete an old atom merely because it becomes reachable through a new organizer.
+Keep unrelated pre-existing broken links in a separate baseline report; only a
+new or changed unresolved link blocks this refinement operation. A requested
+refinement does not authorize whole-tree replacement.
+
 ## Route
 
 1. Invoke `book-graph-intake` to freeze source identity and create `book-profile.json`.
@@ -54,8 +73,8 @@ final-result-only behavior. Never treat test checkpoints as cross-book reuse.
    identity-bound reference semantic proposal and reviewer-confirmed adoption
    before lesson-flow planning. Do not proceed with a manually reviewed
    split manifest that lacks `semantic_review.reference.status: passed`.
-   Require a passed `lesson-flow-manifest.json` before physical textbook
-   splitting.
+   Require a passed `node_architecture` review inside the split manifest and a
+   passed `lesson-flow-manifest.json` before physical textbook splitting.
 5. Invoke `book-graph-audit --stage split`; stop on coverage, link, asset, or identity failures.
 6. Invoke `book-graph-concepts`, then require `book-graph-audit --stage concepts`.
 7. Invoke `book-graph-markdown`, then require `book-graph-audit --stage formatting`.
@@ -89,6 +108,9 @@ Never invoke `mathos-pdf-to-md`, `mathos-formatting`, or `mathos-segmentation`.
   `工具`; never create an empty auxiliary directory.
 - Record LLM-selected categories in the profile before splitting other books.
 - Retain a link in the parent at every moved child block's original position.
+- Render every organizer-to-child ownership link as an embedded Markdown note
+  link, exactly `![标题](目标.md)`. Do not emit a bullet navigation link for an
+  owned child. Ordinary inline concept citations remain ordinary links.
 - Give repeated generic chapter and section children contextual titles and filenames:
   `小结` → `<章名> 小结`, `复习参考题` → `<章名> 复习参考题`, and `习题` → `习题<编号> <对应小节标题>` (e.g., `习题10.1 随机事件与概率`).
 - Do not accept TOC-only textbook splitting. Require the complete H4-H6
@@ -115,21 +137,42 @@ Never invoke `mathos-pdf-to-md`, `mathos-formatting`, or `mathos-segmentation`.
   ordinary paragraphs rather than headings. The splitting stage must remain
   blocked while any section says `review_required`.
 - For every numbered textbook lesson and numbered in-lesson subsection,
-  require a complete source-ordered lesson-flow review and resolve its
-  automatic draft findings. Keep `情景引入`, motivation, and transitions in
-  the lesson entry; move independent topics to children; retain ordinary
-  practice or route it to exercises; give every retained worked example an
-  independent logical block and optionally identify one representative
-  anchor. Treat functional labels/headings, exposition or definition cues,
-  worked-example labels, and practice headings as hard boundaries. Block any
-  reviewed block that crosses the next boundary, as well as link-only lesson
-  entries and oversized retained teaching blocks.
-- Treat `情景引入` in the preceding rule as a structural requirement, not a
-  generated title or callout. Every new node link must be introduced by a
-  complete source-derived question, idea, or ordinary paragraph; preserve
-  unlabeled prose as prose. For every topic child, use its own leading source
-  range as the reviewed `parent_preview` and keep that range in the child. Do
-  not let an unrelated or generic lesson-opening paragraph satisfy the link.
+  require complete source-ordered lesson-flow and node-architecture review.
+  A section is an organizer, not a summary page: its body is its source heading
+  plus ordered links. Move source-backed introductions to `scenario` atoms,
+  complete explanations to `knowledge` atoms, and each worked example under
+  the knowledge atom it demonstrates. Put inline questions under their
+  printed `练习 N` organizer and keep `习题X.Y` as a separate section-exercise
+  organizer. Reject direct section-to-example links and practice-to-section-
+  exercise links.
+- Group contiguous, semantically related scenario/knowledge atoms under a
+  meaningful knowledge-theme organizer, then recursively expand every
+  organizer and require the result to equal source order. Do not infer a theme
+  from adjacency alone. `情景引入` is a source atom only when the book provides
+  the introducing passage; a bare section lead-in is not an atom.
+- Mirror that ownership in the physical tree instead of flattening every note
+  into the section directory. A section, knowledge-theme, practice,
+  section-exercise, or knowledge atom that owns examples is a same-named
+  folder-index note; its direct leaves live inside that folder. Keep category
+  roots as the top-level partition and keep embedded note links authoritative
+  for source order. Require `node_architecture.physical_hierarchy: passed`.
+- Split every printed `习题X.Y` and `复习参考题X` into one atom per complete
+  top-level numbered question. Preserve printed `复习巩固`、`综合运用`、`拓广探索`
+  labels in the exercise organizer and require question numbers to form the
+  complete sequence `1..n`; a missing or duplicate number blocks the split for
+  PDF review instead of aggregating the remainder into the last question.
+- Inspect the printed subparts inside every exercise atom after splitting.
+  Column-interleaved `(1)…(n)` text, missing subpart labels, or OCR-created
+  `\tag{n}` list markers require direct PDF review and an exact reviewed repair;
+  never guess their order from the converted Markdown alone.
+- Do not add artificial filename headings to source atoms or second-layer
+  theme/practice/exercise organizers. A worked-example note contains its own
+  complete problem and solution; it is never an organizer.
+- When refining an existing corpus, freeze the current inventory and reuse its
+  complete source atoms. Stage path moves, link rewrites, and organizer changes
+  together; do not rewrite atom bodies merely to move them into their reviewed
+  owner folders. Audit before atomic publication. Report unrelated
+  pre-existing broken links separately.
 - Keep H1-H3 immutable after TOC formatting.
 - Keep hyperlink and image destinations immutable during post-split standardization.
 - Require Markdown standardization to turn residual functional headings,
@@ -153,7 +196,8 @@ Never invoke `mathos-pdf-to-md`, `mathos-formatting`, or `mathos-segmentation`.
 ## Completion
 
 Report source/profile identity, conversion result, TOC matches and demotions,
-split/category/parent-link counts, coverage, concepts, formatting validation,
+split/category/parent-link counts, organizer/atom counts, architecture and
+recursive-order results, coverage, concepts, formatting validation,
 links/assets, optional Canvas counts and style metrics, audit results, and
 source integrity.
 
@@ -171,7 +215,7 @@ normalized reference-parity review. Compare architecture rather than raw book
 size:
 
 - H1/H2/H3 entry-heading grammar and malformed first lines;
-- bullet navigation placement and configured link syntax;
+- embedded ownership-link placement and configured link syntax;
 - chapter-qualified summary/review titles;
 - category-local flat asset depth;
 - concept-note title/source/definition structure;

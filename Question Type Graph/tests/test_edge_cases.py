@@ -15,6 +15,7 @@ from question_type_graph.answers import (
 )
 from question_type_graph.audit import (
     answer_without_question_errors,
+    global_question_embed_errors,
     has_duplicate_leading_heading,
     path_has_forbidden_colon,
     question_has_fragmented_html_table,
@@ -46,7 +47,13 @@ from question_type_graph.content import (
     split_inline_question_headers,
 )
 from question_type_graph.hierarchy import apply_hierarchy, normalize_generated_output, plan_hierarchy
-from question_type_graph.inventory import build_adapter_draft, build_inventory, inventory_markdown, parse_index_entry
+from question_type_graph.inventory import (
+    build_adapter_draft,
+    build_inventory,
+    inventory_markdown,
+    parse_index_entry,
+    propose_conventional_hierarchy_levels,
+)
 from question_type_graph.profile import create_profile
 from question_type_graph.supplement import apply_supplement, plan_supplement
 
@@ -305,6 +312,18 @@ class TestEdgeCases(unittest.TestCase):
             self.assertNotIn("## 解析", rendered)
             self.assertIn("## 解析", answer_body)
             self.assertIsNotNone(solution_offset)
+
+    def test_unavailable_publisher_answer_is_not_planned_as_unmatched(self) -> None:
+        rendered = render_question(
+            {
+                "answer_handling": "unavailable", "number": "1", "id": "q:1",
+                "question_kind": "exercise", "context_key": "unit",
+                "body_sha256": "x", "source_note": "source.pdf p.1",
+                "metadata": {}, "evidence": {},
+            },
+            "1. Publisher-supplied question without an answer.\n",
+        )
+        self.assertIn("answer_status: unavailable", rendered)
 
     def test_worked_example_stem_word_jiexishi_is_not_a_solution_boundary(self) -> None:
         body = "4. 函数的解析式可能为（ ）\nA. 甲 B. 乙\n【答案】B\n【解析】由图可得。\n"
@@ -1318,6 +1337,21 @@ class TestEdgeCases(unittest.TestCase):
             "literal": "2.4 Generic topic …… Core Advanced (17) (203)",
         })
 
+    def test_inventory_proposes_two_level_lecture_hierarchy_and_leaf_ownership(self) -> None:
+        entries = [
+            {"title": "第1讲 基础", "source_line": 2},
+            {"title": "1.1 概念", "source_line": 3},
+            {"title": "1.2 方法", "source_line": 4},
+            {"title": "思考题", "source_line": 5},
+            {"title": "第2讲 进阶", "source_line": 6},
+            {"title": "2.1 应用", "source_line": 7},
+        ]
+
+        levels, policy = propose_conventional_hierarchy_levels(entries)
+
+        self.assertEqual(levels, [1, 2, 2, 2, 1, 2])
+        self.assertEqual(policy, "leaf-only")
+
     def test_markdown_only_inventory_works_before_run_and_names_arrangement(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)
@@ -1484,6 +1518,151 @@ class TestEdgeCases(unittest.TestCase):
                 if item["kind"] == "unregistered-printed-toc-entry"
             }
             self.assertEqual(missing_lines, {4, 5})
+
+    def test_printed_toc_coverage_counts_multiple_entries_on_one_ocr_line(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            source = tmp_path / "source.md"
+            source.write_text(
+                "目录\n第1讲 基础 …… 1  1.1 概念 …… 2\n\n# 第1讲 基础\n## 1.1 概念\n1. Q\n",
+                encoding="utf-8",
+            )
+            staging = tmp_path / "staging"
+            profile_path = staging / "profile.json"
+            profile = create_profile(
+                [f"questions={source}"], "Joined TOC", staging, tmp_path, tmp_path / "graph", "zh-CN", None, False
+            )
+            write_json_atomic(profile_path, profile)
+            raw = Path(profile["sources"][0]["markdown_path"])
+            raw.parent.mkdir(parents=True, exist_ok=True)
+            raw.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+            adapter = {
+                "schema_version": 1,
+                "status": "passed",
+                "reviewer_confirmed": True,
+                "profile": str(profile_path.resolve()),
+                "hierarchy": {
+                    "source_role": "questions",
+                    "root_output": "index.md",
+                    "primary_authority": {
+                        "status": "passed",
+                        "reviewer_confirmed": True,
+                        "start_line": 2,
+                        "end_line": 2,
+                        "entries": [
+                            {"key": "l1", "title": "第1讲 基础", "level": 1, "source_line": 2},
+                        ],
+                    },
+                    "entries": [
+                        {"key": "l1", "title": "第1讲 基础", "level": 1, "start_line": 4, "output": "l1.md"},
+                    ],
+                },
+                "content": {"question_patterns": [r"^(?P<number>\d+)[.]\s+"], "roles": []},
+            }
+            adapter_path = staging / "adapter.json"
+            write_json_atomic(adapter_path, adapter)
+
+            manifest = plan_hierarchy(profile_path, adapter_path)
+
+            item = next(
+                value
+                for value in manifest["review_items"]
+                if value["kind"] == "unregistered-printed-toc-entry"
+            )
+            self.assertEqual(item["line"], 2)
+            self.assertEqual(item["observed_entry_count"], 2)
+            self.assertEqual(item["registered_entry_count"], 1)
+            self.assertEqual(item["missing_entry_count"], 1)
+
+    def test_leaf_only_policy_requires_structural_parents_and_complete_counts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            source = tmp_path / "source.md"
+            source.write_text(
+                "目录\n第1讲 基础 …… 1\n1.1 概念 …… 2\n\n# 第1讲 基础\n## 1.1 概念\n1. Q\n",
+                encoding="utf-8",
+            )
+            staging = tmp_path / "staging"
+            profile_path = staging / "profile.json"
+            profile = create_profile(
+                [f"questions={source}"], "Leaf Only", staging, tmp_path, tmp_path / "graph", "zh-CN", None, False
+            )
+            write_json_atomic(profile_path, profile)
+            raw = Path(profile["sources"][0]["markdown_path"])
+            raw.parent.mkdir(parents=True, exist_ok=True)
+            raw.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+            adapter = {
+                "schema_version": 1,
+                "status": "passed",
+                "reviewer_confirmed": True,
+                "profile": str(profile_path.resolve()),
+                "hierarchy": {
+                    "source_role": "questions",
+                    "root_output": "index.md",
+                    "question_ownership_policy": "leaf-only",
+                    "primary_authority": {
+                        "status": "passed",
+                        "reviewer_confirmed": True,
+                        "start_line": 2,
+                        "end_line": 3,
+                        "entries": [
+                            {"key": "l1", "title": "第1讲 基础", "level": 1, "source_line": 2},
+                            {"key": "s11", "title": "1.1 概念", "level": 2, "source_line": 3},
+                        ],
+                    },
+                    "entries": [
+                        {"key": "l1", "title": "第1讲 基础", "level": 1, "start_line": 5, "output": "l1.md"},
+                        {"key": "s11", "title": "1.1 概念", "level": 2, "start_line": 6, "output": "l1/s11.md"},
+                    ],
+                },
+                "content": {
+                    "question_patterns": [r"^(?P<number>\d+)[.]\s+"],
+                    "question_scopes": [{"contexts": ["s11"], "kinds": ["exercise"]}],
+                    "question_count_expectations": [
+                        {
+                            "context": "s11",
+                            "kind": "exercise",
+                            "count": 1,
+                            "evidence": "reviewed leaf ledger",
+                            "reviewer_confirmed": True,
+                        }
+                    ],
+                    "roles": [],
+                },
+            }
+            adapter_path = staging / "adapter.json"
+            write_json_atomic(adapter_path, adapter)
+
+            manifest = plan_hierarchy(profile_path, adapter_path)
+            self.assertTrue(
+                any(item["kind"] == "structural-parent-not-marked" for item in manifest["review_items"])
+            )
+
+            adapter["content"]["question_count_expectations"] = []
+            write_json_atomic(adapter_path, adapter, overwrite=True)
+            with self.assertRaisesRegex(ConfigurationError, "complete leaf/kind"):
+                plan_hierarchy(profile_path, adapter_path)
+
+    def test_leaf_only_global_question_embed_must_be_unique(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            vault = Path(tmp_dir)
+            question = vault / "graph" / "questions" / "Q00000001.md"
+            question.parent.mkdir(parents=True)
+            question.write_text("题干\n", encoding="utf-8")
+            first = vault / "graph" / "leaf-a.md"
+            second = vault / "graph" / "leaf-b.md"
+            embed = "![[graph/questions/Q00000001.md]]\n"
+            first.write_text(embed, encoding="utf-8")
+            second.write_text(embed, encoding="utf-8")
+
+            errors = global_question_embed_errors(
+                [{"id": "q1", "output": str(question)}], [first, second], vault
+            )
+
+            self.assertEqual(
+                errors,
+                [{"kind": "global-question-embed-count", "question_id": "q1", "embed_count": 2}],
+            )
 
     def test_conventional_lecture_numbering_blocks_flattened_subsections(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -1796,6 +1975,18 @@ class TestEdgeCases(unittest.TestCase):
         self.assertEqual([item["id"] for item in strategy_candidates("hierarchy-number", question, "Exact stem", answers)[1]], ["b"])
         self.assertEqual(strategy_candidates("source-page-number", question, "Exact stem", answers)[1], [])
         self.assertEqual([item["id"] for item in strategy_candidates("normalized-stem-exact", question, "Exact stem", answers)[1]], ["a"])
+
+        globally_numbered = answers + [
+            {"id": "c", "number": "1", "context": "unit-b", "evidence": {}},
+        ]
+        self.assertEqual(
+            [item["id"] for item in strategy_candidates("number-global", question, "Exact stem", answers)[1]],
+            ["b"],
+        )
+        self.assertEqual(
+            [item["id"] for item in strategy_candidates("number-global", question, "Exact stem", globally_numbered)[1]],
+            ["b", "c"],
+        )
 
     def test_inline_question_headers_are_split_with_raw_coordinates(self) -> None:
         patterns = compile_question_patterns(

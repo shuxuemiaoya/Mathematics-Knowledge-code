@@ -13,13 +13,16 @@
 | Solution supplement | reviewed unmatched questions | provenance-marked AI solution notes and application report | substantive solution text and `reviewer_confirmed: true`; placeholders never apply |
 | Markdown | complete notes | standardization report | lexical signature unchanged |
 | Canvas | passed manifests plus enabled profile and adapter policy | graph manifest and `.canvas`, or an explicit skipped stage | no atomic question cards or invalid endpoints; `output_policy.generate_canvas: false` overrides profile enablement and leaves no owned Canvas artifacts |
-| Audit | complete corpus plus reviewed source question ledger | final report | source hashes, content hashes, links, answers, and all adapter-selected output-presence/absence checks pass; source ordinary-question plus independently solved packet-item counts equal Q and A1 ownership counts; no atomic Q contains multiple independently solved item starts; no generated hierarchy note repeats its semantic heading in the first two nonblank lines; representative first/middle/last source-versus-output checks pass |
+| Audit | complete corpus plus reviewed source question ledger | final report | source hashes, content hashes, links, answers, and all adapter-selected output-presence/absence checks pass; source ordinary-question plus independently solved packet-item counts equal Q and A1 ownership counts; in `leaf-only` mode every Q originates from a leaf and has exactly one global navigation embed; no atomic Q contains multiple independently solved item starts; no generated hierarchy note repeats its semantic heading in the first two nonblank lines; representative first/middle/last source-versus-output checks pass |
 
 The coordinator may stop with `review_required`. Resume only after updating the
 identity-bound adapter or review artifact; do not bypass the owning stage. When
-an authoritative answer is genuinely absent, explicitly approve that answer
-review result, resume to generate `supplemental-solutions-manifest.json`, add and
-review the worked solution, apply it, then resume the coordinator.
+an expected answer should exist but matching cannot find it, explicitly approve
+the answer review result, generate and review a substantive supplemental
+solution, then resume the coordinator. When source review instead proves that
+the publisher intentionally supplies no answer for a retained question, use
+per-question `answer_handling: unavailable`; it must own no A1, answer match, or
+supplement and must render `answer_status: unavailable`.
 Persist reviewer-authored reusable solutions in
 `reviewed-supplement-overrides.json`, keyed by question identity and body
 digest, so safe pipeline replays do not erase reviewed work.

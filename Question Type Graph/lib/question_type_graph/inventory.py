@@ -24,6 +24,37 @@ INLINE_INDEX_ENTRY_RE = re.compile(
     r"(?P<references>\d{1,4}(?:\s*[（(]\s*\d{1,4}\s*[）)])?)"
 )
 PAGE_MARKER_RE = re.compile(r"<!--\s*source-part:(?P<part>\d+)\s+pages:(?P<start>\d+)-(?P<end>\d+)\s*-->")
+LECTURE_TOC_TITLE_RE = re.compile(r"^第\s*(\d+)\s*讲(?:\s|$)")
+NUMBERED_TOC_CHILD_RE = re.compile(r"^(\d+)\.\d+(?:\s|$)")
+
+
+def propose_conventional_hierarchy_levels(
+    entries: list[dict[str, Any]],
+) -> tuple[list[int], str]:
+    """Propose safe reviewed levels for conventional 第N讲 / N.M indexes."""
+    levels: list[int] = []
+    seen_lectures: set[str] = set()
+    current_lecture: str | None = None
+    has_children = False
+    for item in entries:
+        title = str(item.get("title", "")).strip()
+        lecture = LECTURE_TOC_TITLE_RE.match(title)
+        if lecture:
+            current_lecture = lecture.group(1)
+            seen_lectures.add(current_lecture)
+            levels.append(1)
+            continue
+        child = NUMBERED_TOC_CHILD_RE.match(title)
+        if child and child.group(1) in seen_lectures:
+            levels.append(2)
+            has_children = True
+            continue
+        if current_lecture is not None and re.fullmatch(r"思考题\s*", title):
+            levels.append(2)
+            has_children = True
+            continue
+        levels.append(1)
+    return levels, "leaf-only" if has_children else "non-structural"
 
 
 def parse_index_entry(line: str) -> dict[str, Any] | None:
@@ -349,10 +380,15 @@ def build_adapter_draft(profile_path: Path, inventory: dict[str, Any] | None = N
     index_candidates = source_detail.get("index_candidates", [])
     best_index = max(index_candidates, key=lambda item: int(item.get("entry_count", 0)), default=None)
     proposed_authority = None
+    proposed_ownership_policy = "non-structural"
     if best_index:
         proposed_entries = []
         proposed_key_counts: Counter[str] = Counter()
-        for ordinal, item in enumerate(best_index.get("entries", []), 1):
+        index_entries = best_index.get("entries", [])
+        proposed_levels, proposed_ownership_policy = (
+            propose_conventional_hierarchy_levels(index_entries)
+        )
+        for ordinal, item in enumerate(index_entries, 1):
             printed = item.get("printed_ordinal")
             key_base = f"toc-{int(printed):03d}" if isinstance(printed, int) else f"toc-{ordinal:03d}"
             proposed_key_counts[key_base] += 1
@@ -365,7 +401,7 @@ def build_adapter_draft(profile_path: Path, inventory: dict[str, Any] | None = N
                 {
                     "key": key,
                     "title": str(item.get("title", "")).strip(),
-                    "level": 1,
+                    "level": proposed_levels[ordinal - 1],
                     "source_line": int(item["source_line"]),
                     "source_column": int(item.get("source_column", 1)),
                     "references": item.get("references", []),
@@ -393,18 +429,94 @@ def build_adapter_draft(profile_path: Path, inventory: dict[str, Any] | None = N
             "markdown_sha256": source_detail.get("sha256"),
             "heading_count": source_detail.get("heading_count", 0),
             "index_candidate_count": len(source_detail.get("index_candidates", [])),
+            "proposed_question_ownership_policy": proposed_ownership_policy,
         },
         "hierarchy": {
             "source_role": hierarchy_role,
             "root_output": "index.md",
+            "question_ownership_policy": proposed_ownership_policy,
             "primary_authority": proposed_authority,
             "entries": [],
         },
         "content": {
-            "unknown_label_policy": "review",
-            "question_folder": "questions",
-            "question_patterns": [],
-            "inline_question_patterns": [],
+            "unknown_label_policy": "retain",
+            "question_folder": "对点训练",
+            "question_patterns": [
+                r"^(?P<number>\[?例\s*\d+(?:\.\d+)?\]?)\s*",
+                r"^(?P<number>\[?变式(?:题)?\s*(?:[（(]?\d+[）)]?)?\]?)\s*[：:]?\s*",
+                r"^(?P<number>[1-9]\d?)[.．、]\s*(?!\s*【?(?:答案|解析)】?\b)(?!\s*[^.\n]*?法[.．]?\s*$)(?=[（(\[\$【a-zA-Z\u4e00-\u9fa5])"
+            ],
+            "inline_question_patterns": [
+                r"(?P<number>\([1-9]\d?\)|（[1-9]\d?）)\s*"
+            ],
+            "question_kind_rules": [
+                {
+                    "kind": "worked-example",
+                    "pattern": r"^\[?例\s*\d+(?:\.\d+)?\]?\s*",
+                    "answer_handling": "separate-authoritative",
+                    "solution_layout": "interleaved",
+                    "atomize_interleaved_subquestions": True,
+                    "atomized_subquestion_patterns": [
+                        r"(?:^\[?例\s*\d+(?:\.\d+)?\]?\s*)?(?P<part>\([1-9]\d?\)|（[1-9]\d?）)",
+                        r"^(?P<part>\([1-9]\d?\)|（[1-9]\d?）)",
+                        r"^[（(]?(?P<part>[1-9]\d?)[）)]"
+                    ],
+                    "solution_start_patterns": [
+                        r"^\s*(?:[1-9]\d?[.．、]\s*)?【?(?:答案|解析|分析|详解|详细解答|解答|解法|试题解析|解)】?[：:\s]?",
+                        r"^\s*(?:[1-9]\d?[.．、]\s*)?答案\b",
+                        r"^\s*(?:[1-9]\d?[.．、]\s*)?解析\b",
+                        r"^\s*【答案】",
+                        r"^\s*【解析】",
+                        r"^\s*【分析】",
+                        r"^\s*【详解】"
+                    ],
+                    "solution_resume_patterns": [
+                        r"^\s*(?:\([1-9]\d?\)|（[1-9]\d?）|[1-9]\d?[.．、])",
+                        r"^\s*（[1-9]\d?）",
+                        r"^\s*\([1-9]\d?\)"
+                    ],
+                    "sequence_policy": "none",
+                    "preserve_internal_headings": True,
+                    "folder": "例题"
+                },
+                {
+                    "kind": "worked-example",
+                    "pattern": r"^\[?变式(?:题)?\s*(?:[（(]?\d+[）)]?)?\]?\s*[：:]?\s*",
+                    "answer_handling": "separate-authoritative",
+                    "solution_layout": "interleaved",
+                    "atomize_interleaved_subquestions": True,
+                    "atomized_subquestion_patterns": [
+                        r"(?:^\[?变式(?:题)?\s*(?:[（(]?\d+[）)]?)?\]?\s*[：:]?\s*)?(?P<part>\([1-9]\d?\)|（[1-9]\d?）)",
+                        r"^(?P<part>\([1-9]\d?\)|（[1-9]\d?）)",
+                        r"^[（(]?(?P<part>[1-9]\d?)[）)]"
+                    ],
+                    "solution_start_patterns": [
+                        r"^\s*(?:[1-9]\d?[.．、]\s*)?【?(?:答案|解析|分析|详解|详细解答|解答|解法|试题解析|解)】?[：:\s]?",
+                        r"^\s*(?:[1-9]\d?[.．、]\s*)?答案\b",
+                        r"^\s*(?:[1-9]\d?[.．、]\s*)?解析\b",
+                        r"^\s*【答案】",
+                        r"^\s*【解析】",
+                        r"^\s*【分析】",
+                        r"^\s*【详解】"
+                    ],
+                    "solution_resume_patterns": [
+                        r"^\s*(?:\([1-9]\d?\)|（[1-9]\d?）|[1-9]\d?[.．、])",
+                        r"^\s*（[1-9]\d?）",
+                        r"^\s*\([1-9]\d?\)"
+                    ],
+                    "sequence_policy": "none",
+                    "preserve_internal_headings": True,
+                    "folder": "例题"
+                },
+                {
+                    "kind": "separate-authoritative",
+                    "pattern": r"^(?P<number>[1-9]\d?)[.．、](?!\s*【?(?:答案|解析)】?\b)(?!\s*[^.\n]*?法[.．]?\s*)\s*",
+                    "answer_handling": "separate-authoritative",
+                    "preserve_internal_headings": True,
+                    "sequence_policy": "none",
+                    "folder": "对点训练"
+                }
+            ],
             "roles": [],
         },
         "answers": (
@@ -422,6 +534,7 @@ def build_adapter_draft(profile_path: Path, inventory: dict[str, Any] | None = N
         "review_items": [
             "Select a printed-TOC authority or provide a reviewed no-TOC decision.",
             "Confirm every hierarchy entry and exact source anchor.",
+            "For a proposed leaf-only hierarchy, mark every non-leaf structural_only and complete exact leaf scopes plus the leaf/kind count matrix.",
             "Confirm question patterns, functional roles, and output templates.",
             "Confirm whether this format should generate a root index and Canvas.",
             *(
@@ -503,6 +616,7 @@ def build_review_worksheet(
             "- [ ] Confirm page layout and reading order for every multi-column region.",
             "- [ ] Confirm the complete primary TOC/index ledger, or record a reviewed no-TOC decision.",
             "- [ ] Confirm every hierarchy body anchor and output path.",
+            "- [ ] If non-leaf nodes only organize children, confirm `leaf-only`, mark all parents `structural_only`, and fill every leaf/question-kind count including zero.",
             "- [ ] Scope question detection to question-bearing sections before adding line-specific exclusions.",
             "- [ ] Confirm answer contexts against exact raw headings/boundaries and verify every continuous `1..N` ledger.",
             "- [ ] Visually review at least one TOC page, one representative body page, every distinct question layout, every distinct answer layout, and the terminal answer page.",

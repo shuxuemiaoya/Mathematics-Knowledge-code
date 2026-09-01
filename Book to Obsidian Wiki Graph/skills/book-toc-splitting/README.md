@@ -10,7 +10,8 @@ Own physical note boundaries, category placement, parent links, and coverage. Do
 ## Plan
 
 Read `references/split-manifest.md` and create `split-manifest.json`. For a
-textbook, also read `references/lesson-flow-manifest.md`.
+textbook, also read `references/lesson-flow-manifest.md` and the coordinator's
+`../book-to-obsidian-wiki-graph/references/textbook-node-architecture.md`.
 
 For a textbook, first generate the deterministic draft:
 
@@ -71,15 +72,16 @@ python .\skills\book-toc-splitting\scripts\lesson_flow_manifest.py plan `
 
 Review every numbered lesson and numbered in-lesson subsection as one ordered
 teaching sequence. Resolve every `draft_findings` item and adjust child ranges
-before marking the lesson flow passed. Preserve situation introductions and
-transitions in the entry page, route independent topics to children, keep
-ordinary practice locally or in an exercise child, and retain a worked example
-in its own `worked-example` block; optionally mark one
-`representative-example` as the representative anchor. The deterministic draft
+before marking the lesson flow passed. Then complete `node_architecture`:
+section organizers own only source-ordered links; knowledge-theme organizers
+own contiguous related scenario/knowledge atoms; each knowledge atom owns its
+worked examples; each `练习 N` owns only its inline-practice questions; and the
+section exercise aggregate owns only its own questions. The deterministic draft
 must split retained ranges at every functional heading or label, exposition or
 formal-definition cue, worked-example label, and practice heading. Validation
-must reject a reviewed block that crosses any such boundary. Reject a link-only
-lesson entry and an oversized retained teaching block.
+must reject a reviewed block that crosses any such boundary. Reject a section
+organizer that retains teaching prose and reject an oversized retained teaching
+block.
 
 After same-edition semantic ranges are adopted, run
 `scripts/flatten_navigation_containers.py`. A numbered subsection that has no
@@ -88,6 +90,20 @@ container, not another note. Retain and promote its heading on the lesson page,
 promote its children to direct lesson children, and attach a complete
 source-derived parent preview wherever the preceding retained context is
 missing or incomplete.
+
+After ownership is final, materialize the category-relative folder hierarchy:
+
+```powershell
+python .\skills\book-toc-splitting\scripts\apply_textbook_note_hierarchy.py `
+  "<staging>\split-manifest.json" `
+  "<staging>\split-manifest.hierarchical.json"
+```
+
+Continue with the hierarchical manifest. Every owner becomes a same-named
+folder-index note; direct leaves go inside the owner's folder. Set
+`node_architecture.physical_hierarchy: passed` only through this deterministic
+rewrite after the final ownership review. A same-book reference architecture
+performs the same rewrite automatically.
 
 Generate or validate lesson flow only after this adoption. Both lesson-flow
 commands reject a same-book profile when the split manifest lacks a passed,
@@ -126,10 +142,10 @@ that split and its downstream artifacts and restart from the split draft.
   words or sentences. Never duplicate a
   definition, derivation, formula sequence, image cluster, worked solution, or
   long explanatory passage merely to introduce a link. When no concise prompt
-  exists, render only the child link. `情景引入` is a structural concept, never
-  a synthesized title, mandatory callout, or miniature summary of the child.
-  Preserve ordinary
-  paragraphs as ordinary Markdown. Create a callout only when the source itself
+  exists, render only the child link. When the source supplies the complete
+  introducing passage, store it as a `scenario` atom in the same knowledge
+  theme; never synthesize its title or summary. Preserve ordinary paragraphs
+  as ordinary Markdown. Create a callout only when the source itself
   provides a functional label such as `思考`, `观察`, or `探究`; classify formal
   definitions as exposition and example stems as worked examples.
 - Keep ranges nested or disjoint; never overlap siblings.
@@ -138,7 +154,9 @@ that split and its downstream artifacts and restart from the split draft.
   situation context before `观察/思考`, close a question before a worked
   example, start every example separately, and keep `练习` outside every
   question/example block.
-- Leave introductions, transitions, and ordinary lesson practice in their parent unless intentionally moved.
+- Do not leave source exposition, scenario text, worked examples, or ordinary
+  lesson questions in the section organizer. Assign each complete block to the
+  reviewed source atom or question organizer that owns it.
 - Give repeated generic chapter and section children contextual titles and filenames:
   - Use `<章名> 小结` for `小结`, and append the chapter name to a generic `复习参考题` title (e.g., `第1章 复习参考题`). Do not emit ambiguous `第1章 小结.md` placeholders.
   - For section exercises (`习题`), always combine the exercise identifier and section topic text into the format `习题<编号> <对应小节标题>` (e.g. `习题10.1 随机事件与概率` instead of bare `习题 10.1`). If the source heading lacks the section topic text, derive and append it from its parent section title.
@@ -164,6 +182,18 @@ Do not create empty auxiliary directories.
 
 For other books, let the LLM determine useful categories and record them in the profile before splitting.
 
+Audit the rendered textbook ownership immediately after physical splitting:
+
+```powershell
+python .\skills\book-toc-splitting\scripts\textbook_node_architecture.py `
+  "<book_root>" "<staging>\split-manifest.json" `
+  "<staging>\book-profile.json"
+```
+
+The splitter validates the manifest portion before writing. Run this command on
+the staged corpus afterward to enforce link-only organizer bodies, direct-child
+link coverage/order, and redundant-title removal.
+
 ## Split
 
 ```powershell
@@ -178,6 +208,9 @@ python .\skills\book-toc-splitting\scripts\split_book_by_toc.py `
 The splitter must:
 
 - reject a textbook manifest that omits the semantic-review ledger or retains a numbered subsection/section exercise;
+- reject a required `node_architecture` review that is missing, unresolved, or
+  violates section/theme/practice/exercise/example ownership or the physical
+  owner-folder hierarchy;
 - reject a missing, unresolved, stale, non-contiguous, or logically invalid
   lesson-flow manifest;
 - reject a lesson-flow block that crosses a deterministic functional boundary
@@ -197,12 +230,13 @@ The splitter must:
   passed, reviewer-confirmed, identity-bound reference semantic evidence;
 - create one note per split node;
 - replace each direct child range with a standard Markdown link in its parent at the original source position;
-- render every direct-child navigation link as a bullet item, and promote the
+- render every direct-child navigation link as an embedded Markdown note, and promote the
   entry heading of every independent H4-H6 semantic note to H3;
 - render reading, history, exercise, method, tool, concept, and other
   non-knowledge child links without copying their opening body into the parent;
 - compute relative or vault-root targets from the profile;
-- retain the parent heading, introductions, transitions, and unsplit material;
+- retain only the source heading and reviewed navigation material in a section
+  organizer; require source-backed teaching material to be covered by atoms;
 - copy referenced assets into the category-local location and materialize each output image destination according to `links.asset_mode`;
 - flatten MinerU book/part namespaces to category-local `images/<basename>`
   destinations, rejecting a same-name collision when the bytes differ;
@@ -210,7 +244,10 @@ The splitter must:
 - write `coverage-manifest.json` in staging;
 - refuse an existing output root rather than infer replacement.
 
-The parent-link pattern must match the supplied 人教版 example: a lesson note remains an ordered reading path, while linked child bodies live in categorized files.
+The parent-link pattern must match the reviewed textbook architecture: a
+lesson note is an ordered organizer; nested owner folders make containment
+visible in the filesystem, while embedded links preserve source order. Source
+atoms and second-layer organizers set `emit_title: false`.
 
 ## Handoff
 

@@ -29,6 +29,30 @@ NODE_TYPE_MAP = {
     "工具": "工具",
     "目录": "目录",
     "索引": "索引",
+    "情景导入": "情景导入",
+    "例题": "例题",
+}
+
+ARCHITECTURE_NODE_TYPE_MAP = {
+    "organizer": "目录",
+    "scenario": "情景导入",
+    "knowledge": "知识点",
+    "worked-example": "例题",
+    "practice-question": "习题",
+    "section-exercise-question": "习题",
+    "concept": "概念",
+    "reading": "趣味阅读",
+    "history": "趣味阅读",
+    "method": "思维或方法",
+    "tool": "工具",
+}
+ORGANIZER_TYPE_MAP = {
+    "book": "全书",
+    "chapter": "章节",
+    "section": "小节",
+    "knowledge-theme": "知识主题",
+    "practice": "练习",
+    "section-exercise": "习题",
 }
 
 VALID_NODE_TYPES = set(NODE_TYPE_MAP.values())
@@ -136,6 +160,47 @@ def infer_node_type(file_path: Path, book_root: Path) -> str:
     return "知识点"
 
 
+def architecture_metadata_map(
+    manifest: dict[str, Any] | None,
+    profile: dict[str, Any],
+    book_root: Path,
+) -> dict[Path, dict[str, str]]:
+    if not isinstance(manifest, dict):
+        return {}
+    categories = {
+        str(item["role"]): str(item["directory"])
+        for item in profile.get("categories", [])
+        if isinstance(item, dict)
+        and item.get("enabled", True)
+        and isinstance(item.get("role"), str)
+        and isinstance(item.get("directory"), str)
+    }
+    result: dict[Path, dict[str, str]] = {}
+    for node in manifest.get("nodes", []):
+        if not isinstance(node, dict):
+            continue
+        node_type = node.get("node_type")
+        rendered_type = ARCHITECTURE_NODE_TYPE_MAP.get(str(node_type))
+        if rendered_type is None:
+            continue
+        filename = str(node.get("filename") or f"{node.get('title')}.md")
+        role = str(node.get("category", "root"))
+        path = (
+            book_root / filename
+            if role == "root"
+            else book_root / categories[role] / filename
+        ).resolve()
+        metadata = {"节点类型": rendered_type}
+        if node_type == "organizer":
+            organizer_type = ORGANIZER_TYPE_MAP.get(
+                str(node.get("organizer_type"))
+            )
+            if organizer_type:
+                metadata["组织类型"] = organizer_type
+        result[path] = metadata
+    return result
+
+
 def infer_chapter(file_path: Path, book_root: Path) -> str:
     rel_parts = file_path.relative_to(book_root).parts
     for part in rel_parts:
@@ -197,6 +262,7 @@ def derive_metadata_for_file(
     profile: dict[str, Any],
     override_source: str | None = None,
     override_grade: str | None = None,
+    architecture_metadata: dict[str, str] | None = None,
 ) -> dict[str, str]:
     content = file_path.read_text(encoding="utf-8")
     existing, body = parse_frontmatter(content)
@@ -207,7 +273,12 @@ def derive_metadata_for_file(
 
     source = override_source or existing.get("来源") or infer_source(profile)
     grade = override_grade or existing.get("年级") or infer_grade(book_title, book_edition)
-    node_type = existing.get("节点类型") or infer_node_type(file_path, book_root)
+    architecture_metadata = architecture_metadata or {}
+    node_type = (
+        architecture_metadata.get("节点类型")
+        or existing.get("节点类型")
+        or infer_node_type(file_path, book_root)
+    )
     chapter = existing.get("章节") or infer_chapter(file_path, book_root)
     duration = existing.get("时长") or infer_duration(node_type, line_count)
     difficulty = existing.get("难度") or infer_difficulty(node_type, file_path.stem)
@@ -218,6 +289,10 @@ def derive_metadata_for_file(
     metadata["来源"] = source
     metadata["年级"] = grade
     metadata["节点类型"] = node_type
+    if "组织类型" in architecture_metadata:
+        metadata["组织类型"] = architecture_metadata["组织类型"]
+    elif node_type != "目录":
+        metadata.pop("组织类型", None)
     metadata["章节"] = chapter
     metadata["时长"] = duration
     metadata["难度"] = difficulty
@@ -235,6 +310,8 @@ def validate_file_metadata(metadata: dict[str, str]) -> list[str]:
 
     if "节点类型" in metadata and metadata["节点类型"] not in VALID_NODE_TYPES:
         errors.append(f"invalid 节点类型: {metadata['节点类型']}")
+    if metadata.get("节点类型") == "目录" and not metadata.get("组织类型", "").strip():
+        errors.append("目录节点缺少组织类型")
     if "时长" in metadata and metadata["时长"] not in VALID_DURATIONS:
         errors.append(f"invalid 时长: {metadata['时长']}")
     if "难度" in metadata and metadata["难度"] not in VALID_DIFFICULTIES:
@@ -255,11 +332,23 @@ def process_book_metadata(
     override_source: str | None = None,
     override_grade: str | None = None,
     overwrite: bool = True,
+    split_manifest_path: Path | None = None,
 ) -> dict[str, Any]:
     book_root = book_root.resolve()
     profile_path = profile_path.resolve()
     profile = read_json(profile_path)
     source_sha256 = profile.get("source", {}).get("sha256", "")
+    if split_manifest_path is None:
+        candidate = Path(profile.get("paths", {}).get("staging_root", "")) / "split-manifest.json"
+        split_manifest_path = candidate if candidate.is_file() else None
+    split_manifest = (
+        read_json(split_manifest_path.resolve())
+        if split_manifest_path is not None and split_manifest_path.is_file()
+        else None
+    )
+    architecture_by_path = architecture_metadata_map(
+        split_manifest, profile, book_root
+    )
 
     md_files = sorted(f for f in book_root.rglob("*.md") if f.is_file())
     tagged_count = 0
@@ -276,6 +365,7 @@ def process_book_metadata(
                 profile,
                 override_source=override_source,
                 override_grade=override_grade,
+                architecture_metadata=architecture_by_path.get(file_path.resolve()),
             )
             file_errors = validate_file_metadata(metadata)
             if file_errors:
@@ -305,6 +395,9 @@ def process_book_metadata(
         "total_files": len(md_files),
         "tagged_files": tagged_count,
         "categories_summary": categories_summary,
+        "split_manifest": (
+            str(split_manifest_path.resolve()) if split_manifest_path else None
+        ),
         "errors": errors,
     }
 
@@ -319,6 +412,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output", type=Path, required=True, help="Path to metadata-report.json output")
     parser.add_argument("--override-source", help="Optional override for 来源 metadata field")
     parser.add_argument("--override-grade", help="Optional override for 年级 metadata field")
+    parser.add_argument("--split-manifest", type=Path)
     parser.add_argument("--no-overwrite", action="store_false", dest="overwrite")
     return parser.parse_args(argv)
 
@@ -333,6 +427,7 @@ def main(argv: list[str] | None = None) -> int:
             override_source=args.override_source,
             override_grade=args.override_grade,
             overwrite=args.overwrite,
+            split_manifest_path=args.split_manifest,
         )
         print(json.dumps(report, ensure_ascii=False, indent=2))
         return 0 if report["status"] == "passed" else 1

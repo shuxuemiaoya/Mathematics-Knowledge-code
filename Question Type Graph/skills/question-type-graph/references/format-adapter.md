@@ -105,6 +105,18 @@ line, title, concrete reason, and `reviewer_confirmed: true`. Conventional
 `第N讲` and `N.M` titles are cross-checked so numbered subsections and repeated
 `思考题` cannot be flattened into root siblings. Use `structural_only: true`
 for lecture parents that only organize second-level leaf notes.
+If one OCR line contains several leader-delimited printed entries, coverage is
+counted per leader occurrence rather than per raw line; every entry needs its
+own primary-ledger record (normally with a reviewed source column).
+
+Set `hierarchy.question_ownership_policy` to `leaf-only` when non-leaf nodes are
+organizational. In this strict mode every node with children must be
+`structural_only`, `question_scopes` must explicitly cover exactly every leaf,
+and `question_count_expectations` must contain the full Cartesian matrix of
+leaf contexts and configured question kinds, including zeroes. Final audit also
+requires every atomic question to originate from a leaf and have exactly one
+embed across all generated navigation notes. Leave the default
+`non-structural` policy for formats where a non-leaf legitimately owns questions.
 
 `question_patterns` and `answer_patterns` recognize a virtual line at its
 start. Their optional `inline_*_patterns` counterparts identify additional
@@ -195,6 +207,13 @@ under the reviewed folder without hardcoding publisher labels in the compiler.
 `answers.contexts[].start_line` is always a raw Markdown line number, even when
 an OCR line contains multiple inline answer headers. Add `anchor_text` or
 `anchor_pattern` when freezing a fixed boundary so drift fails before matching.
+Use the opt-in `number-global` matching strategy only when visual review proves
+that a question series is numbered continuously and uniquely across hierarchy
+boundaries while the answer appendix omits those boundaries. Duplicate number
+candidates remain ambiguous and must not be auto-selected.
+Use `hierarchy-number-normalized` when OCR varies only insignificant whitespace
+inside an otherwise exact context-local source label (for example `题2-1` versus
+`题 2-1`); it removes whitespace only and preserves ambiguity.
 When OCR preserves a publisher solution but drops only its printed answer
 header, record it in `answers.implicit_answers` with the exact context, number,
 raw `start_line`, and an `anchor_text` or `anchor_pattern`. This is a reviewed
@@ -236,6 +255,9 @@ authoritative `<QID>A1.md` publisher-analysis note, and exclusion from external
 answer matching. Configure `worked_example_solution_patterns` for exact
 publisher solution boundaries. `preserve_internal_headings: true` is permitted
 only when solution headings belong to the example source span before splitting.
+Use `answer_handling: unavailable` only when visual/source review confirms that
+the publisher poses an atomic item without supplying an answer. Such a question
+is retained without inventing an A1 note and is excluded from external matching.
 
 Do not equate a publisher example label with an atomic question boundary.
 Review the whole example span. If `[例 n]` is immediately followed by `(1)`

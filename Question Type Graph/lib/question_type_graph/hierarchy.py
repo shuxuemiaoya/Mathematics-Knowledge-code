@@ -148,7 +148,7 @@ def reviewed_hierarchy_entries(
     return merged, review
 
 
-PRINTED_TOC_LEADER_RE = re.compile(r"(?:…{2,}|\.{4,})\s*\d+\s*$")
+PRINTED_TOC_LEADER_RE = re.compile(r"(?:…{2,}|\.{4,})\s*\d+")
 LECTURE_TITLE_RE = re.compile(r"^第\s*(\d+)\s*讲(?:\s|$)")
 NUMBERED_SUBSECTION_RE = re.compile(r"^(\d+)\.(\d+)(?:\s|$)")
 
@@ -156,43 +156,84 @@ NUMBERED_SUBSECTION_RE = re.compile(r"^(\d+)\.(\d+)(?:\s|$)")
 def reviewed_printed_toc_coverage(
     hierarchy: dict[str, Any], lines: list[str], first_body_line: int
 ) -> list[dict[str, Any]]:
-    """Reject a reviewed ledger that silently covers only part of a printed TOC."""
+    """Reject a reviewed ledger that silently covers only part of a printed TOC.
+
+    Coverage is counted per leader-delimited entry, not merely per raw line.
+    Multi-column OCR commonly joins two or more printed TOC records onto one
+    Markdown line; registering only one of them must not make the row pass.
+    """
     authority = hierarchy.get("primary_authority")
     if not isinstance(authority, dict):
         return []
-    registered_lines: set[int] = set()
+    registered_spans: list[tuple[int, int]] = []
     for item in authority.get("entries") or []:
         start = int(item.get("source_line", 0))
         end = int(item.get("source_end_line", start))
-        registered_lines.update(range(start, end + 1))
+        registered_spans.append((start, end))
 
-    excluded_lines: set[int] = set()
+    excluded_spans: list[tuple[int, int]] = []
     for item in authority.get("excluded_entries") or []:
-        line = int(item.get("source_line", 0))
+        start = int(item.get("source_line", 0))
+        end = int(item.get("source_end_line", start))
         if (
-            line < 1
-            or line >= first_body_line
+            start < 1
+            or end < start
+            or end >= first_body_line
             or item.get("reviewer_confirmed") is not True
             or not str(item.get("title", "")).strip()
             or not str(item.get("reason", "")).strip()
         ):
             raise ConfigurationError(f"Invalid excluded printed TOC entry: {item}")
-        excluded_lines.add(line)
+        excluded_spans.append((start, end))
 
     review: list[dict[str, Any]] = []
     for line_number in range(1, min(first_body_line, len(lines) + 1)):
         text = lines[line_number - 1].strip()
-        if not PRINTED_TOC_LEADER_RE.search(text):
+        observed_count = len(PRINTED_TOC_LEADER_RE.findall(text))
+        if observed_count == 0:
             continue
-        if line_number not in registered_lines and line_number not in excluded_lines:
+        registered_count = sum(
+            start <= line_number <= end for start, end in registered_spans
+        )
+        excluded_count = sum(
+            start <= line_number <= end for start, end in excluded_spans
+        )
+        covered_count = registered_count + excluded_count
+        if covered_count < observed_count:
             review.append(
                 {
                     "kind": "unregistered-printed-toc-entry",
                     "line": line_number,
                     "text": text,
+                    "observed_entry_count": observed_count,
+                    "registered_entry_count": covered_count,
+                    "missing_entry_count": observed_count - covered_count,
                 }
             )
     return review
+
+
+def leaf_question_ownership_review(
+    hierarchy: dict[str, Any], entries: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Require every question-bearing node to be a hierarchy leaf when opted in."""
+    if hierarchy.get("question_ownership_policy", "non-structural") != "leaf-only":
+        return []
+    parent_keys = {
+        str(entry.get("parent"))
+        for entry in entries
+        if entry.get("parent") is not None
+    }
+    return [
+        {
+            "kind": "structural-parent-not-marked",
+            "key": entry.get("key"),
+            "title": entry.get("title"),
+        }
+        for entry in entries
+        if str(entry.get("key")) in parent_keys
+        and entry.get("structural_only") is not True
+    ]
 
 
 def conventional_numbering_structure_review(
@@ -367,6 +408,7 @@ def plan_hierarchy(profile_path: Path, adapter_path: Path) -> dict[str, Any]:
             )
         )
         review_items.extend(conventional_numbering_structure_review(entries))
+        review_items.extend(leaf_question_ownership_review(hierarchy, entries))
     return {
         "schema_version": 1,
         "stage": "hierarchy-segmentation",
@@ -380,6 +422,9 @@ def plan_hierarchy(profile_path: Path, adapter_path: Path) -> dict[str, Any]:
         "root_output": normalize_generated_output(str(hierarchy.get("root_output", "index.md"))),
         "generate_index": output_policy["generate_index"],
         "navigation_embed_mode": "direct-children",
+        "question_ownership_policy": hierarchy.get(
+            "question_ownership_policy", "non-structural"
+        ),
         "entries": entries,
         "review_items": review_items,
     }

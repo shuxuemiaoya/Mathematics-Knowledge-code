@@ -35,7 +35,14 @@ Each Markdown note receives a standard YAML Frontmatter header:
 2. **年级 (Grade)**:
    - Derived from book edition/title (e.g. `必修一`, `必修二` -> `高一`; `选择性必修一/二/三` -> `高二`) or CLI `--override-grade`.
 3. **节点类型 (Node Type)**:
-   - Derived from directory role or path stem:
+   - For an architecture-reviewed textbook, derived first from
+     `split-manifest.json`; directory role is only a fallback:
+     - `organizer` -> `目录` plus `组织类型` (`全书`/`章节`/`小节`/`知识主题`/`练习`/`习题`)
+     - `scenario` -> `情景导入`
+     - `knowledge` -> `知识点`
+     - `worked-example` -> `例题`
+     - question atoms -> `习题`
+   - Without architecture metadata, derive from directory role or path stem:
      - `概念/` -> `概念`
      - `知识点/` -> `知识点`
      - `拓展知识点/` -> `拓展知识点`
@@ -68,6 +75,7 @@ Run metadata tagging:
 ```powershell
 python scripts\tag_book_metadata.py "<book_root>" `
   --profile "<staging>\book-profile.json" `
+  --split-manifest "<staging>\split-manifest.json" `
   --output "<staging>\metadata-report.json"
 ```
 
@@ -77,3 +85,5 @@ The script updates all `.md` files under `<book_root>` atomically and outputs `m
 
 - All Markdown notes must contain valid YAML frontmatter delimiters (`---`).
 - All 8 required metadata fields must be present and hold valid values.
+- Every `目录` node must also carry `组织类型`; do not infer a source atom's
+  type solely from its containing directory when reviewed architecture exists.

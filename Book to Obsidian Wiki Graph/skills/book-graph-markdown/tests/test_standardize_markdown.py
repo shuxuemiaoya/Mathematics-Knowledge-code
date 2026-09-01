@@ -88,12 +88,62 @@ class StandardizeMarkdownTests(unittest.TestCase):
         source = (
             "## 4.1 指数\n\n"
             "指数的范围还可以继续拓展。\n\n"
-            "- [下一个节点](下一个节点.md)\n"
+            "![下一个节点](下一个节点.md)\n"
         )
         output, _ = MODULE.standardize_text(source)
         self.assertIn("指数的范围还可以继续拓展。", output)
         self.assertNotIn("[!info]", output)
         self.assertNotIn("情景引入", output)
+
+    def test_functional_callout_stops_before_owned_child_link(self):
+        source = (
+            "#### 思考\n\n反比例函数的定义域是什么？\n\n"
+            "![例题 1](例题 1.md)\n"
+        )
+        output, _ = MODULE.standardize_text(source)
+        self.assertIn(
+            "> [!question] 思考\n> 反比例函数的定义域是什么？",
+            output,
+        )
+        self.assertIn("\n\n![例题 1](例题 1.md)\n", output)
+        self.assertNotIn("> ![例题 1]", output)
+
+    def test_parenthesized_child_link_is_a_callout_boundary(self):
+        source = (
+            "#### 探究\n\n观察函数图象。\n\n"
+            "![函数变换](函数 y = A sin(ωx + φ).md)\n"
+        )
+        output, _ = MODULE.standardize_text(source)
+        self.assertIn(
+            "\n\n![函数变换](函数 y = A sin(ωx + φ).md)\n",
+            output,
+        )
+        self.assertTrue(MODULE.invariants(source, output)["links"])
+
+    def test_removes_stranded_functional_heading_without_body(self):
+        source = "知识正文。\n\n#### 思考\n"
+        output, changes = MODULE.standardize_text(source)
+        self.assertEqual(output, "知识正文。\n")
+        self.assertEqual(changes["removed_artifact_headings"], 1)
+
+    def test_repairs_child_link_already_quoted_by_an_older_pass(self):
+        source = (
+            "> [!question] 思考\n"
+            "> 反比例函数的定义域是什么？\n"
+            ">\n"
+            "> ![例题 1](例题 1.md)\n"
+            "> $$\n\n"
+            "> [!example]- 例2 求值。\n"
+            "> 解答。\n"
+        )
+        output, changes = MODULE.standardize_text(source)
+        self.assertIn(
+            "> [!question] 思考\n> 反比例函数的定义域是什么？"
+            "\n\n![例题 1](例题 1.md)\n$$",
+            output,
+        )
+        self.assertIn("\n\n> [!example]- 例2 求值。", output)
+        self.assertEqual(changes["detached_owned_child_links"], 1)
 
     def test_question_callout_ends_before_formal_exposition(self):
         source = (

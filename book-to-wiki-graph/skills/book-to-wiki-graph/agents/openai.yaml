@@ -1,0 +1,4 @@
+interface:
+  display_name: "Book to Wiki Graph"
+  short_description: "Build organization-first atomic book graphs"
+  default_prompt: "Use $book-to-wiki-graph to convert this book into a TOC-centered atom graph with organization-first Canvas files."

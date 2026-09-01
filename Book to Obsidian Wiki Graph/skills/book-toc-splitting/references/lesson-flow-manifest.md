@@ -34,19 +34,24 @@ The first block of every numbered lesson or subsection must be
 ## Logical roles
 
 - `entry-context`: lesson heading plus its opening preview;
-- `context`: situation, motivation, prior-knowledge activation;
+- `context`: draft role for situation, motivation, or prior-knowledge
+  activation; under required node architecture its complete source range must
+  be covered by a scenario/knowledge-theme child rather than left as section
+  prose;
 - `question`: a task or question posed to the learner;
 - `analysis`: exploration, reasoning, derivation, or response;
 - `exposition`: a bounded explanatory teaching block that remains on the
   lesson page in source order and is rendered as ordinary Markdown;
 - `topic`: an independently reusable teaching arc moved to a knowledge or
   concept child;
-- `worked-example`: one complete worked example retained on the lesson entry;
-- `representative-example`: one deliberate worked-example anchor retained on
-  the lesson entry;
+- `worked-example`: draft boundary for one complete worked example; in the
+  reviewed node architecture it becomes a `worked-example` atom owned by its
+  corresponding knowledge atom;
+- `representative-example`: legacy retained-example role; do not use it when
+  `require_textbook_node_architecture` is true;
 - `transition`: verbatim bridge or summary that connects adjacent topics;
-- `practice`: ordinary lesson practice retained locally or routed to an
-  exercise child;
+- `practice`: one printed inline-practice range routed to its `practice`
+  organizer and question atoms;
 - `navigation`: an explicit reading-path block retained on the lesson entry.
 - `section-heading`: a reviewed navigation-only numbered subsection heading
   retained on the lesson entry and promoted from H4-H6 to H3.
@@ -67,11 +72,12 @@ question or solution.
 
 ## Ownership
 
-Use `retain-parent` for `entry-context`, `context`, `question`, `analysis`,
-`exposition`, `worked-example`, `representative-example`, `transition`, and
-`navigation`. A `representative-example` must set
-`representative_anchor: true`; an ordinary `worked-example` keeps it false.
-Every worked example occupies its own block.
+For the deterministic draft, `retain-parent` marks content not yet assigned.
+Before passing a required node architecture, expand child ranges so a section
+organizer retains only its source heading and navigation. Scenario, exposition,
+worked-example, and practice content must be owned by their reviewed child
+nodes. `representative-example` is supported only for legacy profiles without
+the architecture requirement.
 
 Use `move-child` for `topic`; its range must exactly equal a direct knowledge
 or concept child range. A moved `practice` block must exactly equal a direct
@@ -94,9 +100,9 @@ When an introduction, transition, topic, or practice role is present, its
 matching preservation/routing check must be `passed`; it cannot be marked
 `not_applicable`.
 
-A lesson with child links must retain at least one substantive preview beyond
-its heading. This blocks link-only entry pages such as the failed
-`2.2 基本不等式` output.
+A reviewed section organizer may be link-only after its source heading. This is
+intentional when `require_textbook_node_architecture` is true; completeness is
+proved by recursive atom expansion rather than duplicated previews.
 
 A reading, history, exercise, method, tool, concept, or other non-knowledge
 child is represented by its navigation link without a duplicated opening
@@ -109,10 +115,10 @@ cannot be rewritten, summarized, shortened, expanded, spliced, or assembled
 from multiple source locations. If no concise prompt exists, use only the
 navigation link.
 
-The opening `entry-context` block itself must contain at least two nonblank
-source lines: the heading and at least one retained preview line. Content that
-belongs to the opening situation cannot be moved wholesale into the first
-child merely because substantial text remains later in the lesson.
+For architecture-required profiles, the opening `entry-context` may contain
+only the source heading. Move a complete opening situation to the scenario atom
+for the theme it introduces. Legacy profiles retain the prior substantive-
+preview requirement.
 
 A retained non-practice/non-worked-example block cannot exceed
 `decomposition.max_retained_teaching_block_nonblank_lines` (default `40`).

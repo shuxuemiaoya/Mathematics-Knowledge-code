@@ -502,6 +502,56 @@ def artifact_errors(
             errors.extend(
                 same_book_reference_review_errors(payload, profile_payload)
             )
+            decomposition = profile_payload.get("decomposition", {})
+            require_architecture = bool(
+                isinstance(decomposition, dict)
+                and decomposition.get(
+                    "require_textbook_node_architecture", False
+                )
+                and "textbook"
+                in str(
+                    profile_payload.get("book", {}).get("kind", "")
+                ).casefold()
+            )
+            if require_architecture:
+                architecture = payload.get("node_architecture")
+                if not isinstance(architecture, dict):
+                    errors.append(
+                        "split-manifest: required node_architecture is missing"
+                    )
+                else:
+                    if architecture.get("status") != "passed":
+                        errors.append(
+                            "split-manifest: node_architecture must pass"
+                        )
+                    if architecture.get("reviewed_entire_book") is not True:
+                        errors.append(
+                            "split-manifest: node architecture needs complete review"
+                        )
+                    for check in (
+                        "source_order_expansion",
+                        "source_content_preservation",
+                        "source_names_preserved",
+                        "physical_hierarchy",
+                    ):
+                        if architecture.get(check) != "passed":
+                            errors.append(
+                                f"split-manifest: node_architecture.{check} must pass"
+                            )
+                    for index, node in enumerate(payload.get("nodes", [])):
+                        if not isinstance(node, dict):
+                            continue
+                        if not isinstance(node.get("node_type"), str):
+                            errors.append(
+                                f"split-manifest: nodes[{index}].node_type is required"
+                            )
+                        if (
+                            node.get("node_type") == "organizer"
+                            and not isinstance(node.get("organizer_type"), str)
+                        ):
+                            errors.append(
+                                f"split-manifest: nodes[{index}].organizer_type is required"
+                            )
     if kind == "coverage-manifest":
         source_keys: set[str] = set()
         source_orders: set[int] = set()

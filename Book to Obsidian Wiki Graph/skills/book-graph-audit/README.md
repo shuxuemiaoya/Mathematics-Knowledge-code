@@ -49,8 +49,13 @@ to contain the passed, reviewer-confirmed reference semantic review with the
 current reference path, tree digest, and proposal-report digest. A later parity
 report or reference-based canvas cannot substitute for this split-stage gate.
 
-At every gate, require each non-concept note to begin with one valid H1-H3
-entry heading. From the concept gate onward, require every concept note to
+At every gate, require an H1-H3 entry heading only for nodes whose reviewed
+architecture has `emit_title: true`. Reject a redundant filename heading on
+source atoms and second-layer theme/practice/section-exercise organizers.
+Require those organizers to contain only their direct-child links in source
+order. Require the manifest paths and rendered files to follow the reviewed
+owner-folder hierarchy; flat sibling placement is a split-stage failure. From
+the concept gate onward, require every concept note to
 begin with `# <filename stem>` and contain `## 定义`, and reject a definition
 body that contains a functional callout marker, H4-H6 teaching heading,
 worked-example label, or practice boundary. When
@@ -81,8 +86,10 @@ functional-block counts, quoted-body callout continuity violations, callout
 semantic-scope violations, canvas counts, and source-integrity status.
 For new textbook profiles, validate the same lesson-flow manifest at every
 gate. Reject missing lessons, unclassified or discontinuous ranges, moved
-context/transitions, uncovered direct children, link-only lesson entries, and
-oversized retained teaching blocks.
+source blocks, uncovered direct children, wrong example/practice/exercise
+ownership, organizer prose, recursive-order drift, and oversized retained
+teaching blocks. A section page that contains only its source heading and
+reviewed links is valid.
 From the formatting gate onward, also report and reject plain running chapter
 headers, OCR-split digit groups inside TeX spans, and HTML tables with
 unbalanced tags, TeX delimiters, or braces. These are review blockers; the

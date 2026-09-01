@@ -56,6 +56,9 @@
       "properties": {
         "source_role": {"type": "string", "minLength": 1},
         "root_output": {"type": "string", "pattern": "\\.md$"},
+        "question_ownership_policy": {
+          "enum": ["non-structural", "leaf-only"]
+        },
         "primary_authority": {"type": "object"},
         "no_toc_authority": {"type": "object"},
         "entries": {
@@ -95,7 +98,7 @@
             "properties": {
               "kind": {"type": "string", "minLength": 1},
               "pattern": {"type": "string", "minLength": 1},
-              "answer_handling": {"enum": ["external", "separate-authoritative"]},
+              "answer_handling": {"enum": ["external", "separate-authoritative", "unavailable"]},
               "solution_layout": {"enum": ["tail", "interleaved"]},
               "solution_start_patterns": {
                 "type": "array",

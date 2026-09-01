@@ -55,6 +55,11 @@ class BookProfileTests(unittest.TestCase):
             self.assertTrue(
                 profile["decomposition"]["require_lesson_flow_manifest"]
             )
+            self.assertTrue(
+                profile["decomposition"][
+                    "require_textbook_node_architecture"
+                ]
+            )
             self.assertEqual(
                 profile["decomposition"][
                     "max_retained_teaching_block_nonblank_lines"

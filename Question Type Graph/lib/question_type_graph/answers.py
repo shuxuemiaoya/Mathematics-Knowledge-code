@@ -245,20 +245,23 @@ def parse_answer_blocks(path: Path, adapter: dict[str, Any]) -> tuple[list[dict[
             f"{answer.get('context')}:{answer['number']}:{answer['line']}:{answer['subline']}"
         )
 
-    deduped_answers: list[dict[str, Any]] = []
+    deduped_by_key: dict[tuple[str, str], dict[str, Any]] = {}
     for ans in answers:
-        if (
-            deduped_answers
-            and deduped_answers[-1].get("context") == ans.get("context")
-            and deduped_answers[-1].get("number") == ans.get("number")
-        ):
-            prev = deduped_answers[-1]
-            if ans["position"] - prev["position"] <= 4:
-                if len(ans["body"].strip()) >= len(prev["body"].strip()):
-                    deduped_answers[-1] = ans
-                continue
-        deduped_answers.append(ans)
-    answers = deduped_answers
+        key = (str(ans.get("context")), str(ans.get("number")))
+        if key in deduped_by_key:
+            prev = deduped_by_key[key]
+            prev_has_res = bool(re.search(r"【(?:解析|详解|分析|解答|解法)】|(?<!见)(?:解析|详解)\s*[：:]|故选", prev.get("body", "")))
+            curr_has_res = bool(re.search(r"【(?:解析|详解|分析|解答|解法)】|(?<!见)(?:解析|详解)\s*[：:]|故选", ans.get("body", "")))
+            if curr_has_res and not prev_has_res:
+                deduped_by_key[key] = ans
+            elif prev_has_res and not curr_has_res:
+                pass
+            elif len(ans.get("body", "").strip()) >= len(prev.get("body", "").strip()):
+                deduped_by_key[key] = ans
+        else:
+            deduped_by_key[key] = ans
+    answers = list(deduped_by_key.values())
+
 
     # MinerU can omit an entire answer block even when the corresponding PDF
     # page is legible (for example, when two columns are merged incorrectly).
@@ -318,6 +321,7 @@ def normalized_stem(text: str) -> str:
 def build_answer_indexes(answers: list[dict[str, Any]]) -> dict[str, Any]:
     indexes: dict[str, Any] = {
         "hierarchy_number": {},
+        "hierarchy_normalized_number": {},
         "number": {},
         "evidence": {},
         "evidence_number": {},
@@ -327,6 +331,10 @@ def build_answer_indexes(answers: list[dict[str, Any]]) -> dict[str, Any]:
         number = str(answer.get("number"))
         context = str(answer.get("context"))
         indexes["hierarchy_number"].setdefault((context, number), []).append(answer)
+        normalized_number = re.sub(r"\s+", "", number)
+        indexes["hierarchy_normalized_number"].setdefault(
+            (context, normalized_number), []
+        ).append(answer)
         indexes["number"].setdefault(number, []).append(answer)
         for field, raw_value in (answer.get("evidence") or {}).items():
             value = str(raw_value).strip()
@@ -355,6 +363,19 @@ def strategy_candidates(
                 (str(question.get("context_key")), str(question.get("number"))), []
             )
         )
+    elif name == "hierarchy-number-normalized":
+        normalized_number = re.sub(r"\s+", "", str(question.get("number")))
+        values = list(
+            indexes["hierarchy_normalized_number"].get(
+                (str(question.get("context_key")), normalized_number), []
+            )
+        )
+    elif name == "number-global":
+        # Opt-in for reviewed books whose question series is continuous across
+        # chapters but whose answer appendix omits chapter boundaries. Duplicate
+        # numbers deliberately remain multiple candidates and therefore require
+        # review instead of being silently selected.
+        values = list(indexes["number"].get(str(question.get("number")), []))
     elif name in {"explicit-reference", "source-page-number"}:
         default_field = "reference" if name == "explicit-reference" else "source_page"
         question_field = str(config.get("question_field", default_field))
@@ -558,28 +579,29 @@ def extract_choice_answer(body: str) -> str | None:
     separate answer field.  Only explicit answer/conclusion phrases are
     accepted; isolated capital letters in mathematical prose are ignored.
     """
+    lines = body.strip().splitlines()
+    if lines:
+        first_line = lines[0].strip()
+        header = re.match(
+            r"^(?:#{1,6}\s*)?【?\d+】?[\.、\s]*([A-F]{1,4})\b\s*(?:【?(?:解析|详解)】?)?\s*",
+            first_line,
+        )
+        if header:
+            return header.group(1).upper()
+
+    m_conc = re.search(r"(?:故选|选|因此选|故选：|选：)\s*([A-D]+)\b|(?:故|则)?\s*([A-D])\s*项正确", body)
+    if m_conc:
+        return (m_conc.group(1) or m_conc.group(2)).upper()
+
     conclusion_pattern = re.compile(
         r"(?:故\s*选|应\s*选|选|选项(?:为|是|有)?|答案(?:为|是)?|也就是|即)\s*[：:]?\s*([A-F]+)\b|\b([A-F])\s*选项\b",
         re.IGNORECASE,
     )
     matches = list(conclusion_pattern.finditer(body))
     if matches:
-        # A worked conclusion is stronger evidence than an OCR-damaged
-        # leading header (which can retain the neighbouring question number
-        # and option after page/column interleaving).
         val = matches[-1].group(1) or matches[-1].group(2)
         if val:
             return val.upper()
-
-    lines = body.strip().splitlines()
-    if lines:
-        first_line = lines[0].strip()
-        header = re.match(
-            r"^【?\d+】?[\.、\s]*([A-F]+)\b\s*(?:【解析】)?\s*",
-            first_line,
-        )
-        if header:
-            return header.group(1)
     return None
 
 
@@ -643,32 +665,18 @@ def format_answer_callout(
     callout_title: str = "答案与解析",
     reviewed_choice_answer: str | None = None,
     reviewed_short_answer: str | None = None,
+    question_body: str = "",
 ) -> str:
     source_body = body.strip()
-    explicit_answer = None
-    long_explicit_answer = None
-    if re.match(r"^\s*(?:#{1,6}\s*)?【答案】", source_body):
-        candidate_answer, _ = extract_nonchoice_answer_prefix(source_body)
-        if candidate_answer is not None:
-            explicit_answer = candidate_answer
-        else:
-            marker = re.search(r"【(?:解析|详解|分析|思路导航|解答|解法|证法|证明)】|(?<!见)(?:解析|详解)\s*[：:]", source_body)
-            if marker is not None:
-                prefix = re.sub(
-                    r"^\s*(?:#{1,6}\s*)?【答案】\s*",
-                    "",
-                    source_body[: marker.start()],
-                    count=1,
-                ).strip()
-                if prefix:
-                    long_explicit_answer = prefix
+    scan_body = (question_body + "\n" + source_body) if question_body else source_body
 
+    # 1. Split out 分析 if present
+    analysis_text = "本题未单列分析。"
+    resolution_body = source_body
     analysis_match = re.search(
         r"(?m)^\s*(?:#{1,6}\s*)?(?:【(?:分析|思路导航)】|(?:分析|思路导航)(?:\s|[：:]|▶|$))",
         source_body,
     )
-    analysis_text = "本题未单列分析。"
-    resolution_body = source_body
     if analysis_match is not None:
         resolution_match = re.search(
             r"(?m)^\s*(?:#{1,6}\s*)?(?:【(?:解析|详解|解答|解法)】|(?:解析|详解|解答|解法)(?:\s|[：:]|▶|$))",
@@ -684,118 +692,171 @@ def format_answer_callout(
             analysis_text = re.sub(r"^\s*(?:#{1,6}\s*)?(?:【(?:分析|思路导航)】|(?:分析|思路导航)\s*[：:]?)\s*", "", raw_analysis).strip()
             resolution_body = "本题未单列解析。"
 
-    if long_explicit_answer:
-        resolution_body = "\n".join(
-            ["【答案】" + long_explicit_answer, resolution_body]
-        ).strip()
+    # 2. Extract Answer Value
+    answer_value = None
+    if reviewed_short_answer:
+        answer_value = reviewed_short_answer
+    elif reviewed_choice_answer:
+        answer_value = reviewed_choice_answer
 
-    lines = resolution_body.splitlines() or [""]
+    # Check leading 【答案】
+    if not answer_value and re.match(r"^\s*(?:#{1,6}\s*)?【答案】", resolution_body):
+        m_head = re.search(r"^\s*(?:#{1,6}\s*)?【答案】\s*(.*?)(?=\n|【(?:解析|详解|分析|思路导航|解答|解法|证法|证明)】|(?<!见)(?:解析|详解)\s*[：:]|$)", resolution_body, flags=re.DOTALL)
+        if m_head:
+            val = m_head.group(1).strip()
+            if val:
+                answer_value = val
+                resolution_body = resolution_body[m_head.end():].strip()
 
-    # Prefer an explicit worked conclusion over an OCR header when both are
-    # present; a reviewed override remains the highest authority.
-    explicit_choice_answer = (
-        explicit_answer.upper()
-        if explicit_answer and re.fullmatch(r"[A-F]+", explicit_answer, re.IGNORECASE)
-        else None
-    )
-    option = (
-        reviewed_choice_answer
-        or extract_choice_answer(resolution_body)
-        or extract_choice_answer(source_body)
-        or explicit_choice_answer
-    )
-    explicit_nonchoice_answer = (
-        explicit_answer if explicit_answer and explicit_choice_answer is None else None
-    )
-    prepared_analysis = None
-    if option is None:
-        candidate_answer, candidate_analysis = extract_nonchoice_answer_prefix(
-            resolution_body
-        )
-        if candidate_answer is not None:
-            explicit_nonchoice_answer = candidate_answer
-            prepared_analysis = candidate_analysis
-            lines = prepared_analysis.splitlines() or [""]
-    first_line = lines[0].strip()
-    m_opt = (
-        re.match(r"^【?\d+】?[\.、\s]*([A-F]+)\b\s*(?:【(?:解析|详解)】)?\s*", first_line)
-        if prepared_analysis is None
-        else None
-    )
-    if m_opt:
-        option = option or m_opt.group(1)
-        first_line = first_line[m_opt.end():].strip()
-    else:
-        # 判断题答案形如 (1) ×; (2) √; ... —— 把整段判断结果作为【答案】。
-        judge_parts = []
-        judge_re = re.compile(r"^\(\d+\)\s*[×√]")
-        stripped_first = (
-            re.sub(r"^【?\d+】?[\s\.、]*", "", first_line)
-            if prepared_analysis is None
-            else first_line
-        )
-        if judge_re.match(stripped_first):
-            first_line = stripped_first
-            while first_line and judge_re.match(first_line):
-                judge_parts.append(first_line.strip())
-                lines = lines[1:]
-                first_line = (lines[0].strip() if lines else "")
-            option = " ".join(judge_parts).strip().rstrip(".").strip()
-            while lines and not lines[0].strip():
-                lines = lines[1:]
-            first_line = (lines[0].strip() if lines else "")
-            first_line = re.sub(r"^【(?:解析|详解|解答|解法)】\s*", "", first_line).strip()
+    # Check leading option header (e.g. 1. D, 7. AC, 7. ABD)
+    if not answer_value:
+        m_opt_head = re.search(r"^\s*(?:#{1,6}\s*)?(?:[1-9]\d?[.．、]\s*)?([A-D]{1,4})(?:\s*[【\n\s]|$)", source_body)
+        if m_opt_head:
+            val = m_opt_head.group(1).strip()
+            # Ensure it is not a Roman numeral or accidental word
+            if val and all(c in "ABCD" for c in val):
+                answer_value = val
+
+    # Check trailing or standalone 答案：...
+    if not answer_value:
+        m_ans_line = re.search(r"(?m)^\s*(?:【答案】|答案\s*[：:])\s*(\S.*?)\s*$", resolution_body)
+        if m_ans_line:
+            answer_value = m_ans_line.group(1).strip()
+            resolution_body = resolution_body[:m_ans_line.start()] + "\n" + resolution_body[m_ans_line.end():]
+
+    # Check 故选: A / 选 C / 项正确
+    # Check leading number option header (e.g. 1. D or 2. AC or 3. B解法1：)
+    if not answer_value:
+        m_lead = re.search(r"^\s*(?:#{1,6}\s*)?(?:(?:[1-9]\d?|例\s*\d+|变式(?:题)?\s*\d*)[.．、\s]*)?([A-D]{1,4})(?:\s*[【\n\s解法解析详解分析]|$)", resolution_body)
+        if m_lead:
+            val = m_lead.group(1).strip().upper()
+            if val and all(c in "ABCD" for c in val):
+                answer_value = val
+
+    if not answer_value:
+        m_choice = re.search(r"(?:故选|选|因此选|故选：|选：)\s*([A-D]+)\b|(?:故|则)?\s*([A-D])\s*项正确", resolution_body)
+        if m_choice:
+            answer_value = (m_choice.group(1) or m_choice.group(2)).strip().upper()
+
+    # Check option interval / formula matching for multiple choice
+    if not answer_value and re.search(r"[A-D][.．、\s]", scan_body):
+        clean_res = re.split(r"【(?:反思|总结|规律总结|方法总结|名师点睛|点睛|考点|易错警示)】", resolution_body)[0]
+        clean_res = re.sub(r"!\[.*?\]\(.*?\)", "", clean_res)
+        clean_res = re.sub(r"(?m)^\s*(?:#{1,6}\s*)?(?:注[：:].*|一数[·\s]*必刷\d*讲|第\d+讲.*|强化训练|对点训练|类型\s*[IVXLCDM一二三四五六七八九十\d].*)\s*$", "", clean_res).strip()
+        sentences = re.split(r"[。！？\n]+", clean_res.strip())
+        final_sentence = ""
+        for s in reversed(sentences):
+            if s.strip() and len(s.strip()) >= 3 and not s.strip().startswith("!"):
+                final_sentence = s.strip()
+                break
+        if not final_sentence:
+            final_sentence = clean_res[-100:]
+        
+        opts = {}
+        for opt in ["A", "B", "C", "D"]:
+            m_opt = re.search(r"(?:^|\s)" + opt + r"[.．、]\s*(.*?)(?=(?:[B-D][.．、]|$|\n\n))", scan_body, flags=re.DOTALL)
+            if m_opt:
+                opts[opt] = m_opt.group(1).strip()
+        
+        # Priority 0: Circled numerals reasoning (e.g. ①④)
+        correct_circled = "".join(item for item in ["①", "②", "③", "④", "⑤"] if re.search(item + r"(?:项|个)?正确", resolution_body))
+        if correct_circled:
+            for opt, val in opts.items():
+                if val == correct_circled:
+                    answer_value = opt
+                    break
+
+        # Priority 1: Exact equation match (e.g. = -32, 为 -32, 是 -32, = 0)
+        if not answer_value:
+            best_pos = -1
+            for opt, val in opts.items():
+                for m in re.finditer(r"(?:=|为|是|选)\s*[\$]*" + re.escape(val) + r"[\$]*(?:\b|[\$ \t\n\.\,\，\。：:]|$)", final_sentence):
+                    if m.end() > best_pos:
+                        best_pos = m.end()
+                        answer_value = opt
+
+        # Priority 2: Semantic and number matches
+        if not answer_value:
+            for opt, val in opts.items():
+                clean_val = re.sub(r"[^\u4e00-\u9fa5a-zA-Z0-9]+", "", val)
+                if len(clean_val) >= 2 and clean_val in re.sub(r"[^\u4e00-\u9fa5a-zA-Z0-9]+", "", final_sentence):
+                    answer_value = opt
+                    break
+                nums = re.findall(r"-?\d+", val)
+                if len(nums) >= 2 and all(re.search(r"(?<!\d)" + re.escape(n) + r"(?!\d)", final_sentence) for n in nums):
+                    answer_value = opt
+                    break
+                elif len(nums) == 1 and nums[0] not in {"0", "1"} and re.search(r"(?<![-\d])" + re.escape(nums[0]) + r"(?!\d)", final_sentence):
+                    answer_value = opt
+                    break
+
+    # Check 故答案为：... / 所以答案为：...
+    if not answer_value:
+        conc_ans = re.search(r"(?m)(?:故|所以|因此|则)?\s*答案为\s*[：:]?\s*(\S.*?)(?:[。.]|\s*$)", resolution_body)
+        if conc_ans:
+            answer_value = conc_ans.group(1).strip()
+
+    # Check 故选 / 应选
+    if not answer_value:
+        m_opt = re.search(r"(?:故\s*选|应\s*选|选|选项(?:为|是|有)?|答案(?:为|是)?|也就是|即)\s*[：:]?\s*([A-F]+)\b|\b([A-F])\s*选项\b", resolution_body, re.IGNORECASE)
+        if m_opt:
+            answer_value = (m_opt.group(1) or m_opt.group(2)).upper()
         else:
-            if prepared_analysis is None:
-                first_line = re.sub(r"^【?\d+】?[\.、\s]*", "", first_line)
-                first_line = re.sub(r"^【(?:解析|详解|解答|解法)】\s*", "", first_line).strip()
+            # check non-choice short answer prefix
+            marker = re.search(r"【(?:解析|详解|分析|思路导航|解答|解法|证法|证明)】|(?<!见)(?:解析|详解)\s*[：:]", resolution_body)
+            if marker:
+                prefix = re.sub(r"^【?\d+】?[\.、\s]*", "", resolution_body[:marker.start()]).strip()
+                prefix = re.sub(r"^(?:【答案】|答案\s*[：:])\s*", "", prefix).strip()
+                if prefix and len(prefix) <= 400 and not re.match(r"^\(\d+\)\s*[×√]", prefix):
+                    answer_value = prefix
+                    resolution_body = resolution_body[marker.start():].strip()
 
-    rebuilt_lines = [first_line] + [l.strip() for l in lines[1:] if l.strip()]
+    if not answer_value:
+        answer_value = "详见解析"
 
-    extra_keywords = ["规律方法", "名师点拨", "敲黑板", "点悟", "链接教材", "易错警示", "避坑", "二级结论", "归纳总结", "多种解法", "思路导引", "巧思"]
-    emoji_map = {
-        "规律方法": "💡 规律方法",
-        "名师点拨": "📌 名师点拨",
-        "敲黑板": "🔔 敲黑板",
-        "点悟": "💡 点悟",
-        "链接教材": "🔗 链接教材",
-        "易错警示": "⚠️ 易错警示",
-        "避坑": "⚠️ 避坑",
-        "二级结论": "📚 二级结论",
-        "归纳总结": "📝 归纳总结",
-        "多种解法": "🔀 多种解法",
-        "思路导引": "🎯 思路导引",
-        "巧思": "✨ 巧思",
-    }
-
-    blocks = []
-    current_block = []
-    current_type = "main"
-    current_extra_kw = None
-
-    for l in rebuilt_lines:
-        matched_kw = next((kw for kw in extra_keywords if re.match(r"^" + re.escape(kw) + r"[\s：:]*", l)), None)
-        if matched_kw:
-            if current_block:
-                blocks.append((current_type, current_extra_kw, "\n".join(current_block)))
-                current_block = []
-            current_type = "extra"
-            current_extra_kw = matched_kw
-            content = re.sub(r"^" + re.escape(matched_kw) + r"[\s：:]*", "", l).strip()
-            if content:
-                current_block.append(content)
-        else:
-            current_block.append(l)
-
-    if current_block:
-        blocks.append((current_type, current_extra_kw, "\n".join(current_block)))
-
-    answer_value = reviewed_short_answer or option or explicit_nonchoice_answer or "详见解析"
     answer_value = re.sub(r"\s+", " ", answer_value).strip()
-    main_text = blocks[0][2] if blocks and blocks[0][0] == "main" else ""
-    raw_sub_items = re.split(r"\n(?=(?:对于\s*)?[①②③④⑤⑥⑦⑧⑨⑩])|(?<=[；;。])\s*(?=(?:对于\s*)?[①②③④⑤⑥⑦⑧⑨⑩])", main_text)
+
+    # Clean leading headers from resolution_body
+    resolution_body = re.sub(r"^\s*【?\d+】?[\.、\s]*", "", resolution_body.strip())
+    resolution_body = re.sub(r"^\s*【(?:解析|详解|解答|解法)】\s*", "", resolution_body).strip()
+    resolution_body = re.sub(r"^\s*(?:解析|详解|解答)\s*[：:]\s*", "解析：", resolution_body)
+
+    # 3. Identify and split sub-callouts: 【反思】, 【总结】, 【规律方法】, 【名师点睛】, etc.
+    callout_tag_patterns = [
+        ("tip", r"【?(?:反思|教学反思)】", "【反思】"),
+        ("tip", r"【?(?:总结|规律总结|归纳总结)】", "【总结】"),
+        ("tip", r"【?(?:规律方法|方法技巧|方法总结)】", "【规律方法】"),
+        ("tip", r"【?(?:名师点睛|点睛|名师点拨|点拨)】", "【名师点睛】"),
+        ("tip", r"【?(?:点悟|敲黑板)】", "【点悟】"),
+        ("warning", r"【?(?:易错警示|避坑|易错点)】", "【易错警示】"),
+        ("tip", r"【?(?:二级结论|核心结论)】", "【二级结论】"),
+        ("tip", r"【?(?:多种解法|另解|其他解法)】", "【多种解法】"),
+        ("note", r"【?(?:考点|相关考点)】", "【考点】"),
+        ("note", r"【?(?:链接教材|教材链接)】", "【链接教材】"),
+    ]
+
+    tag_regex = r"(?m)^\s*(?:#{1,6}\s*)?(" + "|".join(p[1] for p in callout_tag_patterns) + r")[\s：:]*"
+    split_indices = [m.start() for m in re.finditer(tag_regex, resolution_body)]
+
+    sub_callouts = []
+    if split_indices:
+        main_res = resolution_body[:split_indices[0]].strip()
+        for i, start_idx in enumerate(split_indices):
+            end_idx = split_indices[i+1] if i+1 < len(split_indices) else len(resolution_body)
+            chunk = resolution_body[start_idx:end_idx].strip()
+            for c_type, pat, standard_title in callout_tag_patterns:
+                m_tag = re.match(r"^\s*(?:#{1,6}\s*)?" + pat + r"[\s：:]*", chunk)
+                if m_tag:
+                    content = chunk[m_tag.end():].strip()
+                    sub_callouts.append((c_type, standard_title, content))
+                    break
+    else:
+        main_res = resolution_body.strip()
+
+    # Clean ①② sub items in main resolution
+    raw_sub_items = re.split(r"\n(?=(?:对于\s*)?[①②③④⑤⑥⑦⑧⑨⑩])|(?<=[；;。])\s*(?=(?:对于\s*)?[①②③④⑤⑥⑦⑧⑨⑩])", main_res)
+    resolution_lines = []
     conclusion_line = None
-    resolution_lines: list[str] = []
     for sub in raw_sub_items:
         sub_str = sub.strip()
         if not sub_str:
@@ -808,8 +869,6 @@ def format_answer_callout(
 
         if re.match(r"^(?:对于\s*)?[①②③④⑤⑥⑦⑧⑨⑩]", sub_str):
             sub_str = re.sub(r"^(对于\s*[①②③④⑤⑥⑦⑧⑨⑩]|[①②③④⑤⑥⑦⑧⑨⑩])[\s：:]*", r"- **\1**：", sub_str)
-            # ①② item block may itself contain continuation lines (e.g. a
-            # trailing 故选 line merged into the last item) — quote every line.
             item_lines = sub_str.splitlines()
             resolution_lines.append(item_lines[0])
             for extra_line in item_lines[1:]:
@@ -823,16 +882,7 @@ def format_answer_callout(
     if conclusion_line:
         resolution_lines.extend(["", conclusion_line])
 
-    for btype, kw, content in blocks:
-        if btype == "extra" and content.strip():
-            resolution_lines.extend(["", "---"])
-            header = emoji_map.get(kw, f"💡 {kw}")
-            resolution_lines.append(f"**{header}**")
-            content_lines = content.strip().splitlines()
-            resolution_lines.append(content_lines[0])
-            for extra_line in content_lines[1:]:
-                resolution_lines.append(extra_line)
-
+    # Build output
     callout_lines = [
         f"> [!faq]- {callout_title}",
         ">",
@@ -845,6 +895,20 @@ def format_answer_callout(
     callout_lines.extend([">", "> > [!note]- **【解析】**"])
     for line in resolution_lines or ["本题未单列解析。"]:
         callout_lines.append(f"> > {line}" if line else "> >")
+
+    # Append sub callouts (反思, 总结, 规律方法, etc.)
+    for c_type, c_title, c_content in sub_callouts:
+        if c_content.strip():
+            callout_lines.extend([">", f"> > [!{c_type}]- **{c_title}**"])
+            raw_c_items = re.split(r"\n(?=(?:对于\s*)?[①②③④⑤⑥⑦⑧⑨⑩])|(?<=[；;。])\s*(?=(?:对于\s*)?[①②③④⑤⑥⑦⑧⑨⑩])", c_content)
+            for sub_c in raw_c_items:
+                sub_c_str = sub_c.strip()
+                if not sub_c_str:
+                    continue
+                if re.match(r"^(?:对于\s*)?[①②③④⑤⑥⑦⑧⑨⑩]", sub_c_str):
+                    sub_c_str = re.sub(r"^(对于\s*[①②③④⑤⑥⑦⑧⑨⑩]|[①②③④⑤⑥⑦⑧⑨⑩])[\s：:]*", r"- **\1**：", sub_c_str)
+                for line in sub_c_str.splitlines():
+                    callout_lines.append(f"> > {line}" if line else "> >")
 
     return "\n".join(callout_lines)
 
@@ -923,11 +987,25 @@ def apply_matches(profile_path: Path, manifest_path: Path, overwrite: bool) -> d
             ): str(item["answer"]).strip().upper()
             for item in adapter_data.get("answers", {}).get("choice_answer_overrides", [])
         }
+        choice_answer_overrides_by_key = {
+            (
+                str(item["context"]),
+                str(item["number"]),
+            ): str(item["answer"]).strip().upper()
+            for item in adapter_data.get("answers", {}).get("choice_answer_overrides", [])
+        }
         short_answer_overrides = {
             (
                 str(item["context"]),
                 str(item["number"]),
                 int(item["start_line"]),
+            ): str(item["answer"]).strip()
+            for item in adapter_data.get("answers", {}).get("short_answer_overrides", [])
+        }
+        short_answer_overrides_by_key = {
+            (
+                str(item["context"]),
+                str(item["number"]),
             ): str(item["answer"]).strip()
             for item in adapter_data.get("answers", {}).get("short_answer_overrides", [])
         }
@@ -969,12 +1047,22 @@ def apply_matches(profile_path: Path, manifest_path: Path, overwrite: bool) -> d
                         str(match.get("answer_number")),
                         int(match.get("answer_start_line")),
                     )
+                ) or choice_answer_overrides_by_key.get(
+                    (
+                        str(match.get("answer_context")),
+                        str(match.get("answer_number")),
+                    )
                 )
                 reviewed_short_answer = short_answer_overrides.get(
                     (
                         str(match.get("answer_context")),
                         str(match.get("answer_number")),
                         int(match.get("answer_start_line")),
+                    )
+                ) or short_answer_overrides_by_key.get(
+                    (
+                        str(match.get("answer_context")),
+                        str(match.get("answer_number")),
                     )
                 )
                 callout_text = format_answer_callout(

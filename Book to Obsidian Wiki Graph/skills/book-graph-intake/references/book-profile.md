@@ -38,7 +38,10 @@ Create one `book-profile.json` in task-scoped staging. It is the only book-speci
 - Default `decomposition.non_toc_split_default` to `retain` and require an
   explicit, high-confidence independent-teaching-arc decision to override it.
 - Default `decomposition.require_lesson_flow_manifest` to `true` for new
-  textbook profiles. Use
+  textbook profiles. Also default
+  `decomposition.require_textbook_node_architecture` to `true`; this requires
+  reviewed source atoms, organizer ownership, and recursive source-order
+  expansion before physical splitting. Use
   `max_retained_teaching_block_nonblank_lines` (default `40`) as a review
   boundary, not as permission to summarize or discard longer content.
 - Keep source identity and output paths immutable after intake. Validation must

@@ -25,6 +25,8 @@ for _stream in (sys.stdout, sys.stderr):
 MARKDOWN_IMAGE_RE = re.compile(r"!\[[^\]]*\]\([^)]+\)")
 MARKDOWN_LINK_RE = re.compile(r"\[([^\]]+)\]\([^)]+\)")
 WIKILINK_RE = re.compile(r"\[\[([^\]|]+)(?:\|([^\]]+))?\]\]")
+WIKI_EMBED_RE = re.compile(r"!\[\[[^\]]+\]\]")
+FRONTMATTER_RE = re.compile(r"\A---\s*\n.*?\n---\s*(?:\n|\Z)", re.S)
 HTML_RE = re.compile(r"<!--.*?-->|<[^>]+>", re.S)
 LINE_PREFIX_RE = re.compile(
     r"^\s*(?:#{1,6}\s+|>\s*\[![^\]]+\][+-]?\s*|>+\s*|[-*+]\s+)",
@@ -62,6 +64,7 @@ def reference_identity(
     manifest: dict[str, Any],
     reference_root: Path,
 ) -> tuple[str | None, str | None, dict[str, Any]]:
+    reference_root = reference_root.resolve()
     reference_sha256 = inventory_tree_sha256(reference_root)
     identity: dict[str, Any] = {
         "path": str(reference_root),
@@ -80,7 +83,7 @@ def reference_identity(
         raise ProposalError(
             "reference semantic review requires same-book-content-and-style scope"
         )
-    if Path(str(configured.get("path", ""))).resolve() != reference_root:
+    if Path(str(configured.get("path", ""))).resolve() != reference_root.resolve():
         raise ProposalError("reference root does not match profile reference.path")
     if configured.get("sha256") != reference_sha256:
         raise ProposalError("reference root does not match frozen profile digest")
@@ -89,7 +92,9 @@ def reference_identity(
 
 
 def normalize(text: str) -> str:
+    text = FRONTMATTER_RE.sub("", text)
     text = MARKDOWN_IMAGE_RE.sub("", text)
+    text = WIKI_EMBED_RE.sub("", text)
     text = MARKDOWN_LINK_RE.sub(r"\1", text)
     text = WIKILINK_RE.sub(lambda match: match.group(2) or match.group(1), text)
     text = HTML_RE.sub("", text)
@@ -198,16 +203,35 @@ def propose(
     reference_dir = reference_root / "知识点"
     suggestions: list[dict[str, Any]] = []
     skipped_existing: list[str] = []
-    for path in sorted(reference_dir.glob("*.md"), key=lambda item: item.name):
+    # Textbook corpora use a two-level physical layout under 知识点: chapter and
+    # section directories contain the source atoms.  Search recursively so a
+    # same-book reference actually contributes those reviewed note boundaries.
+    for path in sorted(
+        reference_dir.rglob("*.md"),
+        key=lambda item: item.relative_to(reference_dir).as_posix(),
+    ):
         if title_key(path.stem) in existing_titles:
             skipped_existing.append(path.stem)
             continue
         reference_text = normalize(path.read_text(encoding="utf-8-sig"))
         reference_shingles = shingles(reference_text)
-        if len(reference_text) < 36 or not reference_shingles:
+        # Short printed questions and one-line scenarios are valid source atoms;
+        # keep them in the review report instead of silently losing them.
+        if len(reference_text) < 4 or not reference_shingles:
             continue
+        relative_path = path.relative_to(reference_dir)
+        reference_parent_titles = {
+            title_key(part)
+            for part in relative_path.parts[:-1]
+        }
+        scoped_documents = [
+            document
+            for document in source_documents
+            if title_key(str(document["node"]["title"]))
+            in reference_parent_titles
+        ] or source_documents
         ranked: list[tuple[float, dict[str, Any]]] = []
-        for document in source_documents:
+        for document in scoped_documents:
             score = len(reference_shingles & document["shingles"]) / len(
                 reference_shingles
             )
@@ -262,6 +286,8 @@ def propose(
             )
         suggestions.append(
             {
+                "reference_path": str(path.resolve()),
+                "reference_relative_path": relative_path.as_posix(),
                 "title": path.stem,
                 "parent_node_key": best["node"]["key"],
                 "parent_title": best["node"]["title"],
@@ -321,7 +347,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     rendered = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
     if args.output:
-        args.output.resolve().write_text(rendered, encoding="utf-8", newline="\n")
+        output = args.output.resolve()
+        output.parent.mkdir(parents=True, exist_ok=True)
+        with output.open("w", encoding="utf-8", newline="\n") as handle:
+            handle.write(rendered)
     print(rendered, end="")
     return 0
 

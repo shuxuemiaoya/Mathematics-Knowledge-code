@@ -144,6 +144,14 @@ changing that reference after splitting is input drift: initialize the revised
 profile and resume from the split draft, not from the prior lesson flow or any
 downstream checkpoint.
 
+For a textbook profile with
+`decomposition.require_textbook_node_architecture: true`, split-manifest
+validation additionally requires a passed whole-book `node_architecture`
+review, source-content/name preservation, recursive source-order expansion,
+physical owner-folder hierarchy, and reviewed `node_type`/`organizer_type`
+fields. A draft marked
+`review_required` cannot complete the split stage.
+
 Stage completion also requires the artifact set owned by that stage:
 
 | Stage | Required output kinds |

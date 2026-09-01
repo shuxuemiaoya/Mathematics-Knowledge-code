@@ -1,6 +1,6 @@
 ---
 name: question-type-graph
-description: Coordinate conversion of supplementary exercise books into audited Obsidian question-type graphs using typed question, answer, or combined PDF/Markdown sources, reviewed format adapters, atomic question notes, exact answer matching, markup-only formatting, and an optional structural Canvas. Use for new conversions, resumes, format inventory, or final audits across publishers and layouts.
+description: Coordinate conversion or repair of supplementary exercise books, teacher editions, structured mathematical monographs, and multi-volume series into audited Obsidian question-type graphs using reviewed hierarchy adapters, atomic question notes, exact answer matching, markup-only formatting, and optional structural Canvas. Use for new conversions, batch series work, resumes, flattened-hierarchy repairs, format inventory, or final audits across publishers and layouts.
 ---
 
 # Question Type Graph
@@ -11,6 +11,9 @@ Coordinate the standalone skills and enforce profile, review, preservation, and 
 
 - Read `references/pipeline-contract.md` before starting or resuming.
 - Read `references/format-adapter.md` when inventorying an unfamiliar book.
+- Read `references/structured-monograph.md` for multi-level monographs, repeated
+  lecture/section/thought structures, series batches, or repairs of flattened
+  outputs.
 - Validate reviewed adapters against the runtime contract and
   `references/format-adapter.schema.json` before segmentation.
 - Load each component skill only when entering its stage.
@@ -60,9 +63,19 @@ persist the final checks with `audit --overwrite`.
   raw-line ownership through hierarchy snapshots so resolvable questions record
   exact PDF page/bbox evidence.
 - Require a reviewed adapter and complete primary-TOC authority ledger, or an explicit reviewed no-TOC authority decision, before physical hierarchy or content splitting.
+- When chapters or sections contain internal modules, subtopics, or pedagogical divisions (`一、`, `二、`, `考点1`, `考点2`, `专题1`, `题型1`), ALWAYS build a 3-level (or 4-level) fine-grained hierarchy (章 -> 节 -> 考点/模块 -> 例题), scoping question ownership exclusively to the finest leaf nodes. Never flatten internal subtopics into flat section notes.
+- Every entry in `entries` and `primary_authority` MUST be strictly sorted in monotonic increasing reading order by `source_line` (Line 1 -> Line 2 -> ...). Never append chapter nodes before section/subtopic nodes.
+- For MinerU OCR, enforce chunking threshold of `MAX_PAGES = 80` to eliminate cloud OCR timeouts and parsing failures on large volumes.
+- For multi-volume series (e.g. 上册, 下册), isolate output folders under distinct subpaths (e.g. `graph_root/上册`, `graph_root/下册`) and maintain separate staging profiles so audit checks remain 100% independent and collision-free.
 - Parse every leader-delimited index record even when several visual-column
   entries share one OCR line. Show both source-stream and column-major orders in
-  the worksheet; never publish the recommended order without review.
+  the worksheet; never publish the recommended order without review. Count
+  coverage per leader-delimited entry, so one registered record cannot conceal
+  a sibling record joined onto the same OCR line.
+- For a multi-volume series, inventory and visually confirm every volume
+  independently. Freeze per-volume hierarchy depth, body anchors, answer
+  region, output root, and disabled-output policy; reuse only path-free semantic
+  patterns. A successful sibling volume is not evidence for another volume.
 - Keep all source-label semantics and inline question/answer marker syntax in
   the frozen adapter or path-free series preset. Treat any new-book change to
   reusable recognition code as a generalization failure requiring review.
@@ -153,6 +166,12 @@ persist the final checks with `audit --overwrite`.
   atomic Q whose body still contains two independently solved item starts.
   Inspect at least the first, middle, and last generated hierarchy/Q/A1 notes;
   do not treat a successful coordinator exit as semantic proof.
+- For a hierarchy whose non-leaf nodes are organizational, set
+  `hierarchy.question_ownership_policy: leaf-only`. Require every non-leaf to be
+  `structural_only`, explicit question scopes to cover exactly all leaves, and
+  a reviewed count for every leaf/question-kind pair including zero. Final
+  audit must prove every Q belongs to a leaf and appears exactly once across all
+  generated navigation notes.
 - If overlapping OCR blocks duplicate one printed line, preserve frozen raw and
   use only a reviewer-confirmed `reviewed_semantic_line_exclusions` entry bound
   to the exact hierarchy-local line, drift anchor, PDF page/bbox, and reason.
@@ -164,3 +183,6 @@ persist the final checks with `audit --overwrite`.
 - Complete only when `final-audit-report.json` reports `status: passed` and the
   independent ledger, duplicate-heading, Q/A1 parity, embed, disabled-output,
   and representative source-versus-output checks all pass.
+- Never bypass a review gate by directly applying downstream components. Fix
+  the owning review artifact and resume through the coordinator; compiler
+  implementation hashes must invalidate stale descendants automatically.

@@ -5,7 +5,7 @@
 | Intake | `book-graph-intake` | source and target | inventory, profile | frozen source identity |
 | PDF conversion | `book-pdf-to-markdown` | PDF and profile | raw Markdown and assets | forced OCR, complete pages/assets |
 | TOC formatting | `book-toc-formatting` | raw Markdown and printed TOC | TOC manifest, formatted Markdown, report | every TOC entry matched; other headings below H3 |
-| TOC splitting | `book-toc-splitting` | formatted Markdown, TOC, split, same-book reference evidence when configured, and lesson-flow manifests | categorized notes, parent links, coverage | same-book reference ranges are reviewed before lesson flow; every lesson line receives one reviewed logical role; no block crosses a functional/definition/example/practice boundary; context and transitions remain in the entry; independent topics and exercises are routed; all targets resolve |
+| TOC splitting | `book-toc-splitting` | formatted Markdown, TOC, split, same-book reference evidence when configured, reviewed node architecture, and lesson-flow manifests | categorized atoms and organizers, ownership links, coverage | every source unit receives one reviewed role; section/theme/practice/exercise/example ownership passes; recursive expansion equals source order; no block crosses a functional boundary; all targets resolve |
 | Split audit | `book-graph-audit --stage split` | split corpus and coverage | audit report | identity, coverage, links, and assets pass |
 | Concepts | `book-graph-concepts` | split notes and coverage | concept notes and manifest | formal definitions complete and linked |
 | Concept audit | `book-graph-audit --stage concepts` | concept-linked corpus | audit report | concept manifest and links pass |
@@ -24,6 +24,18 @@ For textbook profiles with `decomposition.require_lesson_flow_manifest: true`,
 formatted source and split-manifest digests, covers every numbered lesson with
 contiguous ordered blocks, and must report `status: passed`. The same artifact
 is required by Markdown standardization and progressive audits.
+
+For textbook profiles with
+`decomposition.require_textbook_node_architecture: true`, the split manifest's
+`node_architecture` review is also required. Validate it with
+`scripts/textbook_node_architecture.py`. A section organizer cannot directly
+own examples or question atoms; knowledge themes own scenario/knowledge atoms,
+knowledge atoms own examples, practice organizers own inline-practice
+questions, and section-exercise organizers own only their exercise questions.
+The recursive expansion must retain exact source order. The same review must
+record `physical_hierarchy: passed`: each owner is a same-named folder-index
+note, each leaf is inside its direct owner's folder, and category roots remain
+the top-level partition.
 
 The coordinator runtime owns stage state, schema and identity validation,
 same-run resume, review queues, safe note workplans, and telemetry. It never

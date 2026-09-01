@@ -145,6 +145,34 @@ class GraphAuditTests(unittest.TestCase):
             self.assertEqual(report["status"], "passed", report["errors"])
             self.assertEqual(report["counts"]["concept_files"], 1)
 
+    def test_frontmatter_does_not_hide_note_or_concept_headings(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            items = self.make_profiled_book(Path(temporary))
+            source, vault, book, profile, coverage, concepts = items
+            frontmatter = "---\n类别: 知识点\n来源: Example\n---\n\n"
+            knowledge = book / "主题" / "集合.md"
+            concept = book / "术语" / "集合.md"
+            knowledge.write_text(
+                frontmatter + knowledge.read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            concept.write_text(
+                frontmatter + concept.read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            report = audit_tool.audit_book(
+                book.resolve(),
+                vault.resolve(),
+                source=source.resolve(),
+                expected_source_sha256=audit_tool.sha256_file(source),
+                profile_path=profile.resolve(),
+                coverage_manifest=coverage.resolve(),
+                concept_manifest=concepts.resolve(),
+            )
+            codes = {item["code"] for item in report["errors"]}
+            self.assertNotIn("invalid-note-entry-heading", codes)
+            self.assertNotIn("malformed-concept-note-structure", codes)
+
     def test_rejects_wikilink_and_missing_target(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             items = self.make_profiled_book(Path(temporary))
@@ -220,6 +248,27 @@ class GraphAuditTests(unittest.TestCase):
             )
             codes = {item["code"] for item in report["errors"]}
             self.assertNotIn("missing-markdown-link", codes)
+
+    def test_embedded_markdown_note_is_a_note_link_not_an_image(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            items = self.make_profiled_book(Path(temporary))
+            source, vault, book, profile, coverage, concepts = items
+            (book / "主题" / "集合.md").write_text(
+                "# 集合\n\n![集合概念](../术语/集合.md)\n",
+                encoding="utf-8",
+            )
+            report = audit_tool.audit_book(
+                book.resolve(),
+                vault.resolve(),
+                source=source.resolve(),
+                profile_path=profile.resolve(),
+                coverage_manifest=coverage.resolve(),
+                concept_manifest=concepts.resolve(),
+            )
+            self.assertEqual(report["counts"]["embedded_note_links"], 1)
+            self.assertEqual(report["counts"]["image_references"], 0)
+            self.assertEqual(report["counts"]["missing_markdown_links"], 0)
+            self.assertEqual(report["counts"]["missing_images"], 0)
             self.assertEqual(report["counts"]["standard_links"], 2)
 
     def test_rejects_unstandardized_functional_blocks(self) -> None:

@@ -36,7 +36,9 @@ freeze typed sources
 - When one OCR row contains several leader-delimited TOC entries, inventory
   every entry with its raw column and propose source-stream and column-major
   orders. Prefer a continuous printed ordinal ledger only as a review proposal;
-  a reviewer still confirms authority and reading order.
+  a reviewer still confirms authority and reading order. Coverage is per
+  leader-delimited entry, not per Markdown line: registering one item on a
+  multi-entry row cannot cover its siblings.
 - Review a printed TOC from its first leader-delimited entry through its last
   entry across every TOC page. The hierarchy planner must reject any
   leader-delimited row before the first body anchor that is absent from the
@@ -49,10 +51,21 @@ freeze typed sources
   nearest preceding lecture. Never flatten these titles into sibling folders.
 - When the first hierarchy level exists only to organize second-level files,
   mark every first-level entry `structural_only: true`, scope questions only to
-  second-level leaf contexts, and verify that no generated Q file is owned by a
-  structural parent. Persist reviewed per-leaf question counts, including zero
-  counts for non-question sections, so a structurally valid but incomplete
-  split cannot pass final audit.
+  second-level leaf contexts, and set `question_ownership_policy: leaf-only`.
+  This strict mode requires exact scope coverage and a complete reviewed
+  leaf-by-question-kind count matrix, including zeroes. Verify globally that
+  every Q embed occurs once and that no Q is owned by a structural parent, so a
+  last-node content swallow or duplicate navigation link cannot pass audit.
+- Classify the source format before adapting it: single-topic teacher edition,
+  structured monograph, or exercise bank. For a structured monograph or a
+  multi-book series, visually review each volume's complete printed TOC and
+  freeze its own `entry -> level -> parent -> body anchor -> output` ledger.
+  Never copy line anchors, answer boundaries, or hierarchy depth between
+  sibling volumes; only path-free recognition semantics may be reused.
+- Record reviewed output policy and root layout in every adapter. When the user
+  or series convention disables index and Canvas, set both switches false and
+  audit away stale artifacts. When `graph_root` is already the book directory,
+  never append another same-title wrapper directory.
 - Build a source-provenance index from MinerU content-list artifacts. Preserve
   original Markdown line ownership through hierarchy snapshots and attach an
   exact PDF page/bbox to atomic questions whenever evidence resolves; retain
@@ -145,6 +158,14 @@ freeze typed sources
   OCR text or question bodies during title cleanup.
 - Never accept fuzzy answer similarity by itself. Route ambiguous or missing
   matches to a blocking review queue.
+- A source-confirmed question for which the publisher supplies no answer may be
+  retained with per-question `answer_handling: unavailable`. It must render
+  `answer_status: unavailable`, own no A1 or answer record, and bypass neither a
+  publisher answer that actually exists nor any unresolved matching evidence.
+- Never bypass `review_required` by calling component apply functions directly.
+  Resolve the owning adapter/review artifact and resume through the coordinator.
+  Compiler implementation hashes, not adapter cachebuster metadata, invalidate
+  stale stages and descendants.
 - Assign each answer block to at most one question and each question to at most
   one answer. A re-claimed candidate routes to the blocking review queue,
   never to a second match (the final audit hard-errors on
@@ -200,3 +221,64 @@ freeze typed sources
 
 The canonical skills live under `skills/`. Install or link that directory using
 the host platform's Codex skill location; do not maintain copied duplicates.
+
+---
+
+## 3. Codebase Markdown Documents Map / 文档全景导航与说明
+
+本仓库中所有 `.md` 文件的职责定位与功能划分如下：
+
+### 3.1 根目录核心文档 (Root Documents)
+
+| 文档路径 | 作用与功能说明 |
+| :--- | :--- |
+| [`AGENTS.md`](file:///Users/oven/Documents/Mathematics-Knowledge-code/Question%20Type%20Graph/AGENTS.md) | **顶层 Agent 核心契约与执行规范说明书**。定义了题型图谱构建流水线标准顺序、全局不变量（Invariants）、审计硬性指标以及全仓库 Markdown 文档的职责全景导航。 |
+| [`README.md`](file:///Users/oven/Documents/Mathematics-Knowledge-code/Question%20Type%20Graph/README.md) | **项目概览与上手指南**。介绍 Question Type Graph 系统的设计背景、核心特性、安装运行步骤、CLI 命令行工具用法及基础配置示例。 |
+| [`IDEA.md`](file:///Users/oven/Documents/Mathematics-Knowledge-code/Question%20Type%20Graph/IDEA.md) | **设计思考与技术愿景**。记录系统在设计初期的灵感来源、图谱化题库建模哲学、核心算法构想以及长期演进路线。 |
+
+### 3.2 智能体与变更日志 (Agents & Changelogs)
+
+| 文档路径 | 作用与功能说明 |
+| :--- | :--- |
+| [`agents/question-type-graph-agent.md`](file:///Users/oven/Documents/Mathematics-Knowledge-code/Question%20Type%20Graph/agents/question-type-graph-agent.md) | **专职 Agent 的完整 System Prompt 与实战经验库**。包含系统提示词、实战总结（如【反思】模块独立 Callout、短答案提取、星级难度自动注入、三级大纲防扁平化、高考真题汇编适配、教师版交错解析等规则）。 |
+| [`agents/CHANGELOG.md`](file:///Users/oven/Documents/Mathematics-Knowledge-code/Question%20Type%20Graph/agents/CHANGELOG.md) | **Agent 版本演进与变更记录**。详细记录 Agent 提示词、规则集与核心规范的历次版本修复、功能新增与行为演进历史。 |
+
+### 3.3 各阶段流水线技能与参考规范 (`skills/`)
+
+#### 阶段 0/1：PDF 转写与 OCR
+- [`skills/question-type-pdf-to-markdown/SKILL.md`](file:///Users/oven/Documents/Mathematics-Knowledge-code/Question%20Type%20Graph/skills/question-type-pdf-to-markdown/SKILL.md): **PDF 强制 OCR 与原始 Markdown 转写技能**。指导调用 MinerU 进行 PDF 高精度解析、智能分片、公式识别与图片资产提取。
+- [`skills/question-type-pdf-to-markdown/references/mineru-api.md`](file:///Users/oven/Documents/Mathematics-Knowledge-code/Question%20Type%20Graph/skills/question-type-pdf-to-markdown/references/mineru-api.md): **MinerU API 调用与分片契约**。定义云端/本地 OCR API 接口协议、80 页安全分片上限以及排队重试策略。
+
+#### 阶段 2：目录大纲识别与层级切分
+- [`skills/question-type-toc-segmentation/SKILL.md`](file:///Users/oven/Documents/Mathematics-Knowledge-code/Question%20Type%20Graph/skills/question-type-toc-segmentation/SKILL.md): **目录大纲建模与层级规划技能**。负责分析教辅印刷目录与正文标题，规划章/节/考点层级树与文件夹结构。
+- [`skills/question-type-toc-segmentation/references/hierarchy-manifest.md`](file:///Users/oven/Documents/Mathematics-Knowledge-code/Question%20Type%20Graph/skills/question-type-toc-segmentation/references/hierarchy-manifest.md): **大纲层级清单契约**。定义 `hierarchy-coverage-manifest.json` 结构、单调递增行号约束与 100% 覆盖率验证标准。
+
+#### 阶段 3：内容切分与原子题抽取
+- [`skills/question-type-content-segmentation/SKILL.md`](file:///Users/oven/Documents/Mathematics-Knowledge-code/Question%20Type%20Graph/skills/question-type-content-segmentation/SKILL.md): **内容功能块切分与原子题生成技能**。将正文切分为结构笔记、知识导学与原子题目笔记（`Q*.md`），自动分离例题题干与解析。
+- [`skills/question-type-content-segmentation/references/content-manifest.md`](file:///Users/oven/Documents/Mathematics-Knowledge-code/Question%20Type%20Graph/skills/question-type-content-segmentation/references/content-manifest.md): **内容清单契约**。定义 `question-type-manifest.json` 格式、QID 全局唯一分配规则与星级难度等 Frontmatter 属性。
+
+#### 阶段 4 & 4.5：答案匹配与补充解析
+- [`skills/question-answer-matching/SKILL.md`](file:///Users/oven/Documents/Mathematics-Knowledge-code/Question%20Type%20Graph/skills/question-answer-matching/SKILL.md): **题目与权威答案精准对齐技能**。基于题号、题干特征与上下文边界进行严格对齐，生成 `Q*A1.md` 解析嵌入卡片。
+- [`skills/question-answer-matching/references/answer-matching.md`](file:///Users/oven/Documents/Mathematics-Knowledge-code/Question%20Type%20Graph/skills/question-answer-matching/references/answer-matching.md): **答案匹配清单契约**。定义 `answer-match-manifest.json` 格式、`used_answer_ids` 唯一认领守卫与冲突阻塞机制。
+- [`skills/supplement-question-type-solutions/SKILL.md`](file:///Users/oven/Documents/Mathematics-Knowledge-code/Question%20Type%20Graph/skills/supplement-question-type-solutions/SKILL.md): **缺失答案补充与审核技能**。针对权威答案缺失题目生成高质量 AI 解析，并通过 `reviewed-supplement-overrides.json` 实现持久化绑定。
+
+#### 阶段 5：Markdown 标准化
+- [`skills/question-type-markdown/SKILL.md`](file:///Users/oven/Documents/Mathematics-Knowledge-code/Question%20Type%20Graph/skills/question-type-markdown/SKILL.md): **Markdown 标准化排版与语法清洗技能**。规范折叠 Callout（【答案】/【分析】/【解析】/【反思】）、KaTeX 数学公式与相对图片链接。
+- [`skills/question-type-markdown/references/preservation-contract.md`](file:///Users/oven/Documents/Mathematics-Knowledge-code/Question%20Type%20Graph/skills/question-type-markdown/references/preservation-contract.md): **内容无损保护契约**。严格保证清洗排版过程中原始数学公式、中文推导字句与题干内容 0 丢失、0 篡改。
+
+#### 阶段 6：Canvas 白板编译
+- [`skills/question-type-canvas/SKILL.md`](file:///Users/oven/Documents/Mathematics-Knowledge-code/Question%20Type%20Graph/skills/question-type-canvas/SKILL.md): **结构化 Obsidian Canvas 编译技能**。自动生成章节拓扑白板，仅包含结构与考点笔记，排除海量原子题目。
+- [`skills/question-type-canvas/references/canvas-contract.md`](file:///Users/oven/Documents/Mathematics-Knowledge-code/Question%20Type%20Graph/skills/question-type-canvas/references/canvas-contract.md): **Canvas 白板契约**。定义节点坐标网格计算、父子连线拓扑与边界尺寸规范。
+
+#### 总控流程与适配器规范
+- [`skills/question-type-graph/SKILL.md`](file:///Users/oven/Documents/Mathematics-Knowledge-code/Question%20Type%20Graph/skills/question-type-graph/SKILL.md): **总控编排技能**。统筹调度 0~6 全部阶段、管理断点续跑（`resume`）并执行最终全图谱审计（`audit_graph`）。
+- [`skills/question-type-graph/references/pipeline-contract.md`](file:///Users/oven/Documents/Mathematics-Knowledge-code/Question%20Type%20Graph/skills/question-type-graph/references/pipeline-contract.md): **总控流水线契约**。定义阶段间输入/输出状态机、Stage Fingerprint 哈希失效与零警告完成标准。
+- [`skills/question-type-graph/references/format-adapter.md`](file:///Users/oven/Documents/Mathematics-Knowledge-code/Question%20Type%20Graph/skills/question-type-graph/references/format-adapter.md): **教辅格式适配器规范**。全面定义 `format-adapter.json` 中所有大纲规则、题号正则、解析边界与输出模板字段。
+- [`skills/question-type-graph/references/structured-monograph.md`](file:///Users/oven/Documents/Mathematics-Knowledge-code/Question%20Type%20Graph/skills/question-type-graph/references/structured-monograph.md): **结构化专著与系列教辅批处理协议**。定义多卷丛书独立 staging、多层目录拓扑与逐册审计规范。
+
+### 3.4 历史运行报告 (`reports/`)
+
+| 文档路径 | 作用与功能说明 |
+| :--- | :--- |
+| [`reports/高中数学思想方法导引2023版-adaptability-run-2026-08-11.md`](file:///Users/oven/Documents/Mathematics-Knowledge-code/Question%20Type%20Graph/reports/高中数学思想方法导引2023版-adaptability-run-2026-08-11.md) | **《高中数学思想方法导引》实战运行报告**。记录该专著全书切分运行、大纲适配配置、题目切分统计与最终审计归档数据。 |
+

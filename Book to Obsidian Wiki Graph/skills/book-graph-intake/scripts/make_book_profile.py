@@ -181,6 +181,7 @@ def create_profile(
             "preserve_complete_source_blocks": True,
             "lesson_entry_is_ordered_index": True,
             "require_lesson_flow_manifest": True,
+            "require_textbook_node_architecture": True,
             "non_toc_split_default": "retain",
             "semantic_split_confidence_threshold": 0.9,
             "max_retained_teaching_block_nonblank_lines": 40,
@@ -360,6 +361,13 @@ def profile_errors(profile: Any) -> list[str]:
         ):
             errors.append(
                 "decomposition.require_lesson_flow_manifest must be boolean"
+            )
+        if not isinstance(
+            decomposition.get("require_textbook_node_architecture", True),
+            bool,
+        ):
+            errors.append(
+                "decomposition.require_textbook_node_architecture must be boolean"
             )
         if decomposition.get("non_toc_split_default", "retain") != "retain":
             errors.append("decomposition.non_toc_split_default must be retain")

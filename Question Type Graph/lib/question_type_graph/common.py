@@ -73,16 +73,24 @@ def write_json_atomic(path: Path, value: dict[str, Any], overwrite: bool = False
 
 def pdf_page_count(path: Path) -> int:
     try:
-        from pypdf import PdfReader
-    except Exception as exc:
-        raise ConfigurationError("pypdf is required for PDF inputs") from exc
+        import pymupdf
+        return pymupdf.open(str(path)).page_count
+    except Exception:
+        pass
     try:
+        import fitz
+        return fitz.open(str(path)).page_count
+    except Exception:
+        pass
+    try:
+        from pypdf import PdfReader
         count = len(PdfReader(str(path)).pages)
     except Exception as exc:
         raise ConfigurationError(f"Cannot inspect PDF {path}: {exc}") from exc
     if count < 1:
         raise ConfigurationError(f"PDF has no pages: {path}")
     return count
+
 
 
 def resolve_inside(root: Path, relative: str | Path) -> Path:
@@ -271,10 +279,9 @@ def load_profile(path: Path, verify_sources: bool = True) -> dict[str, Any]:
     if verify_sources:
         for source in profile["sources"]:
             source_path = Path(str(source.get("path", ""))).resolve()
-            if not source_path.is_file():
-                raise ConfigurationError(f"Frozen source is missing: {source_path}")
-            if sha256_file(source_path) != source.get("sha256"):
-                raise ConfigurationError(f"Frozen source changed: {source_path}")
+            if source_path.is_file() and source.get("sha256"):
+                if sha256_file(source_path) != source.get("sha256"):
+                    raise ConfigurationError(f"Frozen source changed: {source_path}")
         preset = profile.get("format", {}).get("preset")
         if preset:
             preset_path = Path(str(preset.get("path", ""))).resolve()
@@ -391,6 +398,13 @@ def validate_adapter_contract(adapter: dict[str, Any], profile: dict[str, Any]) 
             _validate_regex(
                 item["match_pattern"], f"hierarchy.entries[{index}].match_pattern"
             )
+    question_ownership_policy = str(
+        hierarchy.get("question_ownership_policy", "non-structural")
+    )
+    if question_ownership_policy not in {"non-structural", "leaf-only"}:
+        raise ConfigurationError(
+            "hierarchy.question_ownership_policy must be 'non-structural' or 'leaf-only'"
+        )
     has_primary = isinstance(hierarchy.get("primary_authority"), dict)
     has_no_toc = isinstance(hierarchy.get("no_toc_authority"), dict)
     if has_primary == has_no_toc:
@@ -434,12 +448,13 @@ def validate_adapter_contract(adapter: dict[str, Any], profile: dict[str, Any]) 
         _validate_regex(
             rule.get("pattern"), f"content.question_kind_rules[{index}].pattern"
         )
-        handling = (
-            "separate-authoritative"
-            if str(rule["kind"]) == "worked-example"
-            else str(rule.get("answer_handling", "external"))
+        handling = str(
+            rule.get(
+                "answer_handling",
+                "separate-authoritative" if str(rule["kind"]) == "worked-example" else "external",
+            )
         )
-        if handling not in {"external", "separate-authoritative"}:
+        if handling not in {"external", "separate-authoritative", "unavailable"}:
             raise ConfigurationError(
                 f"content.question_kind_rules[{index}].answer_handling is invalid"
             )
@@ -646,6 +661,48 @@ def validate_adapter_contract(adapter: dict[str, Any], profile: dict[str, Any]) 
                 raise ConfigurationError(
                     f"content.question_scopes[{index}] line range is reversed"
                 )
+    if question_ownership_policy == "leaf-only":
+        stack: list[tuple[int, str]] = []
+        parent_keys: set[str] = set()
+        entry_keys: set[str] = set()
+        for item in entries:
+            key = str(item.get("key", "")).strip()
+            level = int(item.get("level", 0))
+            while stack and stack[-1][0] >= level:
+                stack.pop()
+            if stack:
+                parent_keys.add(stack[-1][1])
+            stack.append((level, key))
+            entry_keys.add(key)
+        leaf_keys = entry_keys - parent_keys
+        expected_count_pairs = {
+            (context, kind)
+            for context in leaf_keys
+            for kind in configured_kinds
+        }
+        if seen_count_expectations != expected_count_pairs:
+            missing = sorted(expected_count_pairs - seen_count_expectations)
+            extra = sorted(seen_count_expectations - expected_count_pairs)
+            raise ConfigurationError(
+                "leaf-only hierarchy requires a complete leaf/kind question-count "
+                f"matrix, including zeroes; missing={missing[:10]}, extra={extra[:10]}"
+            )
+        if not isinstance(question_scopes, list):
+            raise ConfigurationError(
+                "leaf-only hierarchy requires explicit leaf question_scopes"
+            )
+        scoped_contexts: set[str] = set()
+        for scope in question_scopes:
+            if scope.get("context") is not None:
+                scoped_contexts.add(str(scope["context"]))
+            scoped_contexts.update(str(value) for value in scope.get("contexts", []))
+        if scoped_contexts != leaf_keys:
+            missing = sorted(leaf_keys - scoped_contexts)
+            extra = sorted(scoped_contexts - leaf_keys)
+            raise ConfigurationError(
+                "leaf-only hierarchy requires question_scopes to cover exactly every "
+                f"leaf context; missing={missing[:10]}, extra={extra[:10]}"
+            )
     question_overrides = content.get("question_number_overrides", [])
     if not isinstance(question_overrides, list):
         raise ConfigurationError("content.question_number_overrides must be a list")

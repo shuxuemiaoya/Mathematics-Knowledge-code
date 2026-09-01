@@ -1,0 +1,22 @@
+{
+  "name": "book-to-wiki-graph",
+  "version": "0.2.0",
+  "description": "Convert books into TOC-centered organizer and link-free atom graphs with organization-first Obsidian Canvas files.",
+  "author": {
+    "name": "Local developer"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Book to Wiki Graph",
+    "shortDescription": "Turn books into atomic Wiki graphs.",
+    "longDescription": "Convert a book PDF to Markdown, derive an open-depth organizer hierarchy from its table of contents, classify source-complete atoms, validate the corpus, and generate separate overview, chapter, and semantic Obsidian Canvas files.",
+    "developerName": "Local developer",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"],
+    "defaultPrompt": [
+      "Convert this PDF into a TOC-centered Wiki graph.",
+      "Audit this book graph's organizers and atoms.",
+      "Build organization-first Canvas files from this atomic book graph."
+    ]
+  }
+}

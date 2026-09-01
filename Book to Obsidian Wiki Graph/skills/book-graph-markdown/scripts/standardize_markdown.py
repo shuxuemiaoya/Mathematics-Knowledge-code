@@ -51,7 +51,12 @@ PLAIN_RUNNING_CHAPTER_HEADER_RE = re.compile(
     r"^\s*(?:\d{1,3}\s*)?第[一二三四五六七八九十]+章\s+"
     r"[^。！？!?；;：:\[\]()（）]{1,40}\s*$"
 )
-LINK_RE = re.compile(r"(?<!!)\[[^\]\r\n]*\]\(([^)\r\n]+)\)")
+LINK_RE = re.compile(
+    r"(?<!!)\[[^\]\r\n]*\]\(((?:[^()\r\n]|\([^()\r\n]*\))*)\)"
+)
+CHILD_LINK_LINE_RE = re.compile(
+    r"^\s*!\[[^\]]+\]\(((?:[^()]|\([^()]*\))*)\)\s*$"
+)
 IMAGE_RE = re.compile(r"!\[[^\]]*\]\(([^)]+)\)|<img\b[^>]*\bsrc=[\"']([^\"']+)")
 FORMULA_NUMBER_RE = re.compile(r"[①②③④⑤⑥⑦⑧⑨⑩]")
 DISPLAY_MATH_RE = re.compile(r"\$\$.*?\$\$", re.DOTALL)
@@ -147,6 +152,8 @@ def is_block_start(line: str) -> bool:
 
 
 def is_functional_callout_boundary(line: str, marker: str) -> bool:
+    if CHILD_LINK_LINE_RE.match(line):
+        return True
     if is_block_start(line):
         return True
     if marker not in {"info", "question"}:
@@ -334,6 +341,43 @@ def nest_existing_reasoning_blocks(text: str) -> tuple[str, int]:
     return "\n".join(lines) + "\n", nested
 
 
+def detach_owned_child_links(text: str) -> tuple[str, int]:
+    """Close an existing callout before a source atom's owned child links."""
+
+    lines = text.splitlines()
+    detached = 0
+    index = 0
+    while index < len(lines):
+        if not TOP_CALLOUT_RE.match(lines[index]):
+            index += 1
+            continue
+        end = index + 1
+        while end < len(lines) and lines[end].startswith(">"):
+            body = lines[end][2:] if lines[end].startswith("> ") else ""
+            if CHILD_LINK_LINE_RE.match(body):
+                while end > index + 1 and lines[end - 1].strip() in {">", "> >"}:
+                    del lines[end - 1]
+                    end -= 1
+                if end > index + 1 and lines[end - 1] != "":
+                    lines.insert(end, "")
+                    end += 1
+                while end < len(lines) and lines[end].startswith(">"):
+                    current = lines[end]
+                    if TOP_CALLOUT_RE.match(current):
+                        break
+                    lines[end] = (
+                        ""
+                        if current.strip() in {">", "> >"}
+                        else re.sub(r"^(?:>\s*)+", "", current)
+                    )
+                    end += 1
+                detached += 1
+                break
+            end += 1
+        index = max(end, index + 1)
+    return "\n".join(lines) + "\n", detached
+
+
 def standardize_text(
     text: str,
     *,
@@ -398,6 +442,12 @@ def standardize_text(
                     converted_headings += 1
                     index = end
                     continue
+                # A functional label stranded at an atomic split boundary has
+                # no source body of its own.  It is presentation scaffolding,
+                # not a reusable heading or an empty callout.
+                removed_artifact_headings += 1
+                index += 1
+                continue
             if title.rstrip().endswith(("?", "？")):
                 ensure_blank_before(output)
                 output.append(title)
@@ -504,6 +554,7 @@ def standardize_text(
     result, nested_existing_reasoning_blocks = nest_existing_reasoning_blocks(
         result
     )
+    result, detached_owned_child_links = detach_owned_child_links(result)
     result, repaired_ocr_math_fragments = repair_spaced_digits_in_math(result)
     return result, {
         "converted_headings": converted_headings,
@@ -513,6 +564,7 @@ def standardize_text(
         "repaired_ocr_math_fragments": repaired_ocr_math_fragments,
         "compacted_example_stems": compacted_example_stems,
         "nested_existing_reasoning_blocks": nested_existing_reasoning_blocks,
+        "detached_owned_child_links": detached_owned_child_links,
     }
 
 
@@ -743,6 +795,9 @@ def run(
         ),
         "nested_existing_reasoning_blocks": sum(
             item["nested_existing_reasoning_blocks"] for item in reports
+        ),
+        "detached_owned_child_links": sum(
+            item["detached_owned_child_links"] for item in reports
         ),
         "report": str(report_path),
     }

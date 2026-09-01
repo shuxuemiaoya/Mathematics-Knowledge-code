@@ -69,13 +69,44 @@ Each chapter note preserves its introduction and links in source order to lesson
 
 ### Lesson entry
 
-A lesson entry remains the ordered learning-flow page. It keeps short introductions and transitions, links to substantial topic notes, retains section practice, and links to the final lesson exercise.
+A lesson entry remains the first-layer ordered organizer. It contains its
+source heading and links to second-layer knowledge-theme, practice, and
+section-exercise files in source order. Source-backed introductions and
+transitions belong to `scenario` atoms; complete exposition belongs to
+`knowledge` atoms. The lesson entry does not directly link worked examples or
+individual questions.
+
+Its physical directory is not flat. Each knowledge theme and practice group is
+a same-named subfolder containing its same-named index note and direct leaves.
+A knowledge atom with worked examples becomes the same kind of folder-index,
+with the example notes inside it. The embedded links still define reading
+order.
 
 The accepted split does not rewrite the lesson into a summary. It changes presentation boundaries while preserving the original sequence.
 
 ### Knowledge topics
 
-Substantial teaching arcs become `知识点` notes. They retain complete definitions, examples, questions, proofs, formulas, tables, images, and transitions relevant to that topic.
+Substantial teaching arcs become `knowledge` atoms. They retain complete
+definitions, proofs, formulas, tables, images, and reasoning relevant to that
+topic, and link their worked-example atoms at the examples' original source
+positions. Related contiguous scenario/knowledge atoms may be grouped by a
+semantic organizer such as `集合的表达方式`.
+
+### Practice and exercise layers
+
+Each printed `练习 N` becomes a link-only practice organizer containing only
+its inline-practice question atoms. The printed section aggregate
+`习题X.Y <小节标题>` is a separate second-layer organizer containing only its
+own exercise-question atoms; it is never embedded inside `练习 N`.
+
+Every section exercise and review exercise is split at its complete sequential
+top-level question numbers. Preserve the book's printed group headings in the
+organizer. After splitting, inspect internal `(1)…(n)` subparts against the PDF
+for column interleaving, missing labels, and list numbers misread as equation
+`\tag` values; fix only with source-backed exact repairs.
+
+Source atoms and second-layer theme/practice/exercise organizers do not receive
+artificial Markdown headings that repeat their filenames.
 
 ### Concepts
 

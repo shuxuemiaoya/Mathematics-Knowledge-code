@@ -37,11 +37,30 @@ authoritative answer field that disagrees with the source conclusion.
 Every solution note, including non-choice problems, must contain a collapsible
 outer FAQ callout and collapsible nested `【答案】`, `【分析】`, and `【解析】`
 callouts. The answer uses `success`; analysis and explanation use `note`; every
-nested content line keeps the `> >` prefix. A bounded source prefix before an
-explicit `解析:` or `【解析】` marker may be promoted to the answer field. If a
-non-choice source provides no safely separable short result, render
-`**【答案】** 详见解析` while preserving the complete derivation under
-`【解析】`; this fallback is forbidden for choice questions.
+nested content line keeps the `> >` prefix.
+
+Answer value extraction scans authoritative sources in strict order:
+1. `reviewed_short_answer` / `reviewed_choice_answer`;
+2. leading `【答案】<value>` header;
+3. trailing / standalone `答案：<value>` / `答案: <value>` in the resolution body;
+4. conclusion expressions such as `故答案为：...`, `所以答案为：...`, `故选: D`;
+5. bounded short answer prefix before `【解析】` (e.g. `1. D` or `2. [-2, 0]`).
+
+Only when a problem is a genuine open-ended proof or unstructured derivation with
+no separable short result may `**【答案】** 详见解析` be emitted. This fallback
+is strictly forbidden for choice questions and any question with an identifiable
+result.
+
+Pedagogical and reflection sections are extracted into dedicated child callouts:
+- `【反思】` -> `> > [!tip]- **【反思】**` (with `①`, `②` formatted as `- **①**：` items);
+- `【总结】` / `【规律总结】` / `【归纳总结】` -> `> > [!tip]- **【总结】**`;
+- `【规律方法】` / `【方法技巧】` -> `> > [!tip]- **【规律方法】**`;
+- `【名师点睛】` / `【点睛】` / `【点拨】` -> `> > [!tip]- **【名师点睛】**`;
+- `【易错警示】` / `【避坑】` -> `> > [!warning]- **【易错警示】**`;
+- `【二级结论】` -> `> > [!tip]- **【二级结论】**`;
+- `【多种解法】` -> `> > [!tip]- **【多种解法】**`;
+- `【考点】` / `【链接教材】` -> `> > [!note]- **【考点】**` / `> > [!note]- **【链接教材】**`.
+These must never remain unparsed or mixed into the main explanation block.
 
 Reviewer-authored supplemental solutions must be durable. Store reusable
 entries in staging `reviewed-supplement-overrides.json`, bound to both
