@@ -239,8 +239,6 @@ def valid_solution_note(
     ):
         return False, "solution-choice-answer-mismatch"
     lexical = re.sub(r"\A---\n.*?\n---\n", "", text, flags=re.DOTALL)
-    if not re.search(r"(?m)^> > \[!note\]-\s+\*\*【分析】\*\*\s*$", text):
-        return False, "solution-analysis-callout-missing"
     if not re.search(r"(?m)^> > \[!note\]-\s+\*\*【解析】\*\*\s*$", text):
         return False, "solution-explanation-callout-missing"
     lexical = re.sub(r"(?m)^>\s*>\s*", "", lexical)

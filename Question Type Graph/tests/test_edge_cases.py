@@ -730,7 +730,7 @@ class TestEdgeCases(unittest.TestCase):
         self.assertEqual(extract_choice_answer(body), "D")
         rendered = format_answer_callout(body, callout_title="全练一本通解析")
         self.assertIn("> > [!success]- **【答案】** D", rendered)
-        self.assertIn("> > [!note]- **【分析】**", rendered)
+        self.assertNotIn("> > [!note]- **【分析】**", rendered)
         self.assertIn("> > [!note]- **【解析】**", rendered)
 
     def test_answer_analysis_and_explanation_are_nested_collapsible_callouts(self) -> None:
@@ -2201,6 +2201,23 @@ class TestEdgeCases(unittest.TestCase):
             ])
             self.assertEqual([item["kind"] for item in review], ["invalid-question-number"])
             self.assertTrue(all(item["source_part"] == {"line": 1, "part": 2, "start_page": 201, "end_page": 400} for item in questions))
+
+    def test_missing_analysis_or_summary_is_completely_omitted_without_placeholders(self) -> None:
+        body = "【正确答案】D\n\n【解析】由集合元素互异性知选项 D 正确。"
+        rendered = format_answer_callout(body)
+        self.assertIn("> > [!success]- **【答案】** D", rendered)
+        self.assertIn("> > [!note]- **【解析】**", rendered)
+        self.assertNotIn("【分析】", rendered)
+        self.assertNotIn("【总结】", rendered)
+        self.assertNotIn("本题未单列分析", rendered)
+
+    def test_extracted_metadata_integer_difficulty_mapping(self) -> None:
+        from question_type_graph.content import extract_text_metadata
+        sample = "【更多习题信息】难易度：适中\n知识点：集合的概念"
+        meta = extract_text_metadata("", sample)
+        self.assertEqual(meta["difficulty"], 3)
+        self.assertEqual(meta["difficulty_stars"], "★★★☆☆")
+        self.assertEqual(meta["knowledge_points"], ["集合的概念"])
 
 
 if __name__ == "__main__":

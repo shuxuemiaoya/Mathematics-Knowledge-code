@@ -57,6 +57,7 @@ persist the final checks with `audit --overwrite`.
 
 ## Gates
 
+- **Stage 0 Discovery Gate**: For unfamiliar document layouts, new publishers, or unstructured exercise banks, ALWAYS execute a sample-based syntax discovery and submit a 5-dimension schema inventory (TOC, stem/subquestion boundaries, answer layout, short answer detection, metadata extraction) with rendered preview cards to the user for confirmation BEFORE any batch processing.
 - Freeze every source path, digest, role, page count, and output root.
 - Force MinerU OCR for PDFs and stop on incomplete page or asset coverage.
 - Build `source-provenance-index.json` from MinerU content-list blocks and carry

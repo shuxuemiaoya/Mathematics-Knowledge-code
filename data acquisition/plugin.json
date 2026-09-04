@@ -1,0 +1,5 @@
+{
+  "name": "data-acquisition",
+  "version": "1.0.0",
+  "description": "Data Acquisition Agent for smart education platforms (basic.smartedu.cn), textbook sync exercises, exam paper scraping, and structured hierarchical archiving."
+}

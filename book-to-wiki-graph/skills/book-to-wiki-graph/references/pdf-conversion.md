@@ -4,6 +4,12 @@ Use an OCR-capable converter appropriate to the environment. The plugin does
 not lock conversion to one vendor: a local model, MinerU, or another converter
 is acceptable when it satisfies this handoff.
 
+The bundled `scripts/convert_pdf.py` is the default MinerU adapter. It reads
+`MINERU_API_KEY` from the process environment or an explicitly selected env
+file, supports OCR/formula/table extraction, splits oversized PDFs, and merges
+results in page order. Other PDF tools may supplement conversion and QA; the
+Markdown handoff and conversion report remain authoritative.
+
 ## Required behavior
 
 - Freeze the PDF path, SHA-256, size, and page count before conversion.
@@ -34,3 +40,10 @@ digest is unchanged.
 
 When the input is already Markdown, register its path and digest directly and
 skip PDF conversion. Do not round-trip it through a PDF tool.
+
+```bash
+python scripts/convert_pdf.py <book.pdf> \
+  --output <staging>/book.raw.md \
+  --report <staging>/conversion-report.json \
+  --env-file /path/to/.env
+```

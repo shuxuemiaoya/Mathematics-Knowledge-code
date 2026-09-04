@@ -18,6 +18,50 @@ ATOM_CATEGORIES = {
     "exercise": "原子层/习题",
     "scenario": "原子层/情景引入",
 }
+DEFAULT_ATOMIZATION = {
+    "mode": "llm-two-pass",
+    "knowledge_granularity": "complete-teaching-unit",
+    "scenario_policy": "substantial-only",
+    "confidence_threshold": 0.90,
+    "short_atom_confidence_threshold": 0.95,
+}
+DEFAULT_ORGANIZATION = {
+    "mode": "toc-plus-reviewed-topics",
+    "activity_heading_policy": "atom-content",
+    "knowledge_topic_policy": "source-supported-reviewed",
+}
+DEFAULT_MARKDOWN_RENDERING = {
+    "atom_heading_policy": "omit",
+    "atom_filename_policy": "sequence-category-code",
+    "leaf_organizer_policy": "flat-note",
+    "organizer_self_heading_policy": "omit",
+    "organizer_child_heading": "relative-depth",
+}
+DEFAULT_RELATION_ANALYSIS = {
+    "mode": "llm-three-pass",
+    "graph_model": "atom-concept-dual-layer",
+    "concept_scope": "book",
+    "explicit_confidence_threshold": 0.90,
+    "inferred_confidence_threshold": 0.95,
+    "concept_merge_threshold": 0.97,
+    "cross_chapter": True,
+    "candidate_retrieval": {
+        "source_window": 2,
+        "lexical_top_k": 8,
+        "embedding": "optional",
+        "embedding_top_k": 8,
+        "graph_hops": 2,
+        "max_ranked_candidates_per_atom": 12,
+    },
+    "community_analysis": "wcc-required-leiden-optional",
+}
+DEFAULT_CANVAS = {
+    "enabled": True,
+    "mode": "two-level-constellation",
+    "theme": "adaptive",
+    "overview_granularity": "chapter",
+    "chapter_granularity": "atom",
+}
 
 
 def sha256_file(path: Path) -> str:
@@ -77,7 +121,11 @@ def create_profile(source: Path, staging_root: Path, book_root: Path) -> dict[st
         },
         "organizer_root": "组织层",
         "atom_categories": ATOM_CATEGORIES,
-        "canvas": {"enabled": True},
+        "organization": DEFAULT_ORGANIZATION,
+        "atomization": DEFAULT_ATOMIZATION,
+        "relation_analysis": DEFAULT_RELATION_ANALYSIS,
+        "markdown_rendering": DEFAULT_MARKDOWN_RENDERING,
+        "canvas": DEFAULT_CANVAS,
     }
 
 

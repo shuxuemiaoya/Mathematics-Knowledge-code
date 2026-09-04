@@ -1,7 +1,7 @@
 {
   "name": "book-to-wiki-graph",
-  "version": "0.2.0",
-  "description": "Convert books into TOC-centered organizer and link-free atom graphs with organization-first Obsidian Canvas files.",
+  "version": "0.5.0",
+  "description": "Convert books into TOC-centered Wiki graphs with reviewed atoms, three-pass dual-layer concept relations, and two-level Obsidian knowledge constellations.",
   "author": {
     "name": "Local developer"
   },
@@ -9,14 +9,15 @@
   "interface": {
     "displayName": "Book to Wiki Graph",
     "shortDescription": "Turn books into atomic Wiki graphs.",
-    "longDescription": "Convert a book PDF to Markdown, derive an open-depth organizer hierarchy from its table of contents, classify source-complete atoms, validate the corpus, and generate separate overview, chapter, and semantic Obsidian Canvas files.",
+    "longDescription": "Convert a book PDF to Markdown, derive an open-depth organizer hierarchy, review source-complete atoms, map canonical concepts and teaching relations in three evidence-bound passes, validate the corpus, and generate a chapter atlas plus dual-layer knowledge constellations with curated method examples and exercise-organizer clusters.",
     "developerName": "Local developer",
     "category": "Productivity",
     "capabilities": ["Read", "Write"],
     "defaultPrompt": [
       "Convert this PDF into a TOC-centered Wiki graph.",
-      "Audit this book graph's organizers and atoms.",
-      "Build organization-first Canvas files from this atomic book graph."
+      "Audit and repair this book graph with two-pass semantic atomization.",
+      "Use the knowledge-relation mapper to build a three-pass atom-concept teaching graph.",
+      "Build two-level learning-path knowledge constellations with selective concept hubs, exercise clusters, and reviewed major-method examples."
     ]
   }
 }

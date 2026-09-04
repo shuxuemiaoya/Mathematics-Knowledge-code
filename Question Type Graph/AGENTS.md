@@ -7,7 +7,8 @@ that agent while operating here.
 ## Required Sequence
 
 ```text
-freeze typed sources
+[Stage 0: Unfamiliar Format Intake Discovery & Human Alignment Gate] (MANDATORY for new sources)
+  -> freeze typed sources
   -> deterministic preflight and immutable run record
   -> forced MinerU OCR for every PDF source
   -> page/bbox provenance index, format inventory, and reviewed adapter worksheet
@@ -23,6 +24,17 @@ freeze typed sources
 
 ## Invariants
 
+- **New Format Intake Discovery Gate (新版式前置探查与人工对齐门禁)**:
+  凡是接入新出版社、新平台（如智慧中小学、真题卷、自编校本题库）或具有未知排版特征的资料集，**绝对禁止直接编写脚本全量批处理**。必须强制执行以下 3 步：
+  1. **样本切片探查（Sample Probing）**：选取 1~2 份包含所有典型题型（单选、多选、填空、多小问大题）的样本，进行 OCR 并探查 Markdown AST。
+  2. **五维特征分析清单（5-Dimension Schema Inventory）**：
+     - **大纲层级与目录锚点**：是否存在章、节、题型子节点？
+     - **题干与小问边界**：题目起止标识、小问编号规则（`(1)` vs `(1)【问答题】`）。
+     - **解答与答案排版布局**：集中尾部（`tail`）、问答交错（`interleaved`）还是独立答案册？
+     - **短答案与解析结构**：选择题/填空题是否有明确提取源（如 `【正确答案】D`），避免退化为 `详见解析`。
+     - **元数据与属性定位**：难度（星级 vs 文本）、知识点、考点、所属目录知识点来源及映射规则（如难度 1~5 映射）。
+  3. **样题渲染与人工决议（Review & Prototype Preview）**：
+     向用户提供 1 道典型题目的完整 YAML Frontmatter 与 Markdown 渲染效果，并就模糊决策点（如属性命名、映射尺度、题型归类）向用户提问。**只有在用户明确确认批准后，方可放行批量流水线。**
 - Treat every source PDF and registered raw Markdown file as immutable.
 - Run preflight before OCR or graph mutation. Resolve credentials from an
   explicit path, process environment, or deterministic profile/project-root

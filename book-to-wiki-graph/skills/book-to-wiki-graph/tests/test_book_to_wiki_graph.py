@@ -16,6 +16,7 @@ if str(SCRIPT_DIRECTORY) not in sys.path:
 
 import build_canvas
 import init_book
+from semantic_atomization import seal_artifact
 import validate_book_graph
 
 
@@ -26,6 +27,7 @@ class BookToWikiGraphTests(unittest.TestCase):
         source_lines: list[str],
         nodes: list[dict[str, Any]],
         relations: list[dict[str, Any]] | None = None,
+        reviewed_relations: bool = True,
     ) -> dict[str, Path]:
         staging = root / "staging"
         book = root / "vault" / "book"
@@ -34,6 +36,9 @@ class BookToWikiGraphTests(unittest.TestCase):
         source = staging / "book.md"
         source.write_text("\n".join(source_lines) + "\n", encoding="utf-8")
         profile = init_book.create_profile(source, staging, book)
+        # These fixtures exercise schema-v1 backward compatibility.
+        profile.pop("atomization", None)
+        profile.pop("markdown_rendering", None)
         profile_path = staging / "book-profile.json"
         profile_path.write_text(
             json.dumps(profile, ensure_ascii=False, indent=2) + "\n",
@@ -74,6 +79,46 @@ class BookToWikiGraphTests(unittest.TestCase):
             json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
+        if reviewed_relations:
+            relation_final = seal_artifact(
+                {
+                    "schema_version": 1,
+                    "kind": "relation-final",
+                    "status": "passed",
+                    "manifest": str(manifest_path),
+                    "manifest_sha256": validate_book_graph.sha256_file(manifest_path),
+                    "source_markdown_sha256": manifest["source_markdown_sha256"],
+                    "relation_analysis": profile["relation_analysis"],
+                    "concept_signatures": [
+                        {"atom_key": "example", "role": "bridge", "teaches": ["A reusable mathematical method."], "assumes": ["Knowledge"]}
+                    ] if any(node.get("key") == "example" for node in nodes) else [],
+                    "reviewer": {"round_1": {"type": "fixture"}, "round_2": {"type": "fixture"}},
+                    "bindings": {},
+                    "unresolved_count": 0,
+                    "relations": relations or [],
+                }
+            )
+            relation_final_path = staging / "relation-final.json"
+            relation_final_path.write_text(
+                json.dumps(relation_final, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            manifest["relation_review"] = {
+                "status": "passed",
+                "mode": "llm-two-pass",
+                "final_artifact": {
+                    "path": str(relation_final_path),
+                    "sha256": relation_final["artifact_sha256"],
+                },
+                "bindings": {},
+                "reviewer": relation_final["reviewer"],
+                "featured_example_keys": ["example"] if any(node.get("key") == "example" for node in nodes) else [],
+                "unresolved_count": 0,
+            }
+            manifest_path.write_text(
+                json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
         by_key = {str(node["key"]): node for node in nodes}
         for node in nodes:
             path = book / str(node["filename"])
@@ -202,15 +247,26 @@ class BookToWikiGraphTests(unittest.TestCase):
                 "source_range": [9, 9],
             },
         ]
-        relations = [
-            {
-                "key": "scenario-introduces-knowledge",
-                "from_key": "scenario",
-                "to_key": "knowledge",
-                "label": "introduces",
-                "evidence": "Source line 4 explicitly introduces the knowledge on line 5.",
-                "color": "5",
+        def relation(key: str, left: str, right: str, relation_type: str, tier: str, ranges: tuple[int, int]) -> dict[str, Any]:
+            return {
+                "key": key,
+                "from_key": left,
+                "to_key": right,
+                "type": relation_type,
+                "tier": tier,
+                "evidence_kind": "pedagogical-inference",
+                "evidence_ranges": [
+                    {"node_key": left, "source_range": [ranges[0], ranges[0]]},
+                    {"node_key": right, "source_range": [ranges[1], ranges[1]]},
+                ],
+                "rationale": "Both endpoint texts establish this teaching progression.",
+                "confidence": 0.98,
             }
+        relations = [
+            relation("scenario-motivates-knowledge", "scenario", "knowledge", "motivates", "backbone", (4, 5)),
+            relation("knowledge-illustrates-example", "knowledge", "example", "illustrates", "supporting", (5, 6)),
+            relation("knowledge-practices-exercise", "knowledge", "exercise", "practices", "supporting", (5, 7)),
+            relation("knowledge-precedes-b", "knowledge", "knowledge-b", "prerequisite", "backbone", (5, 9)),
         ]
         return self.materialize_graph(root, source_lines, nodes, relations)
 
@@ -238,8 +294,20 @@ class BookToWikiGraphTests(unittest.TestCase):
                 set(profile["atom_categories"]),
                 {"knowledge", "worked-example", "exercise", "scenario"},
             )
+            self.assertEqual(profile["atomization"]["mode"], "llm-two-pass")
+            self.assertEqual(profile["organization"]["activity_heading_policy"], "atom-content")
+            self.assertEqual(profile["markdown_rendering"]["atom_heading_policy"], "omit")
+            self.assertEqual(profile["markdown_rendering"]["leaf_organizer_policy"], "flat-note")
+            self.assertEqual(profile["markdown_rendering"]["organizer_child_heading"], "relative-depth")
+            self.assertEqual(
+                profile["atomization"]["knowledge_granularity"],
+                "complete-teaching-unit",
+            )
+            self.assertEqual(profile["relation_analysis"]["mode"], "llm-two-pass")
+            self.assertEqual(profile["canvas"]["mode"], "two-level-constellation")
+            self.assertEqual(profile["canvas"]["theme"], "adaptive")
 
-    def test_bundle_separates_overview_chapters_and_semantics(self) -> None:
+    def test_bundle_builds_two_level_atlas_and_chapter_maps(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             items = self.standard_graph(Path(temporary))
             output_dir = items["book"] / "Canvas"
@@ -247,63 +315,109 @@ class BookToWikiGraphTests(unittest.TestCase):
                 items["manifest"], output_dir, items["book"]
             )
             self.assertEqual(report["status"], "passed")
-            self.assertEqual(report["canvases"], 4)
+            self.assertEqual(report["canvases"], 3)
             index = self.load_index(output_dir)
-            self.assertEqual([item["root_key"] for item in index["chapters"]], ["chapter-a", "chapter-b"])
-            self.assertEqual(index["layout"]["sibling_order"], "source-top-to-bottom")
+            self.assertEqual(index["schema_version"], 2)
+            self.assertEqual([item["root_key"] for item in index["chapter_maps"]], ["chapter-a", "chapter-b"])
+            self.assertEqual(index["layout"]["mode"], "two-level-constellation")
 
-            overview = self.load_canvas(output_dir, index["overview"]["path"])
+            overview = self.load_canvas(output_dir, index["atlas"]["path"])
             overview_cards = self.card_map(overview)
-            expected_organizers = {"book", "chapter-a", "section-a", "chapter-b"}
             self.assertEqual(
                 set(overview_cards),
-                {build_canvas.stable_id("card", key) for key in expected_organizers},
+                {
+                    build_canvas.stable_id("atlas", "book"),
+                    build_canvas.stable_id("chapter", "chapter-a"),
+                    build_canvas.stable_id("chapter", "chapter-b"),
+                    build_canvas.stable_id("utility", "atlas-legend"),
+                },
             )
-            self.assertEqual(len([node for node in overview["nodes"] if node["type"] == "group"]), 2)
-            relation_id = build_canvas.stable_id("edge", "relation:scenario-introduces-knowledge")
-            self.assertNotIn(relation_id, {edge["id"] for edge in overview["edges"]})
+            self.assertEqual(len([node for node in overview["nodes"] if node["type"] == "group"]), 0)
+            self.assertTrue(any("先修 ×1" in edge.get("label", "") for edge in overview["edges"]))
 
-            chapter_card = overview_cards[build_canvas.stable_id("card", "chapter-a")]
+            chapter_card = overview_cards[build_canvas.stable_id("chapter", "chapter-a")]
             href = urllib.parse.unquote(chapter_card["text"].split("](", 1)[1][:-1])
             self.assertEqual(
                 (output_dir / href).resolve(),
-                (output_dir / index["chapters"][0]["path"]).resolve(),
+                (output_dir / index["chapter_maps"][0]["path"]).resolve(),
             )
-            chapter = self.load_canvas(output_dir, index["chapters"][0]["path"])
-            self.assertEqual(len(self.card_map(chapter)), 6)
-            self.assertNotIn(relation_id, {edge["id"] for edge in chapter["edges"]})
-
-            semantics = self.load_canvas(output_dir, index["semantics"]["path"])
-            self.assertEqual(len(self.card_map(semantics)), 2)
-            self.assertEqual({edge["id"] for edge in semantics["edges"]}, {relation_id})
+            chapter = self.load_canvas(output_dir, index["chapter_maps"][0]["path"])
+            self.assertIn(build_canvas.stable_id("card", "knowledge"), self.card_map(chapter))
+            self.assertIn(build_canvas.stable_id("external", "knowledge-b"), self.card_map(chapter))
+            self.assertTrue(any(edge.get("label") == "主线 · 引发" for edge in chapter["edges"]))
 
             final = validate_book_graph.validate_graph(
                 items["manifest"], items["book"], output_dir / "canvas-index.json"
             )
             self.assertEqual(final["status"], "passed", final["errors"])
 
-    def test_atom_order_labels_and_colors_follow_source(self) -> None:
+    def test_visible_atoms_featured_examples_and_exercise_organizers(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             items = self.standard_graph(Path(temporary))
             output_dir = items["book"] / "Canvas"
             build_canvas.build_canvas_bundle(items["manifest"], output_dir, items["book"])
             index = self.load_index(output_dir)
-            chapter = self.load_canvas(output_dir, index["chapters"][0]["path"])
+            chapter = self.load_canvas(output_dir, index["chapter_maps"][0]["path"])
             cards = self.card_map(chapter)
-            keys = ["scenario", "knowledge", "example", "exercise"]
-            y_values = [cards[build_canvas.stable_id("card", key)]["y"] for key in keys]
-            self.assertEqual(y_values, sorted(y_values))
-            self.assertEqual(len(set(y_values)), len(y_values))
+            keys = ["scenario", "knowledge", "example"]
+            positions = {(cards[build_canvas.stable_id("card", key)]["x"], cards[build_canvas.stable_id("card", key)]["y"]) for key in keys}
+            self.assertEqual(len(positions), len(keys))
             expected = {
                 "scenario": ("5", "情景引入 · "),
                 "knowledge": ("2", "知识点 · "),
                 "example": ("4", "例题 · "),
-                "exercise": ("6", "习题 · "),
             }
             for key, (color, label) in expected.items():
                 card = cards[build_canvas.stable_id("card", key)]
                 self.assertEqual(card["color"], color)
                 self.assertIn(label, card["text"])
+            self.assertNotIn(build_canvas.stable_id("card", "exercise"), cards)
+            exercise_group = cards[build_canvas.stable_id("exercise-organizer", "section-a")]
+            self.assertEqual(exercise_group["color"], "6")
+            self.assertIn("练习星群 · Section A", exercise_group["text"])
+            exercise_edge = next(edge for edge in chapter["edges"] if edge.get("label") == "练习 ×1")
+            self.assertEqual((exercise_edge["fromSide"], exercise_edge["toSide"]), ("bottom", "top"))
+            motivating = next(edge for edge in chapter["edges"] if edge.get("label") == "主线 · 引发")
+            self.assertEqual((motivating["fromSide"], motivating["toSide"]), ("right", "top"))
+
+    def test_multiple_knowledge_anchors_use_a_virtual_exercise_junction(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source_lines = ["# Book", "## Chapter", "### Section", "First knowledge.", "Second knowledge.", "Exercise body."]
+            nodes = [
+                {"key": "book", "title": "Book", "layer": "organizer", "parent_key": None, "organizer_level": 1, "filename": "组织层/Book/Book.md", "heading_ranges": [[1, 1]], "children": ["chapter"]},
+                {"key": "chapter", "title": "Chapter", "layer": "organizer", "parent_key": "book", "organizer_level": 2, "filename": "组织层/Book/Chapter/Chapter.md", "heading_ranges": [[2, 2]], "children": ["section"]},
+                {"key": "section", "title": "Section", "layer": "organizer", "parent_key": "chapter", "organizer_level": 3, "filename": "组织层/Book/Chapter/Section/Section.md", "heading_ranges": [[3, 3]], "children": ["k1", "k2", "exercise"]},
+                {"key": "k1", "title": "First", "layer": "atom", "parent_key": "section", "category": "knowledge", "filename": "原子层/知识点/0001-K.md", "source_range": [4, 4]},
+                {"key": "k2", "title": "Second", "layer": "atom", "parent_key": "section", "category": "knowledge", "filename": "原子层/知识点/0002-K.md", "source_range": [5, 5]},
+                {"key": "exercise", "title": "Exercise", "layer": "atom", "parent_key": "section", "category": "exercise", "filename": "原子层/习题/0003-E.md", "source_range": [6, 6]},
+            ]
+            def relation(key: str, left: str, right: str, relation_type: str, tier: str, lines: tuple[int, int]) -> dict[str, Any]:
+                return {
+                    "key": key, "from_key": left, "to_key": right, "type": relation_type, "tier": tier,
+                    "evidence_kind": "pedagogical-inference",
+                    "evidence_ranges": [{"node_key": left, "source_range": [lines[0], lines[0]]}, {"node_key": right, "source_range": [lines[1], lines[1]]}],
+                    "rationale": "Both source passages support this reviewed teaching connection.", "confidence": 0.98,
+                }
+            relations = [
+                relation("r1", "k1", "k2", "develops", "backbone", (4, 5)),
+                relation("r2", "k1", "exercise", "practices", "supporting", (4, 6)),
+                relation("r3", "k2", "exercise", "practices", "supporting", (5, 6)),
+            ]
+            items = self.materialize_graph(root, source_lines, nodes, relations=relations)
+            output_dir = items["book"] / "Canvas"
+            build_canvas.build_canvas_bundle(items["manifest"], output_dir, items["book"])
+            index = self.load_index(output_dir)
+            chapter = self.load_canvas(output_dir, index["chapter_maps"][0]["path"])
+            cards = self.card_map(chapter)
+            junction_id = build_canvas.stable_id("junction", "section")
+            self.assertIn(junction_id, cards)
+            self.assertNotIn("](", cards[junction_id]["text"])
+            incoming = [edge for edge in chapter["edges"] if edge.get("toNode") == junction_id]
+            self.assertEqual(len(incoming), 2)
+            self.assertTrue(all((edge.get("fromSide"), edge.get("toSide")) == ("bottom", "top") for edge in incoming))
+            report = validate_book_graph.validate_graph(items["manifest"], items["book"], output_dir / "canvas-index.json")
+            self.assertEqual(report["status"], "passed", report["errors"])
 
     def test_arbitrary_depth_and_mixed_children_are_supported(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -324,27 +438,49 @@ class BookToWikiGraphTests(unittest.TestCase):
                 {"key": "subsection", "title": "Subsection", "layer": "organizer", "parent_key": "section", "organizer_level": 4, "filename": "组织层/Book/Chapter/Section/Subsection/Subsection.md", "heading_ranges": [[5, 5]], "children": ["deep"]},
                 {"key": "deep", "title": "Deep", "layer": "atom", "parent_key": "subsection", "category": "knowledge", "filename": "原子层/知识点/Deep.md", "source_range": [6, 6]},
             ]
-            items = self.materialize_graph(root, source_lines, nodes)
+            relations = [{
+                "key": "lead-motivates-deep", "from_key": "lead", "to_key": "deep",
+                "type": "motivates", "tier": "backbone", "evidence_kind": "pedagogical-inference",
+                "evidence_ranges": [
+                    {"node_key": "lead", "source_range": [3, 3]},
+                    {"node_key": "deep", "source_range": [6, 6]},
+                ],
+                "rationale": "The opening scenario motivates the later reviewed knowledge unit.",
+                "confidence": 0.98,
+            }]
+            items = self.materialize_graph(root, source_lines, nodes, relations=relations)
             output_dir = items["book"] / "Canvas"
             build_canvas.build_canvas_bundle(items["manifest"], output_dir, items["book"])
             index = self.load_index(output_dir)
-            chapter = self.load_canvas(output_dir, index["chapters"][0]["path"])
+            chapter = self.load_canvas(output_dir, index["chapter_maps"][0]["path"])
             cards = self.card_map(chapter)
-            self.assertLess(
-                cards[build_canvas.stable_id("card", "lead")]["y"],
-                cards[build_canvas.stable_id("card", "section")]["y"],
+            self.assertIn(build_canvas.stable_id("card", "lead"), cards)
+            self.assertIn(build_canvas.stable_id("card", "deep"), cards)
+            self.assertIn(build_canvas.stable_id("landmark", "subsection"), cards)
+            landmark_edge = next(
+                edge for edge in chapter["edges"]
+                if edge.get("fromNode") == build_canvas.stable_id("landmark", "subsection")
             )
-            self.assertGreater(
-                cards[build_canvas.stable_id("card", "deep")]["x"],
-                cards[build_canvas.stable_id("card", "subsection")]["x"],
+            self.assertEqual(landmark_edge.get("toNode"), build_canvas.stable_id("card", "deep"))
+            self.assertEqual(
+                (landmark_edge.get("label"), landmark_edge.get("color"), landmark_edge.get("fromSide"), landmark_edge.get("toSide")),
+                ("包含", build_canvas.SOURCE_ORDER_COLOR, "bottom", "top"),
             )
+            self.assertEqual(len([node for node in chapter["nodes"] if node["type"] == "group"]), 2)
             report = validate_book_graph.validate_graph(
                 items["manifest"], items["book"], output_dir / "canvas-index.json"
             )
             self.assertEqual(report["status"], "passed", report["errors"])
             self.assertIn("mixed-organizer-and-atom-children", {item["code"] for item in report["warnings"]})
+            chapter["edges"] = [edge for edge in chapter["edges"] if edge.get("id") != landmark_edge["id"]]
+            chapter_path = output_dir / index["chapter_maps"][0]["path"]
+            chapter_path.write_text(json.dumps(chapter, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            isolated = validate_book_graph.validate_graph(
+                items["manifest"], items["book"], output_dir / "canvas-index.json"
+            )
+            self.assertIn("canvas-isolated-substantive-node", {item["code"] for item in isolated["errors"]})
 
-    def test_hundreds_of_atoms_stay_in_one_vertical_source_sequence(self) -> None:
+    def test_hundreds_of_atoms_form_a_bounded_constellation(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             source_lines = ["# Book", "## Chapter"]
@@ -352,15 +488,9 @@ class BookToWikiGraphTests(unittest.TestCase):
                 {"key": "book", "title": "Book", "layer": "organizer", "parent_key": None, "organizer_level": 1, "filename": "组织层/Book/Book.md", "heading_ranges": [[1, 1]], "children": ["chapter"]},
                 {"key": "chapter", "title": "Chapter", "layer": "organizer", "parent_key": "book", "organizer_level": 2, "filename": "组织层/Book/Chapter/Chapter.md", "heading_ranges": [[2, 2]], "children": []},
             ]
-            categories = [
-                ("knowledge", "知识点"),
-                ("worked-example", "例题"),
-                ("exercise", "习题"),
-                ("scenario", "情景引入"),
-            ]
             for index in range(250):
                 key = f"atom-{index:03d}"
-                category, directory = categories[index % len(categories)]
+                category, directory = "knowledge", "知识点"
                 source_lines.append(f"Atom body {index}.")
                 nodes[1]["children"].append(key)
                 nodes.append(
@@ -374,18 +504,33 @@ class BookToWikiGraphTests(unittest.TestCase):
                         "source_range": [index + 3, index + 3],
                     }
                 )
-            items = self.materialize_graph(root, source_lines, nodes)
+            relations = [
+                {
+                    "key": f"chain-{index:03d}",
+                    "from_key": f"atom-{index:03d}",
+                    "to_key": f"atom-{index + 1:03d}",
+                    "type": "develops", "tier": "backbone",
+                    "evidence_kind": "pedagogical-inference",
+                    "evidence_ranges": [
+                        {"node_key": f"atom-{index:03d}", "source_range": [index + 3, index + 3]},
+                        {"node_key": f"atom-{index + 1:03d}", "source_range": [index + 4, index + 4]},
+                    ],
+                    "rationale": "Each reviewed unit develops directly into the following teaching unit.",
+                    "confidence": 0.98,
+                }
+                for index in range(249)
+            ]
+            items = self.materialize_graph(root, source_lines, nodes, relations=relations)
             output_dir = items["book"] / "Canvas"
             build_canvas.build_canvas_bundle(items["manifest"], output_dir, items["book"])
             index = self.load_index(output_dir)
-            self.assertIsNone(index["semantics"])
-            chapter = self.load_canvas(output_dir, index["chapters"][0]["path"])
+            chapter = self.load_canvas(output_dir, index["chapter_maps"][0]["path"])
             cards = self.card_map(chapter)
             atom_cards = [cards[build_canvas.stable_id("card", f"atom-{index:03d}")] for index in range(250)]
-            self.assertEqual(len({card["x"] for card in atom_cards}), 1)
-            y_values = [card["y"] for card in atom_cards]
-            self.assertEqual(y_values, sorted(y_values))
-            self.assertEqual(len(set(y_values)), 250)
+            self.assertGreater(len({card["x"] for card in atom_cards}), 20)
+            self.assertGreater(len({card["y"] for card in atom_cards}), 20)
+            self.assertGreaterEqual(index["chapter_maps"][0]["bounds"]["aspect_ratio"], 0.5)
+            self.assertLessEqual(index["chapter_maps"][0]["bounds"]["aspect_ratio"], 2.0)
             report = validate_book_graph.validate_graph(
                 items["manifest"], items["book"], output_dir / "canvas-index.json"
             )
@@ -428,23 +573,23 @@ class BookToWikiGraphTests(unittest.TestCase):
             items = self.materialize_graph(root, source_lines, nodes)
             output_dir = items["book"] / "Canvas"
             build_canvas.build_canvas_bundle(items["manifest"], output_dir, items["book"])
-            paths = [item["path"] for item in self.load_index(output_dir)["chapters"]]
+            paths = [item["path"] for item in self.load_index(output_dir)["chapter_maps"]]
             self.assertEqual(len(paths), len(set(paths)))
             self.assertTrue(all("/" not in Path(path).name and "?" not in path for path in paths))
             self.assertTrue(all((output_dir / path).is_file() for path in paths))
 
-    def test_canvas_validator_rejects_visual_source_order_tampering(self) -> None:
+    def test_canvas_validator_rejects_overlapping_cards(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             items = self.standard_graph(Path(temporary))
             output_dir = items["book"] / "Canvas"
             build_canvas.build_canvas_bundle(items["manifest"], output_dir, items["book"])
             index = self.load_index(output_dir)
-            chapter_path = output_dir / index["chapters"][0]["path"]
+            chapter_path = output_dir / index["chapter_maps"][0]["path"]
             chapter = json.loads(chapter_path.read_text(encoding="utf-8"))
             cards = self.card_map(chapter)
             first = cards[build_canvas.stable_id("card", "scenario")]
             second = cards[build_canvas.stable_id("card", "knowledge")]
-            first["y"], second["y"] = second["y"], first["y"]
+            first["x"], first["y"] = second["x"], second["y"]
             chapter_path.write_text(
                 json.dumps(chapter, ensure_ascii=False, indent=2) + "\n",
                 encoding="utf-8",
@@ -453,7 +598,22 @@ class BookToWikiGraphTests(unittest.TestCase):
                 items["manifest"], items["book"], output_dir / "canvas-index.json"
             )
             self.assertEqual(report["status"], "failed")
-            self.assertIn("canvas-sibling-order-invalid", {item["code"] for item in report["errors"]})
+            self.assertIn("canvas-card-overlap", {item["code"] for item in report["errors"]})
+
+    def test_unreviewed_relations_only_build_navigation_atlas(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            items = self.standard_graph(root)
+            manifest = json.loads(items["manifest"].read_text(encoding="utf-8"))
+            manifest.pop("relation_review")
+            manifest["relations"] = []
+            items["manifest"].write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            output_dir = items["book"] / "Canvas-pending"
+            report = build_canvas.build_canvas_bundle(items["manifest"], output_dir, items["book"])
+            self.assertEqual(report["canvases"], 1)
+            index = self.load_index(output_dir)
+            self.assertEqual(index["relation_status"], "review_required")
+            self.assertTrue(all(item["path"] is None for item in index["chapter_maps"]))
 
     def test_bundle_requires_explicit_overwrite(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -475,7 +635,6 @@ class BookToWikiGraphTests(unittest.TestCase):
             report = validate_book_graph.validate_graph(items["manifest"], items["book"])
             self.assertEqual(report["status"], "failed")
             self.assertIn("atom-has-outgoing-link", {item["code"] for item in report["errors"]})
-
 
 if __name__ == "__main__":
     unittest.main()

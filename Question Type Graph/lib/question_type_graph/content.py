@@ -139,13 +139,16 @@ def classify_question(
                 ),
                 "folder": str(rule.get("folder", "")).strip() or None,
             }
+            rule_meta = dict(rule.get("metadata") or {})
             if kind == "worked-example":
                 # Global graph contract: every publisher worked example is
                 # important and its printed analysis becomes a separate,
                 # provenance-marked authoritative answer note.
                 if result["answer_handling"] != "unavailable":
                     result["answer_handling"] = "separate-authoritative"
-                result["metadata"] = {"重要程度": "重要"}
+                result["metadata"] = {"重要程度": "重要", **rule_meta}
+            else:
+                result["metadata"] = rule_meta
             return result
     return {
         "question_kind": "exercise",
@@ -176,6 +179,54 @@ def extract_star_difficulty(text: str) -> tuple[float | None, str | None]:
     half_stars = stars.count("☆")
     val = full_stars * 1.0 + half_stars * 0.5
     return (int(val) if val.is_integer() else val), stars
+
+
+def extract_text_metadata(body: str, answer_body: str = "") -> dict[str, Any]:
+    """Extract metadata (difficulty, knowledge points, question subtype) from body and answer."""
+    full_text = f"{body}\n{answer_body}"
+    res: dict[str, Any] = {}
+
+    # 1. 难易度 (非常简单->1, 简单->2, 适中->3, 偏难->4, 困难->5)
+    m_diff = re.search(r"(?:难易度|难度)\s*[：:]\s*([^\s\n\r,，。；;【]+)", full_text)
+    if m_diff:
+        raw_diff = m_diff.group(1).strip()
+        raw_diff = re.split(r"(?:知识点|考点)", raw_diff)[0].strip()
+        if raw_diff:
+            if "非常简单" in raw_diff or "极易" in raw_diff or "容易" in raw_diff:
+                res["difficulty"] = 1
+            elif "偏难" in raw_diff or "较难" in raw_diff:
+                res["difficulty"] = 4
+            elif "困难" in raw_diff or "极难" in raw_diff or "非常难" in raw_diff:
+                res["difficulty"] = 5
+            elif "简单" in raw_diff or "较易" in raw_diff:
+                res["difficulty"] = 2
+            elif "适中" in raw_diff or "中等" in raw_diff:
+                res["difficulty"] = 3
+            else:
+                res["difficulty"] = raw_diff
+    if "difficulty" not in res:
+        star_val, star_str = extract_star_difficulty(body)
+        if star_val is not None:
+            res["difficulty"] = int(star_val) if isinstance(star_val, float) and star_val.is_integer() else star_val
+            res["difficulty_stars"] = star_str
+    elif isinstance(res["difficulty"], int) and 1 <= res["difficulty"] <= 5 and "difficulty_stars" not in res:
+        res["difficulty_stars"] = "★" * res["difficulty"] + "☆" * (5 - res["difficulty"])
+
+    # 2. 知识点
+    m_kp = re.search(r"(?:知识点|考点)\s*[：:]\s*([^\n\r]+)", full_text)
+    if m_kp:
+        raw_kps = m_kp.group(1).strip()
+        raw_kps = re.split(r"【", raw_kps)[0].strip()
+        kps = [k.strip() for k in re.split(r"[、,，；;\s]+", raw_kps) if k.strip()]
+        if kps:
+            res["knowledge_points"] = kps
+
+    # 3. 题型子分类
+    m_type = re.search(r"【(单选题|多选题|填空题|复合题|解答题|问答题|判断题|计算题|证明题)】", body)
+    if m_type:
+        res["question_subtype"] = m_type.group(1)
+
+    return res
 
 
 def split_authoritative_solution_body(
@@ -214,37 +265,46 @@ def split_authoritative_solution_body(
     tokens: list[tuple[int, str, bool]] = []
     lines = body.rstrip("\n").splitlines()
 
+    # Check if document contains explicit solution markers
+    has_explicit_marker = any(
+        any(p.search(l) for p in patterns) or
+        re.search(r"(\s*(?:【(?:正确答案|答案与解析|答案及解析|解析|详解|分析|思路导航|详细解答|解答|解法\s*\d*|解法[一二三四五]|证法\s*\d*|证法[一二三四五]|证明|解|答案)】|(?:正确答案|答案与解析|答案及解析|解析|详解|分析|详细解答|解答|思路|解法\s*\d*|证法\s*\d*|证明|解)\s*[：:▶（(]|\b答案\s*[：:]))", l)
+        for l in lines
+    )
+
     # Step A: Check for subquestion repetition (e.g. (1) in stem and (1) in solution)
     seen_subparts = set()
     repeated_part_line = None
-    for i, line in enumerate(lines):
-        m_part = re.match(r"^\s*[(（]([1-9]\d?)[)）]", line)
-        if m_part:
-            p_num = m_part.group(1)
-            if p_num in seen_subparts:
-                repeated_part_line = i
-                break
-            seen_subparts.add(p_num)
+    if not has_explicit_marker:
+        for i, line in enumerate(lines):
+            m_part = re.match(r"^\s*[(（]([1-9]\d?)[)）]", line)
+            if m_part:
+                p_num = m_part.group(1)
+                if p_num in seen_subparts:
+                    repeated_part_line = i
+                    break
+                seen_subparts.add(p_num)
 
     # Step B: Check for fill-in-the-blank or choice end on early lines
     blank_end_line = None
-    for i, line in enumerate(lines[:5]):
-        if re.search(r"(?:\\_\\_\\_\\_|__{2,}|[(（]\s*[)）]|\b[A-D][.．、\s][^A-D]*)[.．、\s]*$", line.strip()):
-            next_idx = i + 1
-            while next_idx < len(lines) and not lines[next_idx].strip():
-                next_idx += 1
-            if next_idx < len(lines) and re.match(r"^!\[.*?\]\(.*?\)", lines[next_idx].strip()):
-                next_idx += 1
+    if not has_explicit_marker:
+        for i, line in enumerate(lines[:5]):
+            if re.search(r"(?:\\_\\_\\_\\_|__{2,}|[(（]\s*[)）]|\b[A-D][.．、][^A-D]*)[.．、\s]*$", line.strip()):
+                next_idx = i + 1
                 while next_idx < len(lines) and not lines[next_idx].strip():
                     next_idx += 1
-            if next_idx < len(lines):
-                blank_end_line = next_idx
-            break
+                if next_idx < len(lines) and re.match(r"^!\[.*?\]\(.*?\)", lines[next_idx].strip()):
+                    next_idx += 1
+                    while next_idx < len(lines) and not lines[next_idx].strip():
+                        next_idx += 1
+                if next_idx < len(lines) and not re.match(r"^\s*[A-D][.．、\s]", lines[next_idx]):
+                    blank_end_line = next_idx
+                break
 
     for original_index, line in enumerate(lines):
         matches = [match for pattern in patterns if (match := pattern.search(line))]
         inline_match = re.search(
-            r"(\s*(?:【(?:解析|详解|分析|思路导航|详细解答|解答|解法\s*\d*|解法[一二三四五]|证法\s*\d*|证法[一二三四五]|证明|解)】|(?:解析|详解|分析|详细解答|解答|思路|解法\s*\d*|证法\s*\d*|证明|解)\s*[：:▶（(]|\b答案\s*[：:]))",
+            r"(\s*(?:【(?:正确答案|答案与解析|答案及解析|解析|详解|分析|思路导航|详细解答|解答|解法\s*\d*|解法[一二三四五]|证法\s*\d*|证法[一二三四五]|证明|解|答案)】|(?:正确答案|答案与解析|答案及解析|解析|详解|分析|详细解答|解答|思路|解法\s*\d*|证法\s*\d*|证明|解)\s*[：:▶（(]|\b答案\s*[：:]))",
             line,
         )
         if inline_match is not None:
@@ -272,7 +332,7 @@ def split_authoritative_solution_body(
             (match for pattern in patterns if (match := pattern.search(line))),
             None,
         )
-        is_derivation_step = bool(re.search(r"^\s*(?:[(（][1-9]\d?[)）]|[1-9]\d?[.．、])\s*(?:[(（]|由|设|因为|易知|若|在|由于|连接|代入|由题意|作|取|证明如下|根据|故|\$|解法|当|令|将|知|得|=|可得|化简|即|抛物线|双曲线|椭圆|圆|直[线角]|方程|如图|积不是定值|问|$)", line))
+        is_derivation_step = bool(re.search(r"^\s*(?:[(（][1-9]\d?[)）]|[1-9]\d?[.．、])\s*(?:[【(（]|由|设|因为|易知|若|在|由于|连接|代入|由题意|作|取|证明如下|根据|故|\$|解法|当|令|将|知|得|=|可得|化简|即|抛物线|双曲线|椭圆|圆|直[线角]|方程|如图|积不是定值|问|∵|∴|解|$)", line))
         resume_match = (
             next(
                 (
@@ -1412,16 +1472,21 @@ def plan_note(
                 )
                 continue
             starts.append((index, match, number, question_config))
+    label_start_lines = {label["start_line"] for label in labels}
     deduped_starts = []
     for s in starts:
-        if deduped_starts and deduped_starts[-1][2] == s[2] and s[0] - deduped_starts[-1][0] <= 4:
+        if (
+            deduped_starts
+            and deduped_starts[-1][2] == s[2]
+            and s[0] - deduped_starts[-1][0] <= 4
+            and not any(deduped_starts[-1][0] < l_start <= s[0] for l_start in label_start_lines)
+        ):
             deduped_starts[-1] = s
             continue
         deduped_starts.append(s)
     starts = deduped_starts
     starts, atomization_review = atomize_interleaved_question_starts(starts, lines)
     unknown.extend(atomization_review)
-    label_start_lines = {label["start_line"] for label in labels}
     question_file_template = str(adapter.get("content", {}).get("question_file_template", "{title}.md"))
     for position, (start, match, number, question_config) in enumerate(starts):
         end = starts[position + 1][0] - 1 if position + 1 < len(starts) else len(lines)
@@ -1854,7 +1919,12 @@ def plan_content(profile_path: Path, adapter_path: Path, hierarchy_coverage_path
     }
 
 
-def render_question(question: dict[str, Any], body: str, answer_mode: str = "separate") -> str:
+def render_question(
+    question: dict[str, Any],
+    body: str,
+    answer_mode: str = "separate",
+    answer_body: str = "",
+) -> str:
     answer_status = (
         "matched"
         if question.get("answer_handling") == "separate-authoritative"
@@ -1869,6 +1939,7 @@ def render_question(question: dict[str, Any], body: str, answer_mode: str = "sep
         for recovery in question.get("recovered_question_fragments", [])
         if recovery.get("destination", "question") == "question"
     ]
+    extracted_meta = extract_text_metadata(body, answer_body)
     frontmatter = [
         "---",
         f"question_id: {json.dumps(question['id'], ensure_ascii=False)}",
@@ -1877,6 +1948,11 @@ def render_question(question: dict[str, Any], body: str, answer_mode: str = "sep
         f"question_source: {json.dumps(question['source_note'], ensure_ascii=False)}",
         f"question_body_sha256: {question.get('question_body_sha256', question['body_sha256'])}",
         f"question_kind: {json.dumps(question.get('question_kind', 'exercise'), ensure_ascii=False)}",
+        *(
+            [f"question_subtype: {json.dumps(extracted_meta['question_subtype'], ensure_ascii=False)}"]
+            if "question_subtype" in extracted_meta
+            else []
+        ),
         f"answer_handling: {json.dumps(question.get('answer_handling', 'external'), ensure_ascii=False)}",
         *(
             [
@@ -1896,10 +1972,23 @@ def render_question(question: dict[str, Any], body: str, answer_mode: str = "sep
         ],
         *(
             [
-                f"difficulty: {extract_star_difficulty(body)[0]}",
-                f"difficulty_stars: {json.dumps(extract_star_difficulty(body)[1], ensure_ascii=False)}",
+                f"difficulty: {json.dumps(extracted_meta['difficulty'], ensure_ascii=False)}",
             ]
-            if extract_star_difficulty(body)[0] is not None
+            if "difficulty" in extracted_meta
+            else []
+        ),
+        *(
+            [
+                f"difficulty_stars: {json.dumps(extracted_meta['difficulty_stars'], ensure_ascii=False)}",
+            ]
+            if "difficulty_stars" in extracted_meta
+            else []
+        ),
+        *(
+            [
+                f"knowledge_points: {json.dumps(extracted_meta['knowledge_points'], ensure_ascii=False)}",
+            ]
+            if "knowledge_points" in extracted_meta
             else []
         ),
         f"answer_status: {answer_status}",
@@ -2125,7 +2214,12 @@ def apply_content(profile_path: Path, adapter_path: Path, manifest_path: Path, o
                         f"Authoritative-solution answer body changed before apply: {question['id']}"
                     )
             rendered_question = rebase_local_links(
-                render_question(question, question_body, str(profile.get("answers", {}).get("mode", "separate"))),
+                render_question(
+                    question,
+                    question_body,
+                    str(profile.get("answers", {}).get("mode", "separate")),
+                    answer_body or "",
+                ),
                 source,
                 output,
             )

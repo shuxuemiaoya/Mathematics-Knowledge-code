@@ -1,0 +1,4 @@
+interface:
+  display_name: "Knowledge Relation Mapper"
+  short_description: "Build audited atom-concept teaching graphs"
+  default_prompt: "Use $knowledge-relation-mapper to extract canonical concepts and build an evidence-audited teaching graph from this materialized book graph."

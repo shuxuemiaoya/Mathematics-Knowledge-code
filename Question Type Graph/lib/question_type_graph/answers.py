@@ -579,16 +579,6 @@ def extract_choice_answer(body: str) -> str | None:
     separate answer field.  Only explicit answer/conclusion phrases are
     accepted; isolated capital letters in mathematical prose are ignored.
     """
-    lines = body.strip().splitlines()
-    if lines:
-        first_line = lines[0].strip()
-        header = re.match(
-            r"^(?:#{1,6}\s*)?【?\d+】?[\.、\s]*([A-F]{1,4})\b\s*(?:【?(?:解析|详解)】?)?\s*",
-            first_line,
-        )
-        if header:
-            return header.group(1).upper()
-
     m_conc = re.search(r"(?:故选|选|因此选|故选：|选：)\s*([A-D]+)\b|(?:故|则)?\s*([A-D])\s*项正确", body)
     if m_conc:
         return (m_conc.group(1) or m_conc.group(2)).upper()
@@ -602,6 +592,16 @@ def extract_choice_answer(body: str) -> str | None:
         val = matches[-1].group(1) or matches[-1].group(2)
         if val:
             return val.upper()
+
+    lines = body.strip().splitlines()
+    if lines:
+        first_line = lines[0].strip()
+        header = re.match(
+            r"^(?:#{1,6}\s*)?【?\d+】?[\.、\s]*([A-F]{1,4})\b\s*(?:【?(?:解析|详解)】?)?\s*",
+            first_line,
+        )
+        if header:
+            return header.group(1).upper()
     return None
 
 
@@ -670,8 +670,30 @@ def format_answer_callout(
     source_body = body.strip()
     scan_body = (question_body + "\n" + source_body) if question_body else source_body
 
-    # 1. Split out 分析 if present
-    analysis_text = "本题未单列分析。"
+    # 1. Extract Answer Value
+    answer_value = None
+    if reviewed_short_answer:
+        answer_value = reviewed_short_answer
+    elif reviewed_choice_answer:
+        answer_value = reviewed_choice_answer
+
+    # Check leading 【正确答案】 or 【答案】
+    if not answer_value and re.match(r"^\s*(?:#{1,6}\s*)?【(?:正确答案|答案)】", source_body):
+        m_head = re.match(
+            r"^\s*(?:#{1,6}\s*)?【(?:正确答案|答案)】\s*(.*?)(?=(?:\n\s*)*【(?:解析|详解|分析|思路导航|解答|解法|证法|证明|提示)】|(?:\n\s*)*(?<!见)(?:解析|详解)\s*[：:]|【(?:更多习题信息|智慧中小学)|$)",
+            source_body,
+            flags=re.DOTALL,
+        )
+        if m_head:
+            val = m_head.group(1).strip()
+            val = re.split(r"【", val)[0].strip()
+            if val:
+                answer_value = val
+                source_body = source_body[m_head.end():].strip()
+                source_body = re.sub(r"^\s*【(?:解析|详解|解答|解法)】\s*(?=(?:#{1,6}\s*)?【(?:分析|思路导航)】)", "", source_body).strip()
+
+    # 2. Split out 分析 if present
+    analysis_text = None
     resolution_body = source_body
     analysis_match = re.search(
         r"(?m)^\s*(?:#{1,6}\s*)?(?:【(?:分析|思路导航)】|(?:分析|思路导航)(?:\s|[：:]|▶|$))",
@@ -688,23 +710,33 @@ def format_answer_callout(
             analysis_text = re.sub(r"^\s*(?:#{1,6}\s*)?(?:【(?:分析|思路导航)】|(?:分析|思路导航)\s*[：:]?)\s*", "", raw_analysis).strip()
             resolution_body = source_body[resolution_start:].strip()
         else:
-            raw_analysis = source_body[analysis_match.start():].strip()
-            analysis_text = re.sub(r"^\s*(?:#{1,6}\s*)?(?:【(?:分析|思路导航)】|(?:分析|思路导航)\s*[：:]?)\s*", "", raw_analysis).strip()
-            resolution_body = "本题未单列解析。"
+            lines = [l for l in source_body[analysis_match.start():].splitlines() if l.strip()]
+            if len(lines) > 1:
+                raw_analysis = lines[0].strip()
+                analysis_text = re.sub(r"^\s*(?:#{1,6}\s*)?(?:【(?:分析|思路导航)】|(?:分析|思路导航)\s*[：:]?)\s*", "", raw_analysis).strip()
+                resolution_body = "\n".join(lines[1:]).strip()
+            else:
+                raw_analysis = source_body[analysis_match.start():].strip()
+                analysis_text = re.sub(r"^\s*(?:#{1,6}\s*)?(?:【(?:分析|思路导航)】|(?:分析|思路导航)\s*[：:]?)\s*", "", raw_analysis).strip()
+                resolution_body = "本题未单列解析。"
 
-    # 2. Extract Answer Value
-    answer_value = None
-    if reviewed_short_answer:
-        answer_value = reviewed_short_answer
-    elif reviewed_choice_answer:
-        answer_value = reviewed_choice_answer
+    # Check 故选: A / 选 C / 项正确 (authoritative conclusion wins over damaged header)
+    if not answer_value:
+        m_choice = re.search(r"(?:故选|选|因此选|故选：|选：)\s*([A-D]+)\b|(?:故|则)?\s*([A-D])\s*项正确", resolution_body or source_body)
+        if m_choice:
+            answer_value = (m_choice.group(1) or m_choice.group(2)).strip().upper()
 
-    # Check leading 【答案】
-    if not answer_value and re.match(r"^\s*(?:#{1,6}\s*)?【答案】", resolution_body):
-        m_head = re.search(r"^\s*(?:#{1,6}\s*)?【答案】\s*(.*?)(?=\n|【(?:解析|详解|分析|思路导航|解答|解法|证法|证明)】|(?<!见)(?:解析|详解)\s*[：:]|$)", resolution_body, flags=re.DOTALL)
+    # Check leading 【正确答案】 or 【答案】 in resolution_body
+    if not answer_value and re.search(r"^\s*(?:#{1,6}\s*)?【(?:正确答案|答案)】", resolution_body):
+        m_head = re.search(
+            r"^\s*(?:#{1,6}\s*)?【(?:正确答案|答案)】\s*(.*?)(?=\n|【(?:更多习题信息|智慧中小学|解析|详解|分析|思路导航|解答|解法|证法|证明|提示)】|(?<!见)(?:解析|详解)\s*[：:]|$)",
+            resolution_body,
+            flags=re.DOTALL,
+        )
         if m_head:
             val = m_head.group(1).strip()
-            if val:
+            val = re.split(r"【", val)[0].strip()
+            if val and "\n" not in val and len(val) <= 100:
                 answer_value = val
                 resolution_body = resolution_body[m_head.end():].strip()
 
@@ -724,7 +756,6 @@ def format_answer_callout(
             answer_value = m_ans_line.group(1).strip()
             resolution_body = resolution_body[:m_ans_line.start()] + "\n" + resolution_body[m_ans_line.end():]
 
-    # Check 故选: A / 选 C / 项正确
     # Check leading number option header (e.g. 1. D or 2. AC or 3. B解法1：)
     if not answer_value:
         m_lead = re.search(r"^\s*(?:#{1,6}\s*)?(?:(?:[1-9]\d?|例\s*\d+|变式(?:题)?\s*\d*)[.．、\s]*)?([A-D]{1,4})(?:\s*[【\n\s解法解析详解分析]|$)", resolution_body)
@@ -732,11 +763,6 @@ def format_answer_callout(
             val = m_lead.group(1).strip().upper()
             if val and all(c in "ABCD" for c in val):
                 answer_value = val
-
-    if not answer_value:
-        m_choice = re.search(r"(?:故选|选|因此选|故选：|选：)\s*([A-D]+)\b|(?:故|则)?\s*([A-D])\s*项正确", resolution_body)
-        if m_choice:
-            answer_value = (m_choice.group(1) or m_choice.group(2)).strip().upper()
 
     # Check option interval / formula matching for multiple choice
     if not answer_value and re.search(r"[A-D][.．、\s]", scan_body):
@@ -887,11 +913,14 @@ def format_answer_callout(
         f"> [!faq]- {callout_title}",
         ">",
         f"> > [!success]- **【答案】** {answer_value}",
-        ">",
-        "> > [!note]- **【分析】**",
     ]
-    for line in analysis_text.splitlines() or ["本题未单列分析。"]:
-        callout_lines.append(f"> > {line}" if line else "> >")
+    if analysis_text and analysis_text.strip():
+        callout_lines.extend([
+            ">",
+            "> > [!note]- **【分析】**",
+        ])
+        for line in analysis_text.splitlines():
+            callout_lines.append(f"> > {line}" if line else "> >")
     callout_lines.extend([">", "> > [!note]- **【解析】**"])
     for line in resolution_lines or ["本题未单列解析。"]:
         callout_lines.append(f"> > {line}" if line else "> >")
