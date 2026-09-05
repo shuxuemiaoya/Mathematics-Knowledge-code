@@ -30,12 +30,13 @@ freeze source -> PDF to Markdown when needed -> review TOC and ownership
 -> prepare range-only atomization jobs -> Agent/model round-one partition
 -> validate round one -> prepare every-adjacency audit
 -> Agent/model round-two keep/merge/resegment review -> finalize
--> require zero unresolved review items -> materialize source ranges while
+-> require zero unresolved review items -> audit atom teaching roles and titles
+-> require zero unresolved role items -> materialize source ranges while
    omitting atom Markdown heading lines
 -> validate corpus -> invoke knowledge-relation-mapper
 -> canonical concept extraction -> hybrid relation decisions -> full graph audit
 -> require zero unresolved relation items for semantic maps
--> apply relations -> build two-level knowledge constellation bundle
+-> apply relations -> build three-level knowledge constellation bundle
 -> validate complete Canvas bundle
 ```
 
@@ -86,17 +87,17 @@ Backbone relations are acyclic. JSON is authoritative; Neo4j is optional and
 read-only with respect to the manifest.
 
 `overview.canvas` contains the book hub and chapters only, with source-order
-navigation plus reviewed cross-chapter aggregation. Each chapter opens one
-knowledge constellation containing every knowledge/scenario atom, selective
-virtual canonical-concept hubs, only
-major-method examples reviewed as `bridge`, and exercise organizer Markdown
-cards instead of individual exercise atoms. Direct sections are spatial
-regions, deeper organizers are landmarks, and reviewed atom relations replace
-ownership-tree edges. Multiple knowledge routes may converge through an
-unlinked visual junction before an exercise organizer. Every edge declares its
-side grammar: development is right-to-left, inspiration right-to-top, and
-subordinate or parallel branches bottom-to-top. An incomplete relation review
-permits the atlas but never an unreviewed semantic chapter map.
+navigation plus reviewed cross-chapter aggregation. Each chapter opens a
+low-noise core constellation containing knowledge/scenario atoms, selective
+canonical-concept hubs, and only major-method examples reviewed as `bridge`;
+it contains no exercise cards or practice edges. Its direct sections are
+click-through star regions. Each section opens a detail Canvas where exercise
+atoms are collapsed into exercise-organizer Markdown entries with at most one
+primary practice edge. One-to-one concept hubs and duplicate organizer
+landmarks are folded away. Every edge declares its side grammar: development
+is right-to-left, inspiration right-to-top, and subordinate or parallel
+branches bottom-to-top. An incomplete relation review permits the atlas but
+never an unreviewed semantic chapter or section map.
 
 Work in task-scoped staging and write outputs atomically. Never replace an
 existing corpus, manifest, or Canvas without explicit authorization.

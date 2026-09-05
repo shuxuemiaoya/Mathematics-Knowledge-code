@@ -1,4 +1,4 @@
 interface:
   display_name: "Book to Wiki Graph"
   short_description: "Build audited atom-concept book maps"
-  default_prompt: "Use $book-to-wiki-graph to convert this book into a TOC-centered atom graph, then invoke $knowledge-relation-mapper for three-pass canonical concept and teaching-relation review before building two-level knowledge constellations."
+  default_prompt: "Use $book-to-wiki-graph to convert this book into a TOC-centered atom graph, audit teaching roles, then invoke $knowledge-relation-mapper for three-pass canonical concept and teaching-relation review before building three-level knowledge constellations."

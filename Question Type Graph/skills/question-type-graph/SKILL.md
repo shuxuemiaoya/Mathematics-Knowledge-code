@@ -57,7 +57,9 @@ persist the final checks with `audit --overwrite`.
 
 ## Gates
 
-- **Stage 0 Discovery Gate**: For unfamiliar document layouts, new publishers, or unstructured exercise banks, ALWAYS execute a sample-based syntax discovery and submit a 5-dimension schema inventory (TOC, stem/subquestion boundaries, answer layout, short answer detection, metadata extraction) with rendered preview cards to the user for confirmation BEFORE any batch processing.
+- **Stage 0 Discovery Gate**: For unfamiliar document layouts, new publishers, or unstructured exercise banks, ALWAYS execute a sample-based syntax discovery and submit a 5-dimension schema inventory (TOC, stem/subquestion boundaries, answer layout, short answer detection, metadata extraction) with rendered preview cards (`generate_stage0_preview`) to the user for confirmation BEFORE any batch processing.
+- **Pre-segmentation Continuity Gate**: Content planning (`plan_content`) MUST scan $1..N$ sequence continuity before file generation. If any gap occurs in a `continuous` sequence context, emit a blocking `question-sequence-discontinuity` review item with missing number and candidate line ranges.
+- **Confidence-Tiered Answer Gate**: Extract choice and short answers with explicit confidence tiers (HIGH > MEDIUM > LOW > FALLBACK). Log low-confidence extractions for review.
 - Freeze every source path, digest, role, page count, and output root.
 - Force MinerU OCR for PDFs and stop on incomplete page or asset coverage.
 - Build `source-provenance-index.json` from MinerU content-list blocks and carry

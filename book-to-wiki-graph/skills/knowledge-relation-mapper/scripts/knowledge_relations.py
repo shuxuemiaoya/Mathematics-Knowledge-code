@@ -238,6 +238,11 @@ def load_manifest_context(manifest_path: Path) -> tuple[dict[str, Any], dict[str
     profile = load_json(profile_path)
     if manifest.get("source_markdown_sha256") != sha256_file(source_path):
         raise RelationV2Error("Source Markdown digest is stale")
+    atomization = profile.get("atomization", {})
+    if isinstance(atomization, dict) and atomization.get("teaching_role_audit") == "required-before-materialization":
+        role_review = manifest.get("atomization_review", {}).get("role_review")
+        if not isinstance(role_review, dict) or role_review.get("status") != "passed" or role_review.get("unresolved_count") != 0:
+            raise RelationV2Error("Passed atom teaching-role review is required before relation mapping")
     nodes = {
         str(node["key"]): node for node in manifest.get("nodes", [])
         if isinstance(node, dict) and isinstance(node.get("key"), str)
@@ -287,6 +292,7 @@ def prepare_concept_jobs(manifest_path: Path, max_chars: int = 80000, registry: 
         key: source_atom(node, nodes, lines, root_key)
         for key, node in nodes.items() if node.get("layer") == "atom"
     }
+    registry_concepts = [] if registry is None else load_json(registry.expanduser().resolve()).get("concepts", [])
     jobs: list[dict[str, Any]] = []
     for chapter_index, chapter in enumerate(chapters, start=1):
         ordered = sorted(
@@ -322,6 +328,22 @@ def prepare_concept_jobs(manifest_path: Path, max_chars: int = 80000, registry: 
                 "packet_count": len(packets),
                 "atoms": packet,
                 "context_atoms": context,
+                "registry_candidates": sorted(
+                    (
+                        {
+                            "key": str(item.get("key", "")),
+                            "preferred_label": str(item.get("preferred_label", "")),
+                            "aliases": list(item.get("aliases", [])),
+                            "definition": str(item.get("definition", "")),
+                            "similarity": round(max(
+                                (lexical_similarity(atom["source_text"], concept_text(item)) for atom in packet),
+                                default=0.0,
+                            ), 6),
+                        }
+                        for item in registry_concepts if isinstance(item, dict)
+                    ),
+                    key=lambda item: (-item["similarity"], item["key"]),
+                )[:8],
             }
             job["packet_sha256"] = packet_digest(job)
             jobs.append(job)
@@ -576,6 +598,12 @@ def prepare_relation_jobs(
             right_terms = {normalized(concepts[right]["preferred_label"]), *(normalized(value) for value in concepts[right].get("aliases", []))}
             if (left_terms - {""}) & (right_terms - {""}):
                 add_candidate(candidates, "concept-merge", left, right, "exact-alias", 1.0, True)
+                left_atoms = {str(item["atom_key"]) for item in by_concept.get(left, [])}
+                right_atoms = {str(item["atom_key"]) for item in by_concept.get(right, [])}
+                for left_atom in left_atoms:
+                    for right_atom in right_atoms:
+                        if bool(config.get("cross_chapter")) and atoms[left_atom]["chapter_key"] != atoms[right_atom]["chapter_key"]:
+                            add_candidate(candidates, "atom-relation", left_atom, right_atom, "cross-chapter-concept-recurrence", 1.0, True)
             similarity = lexical_similarity(concept_text(concepts[left]), concept_text(concepts[right]))
             if similarity >= 0.45:
                 add_candidate(candidates, "concept-merge", left, right, "lexical-concept", similarity)
@@ -610,6 +638,8 @@ def prepare_relation_jobs(
         for index, left in enumerate(occurrence_atoms):
             for right in occurrence_atoms[index + 1:]:
                 add_candidate(candidates, "atom-relation", left, right, "shared-concept", 0.95, True)
+                if atoms[left]["chapter_key"] != atoms[right]["chapter_key"]:
+                    add_candidate(candidates, "atom-relation", left, right, "cross-chapter-concept-recurrence", 1.0, True)
 
     aliases_to_producers: dict[str, set[str]] = defaultdict(set)
     for concept_ref, concept in concepts.items():
@@ -663,16 +693,22 @@ def prepare_relation_jobs(
 
     atom_candidates = [item for item in candidates.values() if item["kind"] == "atom-relation"]
     kept_atom_ids: set[str] = {item["candidate_id"] for item in atom_candidates if item["hard"]}
-    ranked_by_atom: dict[str, list[tuple[float, str]]] = defaultdict(list)
-    for item in atom_candidates:
-        if item["hard"]:
-            continue
-        rank = max(item["scores"].values(), default=0.0) + 0.02 * len(item["channels"])
-        ranked_by_atom[item["left_key"]].append((rank, item["candidate_id"]))
-        ranked_by_atom[item["right_key"]].append((rank, item["candidate_id"]))
     cap = int(retrieval["max_ranked_candidates_per_atom"])
-    for values in ranked_by_atom.values():
-        kept_atom_ids.update(candidate for _, candidate in sorted(values, key=lambda value: (-value[0], value[1]))[:cap])
+    soft_degree: dict[str, int] = defaultdict(int)
+    soft_ranked = sorted(
+        (
+            (-(max(item["scores"].values(), default=0.0) + 0.02 * len(item["channels"])), item["candidate_id"], item)
+            for item in atom_candidates if not item["hard"]
+        ),
+        key=lambda value: (value[0], value[1]),
+    )
+    for _, candidate, item in soft_ranked:
+        left, right = item["left_key"], item["right_key"]
+        if soft_degree[left] >= cap or soft_degree[right] >= cap:
+            continue
+        kept_atom_ids.add(candidate)
+        soft_degree[left] += 1
+        soft_degree[right] += 1
     for identity, item in list(candidates.items()):
         if item["kind"] == "atom-relation" and item["candidate_id"] not in kept_atom_ids:
             del candidates[identity]
@@ -838,18 +874,17 @@ def validate_round2_payload(jobs: dict[str, Any], decisions: dict[str, Any]) -> 
                 if item.get("concept_ref") == concept_ref
             }
             evidence = validate_relation_evidence(raw.get("evidence"), atoms, endpoint_atoms, context, errors, False)
-            if str(evidence_kind) == "pedagogical-inference":
-                covered = {item["atom_key"] for item in evidence}
-                left_atoms = {
-                    str(item["atom_key"]) for item in jobs.get("atom_concept_links", [])
-                    if item.get("concept_ref") == left
-                }
-                right_atoms = {
-                    str(item["atom_key"]) for item in jobs.get("atom_concept_links", [])
-                    if item.get("concept_ref") == right
-                }
-                if not (covered & left_atoms and covered & right_atoms):
-                    errors.append({"code": "concept-relation-two-sided-evidence-missing", "context": context})
+            covered = {item["atom_key"] for item in evidence}
+            left_atoms = {
+                str(item["atom_key"]) for item in jobs.get("atom_concept_links", [])
+                if item.get("concept_ref") == left
+            }
+            right_atoms = {
+                str(item["atom_key"]) for item in jobs.get("atom_concept_links", [])
+                if item.get("concept_ref") == right
+            }
+            if not (covered & left_atoms and covered & right_atoms):
+                errors.append({"code": "concept-relation-two-sided-evidence-missing", "context": context})
             concept_relations.append({
                 "candidate_id": str(raw.get("candidate_id")), "from_ref": left, "to_ref": right,
                 "type": str(relation_type), "tier": str(tier), "evidence_kind": str(evidence_kind),
@@ -876,7 +911,7 @@ def validate_round2_payload(jobs: dict[str, Any], decisions: dict[str, Any]) -> 
             if not isinstance(rationale, str) or len(rationale.strip()) < 12:
                 errors.append({"code": "relation-rationale-invalid", "context": context})
             confidence = validate_confidence(raw.get("confidence"), str(evidence_kind), jobs["relation_analysis"], context, errors, review)
-            evidence = validate_relation_evidence(raw.get("evidence"), atoms, {left, right}, context, errors, str(evidence_kind) == "pedagogical-inference")
+            evidence = validate_relation_evidence(raw.get("evidence"), atoms, {left, right}, context, errors, True)
             atom_relations.append({
                 "candidate_id": str(raw.get("candidate_id")), "from_key": left, "to_key": right,
                 "type": str(relation_type), "tier": str(tier), "evidence_kind": str(evidence_kind),
@@ -887,6 +922,22 @@ def validate_round2_payload(jobs: dict[str, Any], decisions: dict[str, Any]) -> 
     decided_merge_ids = {item["candidate_id"] for item in merges}
     if decided_merge_ids != merge_candidate_ids:
         errors.append({"code": "concept-merge-review-coverage-invalid", "missing": sorted(merge_candidate_ids - decided_merge_ids), "extra": sorted(decided_merge_ids - merge_candidate_ids)})
+    for label, values, left_field, right_field in (
+        ("concept", concept_relations, "from_ref", "to_ref"),
+        ("atom", atom_relations, "from_key", "to_key"),
+    ):
+        identities: set[tuple[str, str, str]] = set()
+        directional: dict[frozenset[str], set[tuple[str, str]]] = defaultdict(set)
+        for item in values:
+            identity = str(item[left_field]), str(item[right_field]), str(item["type"])
+            if identity in identities:
+                errors.append({"code": f"{label}-relation-duplicate", "identity": identity})
+            identities.add(identity)
+            if item["type"] not in {"contrasts", "analogous"}:
+                directional[frozenset(identity[:2])].add(identity[:2])
+        for pair, directions in directional.items():
+            if len(directions) > 1:
+                review.append({"code": f"{label}-relation-direction-conflict", "endpoints": sorted(pair)})
     return {
         "schema_version": 2,
         "status": "failed" if errors else ("review_required" if review else "passed"),
@@ -1244,7 +1295,7 @@ def validate_final_relation(raw: Any, index: int, atoms: dict[str, dict[str, Any
     evidence_kind = str(raw["evidence_kind"])
     confidence = validate_confidence(raw.get("confidence"), evidence_kind, config, context, errors, review)
     endpoints = set() if concept else {left, right}
-    evidence = validate_relation_evidence(raw.get("evidence"), atoms, endpoints, context, errors, evidence_kind == "pedagogical-inference")
+    evidence = validate_relation_evidence(raw.get("evidence"), atoms, endpoints, context, errors, not concept)
     result = {
         left_field: left, right_field: right, "type": str(raw["type"]), "tier": str(raw["tier"]),
         "evidence_kind": evidence_kind, "evidence": evidence,
@@ -1266,6 +1317,11 @@ def quality_report(graph: dict[str, Any], atoms: dict[str, dict[str, Any]], cand
     relation_types: dict[str, int] = defaultdict(int)
     for relation in [*graph["concept_relations"], *graph["relations"]]:
         relation_types[str(relation["type"])] += 1
+    accepted_candidate_ids = {
+        str(value) for relation in [*graph["concept_relations"], *graph["relations"]]
+        for value in relation.get("candidate_sources", []) if value
+    }
+    proposal_count = sum(len(item.get("member_proposal_ids", [])) for item in graph["concepts"])
     return {
         "schema_version": 1, "kind": "relation-quality-report",
         "status": "passed" if not queue else "review_required",
@@ -1275,8 +1331,11 @@ def quality_report(graph: dict[str, Any], atoms: dict[str, dict[str, Any]], cand
             "concept_relations": len(graph["concept_relations"]), "relations": len(graph["relations"]),
             "candidates": len(candidates), "hard_candidates": hard,
             "reviewed_candidates": len(reviewed_ids), "components": len(wcc),
+            "accepted_candidates": len(accepted_candidate_ids & reviewed_ids),
+            "merged_proposals": max(0, proposal_count - len(graph["concepts"])),
             "isolated_concepts": sum(len(item) == 1 for item in wcc), "unresolved": len(queue),
         },
+        "candidate_acceptance_rate": round(len(accepted_candidate_ids & reviewed_ids) / len(reviewed_ids), 6) if reviewed_ids else 0.0,
         "candidate_channels": dict(sorted(channels.items())),
         "relation_types": dict(sorted(relation_types.items())),
         "component_sizes": [len(item) for item in wcc],
@@ -1350,8 +1409,6 @@ def finalize_relations(
         for item in concept_report["concepts"]
     }
     for index, relation in enumerate(final_concept_relations):
-        if relation["evidence_kind"] != "pedagogical-inference":
-            continue
         covered = {str(item["atom_key"]) for item in relation["evidence"]}
         if not (
             covered & evidence_atoms_by_proposal.get(relation["from_ref"], set())
@@ -1362,6 +1419,16 @@ def finalize_relations(
         value for index, raw in enumerate(decision.get("relations", []) if isinstance(decision.get("relations"), list) else [])
         if (value := validate_final_relation(raw, index, atoms, proposal_keys, concept_jobs["relation_analysis"], False, errors, review)) is not None
     ]
+    for label, values, left_field, right_field in (
+        ("concept", final_concept_relations, "from_ref", "to_ref"),
+        ("atom", final_atom_relations, "from_key", "to_key"),
+    ):
+        identities: set[tuple[str, str, str]] = set()
+        for item in values:
+            identity = str(item[left_field]), str(item[right_field]), str(item["type"])
+            if identity in identities:
+                errors.append({"code": f"final-{label}-relation-duplicate", "identity": identity})
+            identities.add(identity)
     graph = normalize_graph(
         concept_report["concepts"], concept_report["atom_concept_links"], round2_report["merge_decisions"],
         final_concept_relations, final_atom_relations, concept_report["atom_roles"], concept_jobs["relation_analysis"],

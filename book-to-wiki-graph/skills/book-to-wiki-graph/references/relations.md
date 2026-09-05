@@ -1,8 +1,10 @@
-# Two-pass Teaching Relation Review
+# Three-pass Dual-layer Teaching Relation Review
 
 Run relation review after Markdown materialization so every endpoint uses its
-final stable atom key. The current Agent is the default reviewer. An external
-model is optional and requires an exact model plus `--execute`.
+final stable atom key. Invoke the plugin's independent
+`$knowledge-relation-mapper` Skill and follow its `workflow.md` and `schema.md`.
+The current Agent is the default reviewer. An external model is optional and
+requires an exact model plus `--execute`.
 
 ## Relation ontology and direction
 
@@ -27,18 +29,16 @@ order. A learned idea that prompts a later question and then a new idea is:
 learned atom -> motivates -> scenario atom -> motivates -> new atom
 ```
 
-## First pass
+## First pass — concepts
 
-Run `relate_book.py prepare`. Jobs are chapter-scoped and split only when their
-source text exceeds the configured packet size. For every atom return:
+Run `knowledge-relation-mapper/scripts/relate_book.py prepare-concepts`. Treat
+each final atom as an immutable TextUnit. Extract canonical concept proposals,
+definitions, aliases, kinds, exact source evidence, atom-concept teaching roles,
+and the `core`/`bridge`/`satellite` display role for every atom.
 
-- `atom_key`;
-- `role`: `core`, `bridge`, or `satellite`;
-- grounded `teaches` and `assumes` concept phrases.
-
-Then propose relations with `from_key`, `to_key`, `type`, `tier`,
-`evidence_kind`, endpoint `evidence_ranges`, a concrete `rationale`, and
-`confidence`. The model may not rewrite atom text.
+Concept names must be reusable mathematical units, never a full question,
+activity label, exercise number, or truncated sentence. Exercises map existing
+concepts and do not originate a concept from question wording alone.
 
 Use `bridge` only for a worked example whose solution exposes a substantial,
 reusable mathematical idea or method (for example modeling, transformation,
@@ -47,23 +47,32 @@ substitution and calculation examples remain `satellite`. `apply` copies the
 reviewed bridge-example keys into `relation_review.featured_example_keys` for
 Canvas selection; it never changes the example Markdown.
 
-## Second pass
+## Second pass — disambiguation and hybrid candidates
 
-`prepare-audit` creates one audit per chapter plus one cross-chapter audit. It
-includes every source-adjacent pair, each teaching satellite's nearest
-knowledge candidate, concept-signature dependencies, first-pass relations,
-and cross-chapter concept candidates.
+`prepare-relations` creates concept merge, concept relation, and atom projection
+candidates from source proximity, organizer neighbourhood, explicit mentions,
+teaches/assumes roles, full-text lexical similarity, optional embeddings,
+existing graph two-hop neighbours, and cross-chapter concept recurrence. Hard
+candidates are retained; other candidates are capped at 12 per atom.
 
-Review every `candidate_id` and return the complete final relation set for the
-scope. The model may add, remove, reverse, retype, or retier a relation. A
-genuinely independent atom needs a source-specific reason; independence is not
-a substitute for reviewing an unclear relationship.
+Review every `candidate_id` as forward, reverse, or unrelated. Embeddings only
+recall candidates. They never merge concepts or create a relation. Concept
+merges need confidence `>= 0.97`; same-name/different-definition items remain
+separate.
+
+## Third pass — graph structure
+
+`prepare-audit` constructs a whole-graph audit. Check WCC, backbone DAG cycles,
+backward prerequisite relations, duplicates, direction conflicts, inferred
+transitive redundancy, concept grounding, teaching-role orphans, packet seams,
+and cross-chapter connections. Return the complete corrected graph. Every
+secondary component needs a specific mathematical independence reason.
 
 ## Gates
 
 - Explicit relations require confidence `>= 0.90`.
-- Pedagogical inferences require confidence `>= 0.95` and evidence from both
-  endpoint atoms.
+- Pedagogical inferences require confidence `>= 0.95`; all final relations
+  retain resolvable evidence from both ends.
 - Backbone edges are limited to `prerequisite`, `develops`, `derives`, and
   `motivates`; their endpoints must be knowledge or scenario atoms.
 - The backbone is acyclic.
@@ -82,26 +91,28 @@ book atlas or the Markdown corpus.
 ## Commands
 
 ```bash
-python scripts/relate_book.py prepare <book-graph.json> \
-  --output-dir <relation-staging>
+python ../knowledge-relation-mapper/scripts/relate_book.py prepare-concepts \
+  <book-graph.json> --output-dir <relation-staging>
 
-python scripts/relate_book.py validate-round1 \
-  <relation-staging>/relation-jobs.json \
-  <relation-staging>/round-1-relations.json
+python ../knowledge-relation-mapper/scripts/relate_book.py prepare-relations \
+  <relation-staging>/concept-jobs.json \
+  <relation-staging>/round-1-concepts.json --output-dir <relation-staging>
 
-python scripts/relate_book.py prepare-audit \
+python ../knowledge-relation-mapper/scripts/relate_book.py prepare-audit \
   <relation-staging>/relation-jobs.json \
-  <relation-staging>/round-1-relations.json \
-  --output-dir <relation-staging>
-
-python scripts/relate_book.py finalize \
-  <relation-staging>/relation-jobs.json \
-  <relation-staging>/round-1-relations.json \
-  <relation-staging>/round-2-jobs.json \
   <relation-staging>/round-2-relations.json \
   --output-dir <relation-staging>
 
-python scripts/relate_book.py apply \
+python ../knowledge-relation-mapper/scripts/relate_book.py finalize \
+  <relation-staging>/concept-jobs.json \
+  <relation-staging>/round-1-concepts.json \
+  <relation-staging>/relation-jobs.json \
+  <relation-staging>/round-2-relations.json \
+  <relation-staging>/graph-audit-jobs.json \
+  <relation-staging>/round-3-audit.json \
+  --output-dir <relation-staging>
+
+python ../knowledge-relation-mapper/scripts/relate_book.py apply \
   <book-graph.json> <relation-staging>/relation-final.json \
   --output <book-graph-with-relations.json>
 ```

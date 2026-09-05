@@ -660,22 +660,48 @@ def extract_composite_short_answer(body: str) -> str | None:
     )
 
 
-def format_answer_callout(
+def normalize_math_text(t: str) -> str:
+    t = re.sub(r"\\mathrm|\\text|\\mathbf|[\${}\s_]+", "", t)
+    return t.casefold()
+
+
+def match_option_from_stem_and_answer(stem: str, ans_body: str) -> str | None:
+    """Infer multiple-choice answer option from question stem options and solution conclusion."""
+    m = re.search(r"(?:故选|选|因此选|故选：|选：)\s*([A-D]+)\b|(?:故|则)?\s*([A-D])\s*项正确", ans_body)
+    if m:
+        return (m.group(1) or m.group(2)).strip().upper()
+    opts: dict[str, str] = {}
+    for om in re.finditer(r"(?P<opt>[A-D])[.．、\s]\s*(?P<val>[^A-D\n]+)", stem):
+        opt = om.group("opt")
+        val_norm = normalize_math_text(om.group("val"))
+        opts[opt] = val_norm
+
+    ans_norm = normalize_math_text(ans_body[-300:])
+    for opt, val in reversed(opts.items()):
+        if val and len(val) >= 2 and val in ans_norm:
+            return opt
+    return None
+
+
+def format_answer_callout_with_metadata(
     body: str,
     callout_title: str = "答案与解析",
     reviewed_choice_answer: str | None = None,
     reviewed_short_answer: str | None = None,
     question_body: str = "",
-) -> str:
+) -> tuple[str, dict[str, Any]]:
     source_body = body.strip()
     scan_body = (question_body + "\n" + source_body) if question_body else source_body
 
-    # 1. Extract Answer Value
+    # 1. Extract Answer Value with Confidence Tiers
     answer_value = None
+    confidence = "HIGH"
     if reviewed_short_answer:
         answer_value = reviewed_short_answer
+        confidence = "HIGH"
     elif reviewed_choice_answer:
         answer_value = reviewed_choice_answer
+        confidence = "HIGH"
 
     # Check leading 【正确答案】 or 【答案】
     if not answer_value and re.match(r"^\s*(?:#{1,6}\s*)?【(?:正确答案|答案)】", source_body):
@@ -725,6 +751,7 @@ def format_answer_callout(
         m_choice = re.search(r"(?:故选|选|因此选|故选：|选：)\s*([A-D]+)\b|(?:故|则)?\s*([A-D])\s*项正确", resolution_body or source_body)
         if m_choice:
             answer_value = (m_choice.group(1) or m_choice.group(2)).strip().upper()
+            confidence = "HIGH"
 
     # Check leading 【正确答案】 or 【答案】 in resolution_body
     if not answer_value and re.search(r"^\s*(?:#{1,6}\s*)?【(?:正确答案|答案)】", resolution_body):
@@ -739,6 +766,7 @@ def format_answer_callout(
             if val and "\n" not in val and len(val) <= 100:
                 answer_value = val
                 resolution_body = resolution_body[m_head.end():].strip()
+                confidence = "HIGH"
 
     # Check leading option header (e.g. 1. D, 7. AC, 7. ABD)
     if not answer_value:
@@ -748,6 +776,7 @@ def format_answer_callout(
             # Ensure it is not a Roman numeral or accidental word
             if val and all(c in "ABCD" for c in val):
                 answer_value = val
+                confidence = "MEDIUM"
 
     # Check trailing or standalone 答案：...
     if not answer_value:
@@ -755,6 +784,7 @@ def format_answer_callout(
         if m_ans_line:
             answer_value = m_ans_line.group(1).strip()
             resolution_body = resolution_body[:m_ans_line.start()] + "\n" + resolution_body[m_ans_line.end():]
+            confidence = "MEDIUM"
 
     # Check leading number option header (e.g. 1. D or 2. AC or 3. B解法1：)
     if not answer_value:
@@ -763,6 +793,7 @@ def format_answer_callout(
             val = m_lead.group(1).strip().upper()
             if val and all(c in "ABCD" for c in val):
                 answer_value = val
+                confidence = "MEDIUM"
 
     # Check option interval / formula matching for multiple choice
     if not answer_value and re.search(r"[A-D][.．、\s]", scan_body):
@@ -790,6 +821,7 @@ def format_answer_callout(
             for opt, val in opts.items():
                 if val == correct_circled:
                     answer_value = opt
+                    confidence = "LOW"
                     break
 
         # Priority 1: Exact equation match (e.g. = -32, 为 -32, 是 -32, = 0)
@@ -800,6 +832,7 @@ def format_answer_callout(
                     if m.end() > best_pos:
                         best_pos = m.end()
                         answer_value = opt
+                        confidence = "LOW"
 
         # Priority 2: Semantic and number matches
         if not answer_value:
@@ -807,13 +840,16 @@ def format_answer_callout(
                 clean_val = re.sub(r"[^\u4e00-\u9fa5a-zA-Z0-9]+", "", val)
                 if len(clean_val) >= 2 and clean_val in re.sub(r"[^\u4e00-\u9fa5a-zA-Z0-9]+", "", final_sentence):
                     answer_value = opt
+                    confidence = "LOW"
                     break
                 nums = re.findall(r"-?\d+", val)
                 if len(nums) >= 2 and all(re.search(r"(?<!\d)" + re.escape(n) + r"(?!\d)", final_sentence) for n in nums):
                     answer_value = opt
+                    confidence = "LOW"
                     break
                 elif len(nums) == 1 and nums[0] not in {"0", "1"} and re.search(r"(?<![-\d])" + re.escape(nums[0]) + r"(?!\d)", final_sentence):
                     answer_value = opt
+                    confidence = "LOW"
                     break
 
     # Check 故答案为：... / 所以答案为：...
@@ -821,12 +857,14 @@ def format_answer_callout(
         conc_ans = re.search(r"(?m)(?:故|所以|因此|则)?\s*答案为\s*[：:]?\s*(\S.*?)(?:[。.]|\s*$)", resolution_body)
         if conc_ans:
             answer_value = conc_ans.group(1).strip()
+            confidence = "MEDIUM"
 
     # Check 故选 / 应选
     if not answer_value:
         m_opt = re.search(r"(?:故\s*选|应\s*选|选|选项(?:为|是|有)?|答案(?:为|是)?|也就是|即)\s*[：:]?\s*([A-F]+)\b|\b([A-F])\s*选项\b", resolution_body, re.IGNORECASE)
         if m_opt:
             answer_value = (m_opt.group(1) or m_opt.group(2)).upper()
+            confidence = "MEDIUM"
         else:
             # check non-choice short answer prefix
             marker = re.search(r"【(?:解析|详解|分析|思路导航|解答|解法|证法|证明)】|(?<!见)(?:解析|详解)\s*[：:]", resolution_body)
@@ -836,9 +874,17 @@ def format_answer_callout(
                 if prefix and len(prefix) <= 400 and not re.match(r"^\(\d+\)\s*[×√]", prefix):
                     answer_value = prefix
                     resolution_body = resolution_body[marker.start():].strip()
+                    confidence = "MEDIUM"
+
+    if not answer_value and question_body:
+        deduced_opt = match_option_from_stem_and_answer(question_body, resolution_body)
+        if deduced_opt:
+            answer_value = deduced_opt
+            confidence = "LOW"
 
     if not answer_value:
         answer_value = "详见解析"
+        confidence = "FALLBACK"
 
     answer_value = re.sub(r"\s+", " ", answer_value).strip()
 
@@ -939,7 +985,30 @@ def format_answer_callout(
                 for line in sub_c_str.splitlines():
                     callout_lines.append(f"> > {line}" if line else "> >")
 
-    return "\n".join(callout_lines)
+    meta = {
+        "answer_value": answer_value,
+        "confidence": confidence,
+        "has_analysis": bool(analysis_text and analysis_text.strip()),
+        "has_summary": bool(sub_callouts),
+    }
+    return "\n".join(callout_lines), meta
+
+
+def format_answer_callout(
+    body: str,
+    callout_title: str = "答案与解析",
+    reviewed_choice_answer: str | None = None,
+    reviewed_short_answer: str | None = None,
+    question_body: str = "",
+) -> str:
+    rendered, _ = format_answer_callout_with_metadata(
+        body,
+        callout_title=callout_title,
+        reviewed_choice_answer=reviewed_choice_answer,
+        reviewed_short_answer=reviewed_short_answer,
+        question_body=question_body,
+    )
+    return rendered
 
 
 def apply_matches(profile_path: Path, manifest_path: Path, overwrite: bool) -> dict[str, Any]:

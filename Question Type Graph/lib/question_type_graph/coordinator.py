@@ -220,6 +220,10 @@ def _run_pipeline(profile_path: Path, args: argparse.Namespace) -> dict[str, Any
             build_review_worksheet(profile_path, inventory, draft),
             overwrite=True,
         )
+    if not paths["adapter"].is_file() and getattr(args, "archetype", None):
+        from .archetypes import build_archetype_adapter
+        build_archetype_adapter(profile_path, archetype=args.archetype, output_path=paths["adapter"], overwrite=args.overwrite)
+
     if not paths["adapter"].is_file():
         draft = build_adapter_draft(profile_path, inventory)
         write_json_atomic(
@@ -694,6 +698,7 @@ def add_run_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--poll-interval", type=float, default=10.0)
     parser.add_argument("--max-polls", type=int, default=180)
     parser.add_argument("--request-timeout", type=float, default=120.0)
+    parser.add_argument("--archetype", choices=["smartedu", "smartedu_synced", "teacher", "teacher_interleaved", "modular", "modular_topic"])
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -725,6 +730,9 @@ def build_parser() -> argparse.ArgumentParser:
     audit.add_argument("profile", type=Path)
     audit.add_argument("--output", type=Path)
     audit.add_argument("--overwrite", action="store_true")
+
+    from .batch import add_batch_subparser
+    add_batch_subparser(sub)
     return parser
 
 
@@ -745,6 +753,19 @@ def main(argv: list[str] | None = None) -> int:
             )
             write_json_atomic(args.output, profile, overwrite=args.overwrite)
             result = {"schema_version": 1, "status": "completed", "profile": str(args.output.resolve())}
+        elif args.command == "batch":
+            from .batch import run_batch
+            result = run_batch(
+                source_dir=args.source_dir,
+                staging_base=args.staging_base,
+                vault_root=args.vault_root,
+                graph_base=args.graph_base,
+                archetype=args.archetype,
+                parallel=args.parallel,
+                skip_conversion=args.skip_conversion,
+                safe_auto_approve=args.safe_auto_approve,
+                overwrite=args.overwrite,
+            )
         elif args.command == "inventory-format":
             profile = load_profile(args.profile)
             output = args.output or Path(profile["format"]["inventory"])

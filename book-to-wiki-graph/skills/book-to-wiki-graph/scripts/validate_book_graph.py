@@ -1235,6 +1235,204 @@ def validate_chapter_constellation(
     return errors
 
 
+def validate_v3_map_document(
+    canvas_path: Path,
+    entry: dict[str, Any],
+    expected_atoms: set[str],
+    expected_exercise_owners: set[str],
+    expected_portals: dict[str, Path],
+    nodes: dict[str, dict[str, Any]],
+    book_root: Path,
+    concepts: list[dict[str, Any]],
+    atom_concept_links: list[dict[str, Any]],
+    chapter_level: bool,
+) -> list[dict[str, Any]]:
+    canvas_nodes, canvas_edges, targets, errors = read_canvas_document(canvas_path)
+    errors.extend(text_overlap_errors(canvas_nodes, canvas_path))
+    cards = {str(item.get("id")): item for item in canvas_nodes if item.get("type") == "text"}
+    actual_atom_ids = {stable_canvas_id("card", key) for key in expected_atoms}
+    missing_atoms = sorted(actual_atom_ids - set(cards))
+    unexpected_exercise_atoms = sorted(
+        stable_canvas_id("card", key) for key, node in nodes.items()
+        if node.get("category") == "exercise" and stable_canvas_id("card", key) in cards
+    )
+    if missing_atoms:
+        errors.append({"code": "canvas-v3-visible-atom-missing", "path": str(canvas_path), "node_ids": missing_atoms})
+    if unexpected_exercise_atoms:
+        errors.append({"code": "canvas-v3-individual-exercise-forbidden", "path": str(canvas_path), "node_ids": unexpected_exercise_atoms})
+    for key in expected_atoms:
+        node_id = stable_canvas_id("card", key)
+        expected_target = (book_root / str(nodes[key]["_filename"])).resolve()
+        if targets.get(node_id) != expected_target:
+            errors.append({"code": "canvas-v3-atom-target-invalid", "path": str(canvas_path), "atom_key": key})
+        if cards.get(node_id, {}).get("color") != ATOM_COLORS.get(str(nodes[key].get("category"))):
+            errors.append({"code": "canvas-v3-atom-color-invalid", "path": str(canvas_path), "atom_key": key})
+    expected_entries = {stable_canvas_id("exercise-entry", key) for key in expected_exercise_owners}
+    actual_entries = {node_id for node_id in cards if node_id in expected_entries}
+    if actual_entries != expected_entries:
+        errors.append({"code": "canvas-v3-exercise-entry-coverage", "path": str(canvas_path), "missing": sorted(expected_entries - actual_entries)})
+    if chapter_level and expected_entries:
+        errors.append({"code": "canvas-v3-chapter-exercise-entry-forbidden", "path": str(canvas_path)})
+    for key in expected_exercise_owners:
+        node_id = stable_canvas_id("exercise-entry", key)
+        if targets.get(node_id) != (book_root / str(nodes[key]["_filename"])).resolve():
+            errors.append({"code": "canvas-v3-exercise-target-invalid", "path": str(canvas_path), "organizer": key})
+    for portal_id, target in expected_portals.items():
+        if portal_id not in cards or targets.get(portal_id) != target.resolve():
+            errors.append({"code": "canvas-v3-section-portal-invalid", "path": str(canvas_path), "portal": portal_id})
+    for edge in canvas_edges:
+        if edge.get("fromSide") not in {"left", "right", "top", "bottom"} or edge.get("toSide") not in {"left", "right", "top", "bottom"}:
+            errors.append({"code": "canvas-v3-edge-port-invalid", "path": str(canvas_path), "edge": edge.get("id")})
+        if chapter_level and str(edge.get("label", "")).startswith("练习"):
+            errors.append({"code": "canvas-v3-practice-edge-leaked-to-chapter", "path": str(canvas_path), "edge": edge.get("id")})
+    concept_by_id = {stable_canvas_id("concept", str(item["key"])): str(item["key"]) for item in concepts if item.get("key")}
+    links_by_concept: dict[str, set[str]] = defaultdict(set)
+    for link in atom_concept_links:
+        atom_key, concept_key = str(link.get("atom_key")), str(link.get("concept_key"))
+        if atom_key in expected_atoms:
+            links_by_concept[concept_key].add(atom_key)
+    concept_ids = set(cards).intersection(concept_by_id)
+    for node_id in concept_ids:
+        concept_key = concept_by_id[node_id]
+        if len(links_by_concept.get(concept_key, set())) < 2:
+            errors.append({"code": "canvas-v3-one-to-one-concept-hub-forbidden", "path": str(canvas_path), "concept_key": concept_key})
+    substantive = actual_atom_ids | expected_entries | concept_ids
+    incident = {str(endpoint) for edge in canvas_edges for endpoint in (edge.get("fromNode"), edge.get("toNode"))}
+    isolated = sorted(node_id for node_id in substantive if node_id in cards and node_id not in incident)
+    if len(substantive) > 1 and isolated:
+        errors.append({"code": "canvas-isolated-substantive-node", "path": str(canvas_path), "nodes": isolated})
+    counts = entry.get("counts")
+    if not isinstance(counts, dict):
+        errors.append({"code": "canvas-index-counts-missing", "path": str(canvas_path)})
+    else:
+        actual_basic = {
+            "cards": sum(item.get("type") == "text" for item in canvas_nodes),
+            "groups": sum(item.get("type") == "group" for item in canvas_nodes),
+            "edges": len(canvas_edges),
+            "internal_atoms": len(expected_atoms),
+            "concept_hubs": len(concept_ids),
+        }
+        for field, value in actual_basic.items():
+            if counts.get(field) != value:
+                errors.append({"code": "canvas-index-count-mismatch", "path": str(canvas_path), "field": field, "expected": value, "actual": counts.get(field)})
+        if chapter_level and counts.get("exercise_relation_edges") != 0:
+            errors.append({"code": "canvas-v3-chapter-practice-count-invalid", "path": str(canvas_path)})
+        if not chapter_level and counts.get("exercise_organizers") != len(expected_exercise_owners):
+            errors.append({"code": "canvas-v3-section-exercise-count-invalid", "path": str(canvas_path)})
+    actual_bounds = canvas_bounds(canvas_nodes)
+    if entry.get("bounds") != actual_bounds:
+        errors.append({"code": "canvas-index-bounds-mismatch", "path": str(canvas_path), "expected": actual_bounds, "actual": entry.get("bounds")})
+    if sum(item.get("type") == "text" for item in canvas_nodes) >= 30 and not 0.5 <= float(actual_bounds["aspect_ratio"]) <= 2.0:
+        errors.append({"code": "canvas-aspect-ratio-invalid", "path": str(canvas_path), "aspect_ratio": actual_bounds["aspect_ratio"]})
+    if not isinstance(entry.get("visual_quality"), dict):
+        errors.append({"code": "canvas-v3-visual-quality-missing", "path": str(canvas_path)})
+    return errors
+
+
+def validate_constellation_bundle_v3(
+    index: dict[str, Any], canvas_index_path: Path, manifest_path: Path, book_root: Path,
+    nodes: dict[str, dict[str, Any]], organizers: list[dict[str, Any]], atoms: list[dict[str, Any]],
+    relations: list[dict[str, Any]], relation_review: Any, concepts: list[dict[str, Any]],
+    atom_concept_links: list[dict[str, Any]], concept_relations: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    errors: list[dict[str, Any]] = []
+    index_root = canvas_index_path.parent
+    if Path(str(index.get("manifest", ""))).expanduser().resolve() != manifest_path or index.get("manifest_sha256") != sha256_file(manifest_path):
+        errors.append({"code": "canvas-index-manifest-binding-invalid"})
+    if Path(str(index.get("book_root", ""))).expanduser().resolve() != book_root:
+        errors.append({"code": "canvas-index-book-root-mismatch"})
+    expected_layout = {
+        "mode": "three-level-constellation", "theme": "adaptive",
+        "zoom_levels": ["book-chapters", "chapter-core", "section-detail"],
+        "learning_direction": "center-outward-clockwise",
+        "organization_encoding": "regions-with-click-through-portals",
+        "atom_visibility": "chapter-core-and-section-detail",
+        "exercise_representation": "chapter-counts-section-primary-entries",
+        "concept_hub_visibility": "multi-atom-and-semantic-bridge-only",
+        "edge_noise_policy": "one-primary-practice-edge-per-exercise-organizer",
+        "edge_ports": {"progression": "right-to-left", "inspiration": "right-to-top", "support-and-containment": "bottom-to-top"},
+    }
+    if index.get("layout") != expected_layout:
+        errors.append({"code": "canvas-index-layout-invalid"})
+    roots = [node for node in organizers if node.get("parent_key") is None]
+    if len(roots) != 1:
+        return [*errors, {"code": "canvas-index-root-unavailable"}]
+    root_key = str(roots[0]["key"])
+    chapters = [str(key) for key in nodes[root_key].get("_children", []) if nodes.get(str(key), {}).get("layer") == "organizer"]
+    semantic_ready = isinstance(relation_review, dict) and relation_review.get("status") == "passed" and relation_review.get("unresolved_count") == 0
+    if index.get("relation_status") != ("passed" if semantic_ready else "review_required"):
+        errors.append({"code": "canvas-index-relation-status-invalid"})
+    chapter_entries = index.get("chapter_maps") if isinstance(index.get("chapter_maps"), list) else []
+    section_entries = index.get("section_maps") if isinstance(index.get("section_maps"), list) else []
+    if [str(item.get("root_key")) for item in chapter_entries] != chapters:
+        errors.append({"code": "canvas-chapter-order-or-coverage", "expected": chapters})
+    chapter_paths: dict[str, Path] = {}
+    for entry in chapter_entries:
+        chapter = str(entry.get("root_key"))
+        if entry.get("role") != "chapter-knowledge-map" or entry.get("status") != ("ready" if semantic_ready else "relation-review-required"):
+            errors.append({"code": "canvas-chapter-entry-invalid", "chapter": chapter})
+        if semantic_ready:
+            try:
+                chapter_paths[chapter] = resolve_canvas_index_path(entry.get("path"), index_root)
+            except Exception as exc:
+                errors.append({"code": "canvas-chapter-path-invalid", "chapter": chapter, "detail": str(exc)})
+    expected_sections: list[tuple[str, str]] = []
+    for chapter in chapters:
+        values: list[str] = []
+        for child in nodes[chapter].get("_children", []):
+            child_key = str(child)
+            section = child_key if nodes[child_key].get("layer") == "organizer" else "__chapter_intro__"
+            if section not in values:
+                values.append(section)
+        expected_sections.extend((chapter, section) for section in (values or ["__chapter_intro__"]))
+    actual_sections = [(str(item.get("chapter_key")), str(item.get("root_key"))) for item in section_entries]
+    if actual_sections != expected_sections:
+        errors.append({"code": "canvas-v3-section-order-or-coverage", "expected": expected_sections, "actual": actual_sections})
+    section_paths: dict[tuple[str, str], Path] = {}
+    for entry in section_entries:
+        identity = str(entry.get("chapter_key")), str(entry.get("root_key"))
+        if entry.get("role") != "section-detail-map" or entry.get("status") != ("ready" if semantic_ready else "relation-review-required"):
+            errors.append({"code": "canvas-v3-section-entry-invalid", "identity": identity})
+        if semantic_ready:
+            try:
+                section_paths[identity] = resolve_canvas_index_path(entry.get("path"), index_root)
+            except Exception as exc:
+                errors.append({"code": "canvas-v3-section-path-invalid", "identity": identity, "detail": str(exc)})
+    featured = {str(key) for key in relation_review.get("featured_example_keys", []) if str(key) in nodes} if isinstance(relation_review, dict) else set()
+    atlas = index.get("atlas") if isinstance(index.get("atlas"), dict) else {}
+    try:
+        atlas_path = resolve_canvas_index_path(atlas.get("path"), index_root)
+        expected_targets = chapter_paths if semantic_ready else {key: (book_root / str(nodes[key]["_filename"])).resolve() for key in chapters}
+        errors.extend(validate_atlas_canvas(atlas_path, atlas, nodes, root_key, chapters, expected_targets, book_root, relations, {str(atom["key"]): validator_chapter_for(nodes, root_key, str(atom["key"])) for atom in atoms}, semantic_ready, featured))
+    except Exception as exc:
+        errors.append({"code": "canvas-atlas-path-invalid", "detail": str(exc)})
+    if not semantic_ready:
+        return errors
+    chapter_entry_by_key = {str(item.get("root_key")): item for item in chapter_entries}
+    section_entry_by_key = {(str(item.get("chapter_key")), str(item.get("root_key"))): item for item in section_entries}
+    for chapter in chapters:
+        chapter_desc = graph_descendants(nodes, chapter)[1:]
+        visible = {key for key in chapter_desc if nodes[key].get("layer") == "atom" and validator_visible_atom(nodes, key, featured)}
+        section_portals = {
+            stable_canvas_id("section-portal", f"{chapter}:{section}"): section_paths[(chapter, section)]
+            for owner, section in expected_sections if owner == chapter and (chapter, section) in section_paths
+        }
+        if chapter in chapter_paths:
+            errors.extend(validate_v3_map_document(chapter_paths[chapter], chapter_entry_by_key[chapter], visible, set(), section_portals, nodes, book_root, concepts, atom_concept_links, True))
+    for chapter, section in expected_sections:
+        if (chapter, section) not in section_paths:
+            continue
+        if section == "__chapter_intro__":
+            source_atoms = [str(key) for key in nodes[chapter].get("_children", []) if nodes[str(key)].get("layer") == "atom"]
+        else:
+            source_atoms = [key for key in graph_descendants(nodes, section)[1:] if nodes[key].get("layer") == "atom"]
+        visible = {key for key in source_atoms if validator_visible_atom(nodes, key, featured)}
+        exercises = [key for key in source_atoms if nodes[key].get("category") == "exercise"]
+        _, by_owner = validator_exercise_owners(nodes, chapter, exercises)
+        errors.extend(validate_v3_map_document(section_paths[(chapter, section)], section_entry_by_key[(chapter, section)], visible, set(by_owner), {}, nodes, book_root, concepts, atom_concept_links, False))
+    return errors
+
+
 def validate_constellation_bundle(
     canvas_index_path: Path,
     manifest_path: Path,
@@ -1254,6 +1452,11 @@ def validate_constellation_bundle(
         index = load_json(canvas_index_path)
     except Exception as exc:
         return [{"code": "canvas-index-invalid", "detail": str(exc)}]
+    if index.get("schema_version") == 3:
+        return validate_constellation_bundle_v3(
+            index, canvas_index_path, manifest_path, book_root, nodes, organizers, atoms,
+            relations, relation_review, concepts, atom_concept_links, concept_relations,
+        )
     index_root = canvas_index_path.parent
     if index.get("schema_version") != 2:
         errors.append({"code": "canvas-index-schema-version"})
@@ -1379,11 +1582,22 @@ def validate_atomization_review(
             or not 0 <= float(value) <= 1
         ):
             errors.append({"code": "atomization-config-invalid", "field": field})
+    role_audit_required = config.get("teaching_role_audit") == "required-before-materialization"
+    if "teaching_role_audit" in config and not role_audit_required:
+        errors.append({"code": "atomization-config-invalid", "field": "teaching_role_audit"})
+    if role_audit_required:
+        value = config.get("role_correction_confidence_threshold")
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= float(value) <= 1:
+            errors.append({"code": "atomization-config-invalid", "field": "role_correction_confidence_threshold"})
     review = manifest.get("atomization_review")
     if not isinstance(review, dict):
         return [*errors, {"code": "atomization-review-missing"}]
     if review.get("status") != "passed" or review.get("unresolved_count") != 0:
         errors.append({"code": "atomization-review-incomplete"})
+    if role_audit_required:
+        role_review = review.get("role_review")
+        if not isinstance(role_review, dict) or role_review.get("status") != "passed" or role_review.get("unresolved_count") != 0:
+            errors.append({"code": "atom-teaching-role-review-missing-or-incomplete"})
     final_binding = review.get("final_artifact")
     if not isinstance(final_binding, dict):
         return [*errors, {"code": "atomization-final-binding-missing"}]
@@ -1784,12 +1998,22 @@ def validate_graph(
                                 errors.append({"code": "relation-analysis-config-invalid", "field": f"candidate_retrieval.{field}"})
         canvas_config = profile.get("canvas")
         if isinstance(canvas_config, dict) and canvas_config.get("mode") is not None:
-            for field, expected in {
-                "mode": "two-level-constellation",
-                "theme": "adaptive",
-                "overview_granularity": "chapter",
-                "chapter_granularity": "atom",
-            }.items():
+            mode = canvas_config.get("mode")
+            expected_canvas = {
+                "two-level-constellation": {
+                    "mode": "two-level-constellation", "theme": "adaptive",
+                    "overview_granularity": "chapter", "chapter_granularity": "atom",
+                },
+                "three-level-constellation": {
+                    "mode": "three-level-constellation", "theme": "adaptive",
+                    "overview_granularity": "chapter", "chapter_granularity": "core-atom",
+                    "section_granularity": "atom-and-exercise-entry",
+                },
+            }.get(str(mode))
+            if expected_canvas is None:
+                errors.append({"code": "canvas-config-invalid", "field": "mode"})
+                expected_canvas = {}
+            for field, expected in expected_canvas.items():
                 if canvas_config.get(field) != expected:
                     errors.append({"code": "canvas-config-invalid", "field": field})
 
@@ -2237,6 +2461,9 @@ def validate_graph(
                 atoms,
                 [item for item in relations if isinstance(item, dict)],
                 manifest.get("relation_review"),
+                [item for item in manifest.get("concepts", []) if isinstance(item, dict)],
+                [item for item in manifest.get("atom_concept_links", []) if isinstance(item, dict)],
+                [item for item in manifest.get("concept_relations", []) if isinstance(item, dict)],
             )
         )
 

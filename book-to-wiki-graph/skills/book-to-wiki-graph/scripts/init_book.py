@@ -22,8 +22,10 @@ DEFAULT_ATOMIZATION = {
     "mode": "llm-two-pass",
     "knowledge_granularity": "complete-teaching-unit",
     "scenario_policy": "substantial-only",
+    "teaching_role_audit": "required-before-materialization",
     "confidence_threshold": 0.90,
     "short_atom_confidence_threshold": 0.95,
+    "role_correction_confidence_threshold": 0.95,
 }
 DEFAULT_ORGANIZATION = {
     "mode": "toc-plus-reviewed-topics",
@@ -57,10 +59,11 @@ DEFAULT_RELATION_ANALYSIS = {
 }
 DEFAULT_CANVAS = {
     "enabled": True,
-    "mode": "two-level-constellation",
+    "mode": "three-level-constellation",
     "theme": "adaptive",
     "overview_granularity": "chapter",
-    "chapter_granularity": "atom",
+    "chapter_granularity": "core-atom",
+    "section_granularity": "atom-and-exercise-entry",
 }
 
 

@@ -1,39 +1,40 @@
-import sys, subprocess, json
+import sys, subprocess, json, base64
 
-def applescript_quote(s):
-    s = s.replace('\\', '\\\\').replace('"', '\\"')
-    return f'"{s}"'
-
-def eval_safari(js_code, url_pattern="basic.smartedu.cn"):
+def eval_safari(js_code):
     """
-    在 Safari 中查找 URL 包含 url_pattern 的标签页并执行 JavaScript 代码。
-    若找不到特定 Tab，则在当前激活 Tab 执行。
+    通过 Base64 + 立即执行函数安全求值，自动兼容 return 语句与任意表达式。
     """
-    quoted_js = applescript_quote(js_code)
+    # 如果代码包含 return 且不在函数内，将其包装在立即执行匿名函数中
+    # 如果代码包含 return 且未被立即执行函数包裹，包裹为立即执行匿名函数
+    stripped = js_code.strip()
+    if "return " in stripped and not (stripped.startswith("(() =>") or stripped.startswith("(function")):
+        wrapped_code = f"(() => {{\n{stripped}\n}})()"
+    else:
+        wrapped_code = stripped
+        
+    b64 = base64.b64encode(wrapped_code.encode("utf-8")).decode("ascii")
+    run_expr = f"(function(){{ try {{ var s = decodeURIComponent(escape(window.atob('{b64}'))); var r = eval(s); return r !== undefined ? String(r) : ''; }} catch(e) {{ return 'JS_ERR: ' + e.message; }} }})()"
+    
     applescript = f'''
     tell application "Safari"
-        set targetTab to null
-        repeat with w in windows
-            repeat with t in tabs of w
-                if URL of t contains "{url_pattern}" and URL of t contains "prepare" then
-                    set targetTab to t
-                    exit repeat
-                end if
-            end repeat
-            if targetTab is not null then exit repeat
+        set targetTab to current tab of front window
+        repeat with t in tabs of front window
+            if URL of t contains "smartedu.cn" then
+                set targetTab to t
+                exit repeat
+            end if
         end repeat
-        
-        if targetTab is null then
-            set targetTab to current tab of front window
-        end if
-        
-        do JavaScript {quoted_js} in targetTab
+        set res to do JavaScript "{run_expr}" in targetTab
+        return res
     end tell
     '''
     proc = subprocess.run(["osascript", "-"], input=applescript, text=True, capture_output=True)
     if proc.returncode != 0:
         raise RuntimeError(f"AppleScript error: {proc.stderr.strip()}")
-    return proc.stdout.strip()
+    res = proc.stdout.strip()
+    if res.startswith("JS_ERR:"):
+        raise RuntimeError(res)
+    return res
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:

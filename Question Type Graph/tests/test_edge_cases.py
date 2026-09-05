@@ -2219,6 +2219,90 @@ class TestEdgeCases(unittest.TestCase):
         self.assertEqual(meta["difficulty_stars"], "★★★☆☆")
         self.assertEqual(meta["knowledge_points"], ["集合的概念"])
 
+    def test_probe_question_continuity_detects_gap_and_provides_remediation(self) -> None:
+        from question_type_graph.content import probe_question_continuity
+        questions = [
+            {"id": "q1", "context_key": "sec1", "number": "1", "sequence_policy": "continuous", "source_start_line": 10},
+            {"id": "q2", "context_key": "sec1", "number": "2", "sequence_policy": "continuous", "source_start_line": 20},
+            {"id": "q4", "context_key": "sec1", "number": "4", "sequence_policy": "continuous", "source_start_line": 40},
+        ]
+        errors = probe_question_continuity(questions)
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(errors[0]["kind"], "question-sequence-discontinuity")
+        self.assertEqual(errors[0]["expected"], 3)
+        self.assertEqual(errors[0]["actual"], 4)
+        self.assertIn("Expected question 3 in context 'sec1'", errors[0]["remediation"])
+
+    def test_ocr_pseudo_heading_question_is_recognized(self) -> None:
+        from question_type_graph.content import match_question
+        patterns = [re.compile(r"^(?P<number>\d+)[.、]\s*")]
+        line_with_heading = "## 13.【填空题】已知函数 $f(x)=x^2$。"
+        match = match_question(line_with_heading, patterns)
+        self.assertIsNotNone(match)
+        self.assertEqual(match.group("number"), "13")
+
+    def test_format_answer_callout_with_metadata_confidence_tiers(self) -> None:
+        from question_type_graph.answers import format_answer_callout_with_metadata
+        high_body = "【正确答案】D\n【解析】正文推导"
+        _, high_meta = format_answer_callout_with_metadata(high_body)
+        self.assertEqual(high_meta["confidence"], "HIGH")
+        self.assertEqual(high_meta["answer_value"], "D")
+
+        fallback_body = "这是一道没有标准答案的开放题论述过程。"
+        _, fallback_meta = format_answer_callout_with_metadata(fallback_body)
+        self.assertEqual(fallback_meta["confidence"], "FALLBACK")
+        self.assertEqual(fallback_meta["answer_value"], "详见解析")
+
+    def test_generate_stage0_preview_produces_cards_and_summary(self) -> None:
+        from question_type_graph.inventory import generate_stage0_preview
+        from question_type_graph.profile import create_profile
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            sample_md = tmp_path / "questions.raw.md"
+            sample_md.write_text(
+                "1. 【单选题】已知集合 $A={1, 2}$，求元素个数。\n"
+                "【正确答案】B【更多习题信息】难易度：简单\n"
+                "知识点：集合的概念\n"
+                "【解析】集合 $A$ 有两个元素，故选 B。\n\n"
+                "2. 【填空题】$1+1=$\n"
+                "【正确答案】2\n"
+                "【解析】显然为 2。\n",
+                encoding="utf-8",
+            )
+            staging = tmp_path / "staging"
+            staging.mkdir(parents=True, exist_ok=True)
+            profile_path = staging / "profile.json"
+            profile = create_profile(
+                [f"questions={sample_md}"], "Stage0Test", staging, tmp_path / "vault", tmp_path / "vault" / "graph", "zh-CN", None, False
+            )
+            write_json_atomic(profile_path, profile)
+
+            report = generate_stage0_preview(profile_path)
+            self.assertEqual(report["status"], "ready_for_review")
+            self.assertEqual(report["total_detected_questions"], 2)
+            self.assertTrue(report["is_continuous"])
+            self.assertTrue(Path(report["preview_markdown"]).is_file())
+            self.assertTrue(Path(report["preview_summary"]).is_file())
+            preview_content = Path(report["preview_markdown"]).read_text(encoding="utf-8")
+            self.assertIn("样题原型 1：第 1 题", preview_content)
+            self.assertIn("**【答案】** B", preview_content)
+
+    def test_match_option_from_stem_and_answer_deduction(self) -> None:
+        from question_type_graph.answers import format_answer_callout_with_metadata, match_option_from_stem_and_answer
+        stem = "已知集合 $A=\\{x \\mid x^2-1=0\\}$，则集合 $A$ 为（  ）\nA. $\\{-1, 1\\}$  B. $\\{1\\}$  C. $\\{-1\\}$  D. $\\varnothing$"
+        ans_body = "【解析】由 $x^2-1=0$ 解得 $x=\\pm 1$，因此集合 $A=\\{-1, 1\\}$。"
+        deduced = match_option_from_stem_and_answer(stem, ans_body)
+        self.assertEqual(deduced, "A")
+
+        rendered, meta = format_answer_callout_with_metadata(
+            ans_body,
+            callout_title="解析",
+            question_body=stem,
+        )
+        self.assertEqual(meta["answer_value"], "A")
+        self.assertEqual(meta["confidence"], "LOW")
+        self.assertIn("**【答案】** A", rendered)
+
 
 if __name__ == "__main__":
     unittest.main()

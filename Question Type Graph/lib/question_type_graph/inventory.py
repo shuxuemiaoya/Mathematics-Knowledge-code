@@ -709,6 +709,164 @@ def build_review_worksheet(
     return "\n".join(lines)
 
 
+def generate_stage0_preview(
+    profile_path: Path,
+    sample_source_path: Path | None = None,
+    overwrite: bool = True,
+) -> dict[str, Any]:
+    """Generate human-reviewable Markdown prototype cards and decision checklist before batch processing."""
+    from .content import extract_text_metadata
+    from .answers import format_answer_callout_with_metadata
+
+    profile = load_profile(profile_path)
+    staging_root = Path(profile["paths"]["staging_root"]).resolve()
+    staging_root.mkdir(parents=True, exist_ok=True)
+
+    source_path = sample_source_path
+    if source_path is None and profile.get("sources"):
+        raw_md = profile["sources"][0].get("markdown_path")
+        if raw_md and Path(raw_md).is_file():
+            source_path = Path(raw_md)
+        else:
+            orig_src = profile["sources"][0].get("path")
+            if orig_src and Path(orig_src).is_file() and Path(orig_src).suffix.lower() in {".md", ".markdown"}:
+                source_path = Path(orig_src)
+
+    if source_path is None or not source_path.is_file():
+        raise ConfigurationError(f"No source markdown file found for preview generation in profile {profile_path}")
+
+    content = source_path.read_text(encoding="utf-8-sig")
+    lines = content.splitlines()
+
+    # Detect questions by scanning common question start patterns
+    candidate_indices = []
+    q_re = re.compile(r"^\s*(?:#{1,6}\s*)?([1-9]\d?)[.．、\s]+(.*?)$")
+    for idx, line in enumerate(lines):
+        m = q_re.match(line)
+        if m:
+            candidate_indices.append((idx, int(m.group(1)), line))
+
+    total_candidates = len(candidate_indices)
+    numbers = [item[1] for item in candidate_indices]
+
+    # Continuity check
+    discontinuities = []
+    expected = 1
+    for num in numbers:
+        if num != expected:
+            discontinuities.append({"expected": expected, "actual": num})
+            expected = num + 1
+        else:
+            expected += 1
+
+    # Extract up to 2 prototype question blocks
+    prototypes = []
+    for i in range(min(2, total_candidates)):
+        start_idx = candidate_indices[i][0]
+        end_idx = candidate_indices[i + 1][0] if i + 1 < total_candidates else min(start_idx + 40, len(lines))
+        chunk = "\n".join(lines[start_idx:end_idx]).strip()
+
+        q_body = chunk
+        ans_body = ""
+        sol_marker = re.search(r"(?m)^\s*(?:【(?:正确答案|答案|解析|详解|解答)】|答案\s*[：:])", chunk)
+        if sol_marker:
+            q_body = chunk[:sol_marker.start()].strip()
+            ans_body = chunk[sol_marker.start():].strip()
+
+        meta = extract_text_metadata(q_body, ans_body)
+        rendered_callout, callout_meta = format_answer_callout_with_metadata(
+            ans_body or ("【答案】详见解析\n【解析】" + q_body),
+            callout_title="样题解析",
+            question_body=q_body,
+        )
+        prototypes.append({
+            "number": candidate_indices[i][1],
+            "question_body": q_body,
+            "answer_body": ans_body,
+            "metadata": meta,
+            "callout_meta": callout_meta,
+            "rendered_callout": rendered_callout,
+        })
+
+    # Render prototype preview markdown cards
+    preview_cards = [
+        "# 新版式样题渲染原型（Stage 0 Prototype Preview）",
+        "",
+        "> [!NOTE]",
+        "> 本文档由 Question Type Graph Agent 自动生成，用于在批量跑批前对版式、提取精度与 Callout 结构进行人工核对与确认。",
+        "",
+    ]
+    for idx, proto in enumerate(prototypes, 1):
+        preview_cards.extend([
+            f"## 样题原型 {idx}：第 {proto['number']} 题",
+            "",
+            "```yaml",
+            "---",
+            f"question_id: \"Q{idx:08d}\"",
+            f"question_kind: \"exercise\"",
+            f"difficulty: {proto['metadata'].get('difficulty', 3)}",
+            f"difficulty_stars: \"{proto['metadata'].get('difficulty_stars', '★★★☆☆')}\"",
+            f"knowledge_points: {json.dumps(proto['metadata'].get('knowledge_points', []), ensure_ascii=False)}",
+            "---",
+            "```",
+            "",
+            "### 题干正文：",
+            "",
+            proto["question_body"],
+            "",
+            "### 答案与解析 Callout 渲染预览：",
+            "",
+            proto["rendered_callout"],
+            "",
+            "---",
+            "",
+        ])
+
+    preview_path = staging_root / "sample-card-preview.md"
+    preview_path.write_text("\n".join(preview_cards), encoding="utf-8")
+
+    # Generate preview summary checklist
+    summary_lines = [
+        "# Stage 0 新版式探查与决策清单（Preview Summary & Decisions）",
+        "",
+        "## 1. 题号连续性排查预报",
+        f"- **探查样本**：`{source_path.name}`",
+        f"- **检测到题目总数**：{total_candidates}",
+        f"- **题号连续性 (1..N)**：{'✅ 严格连续无缺漏' if not discontinuities else f'⚠️ 存在断号跳号：{discontinuities}'}",
+        "",
+        "## 2. 属性与元数据抽取效果",
+        f"- **难度映射**：识别到字段并映射为 1~5 整数",
+        f"- **知识点提取**：{json.dumps([p['metadata'].get('knowledge_points') for p in prototypes], ensure_ascii=False)}",
+        "",
+        "## 3. 人机决策确认清单（待人工核准）",
+        "- [ ] 确认短答案提取是否准确（选择题/填空题无误提取短答案）；",
+        "- [ ] 确认无分析/总结时 Callout 是否已按需留空（无冗余占位符）；",
+        "- [ ] 确认样题卡片预览 ([sample-card-preview.md](sample-card-preview.md)) 格式符合预期。",
+        "",
+    ]
+    summary_path = staging_root / "preview-summary.md"
+    summary_path.write_text("\n".join(summary_lines), encoding="utf-8")
+
+    report = {
+        "schema_version": 1,
+        "stage": "stage0-discovery",
+        "status": "ready_for_review",
+        "sample_source": str(source_path.resolve()),
+        "total_detected_questions": total_candidates,
+        "is_continuous": len(discontinuities) == 0,
+        "discontinuities": discontinuities,
+        "preview_markdown": str(preview_path.resolve()),
+        "preview_summary": str(summary_path.resolve()),
+        "decision_checklist": [
+            "short-answer-accuracy",
+            "optional-callout-cleanliness",
+            "prototype-card-approval",
+        ],
+    }
+    write_json_atomic(staging_root / "stage0-discovery-report.json", report, overwrite=overwrite)
+    return report
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Inventory a supplementary-book Markdown corpus without publisher constants.")
     parser.add_argument("profile", type=Path)

@@ -107,25 +107,30 @@ storage and Canvas color only; it never changes reading order.
 ## Teaching relations and learning maps
 
 Materialize stable atom identities before analyzing relations. Then perform a
-separate two-pass relation review: first index and connect atoms inside each
-chapter; second audit the complete chapter graphs, packet seams, cross-chapter
-candidates, mainline direction, cycles, and teaching satellites. Read
+separate three-pass dual-layer relation review: first extract canonical concepts
+and atom roles, second disambiguate concepts and judge hybrid candidates, and
+third audit the complete graph using WCC, DAG, direction, redundancy, evidence,
+and isolation checks. Read
 [relations.md](relations.md) before producing either pass.
 
 Relations never change organizer ownership or atom prose. Explicit source
 connections and pedagogical inferences remain distinguishable. Every inferred
 edge cites both endpoint ranges and uses the higher confidence threshold.
 
-Canvas uses two semantic scales. The book atlas contains only chapters and
-aggregated cross-chapter routes. A chapter Canvas contains every knowledge and
-scenario atom, only the worked examples reviewed as major-method `bridge`
-examples, and exercise-organizer cards instead of individual exercise atoms.
-Reviewed relations, direct-section regions, deeper organizer landmarks, and
-optional unlinked convergence nodes express the learning map. Explicit edge
+Canvas uses three semantic scales. The book atlas contains only chapters and
+aggregated cross-chapter routes. A chapter core Canvas contains knowledge and
+scenario atoms plus only the worked examples reviewed as major-method `bridge`
+examples; exercises appear only as counts on section portals. Each section
+portal opens a detail Canvas where exercise atoms collapse into organizer-note
+entries with one primary practice edge apiece. Reviewed relations, selective
+virtual concept hubs, and spatial regions express the learning map without
+redrawing the directory tree or duplicating organizer/atom labels. A concept
+hub appears only when it grounds multiple visible nodes and also has high
+degree, crosses regions, or participates across chapters; otherwise it is
+folded into the representative atom. Explicit edge
 sides distinguish forward development (`right` to `left`), inspiration
 (`right` to `top`), and subordinate/parallel branches (`bottom` to `top`).
-Spatial containment communicates ownership. Retain a deeper landmark only when
-it owns rendered content, and give it one gray containment edge to the nearest
-rendered descendant so it cannot become an unexplained island. Do not redraw
-the complete hierarchy as a left-to-right tree. Read [canvas.md](canvas.md)
-before building or repairing Canvas output.
+Spatial containment communicates ownership. A neutral, explicitly labelled
+source-order fallback may remove a visual island but never asserts dependency.
+Do not redraw the complete hierarchy as a left-to-right tree. Read
+[canvas.md](canvas.md) before building or repairing Canvas output.

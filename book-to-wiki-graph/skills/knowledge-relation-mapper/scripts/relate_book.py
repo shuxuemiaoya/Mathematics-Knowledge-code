@@ -18,6 +18,7 @@ from knowledge_relations import (
     prepare_audit_jobs,
     prepare_concept_jobs,
     prepare_relation_jobs,
+    seal_artifact,
     validate_concept_payload,
     validate_round2_payload,
 )
@@ -95,8 +96,14 @@ def main() -> int:
             jobs = load_tagged(args.jobs, "concept-jobs")
             decisions = load_tagged(args.decisions, "round-1-concepts")
             report = validate_concept_payload(jobs, decisions)
-            if args.output:
-                write_json(args.output, report, args.overwrite)
+            concept_index = seal_artifact({
+                "schema_version": 2, "kind": "concept-index",
+                "concept_jobs_sha256": jobs["artifact_sha256"],
+                "round_1_concepts_sha256": decisions["artifact_sha256"],
+                **report,
+            })
+            output = args.output or (args.jobs.expanduser().resolve().parent / "concept-index.json")
+            write_json(output, concept_index, args.overwrite)
             print(json.dumps(report, ensure_ascii=False, indent=2))
             return 0 if report["status"] == "passed" else 1
         if args.command == "prepare-relations":

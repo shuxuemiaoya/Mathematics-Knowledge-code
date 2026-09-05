@@ -80,3 +80,23 @@ external model, run `run_atomization_model.py` with an exact `--model` and
 decisions and reviewer identity, and resumes only when the input artifact
 digest and model match. It never has an implicit model and never records the
 API key.
+
+## Focused teaching-role audit
+
+After two-pass boundaries pass, run `prepare-role-review`. This final recall
+stage finds atoms whose category, boundary, or display title is still
+suspicious: chapter-opening exercises, knowledge that looks like an unsolved
+task, activity headings without a conclusion, multiple teaching roles, worked
+solutions classified as knowledge, and overlong titles.
+
+Every flagged item needs an explicit `keep` or `replace` decision. `keep`
+requires a concrete teaching-cohesion reason. `replace` must partition the
+original range exactly and may split, reclassify, concisely retitle, or reassign
+inside the same top-level scope. It cannot consume adjacent source or rewrite
+text. The usual short-knowledge independence rule applies again to replacement
+atoms. An overlong title cannot pass unchanged.
+
+Run `validate-role-review`, then `finalize-role-review`. When the profile sets
+`teaching_role_audit` to `required-before-materialization`, the materialized
+manifest must bind a passed role review with zero unresolved items. Relation
+mapping also refuses a corpus whose required role audit is missing or stale.

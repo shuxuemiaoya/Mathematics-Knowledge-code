@@ -8,11 +8,14 @@ from semantic_atomization import (  # re-export the review API for Agent use
     actual_boundary_action,
     atomic_json,
     finalize_payload,
+    finalize_role_review,
     main,
     prepare_audit_jobs,
     prepare_jobs,
+    prepare_role_review,
     seal_artifact,
     validate_round1_payload,
+    validate_role_review,
     verify_artifact,
 )
 from validate_book_graph import artifact_digest, canonical_digest, load_json, sha256_file

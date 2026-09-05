@@ -135,8 +135,17 @@ def relation_config(profile: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise RelationError("relation_analysis must be an object")
     config = {**DEFAULT_RELATION_ANALYSIS, **raw}
-    if config.get("mode") != "llm-two-pass":
-        raise RelationError("relation_analysis.mode must be llm-two-pass")
+    if config.get("mode") not in {"llm-two-pass", "llm-three-pass"}:
+        raise RelationError("relation_analysis.mode must be llm-two-pass or llm-three-pass")
+    # Compatibility adapter: this legacy command still emits the v1 atom-only
+    # artifact chain even when invoked against a new v2 profile.
+    config = {
+        "mode": "llm-two-pass",
+        "explicit_confidence_threshold": config["explicit_confidence_threshold"],
+        "inferred_confidence_threshold": config["inferred_confidence_threshold"],
+        "mainline": "directed-acyclic-backbone",
+        "cross_chapter": bool(config.get("cross_chapter", True)),
+    }
     for field in ("explicit_confidence_threshold", "inferred_confidence_threshold"):
         value = config.get(field)
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= float(value) <= 1:

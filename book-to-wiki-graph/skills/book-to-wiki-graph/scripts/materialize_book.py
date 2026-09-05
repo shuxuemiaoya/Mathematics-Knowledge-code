@@ -295,11 +295,18 @@ def materialize(base_path: Path, final_path: Path, book_root: Path, output_manif
         covered.extend([tuple(node["source_range"])] if node["layer"] == "atom" else [tuple(item) for item in node.get("heading_ranges", [])])
     source_order = [str(node["key"]) for node in sorted((node for node in output_nodes if node["layer"] == "atom"), key=lambda item: (int(item["source_range"][0]), int(item["source_range"][1])))]
     bindings = {name: dict(binding) for name, binding in final.get("bindings", {}).items() if isinstance(binding, dict)}
+    atomization_review = {
+        "status": "passed", "mode": "llm-two-pass",
+        "final_artifact": {"path": str(final_path), "sha256": final["artifact_sha256"]},
+        "bindings": bindings, "reviewer": final.get("reviewer"), "unresolved_count": 0,
+    }
+    if isinstance(final.get("role_review"), dict):
+        atomization_review["role_review"] = dict(final["role_review"])
     manifest = {
         "schema_version": 1, "profile": str(output_profile), "source_sha256": base_profile.get("source", {}).get("sha256"),
         "source_markdown": str(source), "source_markdown_sha256": sha256_file(source),
-        "review": {"status": "passed", "reviewed_entire_book": True, "toc_hierarchy": "passed", "source_coverage": "passed", "atom_link_free": "passed", "method": "Two-pass constrained semantic atomization"},
-        "atomization_review": {"status": "passed", "mode": "llm-two-pass", "final_artifact": {"path": str(final_path), "sha256": final["artifact_sha256"]}, "bindings": bindings, "reviewer": final.get("reviewer"), "unresolved_count": 0},
+        "review": {"status": "passed", "reviewed_entire_book": True, "toc_hierarchy": "passed", "source_coverage": "passed", "atom_link_free": "passed", "method": "Two-pass constrained semantic atomization plus teaching-role audit" if final.get("role_review") else "Two-pass constrained semantic atomization"},
+        "atomization_review": atomization_review,
         "excluded_ranges": complement_ranges(len(lines), covered), "nodes": output_nodes, "source_order": source_order, "relations": [],
     }
     if isinstance(base.get("organizer_review"), dict):

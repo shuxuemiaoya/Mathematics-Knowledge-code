@@ -1,57 +1,46 @@
 ---
 name: smartedu-downloader
-description: 国家中小学智慧教育平台 (basic.smartedu.cn) 教材习题、同步试卷与备课资料的自动化嗅探、高速下载与三层层级归档技能。支持从浏览器 React Fiber 状态无损提取整册目录树与资源清单，秒级生成官方 CDN 矢量 PDF 直链，并按「册 / 大章 / 小节目录 / 答案解析.pdf」自动规整。
+description: 国家中小学智慧教育平台 (basic.smartedu.cn) 教材习题、同步练习题库、备课资料与课件的自动化多策略抓取与三层层级归档技能。支持策略模式 (Strategy Pattern)，自动针对备课页面 (prepare) 与习题库页面 (myPaper) 派发不同专用适配器，秒级生成官方矢量试卷、合编高清课件PDF、以及带LaTeX公式的原子题库Markdown。
 ---
 
-# SmartEdu Material Downloader (智慧教育平台资料获取技能)
+# SmartEdu Material Downloader (智慧教育平台全品类多策略获取技能)
 
-本 Skill 专用于将 **国家中小学智慧教育平台 (`basic.smartedu.cn`)** 上的同步课程教学、教材小节习题、试卷解析等优质官方教学资源，全自动无损下载并整理为标准教学资料库。
-
----
-
-## 1. 核心能力与技术架构
-
-1. **React Fiber 内存无损嗅探**：
-   - 绕过前端 DOM 虚拟滚动（Virtual Scroll）限制，直接从页面根 React Fiber 组件中提取整本教材的 `textBookInfo`（包含完整的章节/小节多级树 `chapter` 以及全部 400+ `courseList`）。
-2. **官方 CDN 矢量 PDF 直链计算**：
-   - 提取 `examinationpapers` 习题资源的 `id` 与 `title`；
-   - 结合平台通用 Bank ID 动态构造公共静态 CDN 直链：
-     `https://bdcs-file-2.ykt.cbern.com.cn/xedu_cs_paper_bank/export_papers/nwm/answer/{bank_id}/{resource_id}/{title}（答案解析）.pdf`
-   - 实现免登录鉴权、百毫秒级高速下载高清矢量 PDF。
-3. **教学标准化三层目录归档**：
-   - 自动映射章节层级：`[册名] / [大章名称] / [小节编号 小节名称] / [习题标题]（答案解析）.pdf`
-   - 严格保证课时（1）、（2）自动归拢至对应小节文件夹内。
-4. **断点续传与安全防风控**：
-   - 自动检测目标路径，已下载文件秒级跳过；
-   - 内置温和的人性化请求间隔（0.6s ~ 1.2s），零风控报警。
+本 Skill 专用于将 **国家中小学智慧教育平台 (`basic.smartedu.cn`)** 上的多种不同业务页面与资源，通过模块化适配器（Adapters）自动进行差异化获取与三层标准化归档。
 
 ---
 
-## 2. 脚本使用说明
+## 1. 核心架构：策略模式 (Strategy Pattern)
 
-### 核心脚本路径
-- 主下载器：`skills/smartedu-downloader/scripts/fetch_smartedu.py`
-- Safari 桥接驱动：`skills/smartedu-downloader/scripts/safari_helper.py`
-
-### 命令行用法
-
-```bash
-# 1. 默认下载（下载到本地 Downloads/中小学智慧平台题，自动识别当前 Safari 选中的教材册名）
-python3 skills/smartedu-downloader/scripts/fetch_smartedu.py
-
-# 2. 自定义输出目录与册名
-python3 skills/smartedu-downloader/scripts/fetch_smartedu.py \
-  --output "/Volumes/Whw/数学妙呀资料/高中/课堂同步/教辅/中小学智慧平台题" \
-  --book-prefix "必修一"
-
-# 3. 仅预览下载计划（Dry Run）
-python3 skills/smartedu-downloader/scripts/fetch_smartedu.py --dry-run
+```text
+dispatcher.py (智能识别当前网页并自动派发)
+  ├── PrepareMaterialAdapter (适配 /syncClassroom/prepare)
+  │     └── 抓取教材全册课件 PPTX、教学设计 DOCX、整套试卷 PDF
+  │
+  └── ExerciseBankAdapter (适配 /myPaper 习题库-同步练习)
+        └── 抓取原子题目、LaTeX公式、填空/选择标准答案、名师解析与视频，导出 Markdown + 题目高清大图 PDF
 ```
 
 ---
 
-## 3. 前置依赖与环境要求
+## 2. 差异化资源与处理方法对照表
 
-1. **浏览器环境**：macOS Safari 浏览器，需在菜单栏「开发」中勾选 **「允许 JavaScript 控制 Apple 事件」**；
-2. **当前页面**：在 Safari 中打开国家中小学智慧教育平台任意教材备课页（如 `https://basic.smartedu.cn/syncClassroom/prepare?...`）；
-3. **Python 依赖**：仅需 Python 3.7+ 标准库（`urllib`, `json`, `subprocess`, `argparse`），无需额外安装第三方包。
+| 业务页面 | 资源类型 | 处理适配器 (Adapter) | 核心算法与方法 | 输出文件格式 |
+| :--- | :--- | :--- | :--- | :--- |
+| **教材备课页** (`/syncClassroom/prepare`) | 课件 PPTX、教案 DOCX、整册试卷 PDF | `PrepareMaterialAdapter` | 1. React Fiber 提取 `textBookInfo`<br>2. 官方矢量 PDF 静态直链秒级下载<br>3. 高清幻灯片逐页提取并合成 PDF | `[小节名]_课件.pdf`<br>`[小节名]_教学设计.pdf`<br>`[小节名]（答案解析）.pdf` |
+| **习题库同步练习** (`/myPaper`) | 微观原子题目、LaTeX 公式、选择/填空答案、名师解析 | `ExerciseBankAdapter` | 1. 自动展开并遍历左侧目录树<br>2. 自动翻页遍历小节题目<br>3. 提取 QTI 节点 `content`<br>4. 生成带 LaTeX 的结构化 Markdown 与大图合编 PDF | `[小节名]_题库.md`<br>`[小节名]_习题与答案解析.pdf` |
+
+---
+
+## 3. 命令行调用与自动化运行
+
+```bash
+# 1. 智能自动识别（自动探查当前 Safari 页面类型并启动对应策略）
+python3 skills/smartedu-downloader/scripts/dispatcher.py
+
+# 2. 显式指定同步练习题库适配器
+python3 skills/smartedu-downloader/scripts/dispatcher.py --adapter exercise
+
+# 3. 自定义输出目录
+python3 skills/smartedu-downloader/scripts/dispatcher.py \
+  --output "/Users/oven/Downloads/中小学智慧平台资源/初中/新教材/北师大版/七年级上册/同步练习题库"
+```

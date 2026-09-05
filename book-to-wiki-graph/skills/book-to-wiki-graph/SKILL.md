@@ -1,6 +1,6 @@
 ---
 name: book-to-wiki-graph
-description: Convert a book PDF or source Markdown into a TOC-centered Wiki graph with open-depth organizers, two-pass semantic atomization, three-pass atom-concept relation mapping, and two-level Obsidian knowledge constellations. Use for book conversion, corpus or relation audits, resumes, atomization repair, and learning-map Canvas rebuilds across subjects; do not use for summaries or prose-only exports.
+description: Convert a book PDF or source Markdown into a TOC-centered Wiki graph with open-depth organizers, two-pass semantic atomization plus teaching-role audit, three-pass atom-concept relation mapping, and three-level Obsidian knowledge constellations. Use for book conversion, corpus or relation audits, resumes, atomization repair, and learning-map Canvas rebuilds across subjects; do not use for summaries or prose-only exports.
 ---
 
 # Book to Wiki Graph
@@ -47,23 +47,29 @@ plugin is separate and must not be modified by this workflow.
    partition. Never rewrite the source text.
 6. Run `finalize`. Stop if the final status is not `passed` or
    `atomization-review-queue.json` has unresolved items.
-7. Run `scripts/materialize_book.py`. It copies approved source content while
+7. Run `prepare-role-review` on the passed atomization final. Review every
+   recalled category, boundary, or title anomaly as `keep` or an exact
+   source-range `replace`; `replace` may split, reclassify, concisely retitle,
+   or reassign inside the same top-level scope. Run `validate-role-review` and
+   `finalize-role-review`. A configured teaching-role audit must pass with zero
+   unresolved items before materialization.
+8. Run `scripts/materialize_book.py`. It copies approved source content while
    omitting Markdown heading lines from atom bodies, rewrites/copies assets,
    renders compact organizer notes, and binds both review passes into
    `book-graph.json`.
-8. After materialization, invoke `$knowledge-relation-mapper`. Its first pass
+9. After materialization, invoke `$knowledge-relation-mapper`. Its first pass
    treats atoms as immutable TextUnits, extracts book-scoped canonical concept
    proposals, and maps every atom to an explicit teaching role with source-line
    evidence. Do not recreate concepts from exercise wording alone.
-9. Its second pass disambiguates concepts and judges every hybrid candidate
+10. Its second pass disambiguates concepts and judges every hybrid candidate
    from source order, ownership, explicit mentions, text search, optional
    embeddings, graph neighbourhoods, and cross-chapter recurrence. Its third
    pass audits WCC, DAG cycles, backward prerequisite edges, redundancy,
    evidence, and unjustified isolation. Only exceptional unresolved cases go
    to the human queue; unresolved relations block semantic chapter maps, not
    the Markdown corpus or navigation atlas.
-10. Apply only a passed `relation-final.json`. Validate the enriched dual-layer
-    graph, build the two-level Canvas bundle with selective virtual concept
+11. Apply only a passed `relation-final.json`. Validate the enriched dual-layer
+    graph, build the three-level Canvas bundle with selective virtual concept
     hubs, then validate again with `--canvas-index`. JSON remains authoritative;
     optional Neo4j export never edits it.
 
@@ -114,20 +120,21 @@ plugin is separate and must not be modified by this workflow.
   backbone relations remain acyclic.
 - `overview.canvas` contains the book hub and chapters only. It aggregates
   cross-chapter routes and links each chapter to one chapter knowledge Canvas.
-- A chapter Canvas displays every knowledge and scenario atom, but never emits
-  individual exercise cards. Collapse exercises into the highest available
-  exercise-only organizer Markdown card (or their nearest organizer when no
-  exercise-only wrapper exists). Show a worked-example atom only when relation
-  review marks it `bridge` for a substantial reusable mathematical idea or
-  method; routine examples remain reachable through organizer notes.
-- Use direct sections as regions and deeper organizers as landmarks. Suppress a
-  landmark with no visible descendant; connect every retained landmark to its
-  nearest rendered descendant with exactly one neutral `包含` edge. This sparse
-  anchor is not a reconstruction of the full ownership tree. Cross-chapter
-  endpoints are deduplicated perimeter portals. A multi-concept exercise set
-  may use an unlinked virtual junction node to make inclusion and convergence
-  legible; virtual nodes never pretend to be Markdown files. Reject isolated
-  substantive cards, including landmarks and exercise clusters.
+- A chapter Canvas is a low-noise core map: display every knowledge/scenario
+  atom and only worked examples marked `bridge`, but no exercise card or
+  practice edge. Direct sections are numbered star regions with click-through
+  portals to section detail maps; do not duplicate organizer landmarks beside
+  equivalent atom or concept cards.
+- A section detail Canvas repeats that section's visible teaching atoms and
+  collapses all exercises into their highest exercise-only organizer Markdown
+  entries. Each entry has at most one primary practice edge and is placed in
+  the same local star region as its knowledge anchor. Routine examples remain
+  reachable through organizer notes. Neutral `书序` fallback edges may remove a
+  visual island but must be visibly distinguished from semantic evidence.
+- Render a virtual concept hub only when it grounds at least two visible atoms
+  and also crosses regions, has concept-relation degree at least three, or
+  participates across chapters. Fold one-to-one concepts into their atom card.
+  Reject isolated substantive cards and all overlapping nodes.
 - Follow the port grammar adapted from the reference knowledge map: progressive
   knowledge leaves from the right and enters the next node from the left;
   `motivates` enters the inspired node from the top; example/application,
@@ -173,9 +180,21 @@ python scripts/atomize_book.py finalize \
   <staging_root>/round-2-decisions.json \
   --output-dir <staging_root>
 
+python scripts/atomize_book.py prepare-role-review \
+  <staging_root>/atomization-final.json --output-dir <staging_root>
+
+python scripts/atomize_book.py validate-role-review \
+  <staging_root>/atom-role-jobs.json \
+  <staging_root>/atom-role-decisions.json
+
+python scripts/atomize_book.py finalize-role-review \
+  <staging_root>/atomization-final.json \
+  <staging_root>/atom-role-jobs.json \
+  <staging_root>/atom-role-decisions.json --output-dir <staging_root>
+
 python scripts/materialize_book.py \
   <staging_root>/refined-draft-book-graph.json \
-  <staging_root>/atomization-final.json \
+  <staging_root>/atomization-final.role-reviewed.json \
   --book-root <book_root> \
   --output-manifest <book_root>/book-graph.json
 

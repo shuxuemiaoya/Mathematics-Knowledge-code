@@ -268,7 +268,7 @@ def split_authoritative_solution_body(
     # Check if document contains explicit solution markers
     has_explicit_marker = any(
         any(p.search(l) for p in patterns) or
-        re.search(r"(\s*(?:【(?:正确答案|答案与解析|答案及解析|解析|详解|分析|思路导航|详细解答|解答|解法\s*\d*|解法[一二三四五]|证法\s*\d*|证法[一二三四五]|证明|解|答案)】|(?:正确答案|答案与解析|答案及解析|解析|详解|分析|详细解答|解答|思路|解法\s*\d*|证法\s*\d*|证明|解)\s*[：:▶（(]|\b答案\s*[：:]))", l)
+        re.search(r"(\s*(?:【(?:正确答案|答案与解析|答案及解析|解析|详解|分析|思路导航|详细解答|解答|解法\s*\d*|解法[一二三四五]|证法\s*\d*|证法[一二三四五]|证明|解|答案)】|^\s*解\s*[：:]|(?:正确答案|答案与解析|答案及解析|解析|详解|分析|详细解答|解答|思路导航|思路|解法\s*\d*|解法[一二三四五]|证法\s*\d*|证法[一二三四五])\s*[：:▶（(]|\b答案\s*[：:]))", l)
         for l in lines
     )
 
@@ -304,7 +304,7 @@ def split_authoritative_solution_body(
     for original_index, line in enumerate(lines):
         matches = [match for pattern in patterns if (match := pattern.search(line))]
         inline_match = re.search(
-            r"(\s*(?:【(?:正确答案|答案与解析|答案及解析|解析|详解|分析|思路导航|详细解答|解答|解法\s*\d*|解法[一二三四五]|证法\s*\d*|证法[一二三四五]|证明|解|答案)】|(?:正确答案|答案与解析|答案及解析|解析|详解|分析|详细解答|解答|思路|解法\s*\d*|证法\s*\d*|证明|解)\s*[：:▶（(]|\b答案\s*[：:]))",
+            r"(\s*(?:【(?:正确答案|答案与解析|答案及解析|解析|详解|分析|思路导航|详细解答|解答|解法\s*\d*|解法[一二三四五]|证法\s*\d*|证法[一二三四五]|证明|解|答案)】|^\s*解\s*[：:]|(?:正确答案|答案与解析|答案及解析|解析|详解|分析|详细解答|解答|思路导航|思路|解法\s*\d*|解法[一二三四五]|证法\s*\d*|证法[一二三四五])\s*[：:▶（(]|\b答案\s*[：:]))",
             line,
         )
         if inline_match is not None:
@@ -406,6 +406,14 @@ def match_question(line: str, patterns: list[re.Pattern[str]]) -> re.Match[str] 
         match = pattern.match(line)
         if match:
             return match
+    m_heading = re.match(r"^\s*#{1,6}\s*", line)
+    if m_heading:
+        stripped_line = line[m_heading.end():]
+        if re.search(r"【(?:单选题?|多选题?|填空题?|解答题?|计算题?|证明题?|问答题?|复合题?|例题?|变式题?|思考题?|习题|试题|题)】", stripped_line):
+            for pattern in patterns:
+                match = pattern.match(stripped_line)
+                if match:
+                    return match
     return None
 
 
@@ -1843,6 +1851,45 @@ def assign_question_codes(
         write_json_atomic(registry_path, registry, overwrite=registry_path.is_file())
 
 
+def probe_question_continuity(questions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Pre-segmentation continuity probe: inspect 1..N continuous sequence ledgers before file generation."""
+    by_context: dict[str, list[dict[str, Any]]] = {}
+    for question in questions:
+        if question.get("sequence_policy", "none") != "continuous":
+            continue
+        by_context.setdefault(str(question.get("context_key", "")), []).append(question)
+    errors: list[dict[str, Any]] = []
+    for context, items in by_context.items():
+        expected = 1
+        for item in items:
+            number = str(item.get("number", "")).strip()
+            if not number.isdecimal():
+                continue
+            actual = int(number)
+            if actual != expected:
+                start_line = item.get("source_start_line", 0)
+                remediation = (
+                    f"Expected question {expected} in context '{context}', but encountered question {actual}. "
+                    f"Check OCR bounding boxes and raw markdown around line {start_line}."
+                )
+                errors.append(
+                    {
+                        "kind": "question-sequence-discontinuity",
+                        "context": context,
+                        "expected": expected,
+                        "actual": actual,
+                        "question_id": item.get("id"),
+                        "source_start_line": start_line,
+                        "source_start_column": item.get("source_start_column", 1),
+                        "remediation": remediation,
+                    }
+                )
+                expected = actual + 1
+            else:
+                expected += 1
+    return errors
+
+
 def plan_content(profile_path: Path, adapter_path: Path, hierarchy_coverage_path: Path) -> dict[str, Any]:
     profile = load_profile(profile_path)
     adapter = require_reviewed_adapter(profile, adapter_path)
@@ -1884,6 +1931,7 @@ def plan_content(profile_path: Path, adapter_path: Path, hierarchy_coverage_path
         labels.extend(note_labels)
         questions.extend(note_questions)
         review.extend(note_review)
+    review.extend(probe_question_continuity(questions))
 
     assign_question_codes(profile, adapter, questions)
     for question in questions:

@@ -39,6 +39,13 @@ class BookToWikiGraphTests(unittest.TestCase):
         # These fixtures exercise schema-v1 backward compatibility.
         profile.pop("atomization", None)
         profile.pop("markdown_rendering", None)
+        profile["canvas"] = {
+            "enabled": True,
+            "mode": "two-level-constellation",
+            "theme": "adaptive",
+            "overview_granularity": "chapter",
+            "chapter_granularity": "atom",
+        }
         profile_path = staging / "book-profile.json"
         profile_path.write_text(
             json.dumps(profile, ensure_ascii=False, indent=2) + "\n",
@@ -303,9 +310,37 @@ class BookToWikiGraphTests(unittest.TestCase):
                 profile["atomization"]["knowledge_granularity"],
                 "complete-teaching-unit",
             )
-            self.assertEqual(profile["relation_analysis"]["mode"], "llm-two-pass")
-            self.assertEqual(profile["canvas"]["mode"], "two-level-constellation")
+            self.assertEqual(profile["relation_analysis"]["mode"], "llm-three-pass")
+            self.assertEqual(profile["relation_analysis"]["graph_model"], "atom-concept-dual-layer")
+            self.assertEqual(profile["relation_analysis"]["concept_merge_threshold"], 0.97)
+            self.assertEqual(profile["atomization"]["teaching_role_audit"], "required-before-materialization")
+            self.assertEqual(profile["canvas"]["mode"], "three-level-constellation")
+            self.assertEqual(profile["canvas"]["section_granularity"], "atom-and-exercise-entry")
             self.assertEqual(profile["canvas"]["theme"], "adaptive")
+
+    def test_three_level_canvas_reduces_chapter_noise_and_adds_section_detail(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            items = self.standard_graph(Path(temporary))
+            profile = json.loads(items["profile"].read_text(encoding="utf-8"))
+            profile["canvas"] = dict(init_book.DEFAULT_CANVAS)
+            items["profile"].write_text(json.dumps(profile, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            output_dir = items["book"] / "Canvas-v3"
+            report = build_canvas.build_canvas_bundle(items["manifest"], output_dir, items["book"])
+            self.assertEqual(report["canvases"], 5)
+            self.assertEqual(report["section_maps"], 2)
+            index = self.load_index(output_dir)
+            self.assertEqual(index["schema_version"], 3)
+            self.assertEqual(index["layout"]["zoom_levels"], ["book-chapters", "chapter-core", "section-detail"])
+            chapter = self.load_canvas(output_dir, index["chapter_maps"][0]["path"])
+            chapter_cards = self.card_map(chapter)
+            self.assertNotIn(build_canvas.stable_id("exercise-entry", "section-a"), chapter_cards)
+            self.assertFalse(any(str(edge.get("label", "")).startswith("练习") for edge in chapter["edges"]))
+            section_entry = next(item for item in index["section_maps"] if item["chapter_key"] == "chapter-a")
+            section = self.load_canvas(output_dir, section_entry["path"])
+            self.assertIn(build_canvas.stable_id("exercise-entry", "section-a"), self.card_map(section))
+            self.assertLessEqual(sum(str(edge.get("label", "")).startswith("练习") for edge in section["edges"]), 1)
+            final = validate_book_graph.validate_graph(items["manifest"], items["book"], output_dir / "canvas-index.json")
+            self.assertEqual(final["status"], "passed", final["errors"])
 
     def test_bundle_builds_two_level_atlas_and_chapter_maps(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

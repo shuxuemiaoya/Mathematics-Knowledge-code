@@ -38,6 +38,10 @@ class SemanticAtomizationTests(unittest.TestCase):
         staging, book = root / "base-staging", root / "base-book"
         staging.mkdir()
         profile = init_book.create_profile(source, staging, book)
+        # Most tests retain the v0.5 two-pass compatibility path. The focused
+        # role-review test below exercises the new required v0.6 gate.
+        profile["atomization"].pop("teaching_role_audit", None)
+        profile["atomization"].pop("role_correction_confidence_threshold", None)
         profile_path = staging / "book-profile.json"
         profile_path.write_text(json.dumps(profile, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         old = [
@@ -106,6 +110,42 @@ class SemanticAtomizationTests(unittest.TestCase):
             by_category = {atom["category"]: atom for atom in items["final"]["atoms"]}
             self.assertEqual(by_category["worked-example"]["source_range"], [10, 13])
             self.assertEqual(by_category["exercise"]["source_range"], [14, 16])
+
+    def test_teaching_role_review_resegments_a_mixed_question_atom(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            items = self.passed(root)
+            items["final"]["atoms"][0]["title"] = "观察并思考这个很长的问题：你能说明这些现象如何帮助我们认识几何体并得到点线面体的完整结论吗？"
+            items["final"] = semantic.seal_artifact({key: value for key, value in items["final"].items() if key != "artifact_sha256"})
+            items["final_path"].write_text(json.dumps(items["final"], ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            jobs_path = items["staging"] / "atom-role-jobs.json"
+            jobs_path.write_text(json.dumps(semantic.prepare_role_review(items["final_path"]), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            jobs = semantic.load_tagged(jobs_path, "atom-role-jobs")
+            required = [atom for atom in jobs["atoms"] if atom["requires_decision"]]
+            self.assertEqual([atom["atom_id"] for atom in required], ["final-unit"])
+            replacements = [
+                self.atom("role-scenario", [4, 5], "scenario", "观察图形运动的情景"),
+                self.atom("role-knowledge", [6, 8], "knowledge", "点、线、面、体的运动关系"),
+            ]
+            replacements[1]["standalone_kind"] = "law"
+            replacements[1]["standalone_reason"] = "这三行共同给出可独立复用的点线面体运动规律。"
+            decisions_path = items["staging"] / "atom-role-decisions.json"
+            decisions = self.write_artifact(decisions_path, {
+                "schema_version": 1, "kind": "atom-role-decisions",
+                "atom_role_jobs_sha256": jobs["artifact_sha256"],
+                "reviewer": {"type": "codex-agent", "model": "test"},
+                "decisions": [{"atom_id": "final-unit", "action": "replace", "rationale": "The opening is a complete scenario and the remaining lines form a distinct reusable conclusion.", "confidence": 0.99, "replacement_atoms": replacements}],
+            })
+            final, queue = semantic.finalize_role_review(semantic.load_tagged(items["final_path"], "atomization-final"), jobs, decisions)
+            self.assertEqual(queue["unresolved_count"], 0)
+            self.assertEqual([atom["category"] for atom in final["atoms"][:2]], ["scenario", "knowledge"])
+            self.assertEqual(final["role_review"]["status"], "passed")
+            reviewed_path = items["staging"] / "atomization-final.role-reviewed.json"
+            reviewed_path.write_text(json.dumps(final, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            output_book, output_manifest = root / "role-book", root / "role-staging" / "book-graph.json"
+            materialize_book.materialize(items["manifest"], reviewed_path, output_book, output_manifest)
+            validation = validate_book_graph.validate_graph(output_manifest, output_book)
+            self.assertEqual(validation["status"], "passed", validation["errors"])
 
     def test_low_confidence_short_knowledge_blocks(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

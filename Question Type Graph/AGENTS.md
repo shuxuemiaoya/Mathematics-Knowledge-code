@@ -34,7 +34,11 @@ that agent while operating here.
      - **短答案与解析结构**：选择题/填空题是否有明确提取源（如 `【正确答案】D`），避免退化为 `详见解析`。
      - **元数据与属性定位**：难度（星级 vs 文本）、知识点、考点、所属目录知识点来源及映射规则（如难度 1~5 映射）。
   3. **样题渲染与人工决议（Review & Prototype Preview）**：
-     向用户提供 1 道典型题目的完整 YAML Frontmatter 与 Markdown 渲染效果，并就模糊决策点（如属性命名、映射尺度、题型归类）向用户提问。**只有在用户明确确认批准后，方可放行批量流水线。**
+     向用户提供典型题目的完整 YAML Frontmatter 与 Markdown 渲染效果（`generate_stage0_preview` 产物），并就模糊决策点（如属性命名、映射尺度、题型归类）向用户提问。**只有在用户明确确认批准后，方可放行批量流水线。**
+- **Pre-segmentation Continuity Probe (切分前题目连续性探针)**:
+  在内容切分（`plan_content`）阶段完成题目提取后，必须立即执行 $1..N$ 连续性扫描。若在连续编号上下文（`sequence_policy: continuous`）发现断号，必须立即将状态置为 `review_required` 并记录具体缺失题号、候选行号区间及页面，禁止漏题静默渗透至后续生成与应用阶段。
+- **Confidence-Tiered Answer Extraction (分级置信度答案提取)**:
+  选择题与填空题答案提取必须遵循明确的置信度分级（HIGH > MEDIUM > LOW > FALLBACK），低置信度（LOW/FALLBACK）题目必须记录在清单中以便抽检复核或小模型介入，严禁静默进行不可靠的模糊猜测。
 - Treat every source PDF and registered raw Markdown file as immutable.
 - Run preflight before OCR or graph mutation. Resolve credentials from an
   explicit path, process environment, or deterministic profile/project-root

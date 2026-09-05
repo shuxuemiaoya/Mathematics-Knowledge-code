@@ -207,24 +207,20 @@ def build_3level_adapter(staging_path: Path, volume_title: str, sections_meta, c
             "unknown_label_policy": "retain",
             "question_folder": "例题",
             "question_repository_root": "/Users/oven/Documents/ovenmathmap/mathmap/习题/questions",
-            "question_title_template": "题 {number}",
             "question_patterns": [
-                r"^(?P<number>\[?例\s*\d+(?:\.\d+)?\]?)\s*",
-                r"^(?P<number>\[?变式(?:题)?\s*(?:[（(]?\d+[）)]?)?\]?)\s*[：:]?\s*",
-                r"^(?P<number>[1-9]\d?)[.．、]\s*(?!\s*【?(?:答案|解析)】?\b)(?!\s*[^.\n]*?法[.．]?\s*$)(?=[（(\[\$【a-zA-Z\u4e00-\u9fa5])"
+                r"^(?P<number>\[?例\s*(?:[0-9]+(?:\.\d+)?|[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳一二三四五六七八九十]+|[（(][0-9①②③④⑤⑥⑦⑧⑨⑩一二三四五六七八九十]+[）)])\]?)\s*",
+                r"^(?P<number>\[?变式(?:题)?\s*(?:[0-9]+(?:\.\d+)?|[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳一二三四五六七八九十]+|[（(][0-9①②③④⑤⑥⑦⑧⑨⑩一二三四五六七八九十]+[）)])?\]?)\s*[：:]?\s*"
             ],
-            "inline_question_patterns": [
-                r"(?P<number>\([1-9]\d?\)|（[1-9]\d?）)\s*"
-            ],
+            "inline_question_patterns": [],
             "question_kind_rules": [
                 {
                     "kind": "worked-example",
-                    "pattern": r"^\[?例\s*\d+(?:\.\d+)?\]?\s*",
+                    "pattern": r"^\[?例\s*(?:[0-9]+(?:\.\d+)?|[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳一二三四五六七八九十]+|[（(][0-9①②③④⑤⑥⑦⑧⑨⑩一二三四五六七八九十]+[）)])\]?\s*",
                     "answer_handling": "separate-authoritative",
-                    "solution_layout": "interleaved",
+                    "solution_layout": "tail",
                     "atomize_interleaved_subquestions": False,
                     "solution_start_patterns": [
-                        r"^\s*(?:[1-9]\d?[.．、]\s*)?【?(?:答案|解析|分析|详解|详细解答|解答|解法|试题解析|解)】?[：:\s]?",
+                        r"^\s*(?:[1-9]\d?[.．、]\s*)?【?(?:答案|解析|分析|详解|详细解答|解答|解法|试题解析)】?[：:\s]?",
                         r"^\s*(?:[1-9]\d?[.．、]\s*)?答案\b",
                         r"^\s*(?:[1-9]\d?[.．、]\s*)?解析\b",
                         r"^\s*【答案】",
@@ -232,23 +228,19 @@ def build_3level_adapter(staging_path: Path, volume_title: str, sections_meta, c
                         r"^\s*【分析】",
                         r"^\s*【详解】"
                     ],
-                    "solution_resume_patterns": [
-                        r"^\s*(?:\([1-9]\d?\)|（[1-9]\d?）|[1-9]\d?[.．、])",
-                        r"^\s*（[1-9]\d?）",
-                        r"^\s*\([1-9]\d?\)"
-                    ],
+                    "solution_resume_patterns": [],
                     "sequence_policy": "none",
                     "preserve_internal_headings": True,
                     "folder": "例题"
                 },
                 {
                     "kind": "worked-example",
-                    "pattern": r"^\[?变式(?:题)?\s*(?:[（(]?\d+[）)]?)?\]?\s*[：:]?\s*",
+                    "pattern": r"^\[?变式(?:题)?\s*(?:[0-9]+(?:\.\d+)?|[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳一二三四五六七八九十]+|[（(][0-9①②③④⑤⑥⑦⑧⑨⑩一二三四五六七八九十]+[）)])?\]?\s*[：:]?\s*",
                     "answer_handling": "separate-authoritative",
-                    "solution_layout": "interleaved",
+                    "solution_layout": "tail",
                     "atomize_interleaved_subquestions": False,
                     "solution_start_patterns": [
-                        r"^\s*(?:[1-9]\d?[.．、]\s*)?【?(?:答案|解析|分析|详解|详细解答|解答|解法|试题解析|解)】?[：:\s]?",
+                        r"^\s*(?:[1-9]\d?[.．、]\s*)?【?(?:答案|解析|分析|详解|详细解答|解答|解法|试题解析)】?[：:\s]?",
                         r"^\s*(?:[1-9]\d?[.．、]\s*)?答案\b",
                         r"^\s*(?:[1-9]\d?[.．、]\s*)?解析\b",
                         r"^\s*【答案】",
@@ -256,26 +248,14 @@ def build_3level_adapter(staging_path: Path, volume_title: str, sections_meta, c
                         r"^\s*【分析】",
                         r"^\s*【详解】"
                     ],
-                    "solution_resume_patterns": [
-                        r"^\s*(?:\([1-9]\d?\)|（[1-9]\d?）|[1-9]\d?[.．、])",
-                        r"^\s*（[1-9]\d?）",
-                        r"^\s*\([1-9]\d?\)"
-                    ],
+                    "solution_resume_patterns": [],
                     "sequence_policy": "none",
                     "preserve_internal_headings": True,
                     "folder": "例题"
-                },
-                {
-                    "kind": "separate-authoritative",
-                    "pattern": r"^(?P<number>[1-9]\d?)[.．、](?!\s*【?(?:答案|解析)】?\b)(?!\s*[^.\n]*?法[.．]?\s*)\s*",
-                    "answer_handling": "separate-authoritative",
-                    "preserve_internal_headings": True,
-                    "sequence_policy": "none",
-                    "folder": "对点训练"
                 }
             ],
             "worked_example_solution_patterns": [
-                r"^\s*(?:[1-9]\d?[.．、]\s*)?【?(?:答案|解析|分析|详解|思路导航|详细解答|解答|解法|证法|证明|点拨|名师点睛|点睛|考点|总结|规律总结|试题解析|解)】?[：:\s]?",
+                r"^\s*(?:[1-9]\d?[.．、]\s*)?【?(?:答案|解析|分析|详解|思路导航|详细解答|解答|解法|证法|点拨|名师点睛|点睛|考点|总结|规律总结|试题解析)】?[：:\s]?",
                 r"^\s*(?:[1-9]\d?[.．、]\s*)?答案\b",
                 r"^\s*(?:[1-9]\d?[.．、]\s*)?解析\b",
                 r"^\s*【答案】",
@@ -307,7 +287,7 @@ def build_3level_adapter(staging_path: Path, volume_title: str, sections_meta, c
             "question_scopes": [
                 {
                     "contexts": leaf_keys,
-                    "kinds": ["worked-example", "separate-authoritative"]
+                    "kinds": ["worked-example"]
                 }
             ],
             "roles": []
@@ -316,12 +296,11 @@ def build_3level_adapter(staging_path: Path, volume_title: str, sections_meta, c
             "source_role": "questions",
             "mode": "separate",
             "question_number_regexes": [
-                r"^(?P<number>\[?例\s*\d+(?:\.\d+)?\]?)\s*",
-                r"^(?P<number>\[?变式(?:题)?\s*(?:[（(]?\d+[）)]?)?\]?)\s*[：:]?\s*",
-                r"^(?P<number>[1-9]\d?)[.．、]\s*"
+                r"^(?P<number>\[?例\s*(?:[0-9]+(?:\.\d+)?|[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳一二三四五六七八九十]+|[（(][0-9①②③④⑤⑥⑦⑧⑨⑩一二三四五六七八九十]+[）)])\]?)\s*",
+                r"^(?P<number>\[?变式(?:题)?\s*(?:[0-9]+(?:\.\d+)?|[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳一二三四五六七八九十]+|[（(][0-9①②③④⑤⑥⑦⑧⑨⑩一二三四五六七八九十]+[）)])?\]?)\s*[：:]?\s*"
             ],
             "answer_content_regexes": [
-                r"^\s*(?:[1-9]\d?[.．、]\s*)?【?(?:答案|解析|分析|详解|详细解答|解答|解法|试题解析|解)】?[：:\s]?",
+                r"^\s*(?:[1-9]\d?[.．、]\s*)?【?(?:答案|解析|分析|详解|详细解答|解答|解法|试题解析)】?[：:\s]?",
                 r"^\s*(?:[1-9]\d?[.．、]\s*)?答案\b",
                 r"^\s*(?:[1-9]\d?[.．、]\s*)?解析\b",
                 r"^\s*【答案】",

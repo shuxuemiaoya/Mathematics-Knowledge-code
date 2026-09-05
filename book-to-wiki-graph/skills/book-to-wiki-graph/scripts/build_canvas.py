@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a two-level, learning-path constellation from a reviewed book graph."""
+"""Build a level-of-detail learning constellation from a reviewed book graph."""
 
 from __future__ import annotations
 
@@ -935,7 +935,18 @@ def build_canvas_bundle(manifest_path: Path, output_dir: Path, book_root: Path, 
     validation = validate_graph(manifest_path, book_root)
     if validation["status"] != "passed":
         raise ValueError("Book graph must pass before Canvas build: " + json.dumps(validation["errors"][:5], ensure_ascii=False))
-    builder = CanvasBundleBuilder(load_json(manifest_path), manifest_path, book_root, output_dir)
+    manifest = load_json(manifest_path)
+    profile = load_json(Path(str(manifest["profile"])).expanduser().resolve())
+    canvas_mode = str(profile.get("canvas", {}).get("mode", "two-level-constellation"))
+    if canvas_mode == "three-level-constellation":
+        # Imported lazily so the v2 compatibility builder remains directly
+        # importable and existing reviewed bundles keep their exact contract.
+        from constellation_v3 import CanvasBundleBuilderV3
+        builder = CanvasBundleBuilderV3(manifest, manifest_path, book_root, output_dir)
+    elif canvas_mode == "two-level-constellation":
+        builder = CanvasBundleBuilder(manifest, manifest_path, book_root, output_dir)
+    else:
+        raise ValueError(f"Unsupported canvas.mode: {canvas_mode}")
     payloads, index = builder.build()
     index_path = output_dir / "canvas-index.json"
     planned = [*payloads, index_path]
@@ -946,12 +957,15 @@ def build_canvas_bundle(manifest_path: Path, output_dir: Path, book_root: Path, 
     for path, payload in payloads.items():
         atomic_json(path, payload, overwrite=True)
     atomic_json(index_path, index, overwrite=True)
-    return {
+    report = {
         "status": "passed", "canvas_index": str(index_path), "canvases": len(payloads),
         "atlas": str(output_dir / index["atlas"]["path"]),
         "chapter_maps": sum(entry["status"] == "ready" for entry in index["chapter_maps"]),
         "relation_status": index["relation_status"],
     }
+    if "section_maps" in index:
+        report["section_maps"] = sum(entry["status"] == "ready" for entry in index["section_maps"])
+    return report
 
 
 def main() -> int:

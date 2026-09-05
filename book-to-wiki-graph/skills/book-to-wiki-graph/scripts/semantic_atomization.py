@@ -28,6 +28,9 @@ FORBIDDEN_DECISION_FIELDS = {"body", "content", "markdown", "source_text", "rewr
 EXAMPLE_RE = re.compile(r"^\s*(?:#{1,6}\s*)?【?例题?\s*(?:\d+|[一二三四五六七八九十]+)】?(?:\s|[.．、：:]|$)")
 EXERCISE_RE = re.compile(r"^\s*(?:#{1,6}\s*)?\d+[.．、]\s*\S+")
 EXERCISE_HEADING_RE = re.compile(r"^\s*(?:#{1,6}\s*)?【?(?:练习|习题|复习题)[^】]*】?(?:\s|[.．、：:]|$)")
+ACTIVITY_HEADING_RE = re.compile(r"^\s*#{1,6}\s*(?:观察|思考|尝试|操作|交流|探究|讨论)[·・、]?", re.MULTILINE)
+TASK_LANGUAGE_RE = re.compile(r"(?:请你|请同伴|你能|你认为|怎样|如何|与同伴.*交流|[？?])")
+SOLUTION_LANGUAGE_RE = re.compile(r"(?:解法[一二三四五六七八九十\d]+|^\s*(?:解|证明|分析)\s*[：:]|因此|所以|可得|叫作|称为|法则)", re.MULTILINE)
 
 
 class AtomizationError(ValueError):
@@ -459,6 +462,250 @@ def finalize_payload(jobs: dict[str, Any], round1: dict[str, Any], audit_jobs: d
     return final, queue
 
 
+def teaching_role_flags(atom: dict[str, Any], lines: list[str]) -> list[str]:
+    """Recall suspicious atoms for a focused post-partition role audit.
+
+    These signals never reclassify source automatically. They deliberately
+    favour recall so an Agent can distinguish a prompt that belongs inside a
+    complete teaching arc from a genuinely misclassified task or scenario.
+    """
+    body = "\n".join(source_slice(lines, atom["source_range"]))
+    compact_title = "".join(str(atom.get("title", "")).split())
+    category = str(atom.get("category"))
+    flags: list[str] = []
+    if len(compact_title) > 48:
+        flags.append("title-too-long-for-reusable-atom")
+    if category == "knowledge" and TASK_LANGUAGE_RE.search(str(atom.get("title", ""))):
+        flags.append("knowledge-title-looks-like-question-or-task")
+    if category == "knowledge" and ACTIVITY_HEADING_RE.search(body):
+        flags.append("knowledge-contains-activity-heading")
+    if category == "knowledge" and TASK_LANGUAGE_RE.search(body) and not SOLUTION_LANGUAGE_RE.search(body):
+        flags.append("knowledge-looks-like-unsolved-task")
+    if category == "knowledge" and normalized_char_count(source_slice(lines, atom["source_range"])) > 1200:
+        flags.append("knowledge-may-contain-multiple-teaching-roles")
+    if category == "knowledge" and re.search(r"解法[一二三四五六七八九十\d]+", body):
+        flags.append("knowledge-looks-like-worked-example")
+    return sorted(set(flags))
+
+
+def prepare_role_review(final_path: Path) -> dict[str, Any]:
+    final_path = final_path.expanduser().resolve()
+    final = load_json(final_path)
+    verify_artifact(final, "atomization-final")
+    if final.get("status") != "passed" or final.get("unresolved_count") != 0:
+        raise AtomizationError("Role review requires a passed atomization-final artifact")
+    source = Path(str(final.get("source_markdown", ""))).expanduser().resolve()
+    if not source.is_file() or sha256_file(source) != final.get("source_markdown_sha256"):
+        raise AtomizationError("Role review source Markdown is missing or stale")
+    base_path = Path(str(final.get("base_manifest", ""))).expanduser().resolve()
+    if not base_path.is_file() or sha256_file(base_path) != final.get("base_manifest_sha256"):
+        raise AtomizationError("Role review base manifest is missing or stale")
+    base = load_json(base_path)
+    nodes = {str(item["key"]): item for item in base.get("nodes", []) if isinstance(item, dict) and item.get("key")}
+    organizers = {key for key, node in nodes.items() if node.get("layer") == "organizer"}
+    root = next((key for key in organizers if nodes[key].get("parent_key") is None), None)
+    if root is None:
+        raise AtomizationError("Role review base manifest has no root organizer")
+    scope_roots = set(map(str, final.get("scope_root_keys", [])))
+
+    def scope_for(owner: str) -> str:
+        cursor = owner
+        while nodes.get(cursor, {}).get("parent_key") not in {None, root}:
+            cursor = str(nodes[cursor]["parent_key"])
+        return cursor
+
+    owners_by_scope: dict[str, list[str]] = {}
+    for scope in scope_roots:
+        owners_by_scope[scope] = [key for key in descendants(nodes, scope) if key in organizers]
+    lines = source.read_text(encoding="utf-8-sig").splitlines()
+    review_atoms: list[dict[str, Any]] = []
+    for atom in final.get("atoms", []):
+        if not isinstance(atom, dict):
+            continue
+        flags = teaching_role_flags(atom, lines)
+        owner = str(atom.get("owner_key"))
+        scope = scope_for(owner)
+        if str(atom.get("category")) == "exercise" and owner in scope_roots:
+            flags = sorted({*flags, "chapter-opening-exercise-may-be-scenario"})
+        item = {
+            "atom_id": str(atom.get("atom_id")), "owner_key": owner,
+            "source_range": list(atom.get("source_range", [])),
+            "category": str(atom.get("category")), "title": str(atom.get("title", "")),
+            "source_text": "\n".join(source_slice(lines, atom["source_range"])),
+            "flags": flags, "requires_decision": bool(flags),
+            "allowed_owner_keys": owners_by_scope.get(scope, [owner]),
+        }
+        review_atoms.append(item)
+    return seal_artifact({
+        "schema_version": 1, "kind": "atom-role-jobs",
+        "atomization_final": str(final_path), "atomization_final_sha256": final["artifact_sha256"],
+        "source_markdown": str(source), "source_markdown_sha256": final["source_markdown_sha256"],
+        "base_manifest": str(base_path), "base_manifest_sha256": final["base_manifest_sha256"],
+        "atomization": {**DEFAULT_ATOMIZATION, **dict(final.get("atomization", {}))},
+        "confidence_threshold": float(final.get("atomization", {}).get("role_correction_confidence_threshold", 0.95)),
+        "instructions": {
+            "goal": "Ensure each atom has one accurate teaching role and a concise reusable title.",
+            "actions": ["keep", "replace"],
+            "replace": "Return a complete contiguous partition of the flagged atom. Reclassification, splitting, concise retitling, and evidence-backed reassignment inside the same scope are allowed; source text may not be rewritten.",
+            "categories": sorted(ATOM_CATEGORY_NAMES),
+        },
+        "atoms": review_atoms,
+    })
+
+
+def validate_role_review(jobs: dict[str, Any], decisions: dict[str, Any]) -> dict[str, Any]:
+    verify_artifact(jobs, "atom-role-jobs")
+    verify_artifact(decisions, "atom-role-decisions")
+    errors: list[dict[str, Any]] = []
+    review: list[dict[str, Any]] = []
+    if decisions.get("atom_role_jobs_sha256") != jobs.get("artifact_sha256"):
+        errors.append({"code": "atom-role-binding-invalid"})
+    required = {str(item["atom_id"]): item for item in jobs.get("atoms", []) if item.get("requires_decision")}
+    raw = decisions.get("decisions")
+    if not isinstance(raw, list):
+        raw = []
+        errors.append({"code": "atom-role-decisions-missing"})
+    by_id = {str(item.get("atom_id")): item for item in raw if isinstance(item, dict)}
+    if len(by_id) != len(raw) or set(by_id) != set(required):
+        errors.append({"code": "atom-role-decision-coverage-invalid", "missing": sorted(set(required) - set(by_id)), "extra": sorted(set(by_id) - set(required))})
+    normalized: dict[str, list[dict[str, Any]]] = {}
+    threshold = float(jobs.get("confidence_threshold", 0.95))
+    source = Path(str(jobs.get("source_markdown", ""))).expanduser().resolve()
+    if not source.is_file() or sha256_file(source) != jobs.get("source_markdown_sha256"):
+        errors.append({"code": "atom-role-source-stale"})
+        lines: list[str] = []
+    else:
+        lines = source.read_text(encoding="utf-8-sig").splitlines()
+    seen_new_ids: set[str] = set()
+    for atom_id, original in required.items():
+        decision = by_id.get(atom_id)
+        if decision is None:
+            continue
+        action = decision.get("action")
+        rationale = decision.get("rationale")
+        confidence = decision.get("confidence")
+        if action not in {"keep", "replace"}:
+            errors.append({"code": "atom-role-action-invalid", "atom_id": atom_id})
+        if not isinstance(rationale, str) or len(rationale.strip()) < 12:
+            errors.append({"code": "atom-role-rationale-invalid", "atom_id": atom_id})
+        if isinstance(confidence, bool) or not isinstance(confidence, (int, float)) or not 0 <= float(confidence) <= 1:
+            errors.append({"code": "atom-role-confidence-invalid", "atom_id": atom_id})
+            confidence = 0.0
+        elif float(confidence) < threshold:
+            review.append({"code": "atom-role-low-confidence", "atom_id": atom_id, "confidence": confidence, "required": threshold})
+        if action == "keep":
+            if decision.get("replacement_atoms") not in (None, []):
+                errors.append({"code": "atom-role-keep-has-replacements", "atom_id": atom_id})
+            if "title-too-long-for-reusable-atom" in set(map(str, original.get("flags", []))):
+                review.append({
+                    "code": "atom-role-title-not-corrected", "atom_id": atom_id,
+                    "detail": "A keep decision cannot leave a title that is too long for reusable Markdown and Canvas labels.",
+                })
+            normalized[atom_id] = []
+            continue
+        replacements = decision.get("replacement_atoms")
+        if not isinstance(replacements, list) or not replacements:
+            errors.append({"code": "atom-role-replacements-missing", "atom_id": atom_id})
+            continue
+        parsed: list[tuple[int, int, dict[str, Any]]] = []
+        for index, replacement in enumerate(replacements):
+            context = f"{atom_id}:replacement:{index}"
+            if not isinstance(replacement, dict):
+                errors.append({"code": "atom-role-replacement-invalid", "context": context})
+                continue
+            forbidden = sorted(FORBIDDEN_DECISION_FIELDS.intersection(replacement))
+            if forbidden:
+                errors.append({"code": "decision-rewrites-source", "context": context, "forbidden": forbidden})
+            try:
+                start, end = parse_range(replacement.get("source_range"), f"{context}.source_range", len(lines))
+            except Exception as exc:
+                errors.append({"code": "atom-role-range-invalid", "context": context, "detail": str(exc)})
+                continue
+            new_id = str(replacement.get("atom_id", ""))
+            title = str(replacement.get("title", "")).strip()
+            owner = str(replacement.get("owner_key", ""))
+            category = replacement.get("category")
+            item_confidence = replacement.get("confidence")
+            if not new_id or new_id in seen_new_ids:
+                errors.append({"code": "atom-role-id-invalid", "context": context})
+            seen_new_ids.add(new_id)
+            if owner not in set(map(str, original.get("allowed_owner_keys", []))):
+                errors.append({"code": "atom-role-owner-invalid", "context": context, "owner_key": owner})
+            if category not in ATOM_CATEGORY_NAMES:
+                errors.append({"code": "atom-role-category-invalid", "context": context})
+            if not title or "\n" in title or len("".join(title.split())) > 48:
+                errors.append({"code": "atom-role-title-invalid", "context": context})
+            if isinstance(item_confidence, bool) or not isinstance(item_confidence, (int, float)) or float(item_confidence) < threshold or float(item_confidence) > 1:
+                review.append({"code": "atom-role-replacement-confidence-low", "context": context, "confidence": item_confidence, "required": threshold})
+            copied = {key: value for key, value in replacement.items() if key not in FORBIDDEN_DECISION_FIELDS}
+            copied["source_range"] = [start, end]
+            copied["source_text_sha256"] = canonical_digest(source_slice(lines, [start, end]))
+            for field in ("boundary_reason", "cohesion_reason"):
+                if not isinstance(copied.get(field), str) or len(str(copied[field]).strip()) < 12:
+                    errors.append({"code": "atom-role-replacement-reason-invalid", "context": context, "field": field})
+            role_config = {**DEFAULT_ATOMIZATION, **dict(jobs.get("atomization", {}))}
+            review.extend(quality_issues(copied, lines, role_config, context, final=True))
+            parsed.append((start, end, copied))
+        parsed.sort(key=lambda item: (item[0], item[1]))
+        cursor = int(original["source_range"][0])
+        for start, end, _ in parsed:
+            if start != cursor:
+                errors.append({"code": "atom-role-partition-gap-or-overlap", "atom_id": atom_id, "expected": cursor, "actual": start})
+            cursor = end + 1
+        if cursor != int(original["source_range"][1]) + 1:
+            errors.append({"code": "atom-role-partition-incomplete", "atom_id": atom_id})
+        normalized[atom_id] = [item[2] for item in parsed]
+    return {
+        "schema_version": 1,
+        "status": "failed" if errors else ("review_required" if review else "passed"),
+        "errors": errors, "review_items": review,
+        "required_decisions": len(required), "normalized_replacements": normalized,
+    }
+
+
+def finalize_role_review(final: dict[str, Any], jobs: dict[str, Any], decisions: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    verify_artifact(final, "atomization-final")
+    report = validate_role_review(jobs, decisions)
+    if jobs.get("atomization_final_sha256") != final.get("artifact_sha256"):
+        report["errors"].append({"code": "atom-role-final-binding-invalid"})
+        report["status"] = "failed"
+    if report["status"] != "passed":
+        raise AtomizationError(f"Atom role review is unresolved: {report['errors'] + report['review_items']}")
+    required = report["normalized_replacements"]
+    atoms: list[dict[str, Any]] = []
+    changed = 0
+    for atom in final.get("atoms", []):
+        atom_id = str(atom.get("atom_id"))
+        if atom_id not in required or required[atom_id] == []:
+            atoms.append(dict(atom))
+            continue
+        atoms.extend(required[atom_id])
+        changed += 1
+    atoms.sort(key=lambda item: (int(item["source_range"][0]), int(item["source_range"][1]), str(item["atom_id"])))
+    bindings = dict(final.get("bindings", {}))
+    bindings["atom_role_jobs"] = {"path": jobs.get("_path"), "sha256": jobs["artifact_sha256"]}
+    bindings["atom_role_decisions"] = {"path": decisions.get("_path"), "sha256": decisions["artifact_sha256"]}
+    reviewer = dict(final.get("reviewer", {}))
+    reviewer["role_review"] = decisions.get("reviewer", {})
+    atomization = dict(final.get("atomization", {}))
+    atomization["teaching_role_audit"] = "required-before-materialization"
+    atomization["role_correction_confidence_threshold"] = float(jobs.get("confidence_threshold", 0.95))
+    result = seal_artifact({
+        **{key: value for key, value in final.items() if key not in {"artifact_sha256", "atoms", "bindings", "reviewer", "atomization"}},
+        "atoms": atoms, "bindings": bindings, "reviewer": reviewer,
+        "atomization": atomization,
+        "role_review": {
+            "status": "passed", "reviewed_flagged_atoms": report["required_decisions"],
+            "replaced_atoms": changed, "result_atoms": len(atoms), "unresolved_count": 0,
+        },
+    })
+    queue = seal_artifact({
+        "schema_version": 1, "kind": "atom-role-review-queue", "status": "passed",
+        "atomization_final_sha256": result["artifact_sha256"], "unresolved_count": 0, "items": [],
+    })
+    return result, queue
+
+
 def load_tagged(path: Path, kind: str) -> dict[str, Any]:
     resolved = path.expanduser().resolve()
     payload = load_json(resolved)
@@ -493,6 +740,21 @@ def main(argv: list[str] | None = None) -> int:
     finish.add_argument("round2", type=Path)
     finish.add_argument("--output-dir", type=Path, required=True)
     finish.add_argument("--overwrite", action="store_true")
+    role_prepare = sub.add_parser("prepare-role-review")
+    role_prepare.add_argument("atomization_final", type=Path)
+    role_prepare.add_argument("--output-dir", type=Path, required=True)
+    role_prepare.add_argument("--overwrite", action="store_true")
+    role_validate = sub.add_parser("validate-role-review")
+    role_validate.add_argument("jobs", type=Path)
+    role_validate.add_argument("decisions", type=Path)
+    role_validate.add_argument("--output", type=Path)
+    role_validate.add_argument("--overwrite", action="store_true")
+    role_finish = sub.add_parser("finalize-role-review")
+    role_finish.add_argument("atomization_final", type=Path)
+    role_finish.add_argument("jobs", type=Path)
+    role_finish.add_argument("decisions", type=Path)
+    role_finish.add_argument("--output-dir", type=Path, required=True)
+    role_finish.add_argument("--overwrite", action="store_true")
     args = parser.parse_args(argv)
     try:
         if args.command == "prepare":
@@ -510,7 +772,7 @@ def main(argv: list[str] | None = None) -> int:
             output = args.output_dir.expanduser().resolve() / "round-2-jobs.json"
             atomic_json(output, payload, args.overwrite)
             report, code = {"status": "created", "path": str(output), "audits": len(payload["audits"]), "sha256": payload["artifact_sha256"]}, 0
-        else:
+        elif args.command == "finalize":
             final, queue = finalize_payload(load_tagged(args.jobs, "atomization-jobs"), load_tagged(args.round1, "round-1-decisions"), load_tagged(args.round2_jobs, "round-2-jobs"), load_tagged(args.round2, "round-2-decisions"))
             output_dir = args.output_dir.expanduser().resolve()
             final_path, queue_path = output_dir / "atomization-final.json", output_dir / "atomization-review-queue.json"
@@ -518,6 +780,29 @@ def main(argv: list[str] | None = None) -> int:
             atomic_json(queue_path, queue, args.overwrite)
             report = {"status": final["status"], "atomization_final": str(final_path), "review_queue": str(queue_path), "atoms": len(final["atoms"]), "unresolved_count": final["unresolved_count"]}
             code = 0 if final["status"] == "passed" else 2
+        elif args.command == "prepare-role-review":
+            payload = prepare_role_review(args.atomization_final)
+            output = args.output_dir.expanduser().resolve() / "atom-role-jobs.json"
+            atomic_json(output, payload, args.overwrite)
+            report = {"status": "created", "path": str(output), "atoms": len(payload["atoms"]), "flagged_atoms": sum(item["requires_decision"] for item in payload["atoms"])}
+            code = 0
+        elif args.command == "validate-role-review":
+            report = validate_role_review(load_tagged(args.jobs, "atom-role-jobs"), load_tagged(args.decisions, "atom-role-decisions"))
+            if args.output:
+                atomic_json(args.output, report, args.overwrite)
+            code = 0 if report["status"] == "passed" else 2
+        else:
+            original = load_tagged(args.atomization_final, "atomization-final")
+            jobs = load_tagged(args.jobs, "atom-role-jobs")
+            decisions = load_tagged(args.decisions, "atom-role-decisions")
+            final, queue = finalize_role_review(original, jobs, decisions)
+            output_dir = args.output_dir.expanduser().resolve()
+            final_path = output_dir / "atomization-final.role-reviewed.json"
+            queue_path = output_dir / "atom-role-review-queue.json"
+            atomic_json(final_path, final, args.overwrite)
+            atomic_json(queue_path, queue, args.overwrite)
+            report = {"status": "passed", "atomization_final": str(final_path), "review_queue": str(queue_path), "atoms": len(final["atoms"]), "reviewed_flagged_atoms": final["role_review"]["reviewed_flagged_atoms"], "replaced_atoms": final["role_review"]["replaced_atoms"]}
+            code = 0
     except Exception as exc:
         report, code = {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}, 1
     print(json.dumps(report, ensure_ascii=False, indent=2))
