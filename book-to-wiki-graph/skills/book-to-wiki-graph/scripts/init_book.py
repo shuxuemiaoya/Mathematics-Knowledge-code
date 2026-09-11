@@ -17,15 +17,22 @@ ATOM_CATEGORIES = {
     "worked-example": "原子层/例题",
     "exercise": "原子层/习题",
     "scenario": "原子层/情景引入",
+    "concept": "原子层/概念",
+    "formula": "原子层/公式",
 }
+ATOM_SUBCATEGORY_PATHS = {"reflection-question": "原子层/思考题"}
 DEFAULT_ATOMIZATION = {
-    "mode": "llm-two-pass",
+    "mode": "llm-category-aware-graph",
     "knowledge_granularity": "complete-teaching-unit",
-    "scenario_policy": "substantial-only",
-    "teaching_role_audit": "required-before-materialization",
+    "scenario_policy": "role-aware-bridges-and-reflections",
+    "teaching_role_audit": "integrated",
+    "relation_feedback_cycles": 2,
     "confidence_threshold": 0.90,
     "short_atom_confidence_threshold": 0.95,
     "role_correction_confidence_threshold": 0.95,
+    "knowledge_boundary_authority": "llm-exclusive",
+    "provisional_atom_policy": "coverage-context-only",
+    "parallel_definition_policy": "split-when-independently-reusable",
 }
 DEFAULT_ORGANIZATION = {
     "mode": "toc-plus-reviewed-topics",
@@ -36,8 +43,11 @@ DEFAULT_MARKDOWN_RENDERING = {
     "atom_heading_policy": "omit",
     "atom_filename_policy": "sequence-category-code",
     "leaf_organizer_policy": "flat-note",
-    "organizer_self_heading_policy": "omit",
+    "organizer_frontmatter_policy": "required",
+    "organizer_self_heading_policy": "nested-organizer-note",
     "organizer_child_heading": "relative-depth",
+    "organizer_filename_policy": "clear-title",
+    "concept_filename_policy": "preferred-label-collision-safe",
 }
 DEFAULT_RELATION_ANALYSIS = {
     "mode": "llm-three-pass",
@@ -64,6 +74,9 @@ DEFAULT_CANVAS = {
     "overview_granularity": "chapter",
     "chapter_granularity": "core-atom",
     "section_granularity": "atom-and-exercise-entry",
+    "concept_nodes": "hidden",
+    "formula_nodes": "hidden",
+    "isolation_policy": "semantic-or-labelled-membership",
 }
 
 
@@ -124,6 +137,7 @@ def create_profile(source: Path, staging_root: Path, book_root: Path) -> dict[st
         },
         "organizer_root": "组织层",
         "atom_categories": ATOM_CATEGORIES,
+        "atom_subcategory_paths": ATOM_SUBCATEGORY_PATHS,
         "organization": DEFAULT_ORGANIZATION,
         "atomization": DEFAULT_ATOMIZATION,
         "relation_analysis": DEFAULT_RELATION_ANALYSIS,

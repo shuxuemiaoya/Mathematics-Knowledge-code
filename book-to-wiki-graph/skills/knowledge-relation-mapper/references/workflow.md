@@ -14,6 +14,24 @@ fixed kind, and exact source evidence. `validate-concepts` rejects stale packets
 missing atom coverage, invalid line ranges, and invalid roles; suspicious names
 and exercise-only concepts go to review.
 
+For `scenario_role: reflection-question`, reuse the scenario relation grammar:
+learned knowledge points into the question with `motivates`; if grounded later
+or external knowledge answers the inquiry, the question may point to that target
+with `motivates`. The question wording itself is not a concept proposal.
+
+For `scenario_role: section-introduction`, map the atom to the concepts that
+collectively answer its framing question, but create no concept from the
+question wording. Require an outgoing `motivates` edge to the first knowledge
+unit that begins the answer. Additional sibling targets are allowed only when
+the wording and both endpoint ranges support each edge; book order alone is not
+evidence.
+
+For a short `scenario_role: knowledge-motivation`, require both sides of the
+bridge in the audit: learned content must motivate the prompt, and the prompt
+must motivate a distinct target topic. A one-sided short prompt is evidence of
+an atomization error and should produce boundary feedback rather than an
+artificial relation.
+
 ## Pass 2 — candidate decision and disambiguation
 
 `prepare-relations` combines these recall channels:
@@ -55,3 +73,12 @@ manifest, earlier decisions, embeddings, or model identity requires regeneration
 
 The Agent may review packets directly without an API call. In that case it must
 produce the same schemas and identify itself in each artifact's `reviewer` field.
+
+## Boundary feedback loop
+
+With `prepare-concepts --atomization-final`, atoms are stable virtual records,
+not yet-written Markdown. Local relations from atomization enter hard candidate
+recall. Round three may return `boundary_feedback` only when dependency evidence
+shows that ranges must merge, split, or be resegmented. The main Skill owns the
+revision and permits at most two automatic cycles. A changed atomization digest
+invalidates relation, audit, and cross-chapter decisions.

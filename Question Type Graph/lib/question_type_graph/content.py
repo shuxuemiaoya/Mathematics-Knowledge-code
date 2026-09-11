@@ -1374,8 +1374,8 @@ def plan_note(
     graph_root = Path(adapter["_graph_root"])
     question_folder = str(adapter.get("content", {}).get("question_folder", "questions"))
     path_by_label: dict[str, Path] = {}
-    component_limit = int(adapter.get("content", {}).get("max_path_component_length", 80))
-    path_limit = int(adapter.get("content", {}).get("max_path_length", 220))
+    component_limit = int(adapter.get("content", {}).get("max_path_component_length", 35))
+    path_limit = int(adapter.get("content", {}).get("max_path_length", 160))
     if component_limit < 12 or component_limit > 120:
         raise ConfigurationError("content.max_path_component_length must be between 12 and 120")
     functional_folder_template = str(adapter.get("content", {}).get("functional_folder_template", "{title}"))
@@ -1859,13 +1859,23 @@ def probe_question_continuity(questions: list[dict[str, Any]]) -> list[dict[str,
             continue
         by_context.setdefault(str(question.get("context_key", "")), []).append(question)
     errors: list[dict[str, Any]] = []
-    for context, items in by_context.items():
-        expected = 1
-        for item in items:
-            number = str(item.get("number", "")).strip()
-            if not number.isdecimal():
-                continue
-            actual = int(number)
+    prev_context_end: int | None = None
+    for context_idx, (context, items) in enumerate(by_context.items()):
+        decimal_items = [it for it in items if str(it.get("number", "")).strip().isdecimal()]
+        if not decimal_items:
+            continue
+        first_num = int(str(decimal_items[0].get("number", "")).strip())
+        if prev_context_end is not None and first_num == prev_context_end + 1:
+            expected = first_num
+        elif context_idx == 0 and first_num == 1:
+            expected = 1
+        elif first_num == 1:
+            expected = 1
+        else:
+            expected = first_num
+
+        for item in decimal_items:
+            actual = int(str(item.get("number", "")).strip())
             if actual != expected:
                 start_line = item.get("source_start_line", 0)
                 remediation = (
@@ -1887,6 +1897,7 @@ def probe_question_continuity(questions: list[dict[str, Any]]) -> list[dict[str,
                 expected = actual + 1
             else:
                 expected += 1
+        prev_context_end = expected - 1
     return errors
 
 

@@ -9,6 +9,7 @@ import json
 import os
 import re
 import sys
+import unicodedata
 import urllib.parse
 from collections import defaultdict
 from pathlib import Path, PurePosixPath
@@ -20,6 +21,8 @@ ATOM_CATEGORIES = {
     "worked-example": "原子层/例题",
     "exercise": "原子层/习题",
     "scenario": "原子层/情景引入",
+    "concept": "原子层/概念",
+    "formula": "原子层/公式",
 }
 ATOM_COLORS = {
     "knowledge": "2",
@@ -32,30 +35,65 @@ ATOM_LABELS = {
     "worked-example": "例题",
     "exercise": "习题",
     "scenario": "情景引入",
+    "concept": "概念",
+    "formula": "公式",
 }
 ATOM_CATEGORY_CODES = {
     "knowledge": "K",
     "worked-example": "W",
     "exercise": "E",
     "scenario": "S",
+    "concept": "C",
+    "formula": "F",
 }
+SCENARIO_ROLE_PATHS = {"reflection-question": ("原子层/思考题", "T")}
+
+
+def atom_path_and_code(node: dict[str, Any]) -> tuple[str | None, str | None]:
+    category = str(node.get("category", ""))
+    if category == "scenario" and node.get("scenario_role") in SCENARIO_ROLE_PATHS:
+        return SCENARIO_ROLE_PATHS[str(node["scenario_role"])]
+    if category == "concept":
+        return ATOM_CATEGORIES["concept"], None
+    return ATOM_CATEGORIES.get(category), ATOM_CATEGORY_CODES.get(category)
+
+
+def atom_label(node: dict[str, Any]) -> str:
+    if node.get("category") == "scenario" and node.get("scenario_role") == "reflection-question":
+        return "思考题"
+    return ATOM_LABELS.get(str(node.get("category")), "原子")
+
+
+def concept_filename_stem(value: str) -> str:
+    value = unicodedata.normalize("NFKC", value).strip()
+    value = re.sub(r"[\x00-\x1f<>:\"/\\|?*#]+", "-", value)
+    value = re.sub(r"\s+", " ", value).strip(". -")
+    return (value or "概念")[:100].rstrip(". -") or "概念"
+
+
+PRIMARY_ATOM_CATEGORIES = {"knowledge", "worked-example", "exercise", "scenario"}
+DERIVED_ATOM_CATEGORIES = {"concept", "formula"}
 MARKDOWN_RENDERING_CONTRACT = {
     "atom_heading_policy": "omit",
     "atom_filename_policy": "sequence-category-code",
     "leaf_organizer_policy": "flat-note",
-    "organizer_self_heading_policy": "omit",
     "organizer_child_heading": "relative-depth",
+    "concept_filename_policy": "preferred-label-collision-safe",
 }
+ORGANIZER_SELF_HEADING_POLICIES = {"omit", "nested-organizer-note"}
+ORGANIZER_FRONTMATTER_POLICIES = {"omit", "required"}
 ORGANIZER_COLOR = "1"
 RELATION_LABELS = {
     "prerequisite": "先修", "develops": "发展", "derives": "推导",
     "motivates": "引发", "illustrates": "例证", "applies": "应用",
     "practices": "练习", "contrasts": "对比", "analogous": "类比",
+    "synthesizes": "汇合",
 }
 RELATION_COLORS = {
     "prerequisite": "1", "develops": "2", "derives": "4",
     "motivates": "5", "illustrates": "4", "applies": "4",
     "practices": "6", "contrasts": "1", "analogous": "5",
+    "synthesizes": "3",
 }
 CONCEPT_RELATION_LABELS = {
     "prerequisite": "先修", "develops": "发展", "derives": "推导",
@@ -135,6 +173,75 @@ def strip_frontmatter(text: str) -> list[str]:
         if line.strip() in {"---", "..."}:
             return lines[index + 1 :]
     return lines
+
+
+def frontmatter_keys(text: str) -> set[str]:
+    """Return top-level YAML property names without requiring a YAML package."""
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return set()
+    keys: set[str] = set()
+    for line in lines[1:]:
+        if line.strip() in {"---", "..."}:
+            break
+        match = re.match(r"^([A-Za-z_][A-Za-z0-9_-]*):", line)
+        if match:
+            keys.add(match.group(1))
+    return keys
+
+
+def frontmatter_scalar(text: str, key: str) -> Any:
+    """Read one generated top-level scalar without adding a YAML dependency."""
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return None
+    pattern = re.compile(rf"^{re.escape(key)}:\s*(.*?)\s*$")
+    for line in lines[1:]:
+        if line.strip() in {"---", "..."}:
+            break
+        match = pattern.match(line)
+        if match is None:
+            continue
+        raw = match.group(1)
+        if not raw:
+            return None
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            return raw
+    return None
+
+
+def frontmatter_list(text: str, key: str) -> list[Any] | None:
+    """Read one generated top-level YAML list without a YAML dependency."""
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return None
+    field = re.compile(rf"^{re.escape(key)}:\s*(.*?)\s*$")
+    for index, line in enumerate(lines[1:], start=1):
+        if line.strip() in {"---", "..."}:
+            break
+        match = field.match(line)
+        if match is None:
+            continue
+        raw = match.group(1)
+        if raw:
+            try:
+                value = json.loads(raw)
+            except json.JSONDecodeError:
+                return None
+            return value if isinstance(value, list) else None
+        result: list[Any] = []
+        for item_line in lines[index + 1 :]:
+            item = re.match(r"^\s{2}-\s*(.*?)\s*$", item_line)
+            if item is None:
+                break
+            try:
+                result.append(json.loads(item.group(1)))
+            except json.JSONDecodeError:
+                result.append(item.group(1))
+        return result
+    return None
 
 
 def normalize_relative_path(value: Any, field: str) -> str:
@@ -400,7 +507,7 @@ def validate_tree_canvas(
             category = str(node.get("category"))
             expected_color = ATOM_COLORS.get(category)
             text = card.get("text")
-            if not isinstance(text, str) or f"{ATOM_LABELS.get(category)} · " not in text:
+            if not isinstance(text, str) or f"{atom_label(node)} · " not in text:
                 errors.append({"code": "canvas-atom-label-invalid", "path": str(canvas_path), "node": key})
         if card.get("color") != expected_color:
             errors.append({"code": "canvas-card-color-invalid", "path": str(canvas_path), "node": key})
@@ -688,6 +795,33 @@ def text_overlap_errors(canvas_nodes: list[dict[str, Any]], canvas_path: Path) -
             right_box = (right["x"], right["y"], right["x"] + right["width"], right["y"] + right["height"])
             if not (left_box[2] <= right_box[0] or right_box[2] <= left_box[0] or left_box[3] <= right_box[1] or right_box[3] <= left_box[1]):
                 errors.append({"code": "canvas-card-overlap", "path": str(canvas_path), "left": left.get("id"), "right": right.get("id")})
+    return errors
+
+
+def semantic_direction_errors(canvas_nodes: list[dict[str, Any]], canvas_edges: list[dict[str, Any]], canvas_path: Path) -> list[dict[str, Any]]:
+    """Verify the four-side directional contract for labelled semantic edges."""
+    by_id = {str(node.get("id")): node for node in canvas_nodes if node.get("type") == "text"}
+    labels = set(RELATION_LABELS.values()) | set(CONCEPT_RELATION_LABELS.values()) | set(CONCEPT_ROLE_LABELS.values())
+    errors: list[dict[str, Any]] = []
+    for edge in canvas_edges:
+        label = str(edge.get("label", "")).strip()
+        # Empty-label routes are map navigation.  All relation/containment
+        # labels are checked, including exercise and organization membership.
+        semantic = (
+            label.startswith("主线 ·")
+            or any(label == value or label.startswith(value + " ") or label.startswith(value + " ·") for value in labels)
+            or label.startswith(("练习", "归属", "包含"))
+        )
+        if not semantic:
+            continue
+        source = by_id.get(str(edge.get("fromNode")))
+        target = by_id.get(str(edge.get("toNode")))
+        if source is None or target is None:
+            continue
+        if edge.get("fromSide") == "right" and int(target["x"]) < int(source["x"]):
+            errors.append({"code": "canvas-right-edge-target-left", "path": str(canvas_path), "edge": edge.get("id")})
+        if edge.get("fromSide") == "bottom" and int(target["y"]) < int(source["y"]):
+            errors.append({"code": "canvas-bottom-edge-target-above", "path": str(canvas_path), "edge": edge.get("id")})
     return errors
 
 
@@ -1019,7 +1153,7 @@ def validate_chapter_constellation(
             continue
         if targets.get(card_id) != (book_root / str(nodes[key]["_filename"])).resolve():
             errors.append({"code": "canvas-atom-target-invalid", "chapter": chapter_key, "atom": key})
-        if card.get("color") != ATOM_COLORS.get(str(nodes[key].get("category"))) or f"{ATOM_LABELS.get(str(nodes[key].get('category')))} · " not in str(card.get("text")):
+        if card.get("color") != ATOM_COLORS.get(str(nodes[key].get("category"))) or f"{atom_label(nodes[key])} · " not in str(card.get("text")):
             errors.append({"code": "canvas-atom-visual-invalid", "chapter": chapter_key, "atom": key})
     forbidden_atom_cards = {
         stable_canvas_id("card", key) for key in source_atoms
@@ -1235,6 +1369,89 @@ def validate_chapter_constellation(
     return errors
 
 
+def validate_compact_geometry(canvas_nodes, canvas_edges, entry, graph_nodes, canvas_path):
+    """Independently audit actual geometry, including nested ownership."""
+    errors = []
+    cards = {str(n["id"]): n for n in canvas_nodes if n["type"] == "text"}
+    groups = {str(n["id"]): n for n in canvas_nodes if n["type"] == "group"}
+    root = str(entry.get("root_key"))
+    if root == "__chapter_intro__":
+        root = str(entry.get("chapter_key"))
+    scope = root if entry.get("role") == "chapter-knowledge-map" else f"{entry.get('chapter_key')}:{entry.get('root_key')}"
+    header_id = stable_canvas_id("map-hub",scope)
+    records = entry.get("organization_groups", [])
+    records_by_id = {str(item.get("node_id")):item for item in records if isinstance(item,dict)}
+    if set(records_by_id) != set(groups):
+        errors.append({"code":"canvas-group-records-mismatch","path":str(canvas_path)})
+
+    def contains(parent, child):
+        return (parent['x'] <= child['x'] and parent['y'] <= child['y']
+                and parent['x']+parent['width'] >= child['x']+child['width']
+                and parent['y']+parent['height'] >= child['y']+child['height'])
+
+    def separated(a,b,gap):
+        return (a['x']+a['width']+gap <= b['x'] or b['x']+b['width']+gap <= a['x']
+                or a['y']+a['height']+gap <= b['y'] or b['y']+b['height']+gap <= a['y'])
+
+    card_list = list(cards.values())
+    for i,a in enumerate(card_list):
+        for b in card_list[i+1:]:
+            if not separated(a,b,100):
+                errors.append({"code":"canvas-node-gap-insufficient","path":str(canvas_path),"nodes":[a['id'],b['id']]})
+    for edge in canvas_edges:
+        left,right = cards.get(edge.get('fromNode')),cards.get(edge.get('toNode'))
+        if header_id in {edge.get('fromNode'),edge.get('toNode')}:
+            errors.append({"code":"canvas-title-spoke-forbidden","path":str(canvas_path),"edge":edge.get('id')})
+        if not left or not right:
+            continue
+        if edge.get('fromSide') == 'right':
+            valid = right['x'] >= left['x']+left['width']+140
+        elif edge.get('fromSide') == 'bottom':
+            valid = right['y'] >= left['y']+left['height']+110
+        else:
+            valid = False
+        if not valid:
+            errors.append({"code":"canvas-direction-clearance-invalid","path":str(canvas_path),"edge":edge.get('id')})
+    group_by_owner = {}
+    for node_id,record in records_by_id.items():
+        key = str(record.get('organizer_key'))
+        group = groups.get(node_id)
+        if graph_nodes.get(key,{}).get('layer') != 'organizer' or group is None:
+            errors.append({"code":"canvas-group-owner-invalid","path":str(canvas_path),"group":node_id})
+            continue
+        group_by_owner[key] = group
+        expected_parent = None if key == root else stable_canvas_id('organizer-group-v4',f"{scope}:{graph_nodes[key].get('parent_key')}")
+        if record.get('parent_id') != expected_parent:
+            errors.append({"code":"canvas-group-parent-invalid","path":str(canvas_path),"group":node_id})
+        if expected_parent and (expected_parent not in groups or not contains(groups[expected_parent],group)):
+            errors.append({"code":"canvas-group-parent-containment","path":str(canvas_path),"group":node_id})
+        for member in record.get('member_ids',[]):
+            if member not in cards or not contains(group,cards[member]):
+                errors.append({"code":"canvas-group-member-outside","path":str(canvas_path),"group":node_id,"member":member})
+    # Derive required membership from JSON ownership, not from the index's claim.
+    for key,node in graph_nodes.items():
+        card = cards.get(stable_canvas_id('card',key)) if node.get('layer') == 'atom' else cards.get(stable_canvas_id('exercise-entry',key))
+        if card is None:
+            continue
+        owner = str(node['parent_key']) if node['layer'] == 'atom' else key
+        while owner in graph_nodes:
+            group = group_by_owner.get(owner)
+            if not group or not contains(group,card):
+                errors.append({"code":"canvas-organizer-ownership-envelope","path":str(canvas_path),"organizer":owner,"card":card['id']})
+            elif card['id'] not in records_by_id[group['id']].get('member_ids',[]):
+                errors.append({"code":"canvas-group-member-unrecorded","path":str(canvas_path),"organizer":owner,"card":card['id']})
+            if owner == root:
+                break
+            owner = str(graph_nodes[owner].get('parent_key'))
+    group_list = list(records_by_id.values())
+    for i,a in enumerate(group_list):
+        for b in group_list[i+1:]:
+            if a.get('parent_id') == b.get('parent_id') and a['node_id'] in groups and b['node_id'] in groups:
+                if not separated(groups[a['node_id']],groups[b['node_id']],0):
+                    errors.append({"code":"canvas-sibling-groups-overlap","path":str(canvas_path),"groups":[a['node_id'],b['node_id']]})
+    return errors
+
+
 def validate_v3_map_document(
     canvas_path: Path,
     entry: dict[str, Any],
@@ -1246,9 +1463,14 @@ def validate_v3_map_document(
     concepts: list[dict[str, Any]],
     atom_concept_links: list[dict[str, Any]],
     chapter_level: bool,
+    direction_policy: str = "legacy",
 ) -> list[dict[str, Any]]:
     canvas_nodes, canvas_edges, targets, errors = read_canvas_document(canvas_path)
     errors.extend(text_overlap_errors(canvas_nodes, canvas_path))
+    if direction_policy != "legacy":
+        errors.extend(semantic_direction_errors(canvas_nodes, canvas_edges, canvas_path))
+    if direction_policy == "compact-v1":
+        errors.extend(validate_compact_geometry(canvas_nodes,canvas_edges,entry,nodes,canvas_path))
     cards = {str(item.get("id")): item for item in canvas_nodes if item.get("type") == "text"}
     actual_atom_ids = {stable_canvas_id("card", key) for key in expected_atoms}
     missing_atoms = sorted(actual_atom_ids - set(cards))
@@ -1322,7 +1544,7 @@ def validate_v3_map_document(
     actual_bounds = canvas_bounds(canvas_nodes)
     if entry.get("bounds") != actual_bounds:
         errors.append({"code": "canvas-index-bounds-mismatch", "path": str(canvas_path), "expected": actual_bounds, "actual": entry.get("bounds")})
-    if sum(item.get("type") == "text" for item in canvas_nodes) >= 30 and not 0.5 <= float(actual_bounds["aspect_ratio"]) <= 2.0:
+    if direction_policy != "compact-v1" and sum(item.get("type") == "text" for item in canvas_nodes) >= 30 and not 0.5 <= float(actual_bounds["aspect_ratio"]) <= 2.0:
         errors.append({"code": "canvas-aspect-ratio-invalid", "path": str(canvas_path), "aspect_ratio": actual_bounds["aspect_ratio"]})
     if not isinstance(entry.get("visual_quality"), dict):
         errors.append({"code": "canvas-v3-visual-quality-missing", "path": str(canvas_path)})
@@ -1337,6 +1559,11 @@ def validate_constellation_bundle_v3(
 ) -> list[dict[str, Any]]:
     errors: list[dict[str, Any]] = []
     index_root = canvas_index_path.parent
+    manifest_payload = load_json(manifest_path)
+    profile_payload = load_json(Path(str(manifest_payload.get("profile", ""))).expanduser().resolve())
+    canvas_config = profile_payload.get("canvas", {}) if isinstance(profile_payload.get("canvas"), dict) else {}
+    hidden_concepts = canvas_config.get("concept_nodes") == "hidden"
+    membership_policy = canvas_config.get("isolation_policy") == "semantic-or-labelled-membership"
     if Path(str(index.get("manifest", ""))).expanduser().resolve() != manifest_path or index.get("manifest_sha256") != sha256_file(manifest_path):
         errors.append({"code": "canvas-index-manifest-binding-invalid"})
     if Path(str(index.get("book_root", ""))).expanduser().resolve() != book_root:
@@ -1344,15 +1571,32 @@ def validate_constellation_bundle_v3(
     expected_layout = {
         "mode": "three-level-constellation", "theme": "adaptive",
         "zoom_levels": ["book-chapters", "chapter-core", "section-detail"],
-        "learning_direction": "center-outward-clockwise",
-        "organization_encoding": "regions-with-click-through-portals",
+        "learning_direction": "timeline-left-to-right",
+        "organization_encoding": "regions-and-organizer-groups",
         "atom_visibility": "chapter-core-and-section-detail",
         "exercise_representation": "chapter-counts-section-primary-entries",
-        "concept_hub_visibility": "multi-atom-and-semantic-bridge-only",
-        "edge_noise_policy": "one-primary-practice-edge-per-exercise-organizer",
+        "concept_hub_visibility": "hidden" if hidden_concepts else "multi-atom-and-semantic-bridge-only",
+        "edge_noise_policy": "semantic-or-labelled-membership" if membership_policy else "one-primary-practice-edge-per-exercise-organizer",
         "edge_ports": {"progression": "right-to-left", "inspiration": "right-to-top", "support-and-containment": "bottom-to-top"},
+        "direction_constraints": {"right_outgoing": "target.x>=source.x", "bottom_outgoing": "target.y>=source.y"},
+        "spacing": {"node_margin": 120, "group_padding": 180, "timeline_x_gap": 500, "timeline_y_gap": 330},
     }
-    if index.get("layout") != expected_layout:
+    layout = index.get("layout", {})
+    compact = layout.get("revision") == "compact-v1"
+    direction_policy = "compact-v1" if compact else ("timeline" if layout.get("learning_direction") == "timeline-left-to-right" else "legacy")
+    if compact:
+        expected_layout.update({
+            "revision":"compact-v1", "learning_direction":"edge-constrained-clusters",
+            "navigation":"unconnected-header-and-local-portals",
+            "direction_constraints":{"right_outgoing":"target.left>=source.right+gap", "bottom_outgoing":"target.top>=source.bottom+gap"},
+            "spacing":{"node_margin":100,"region_gap":160,"right_gap":140,"down_gap":110},
+        })
+    elif direction_policy == "legacy":
+        expected_layout["learning_direction"] = "center-outward-clockwise"
+        expected_layout["organization_encoding"] = "regions-with-click-through-portals"
+        expected_layout.pop("direction_constraints")
+        expected_layout.pop("spacing")
+    if layout != expected_layout:
         errors.append({"code": "canvas-index-layout-invalid"})
     roots = [node for node in organizers if node.get("parent_key") is None]
     if len(roots) != 1:
@@ -1418,7 +1662,7 @@ def validate_constellation_bundle_v3(
             for owner, section in expected_sections if owner == chapter and (chapter, section) in section_paths
         }
         if chapter in chapter_paths:
-            errors.extend(validate_v3_map_document(chapter_paths[chapter], chapter_entry_by_key[chapter], visible, set(), section_portals, nodes, book_root, concepts, atom_concept_links, True))
+            errors.extend(validate_v3_map_document(chapter_paths[chapter], chapter_entry_by_key[chapter], visible, set(), section_portals, nodes, book_root, concepts, atom_concept_links, True, direction_policy))
     for chapter, section in expected_sections:
         if (chapter, section) not in section_paths:
             continue
@@ -1429,7 +1673,26 @@ def validate_constellation_bundle_v3(
         visible = {key for key in source_atoms if validator_visible_atom(nodes, key, featured)}
         exercises = [key for key in source_atoms if nodes[key].get("category") == "exercise"]
         _, by_owner = validator_exercise_owners(nodes, chapter, exercises)
-        errors.extend(validate_v3_map_document(section_paths[(chapter, section)], section_entry_by_key[(chapter, section)], visible, set(by_owner), {}, nodes, book_root, concepts, atom_concept_links, False))
+        errors.extend(validate_v3_map_document(section_paths[(chapter, section)], section_entry_by_key[(chapter, section)], visible, set(by_owner), {}, nodes, book_root, concepts, atom_concept_links, False, direction_policy))
+    if hidden_concepts or membership_policy:
+        concept_ids = {stable_canvas_id("concept", str(item.get("key"))) for item in concepts if item.get("key")}
+        entries = [*chapter_entries, *section_entries]
+        for entry in entries:
+            if not entry.get("path"):
+                continue
+            path = resolve_canvas_index_path(entry["path"], index_root)
+            canvas_nodes, canvas_edges, _, parse_errors = read_canvas_document(path)
+            errors.extend(parse_errors)
+            node_ids = {str(item.get("id")) for item in canvas_nodes}
+            if hidden_concepts and node_ids.intersection(concept_ids):
+                errors.append({"code": "canvas-hidden-concept-node-present", "path": str(path)})
+            if membership_policy:
+                if any(edge.get("label") == "书序" for edge in canvas_edges):
+                    errors.append({"code": "canvas-source-order-fallback-forbidden", "path": str(path)})
+                actual_membership = sum(edge.get("label") == "归属" and edge.get("fromSide") == "bottom" and edge.get("toSide") == "top" for edge in canvas_edges)
+                counts = entry.get("counts", {})
+                if counts.get("source_order_fallback_edges") != 0 or counts.get("organization_membership_edges") != actual_membership:
+                    errors.append({"code": "canvas-membership-count-invalid", "path": str(path)})
     return errors
 
 
@@ -1560,11 +1823,16 @@ def validate_atomization_review(
         return errors
     if not isinstance(config, dict):
         return [{"code": "atomization-config-invalid"}]
-    expected_config = {
-        "mode": "llm-two-pass",
-        "knowledge_granularity": "complete-teaching-unit",
-        "scenario_policy": "substantial-only",
-    }
+    mode = config.get("mode")
+    expected_config = {"knowledge_granularity": "complete-teaching-unit"}
+    if mode == "llm-category-aware-graph":
+        expected_config.update({
+            "knowledge_boundary_authority": "llm-exclusive",
+            "provisional_atom_policy": "coverage-context-only",
+            "parallel_definition_policy": "split-when-independently-reusable",
+        })
+    if mode not in {"llm-two-pass", "llm-category-aware-graph"}:
+        errors.append({"code": "atomization-config-invalid", "field": "mode"})
     for field, expected in expected_config.items():
         if config.get(field) != expected:
             errors.append(
@@ -1574,6 +1842,12 @@ def validate_atomization_review(
                     "expected": expected,
                 }
             )
+    if config.get("scenario_policy") not in {"substantial-only", "role-aware-bridges-and-reflections"}:
+        errors.append({
+            "code": "atomization-config-invalid",
+            "field": "scenario_policy",
+            "expected": "role-aware-bridges-and-reflections",
+        })
     for field in ("confidence_threshold", "short_atom_confidence_threshold"):
         value = config.get(field)
         if (
@@ -1583,7 +1857,8 @@ def validate_atomization_review(
         ):
             errors.append({"code": "atomization-config-invalid", "field": field})
     role_audit_required = config.get("teaching_role_audit") == "required-before-materialization"
-    if "teaching_role_audit" in config and not role_audit_required:
+    integrated_role_audit = mode == "llm-category-aware-graph" and config.get("teaching_role_audit") == "integrated"
+    if "teaching_role_audit" in config and not (role_audit_required or integrated_role_audit):
         errors.append({"code": "atomization-config-invalid", "field": "teaching_role_audit"})
     if role_audit_required:
         value = config.get("role_correction_confidence_threshold")
@@ -1628,6 +1903,14 @@ def validate_atomization_review(
         errors.append({"code": "atomization-final-not-passed"})
     if final.get("source_markdown_sha256") != source_markdown_sha256:
         errors.append({"code": "atomization-source-digest-mismatch"})
+    if mode == "llm-category-aware-graph":
+        for field in ("knowledge_signatures", "local_relations", "derived_card_candidates"):
+            if not isinstance(final.get(field), list):
+                errors.append({"code": "atomization-joint-field-missing", "field": field})
+        signatures = {str(item.get("atom_id")) for item in final.get("knowledge_signatures", []) if isinstance(item, dict)}
+        knowledge = {str(item.get("atom_id")) for item in final.get("atoms", []) if isinstance(item, dict) and item.get("category") == "knowledge"}
+        if signatures != knowledge:
+            errors.append({"code": "atomization-knowledge-signature-coverage", "missing": sorted(knowledge - signatures), "extra": sorted(signatures - knowledge)})
 
     for name, binding in review.get("bindings", {}).items():
         if not isinstance(binding, dict):
@@ -1807,7 +2090,7 @@ def validate_dual_layer_graph(manifest: dict[str, Any], nodes: dict[str, dict[st
             for value in ranges
         ):
             errors.append({"code": "atom-concept-evidence-invalid", "link": key})
-    atom_keys = {key for key, node in nodes.items() if node.get("layer") == "atom"}
+    atom_keys = {key for key, node in nodes.items() if node.get("layer") == "atom" and node.get("coverage_role", "primary") == "primary"}
     if linked_atoms != atom_keys:
         errors.append({"code": "atom-concept-coverage-invalid", "missing": sorted(atom_keys - linked_atoms)})
     if grounded_concepts != set(concept_by_key):
@@ -1893,9 +2176,17 @@ def validate_relation_review(
     if final.get("relations") != relations:
         errors.append({"code": "relation-materialization-mismatch"})
     if mode == "llm-three-pass":
-        for field in ("concepts", "atom_concept_links", "concept_relations"):
-            if final.get(field) != manifest.get(field):
+        for field in ("concepts", "atom_concept_links", "concept_relations", "formulas"):
+            manifest_value = manifest.get(field, [])
+            if field in {"concepts", "formulas"} and isinstance(manifest_value, list):
+                manifest_value = [{key: value for key, value in item.items() if key != "derived_atom_key"} if isinstance(item, dict) else item for item in manifest_value]
+            if final.get(field, []) != manifest_value:
                 errors.append({"code": "relation-materialization-mismatch", "field": field})
+        atomization_binding = manifest.get("atomization_review", {}).get("final_artifact", {})
+        if final.get("atomization_final_sha256") and final.get("atomization_final_sha256") != atomization_binding.get("sha256"):
+            errors.append({"code": "relation-atomization-binding-mismatch"})
+        if final.get("boundary_feedback"):
+            errors.append({"code": "relation-boundary-feedback-unresolved"})
     categories = {
         str(node.get("key")): str(node.get("category"))
         for node in manifest.get("nodes", [])
@@ -1929,6 +2220,44 @@ def validate_relation_review(
     return errors
 
 
+def validate_section_introduction_placement(
+    nodes: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Require a section-wide introduction to precede its sibling topic organizers."""
+    errors: list[dict[str, Any]] = []
+    for key, node in nodes.items():
+        if node.get("layer") != "atom" or node.get("category") != "scenario":
+            continue
+        if node.get("scenario_role") != "section-introduction":
+            continue
+        parent_key = node.get("parent_key")
+        parent = nodes.get(str(parent_key)) if parent_key is not None else None
+        if parent is None or parent.get("layer") != "organizer":
+            errors.append({"code": "section-introduction-owner-invalid", "node": key})
+            continue
+        children = parent.get("_children", parent.get("children", []))
+        organizer_children = [
+            child_key
+            for child_key in children
+            if child_key in nodes and nodes[child_key].get("layer") == "organizer"
+        ]
+        if not organizer_children:
+            errors.append({
+                "code": "section-introduction-owner-invalid",
+                "node": key,
+                "parent": parent_key,
+                "detail": "section introduction must frame following topic organizers",
+            })
+        if not children or children[0] != key:
+            errors.append({
+                "code": "section-introduction-order-invalid",
+                "node": key,
+                "parent": parent_key,
+                "actual_index": children.index(key) if key in children else None,
+            })
+    return errors
+
+
 def validate_graph(
     manifest_path: Path,
     book_root: Path,
@@ -1940,6 +2269,9 @@ def validate_graph(
     errors: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
     rendering_contract_enabled = False
+    organizer_self_heading_policy = "omit"
+    organizer_metadata_contract_enabled = False
+    atom_metadata_contract_enabled = False
 
     if manifest.get("schema_version") != 1:
         errors.append({"code": "manifest-schema-version"})
@@ -1959,15 +2291,23 @@ def validate_graph(
             errors.append({"code": "source-identity-mismatch"})
         if manifest.get("source_sha256") != profile.get("source", {}).get("sha256"):
             errors.append({"code": "manifest-source-identity-mismatch"})
+        atom_metadata_contract_enabled = profile.get("atomization", {}).get("mode") == "llm-category-aware-graph"
         rendering = profile.get("markdown_rendering")
         if isinstance(rendering, dict):
+            organizer_self_heading_policy = str(rendering.get("organizer_self_heading_policy", "omit"))
+            organizer_frontmatter_policy = str(rendering.get("organizer_frontmatter_policy", "omit"))
+            organizer_metadata_contract_enabled = organizer_frontmatter_policy == "required"
             rendering_contract_enabled = all(
                 rendering.get(field) == expected
                 for field, expected in MARKDOWN_RENDERING_CONTRACT.items()
-            )
+            ) and rendering.get("organizer_self_heading_policy", "omit") in ORGANIZER_SELF_HEADING_POLICIES
             for field, expected in MARKDOWN_RENDERING_CONTRACT.items():
                 if rendering.get(field) != expected:
                     errors.append({"code": "markdown-rendering-config-invalid", "field": field})
+            if rendering.get("organizer_self_heading_policy", "omit") not in ORGANIZER_SELF_HEADING_POLICIES:
+                errors.append({"code": "markdown-rendering-config-invalid", "field": "organizer_self_heading_policy"})
+            if organizer_frontmatter_policy not in ORGANIZER_FRONTMATTER_POLICIES:
+                errors.append({"code": "markdown-rendering-config-invalid", "field": "organizer_frontmatter_policy"})
         elif profile.get("atomization", {}).get("mode") == "llm-two-pass":
             errors.append({"code": "markdown-rendering-config-missing"})
         relation_analysis = profile.get("relation_analysis")
@@ -2106,20 +2446,32 @@ def validate_graph(
         else:
             atoms.append(node)
             category = node.get("category")
+            coverage_role = node.get("coverage_role", "primary")
             if category not in ATOM_CATEGORIES:
                 errors.append({"code": "atom-category-invalid", "node": key})
-            elif not filename.startswith(ATOM_CATEGORIES[category] + "/"):
+            expected_path, expected_code = atom_path_and_code(node)
+            if category in ATOM_CATEGORIES and (expected_path is None or not filename.startswith(expected_path + "/")):
                 errors.append({"code": "atom-path-invalid", "node": key})
-            elif rendering_contract_enabled:
-                code = ATOM_CATEGORY_CODES[category]
-                if re.fullmatch(rf"\d{{4,}}-{code}\.md", PurePosixPath(filename).name) is None:
+            elif category in ATOM_CATEGORIES and rendering_contract_enabled:
+                note_name = PurePosixPath(filename).name
+                if category == "concept":
+                    expected_stem = concept_filename_stem(str(node.get("title", "")))
+                    if note_name != f"{expected_stem}.md" and re.fullmatch(rf"{re.escape(expected_stem)}--[0-9a-f]{{6}}\.md", note_name) is None:
+                        errors.append({"code": "concept-filename-invalid", "node": key, "filename": filename})
+                elif re.fullmatch(rf"\d{{4,}}-{expected_code}\.md", note_name) is None:
                     errors.append({"code": "atom-filename-invalid", "node": key, "filename": filename})
+            if category in PRIMARY_ATOM_CATEGORIES and coverage_role != "primary":
+                errors.append({"code": "primary-atom-coverage-role-invalid", "node": key})
+            if category in DERIVED_ATOM_CATEGORIES:
+                if coverage_role != "derived" or not isinstance(node.get("derived_from_key"), str):
+                    errors.append({"code": "derived-atom-metadata-invalid", "node": key})
             if "children" in node:
                 errors.append({"code": "atom-has-children", "node": key})
             try:
                 start, end = parse_range(node.get("source_range"), f"node {key}.source_range", line_count)
                 node["_source_range"] = (start, end)
-                ranges.append((start, end, f"atom:{key}"))
+                if coverage_role == "primary":
+                    ranges.append((start, end, f"atom:{key}"))
             except Exception as exc:
                 errors.append({"code": "atom-source-range-invalid", "node": key, "detail": str(exc)})
 
@@ -2137,10 +2489,12 @@ def validate_graph(
         if parent is None or parent.get("layer") != "organizer":
             errors.append({"code": "node-parent-invalid", "node": key})
             continue
-        if key not in parent.get("_children", []):
+        if key not in parent.get("_children", []) and node.get("coverage_role", "primary") != "derived":
             errors.append({"code": "parent-child-mismatch", "node": key})
         if node.get("layer") == "organizer" and node.get("organizer_level") != parent.get("organizer_level", 0) + 1:
             errors.append({"code": "organizer-level-discontinuity", "node": key})
+
+    errors.extend(validate_section_introduction_placement(nodes))
 
     for organizer in organizers:
         key = str(organizer.get("key"))
@@ -2153,7 +2507,14 @@ def validate_graph(
         if "organizer" not in child_layers and child_layers != {"atom"}:
             errors.append({"code": "bottom-organizer-must-own-atoms", "node": key})
         if child_layers == {"organizer", "atom"}:
-            warnings.append({"code": "mixed-organizer-and-atom-children", "node": key})
+            direct_atoms = [nodes[child] for child in children if child in nodes and nodes[child].get("layer") == "atom"]
+            canonical_section_introductions = direct_atoms and all(
+                atom.get("category") == "scenario"
+                and atom.get("scenario_role") == "section-introduction"
+                for atom in direct_atoms
+            )
+            if not canonical_section_introductions:
+                warnings.append({"code": "mixed-organizer-and-atom-children", "node": key})
         if rendering_contract_enabled and child_layers == {"atom"} and organizer.get("parent_key") is not None:
             parent = nodes.get(str(organizer.get("parent_key")))
             if parent is not None and "_filename" in organizer and "_filename" in parent:
@@ -2182,7 +2543,7 @@ def validate_graph(
 
     if roots:
         visit(str(roots[0]["key"]))
-    unreachable = sorted(set(nodes) - visited)
+    unreachable = sorted(key for key in set(nodes) - visited if nodes[key].get("coverage_role") != "derived")
     if unreachable:
         errors.append({"code": "unreachable-nodes", "nodes": unreachable})
 
@@ -2230,12 +2591,30 @@ def validate_graph(
     expected_order = [
         str(node["key"])
         for node in sorted(
-            (node for node in atoms if "_source_range" in node),
+            (node for node in atoms if "_source_range" in node and node.get("coverage_role", "primary") == "primary"),
             key=lambda item: (item["_source_range"][0], item["_source_range"][1], str(item["key"])),
         )
     ]
     if manifest.get("source_order") != expected_order:
         errors.append({"code": "source-order-invalid", "expected": expected_order})
+    expected_derived_order = [
+        str(node["key"]) for node in sorted(
+            (node for node in atoms if "_source_range" in node and node.get("coverage_role") == "derived"),
+            key=lambda item: (item["_source_range"][0], str(item.get("category")), str(item["key"])),
+        )
+    ]
+    if manifest.get("derived_order", []) != expected_derived_order:
+        errors.append({"code": "derived-order-invalid", "expected": expected_derived_order})
+    for key in expected_derived_order:
+        source_key = str(nodes[key].get("derived_from_key", ""))
+        source_atom = nodes.get(source_key)
+        if not isinstance(source_atom, dict) or source_atom.get("category") not in {"knowledge", "worked-example"} or source_atom.get("coverage_role", "primary") != "primary":
+            errors.append({"code": "derived-source-invalid", "node": key})
+            continue
+        start, end = nodes[key].get("_source_range", (0, -1))
+        source_start, source_end = source_atom.get("_source_range", (1, 0))
+        if start < source_start or end > source_end or (nodes[key].get("category") == "concept" and source_atom.get("category") != "knowledge"):
+            errors.append({"code": "derived-range-outside-source", "node": key})
 
     exclusions = manifest.get("excluded_ranges", [])
     if not isinstance(exclusions, list):
@@ -2278,6 +2657,30 @@ def validate_graph(
         text = path.read_text(encoding="utf-8-sig")
         body_lines = strip_frontmatter(text)
         if node.get("layer") == "atom":
+            if atom_metadata_contract_enabled:
+                properties = frontmatter_keys(text)
+                required = {
+                    "title", "atom_type", "atom_key", "owner_key", "source",
+                    "source_pdf", "source_sha256", "source_range", "used_by",
+                    "organizers", "updated_at", "review_status",
+                    "estimated_learning_minutes", "difficulty", "importance",
+                    "learning_objectives",
+                }
+                missing = sorted(required - properties)
+                if missing:
+                    errors.append({"code": "atom-metadata-missing", "node": key, "fields": missing})
+                category = str(node.get("category", ""))
+                category_required = {
+                    "knowledge": {"estimated_learning_minutes", "difficulty", "importance", "learning_objectives"},
+                    "scenario": {"scenario_role"},
+                    "worked-example": {"complete_solution"},
+                    "exercise": {"exercise_scope"},
+                    "concept": {"concept_name", "derived_from", "is_definition_card"},
+                    "formula": {"derived_from"},
+                }.get(category, set())
+                missing_category = sorted(category_required - properties)
+                if missing_category:
+                    errors.append({"code": "atom-metadata-category-missing", "node": key, "fields": missing_category})
             if rendering_contract_enabled and any(ANY_MARKDOWN_HEADING_RE.match(line.strip()) for line in body_lines):
                 errors.append({"code": "atom-heading-forbidden", "node": key})
             if WIKILINK_RE.search(text) or MARKDOWN_LINK_RE.search(text) or HTML_ANCHOR_RE.search(text):
@@ -2287,11 +2690,99 @@ def validate_graph(
                     errors.append({"code": "atom-has-outgoing-note-embed", "node": key})
                     break
         else:
+            if organizer_metadata_contract_enabled:
+                properties = frontmatter_keys(text)
+                required = {
+                    "title", "node_type", "organizer_key",
+                    "parent_organizer_key", "parent_organizer",
+                    "parent_organizer_file", "source", "source_pdf",
+                    "source_sha256", "organizer_level", "organizer_role",
+                    "hierarchy_path", "heading_ranges", "source_anchor",
+                    "children_count", "direct_organizer_count",
+                    "direct_atom_count", "descendant_atom_count",
+                    "updated_at", "review_status",
+                }
+                missing = sorted(required - properties)
+                if missing:
+                    errors.append({"code": "organizer-metadata-missing", "node": key, "fields": missing})
+                children = [nodes[str(child)] for child in node.get("_children", []) if str(child) in nodes]
+                organizer_children = [child for child in children if child.get("layer") == "organizer"]
+                atom_children = [child for child in children if child.get("layer") == "atom"]
+                parent = nodes.get(str(node.get("parent_key"))) if node.get("parent_key") is not None else None
+                if parent is None:
+                    role = "root"
+                elif organizer_children and atom_children:
+                    role = "mixed"
+                elif organizer_children:
+                    role = "branch"
+                else:
+                    role = "leaf"
+                source_cfg = profile.get("source", {}) if isinstance(profile.get("source"), dict) else {}
+                source_pdf = Path(str(source_cfg.get("path", ""))).name
+                expected_scalars = {
+                    "title": str(node.get("title", "")),
+                    "node_type": "organizer",
+                    "organizer_key": key,
+                    "parent_organizer_key": str(node.get("parent_key")) if parent is not None else None,
+                    "parent_organizer": str(parent.get("title", "")) if parent is not None else None,
+                    "parent_organizer_file": str(parent.get("_filename", parent.get("filename", ""))) if parent is not None else None,
+                    "source": source_pdf,
+                    "source_pdf": source_pdf,
+                    "source_sha256": str(source_cfg.get("sha256", "")),
+                    "organizer_level": int(node.get("organizer_level", 1)),
+                    "organizer_role": role,
+                    "source_anchor": first_source_line(key),
+                    "children_count": len(children),
+                    "direct_organizer_count": len(organizer_children),
+                    "direct_atom_count": len(atom_children),
+                    "descendant_atom_count": len(validator_descendant_atoms(nodes, key)),
+                    "review_status": "passed",
+                }
+                for field, expected in expected_scalars.items():
+                    actual = frontmatter_scalar(text, field)
+                    if actual != expected:
+                        errors.append({
+                            "code": "organizer-metadata-mismatch",
+                            "node": key,
+                            "field": field,
+                            "expected": expected,
+                            "actual": actual,
+                        })
+                hierarchy: list[str] = []
+                hierarchy_cursor: str | None = key
+                hierarchy_seen: set[str] = set()
+                while hierarchy_cursor is not None and hierarchy_cursor in nodes and hierarchy_cursor not in hierarchy_seen:
+                    hierarchy_seen.add(hierarchy_cursor)
+                    hierarchy.append(str(nodes[hierarchy_cursor].get("title", "")))
+                    parent_value = nodes[hierarchy_cursor].get("parent_key")
+                    hierarchy_cursor = str(parent_value) if parent_value is not None else None
+                hierarchy.reverse()
+                expected_ranges = [list(item) for item in node.get("_heading_ranges", [])]
+                if frontmatter_list(text, "hierarchy_path") != hierarchy:
+                    errors.append({"code": "organizer-metadata-mismatch", "node": key, "field": "hierarchy_path", "expected": hierarchy})
+                if frontmatter_list(text, "heading_ranges") != expected_ranges:
+                    errors.append({"code": "organizer-metadata-mismatch", "node": key, "field": "heading_ranges", "expected": expected_ranges})
+                updated_at = frontmatter_scalar(text, "updated_at")
+                if not isinstance(updated_at, str) or re.fullmatch(r"\d{4}-\d{2}-\d{2}", updated_at) is None:
+                    errors.append({"code": "organizer-metadata-mismatch", "node": key, "field": "updated_at", "actual": updated_at})
             nonblank = [(index, line.strip()) for index, line in enumerate(body_lines, start=1) if line.strip()]
             links: list[Path] = []
             if rendering_contract_enabled:
                 content = nonblank
                 cursor = 0
+                has_organizer_child = any(
+                    nodes.get(str(child), {}).get("layer") == "organizer"
+                    for child in node.get("_children", [])
+                )
+                if organizer_self_heading_policy == "nested-organizer-note" and has_organizer_child:
+                    if not content:
+                        errors.append({"code": "organizer-self-heading-missing", "node": key})
+                    else:
+                        line_number, line = content[cursor]
+                        expected_heading = f"{'#' * min(max(int(node.get('organizer_level', 1)), 1), 6)} {node.get('title')}"
+                        if line != expected_heading:
+                            errors.append({"code": "organizer-self-heading-invalid", "node": key, "line": line_number})
+                        cursor += 1
                 for child_key in node.get("_children", []):
                     child = nodes.get(child_key)
                     if child is None:
@@ -2302,7 +2793,10 @@ def validate_graph(
                             continue
                         line_number, line = content[cursor]
                         root_level = int(roots[0].get("organizer_level", 1)) if roots else 1
-                        depth = min(max(int(child.get("organizer_level", root_level + 1)) - root_level, 1), 6)
+                        if organizer_self_heading_policy == "nested-organizer-note" and has_organizer_child:
+                            depth = min(max(int(child.get("organizer_level", root_level + 1)), 1), 6)
+                        else:
+                            depth = min(max(int(child.get("organizer_level", root_level + 1)) - root_level, 1), 6)
                         expected_heading = f"{'#' * depth} {child.get('title')}"
                         if line != expected_heading:
                             errors.append({"code": "organizer-child-heading-invalid", "node": key, "child": child_key, "line": line_number})
@@ -2337,6 +2831,104 @@ def validate_graph(
             ]
             if links != expected_paths:
                 errors.append({"code": "organizer-link-order-or-coverage", "node": key, "expected": [str(item) for item in expected_paths], "actual": [str(item) for item in links]})
+
+    derived_keys = [str(value) for value in manifest.get("derived_order", [])] if isinstance(manifest.get("derived_order", []), list) else []
+    index_specs = manifest.get("derived_indexes", [])
+    indexed: list[str] = []
+    if not isinstance(index_specs, list):
+        errors.append({"code": "derived-indexes-invalid"})
+        index_specs = []
+    for index, spec in enumerate(index_specs):
+        if not isinstance(spec, dict) or spec.get("category") not in DERIVED_ATOM_CATEGORIES or not isinstance(spec.get("derived_keys"), list):
+            errors.append({"code": "derived-index-invalid", "index": index})
+            continue
+        keys = [str(value) for value in spec["derived_keys"]]
+        if any(key not in nodes or nodes[key].get("category") != spec.get("category") for key in keys):
+            errors.append({"code": "derived-index-keys-invalid", "index": index})
+        expected_key_order = sorted(
+            keys,
+            key=lambda key: (
+                int(nodes.get(key, {}).get("_source_range", (10**12,))[0]),
+                str(key),
+            ),
+        )
+        if keys != expected_key_order:
+            errors.append({"code": "derived-index-source-order-invalid", "index": index, "expected": expected_key_order})
+        indexed.extend(keys)
+        try:
+            filename = normalize_relative_path(spec.get("filename"), f"derived_indexes[{index}].filename")
+            path = (book_root / filename).resolve()
+            path.relative_to(book_root)
+        except Exception as exc:
+            errors.append({"code": "derived-index-path-invalid", "index": index, "detail": str(exc)})
+            continue
+        if not path.is_file():
+            errors.append({"code": "derived-index-file-missing", "index": index, "path": str(path)})
+            continue
+        index_text = path.read_text(encoding="utf-8-sig")
+        if organizer_metadata_contract_enabled:
+            properties = frontmatter_keys(index_text)
+            required = {
+                "title", "node_type", "organizer_key",
+                "parent_organizer_key", "parent_organizer",
+                "parent_organizer_file", "source", "source_pdf",
+                "source_sha256", "organizer_level", "organizer_role",
+                "hierarchy_path", "heading_ranges", "source_anchor",
+                "children_count", "direct_organizer_count",
+                "direct_atom_count", "descendant_atom_count",
+                "updated_at", "review_status",
+            }
+            missing = sorted(required - properties)
+            if missing:
+                errors.append({"code": "derived-index-metadata-missing", "index": index, "fields": missing})
+            chapter = nodes.get(str(spec.get("chapter_key")))
+            if chapter is None:
+                errors.append({"code": "derived-index-chapter-invalid", "index": index})
+            else:
+                source_cfg = profile.get("source", {}) if isinstance(profile.get("source"), dict) else {}
+                source_pdf = Path(str(source_cfg.get("path", ""))).name
+                source_anchors = [int(nodes[key]["_source_range"][0]) for key in keys if key in nodes and "_source_range" in nodes[key]]
+                expected_scalars = {
+                    "title": str(spec.get("title", "")),
+                    "node_type": "organizer",
+                    "organizer_key": f"derived-index:{spec.get('chapter_key')}:{spec.get('category')}",
+                    "parent_organizer_key": str(spec.get("chapter_key")),
+                    "parent_organizer": str(chapter.get("title", "")),
+                    "parent_organizer_file": str(chapter.get("_filename", chapter.get("filename", ""))),
+                    "source": source_pdf,
+                    "source_pdf": source_pdf,
+                    "source_sha256": str(source_cfg.get("sha256", "")),
+                    "organizer_level": int(chapter.get("organizer_level", 1)) + 1,
+                    "organizer_role": "leaf",
+                    "source_anchor": min(source_anchors) if source_anchors else None,
+                    "children_count": len(keys),
+                    "direct_organizer_count": 0,
+                    "direct_atom_count": len(keys),
+                    "descendant_atom_count": len(keys),
+                    "review_status": "passed",
+                }
+                for field, expected in expected_scalars.items():
+                    actual = frontmatter_scalar(index_text, field)
+                    if actual != expected:
+                        errors.append({
+                            "code": "derived-index-metadata-mismatch",
+                            "index": index,
+                            "field": field,
+                            "expected": expected,
+                            "actual": actual,
+                        })
+        targets = [resolve_link(match.group(1), path, book_root) for match in MARKDOWN_EMBED_RE.finditer(index_text) if is_markdown_note_embed(match.group(1))]
+        expected_targets = [(book_root / str(nodes[key].get("_filename", nodes[key].get("filename", "")))).resolve() for key in keys if key in nodes]
+        if targets != expected_targets:
+            errors.append({"code": "derived-index-link-order-or-coverage", "index": index})
+    # ``derived_order`` is one source-ordered stream, whereas index notes are
+    # intentionally grouped by chapter and category.  Requiring concatenated
+    # index order to equal the mixed stream rejects every book in which a
+    # formula appears before a later concept.  Coverage is set-based here;
+    # source order is checked for the global stream above and inside each
+    # individual index immediately above.
+    if set(indexed) != set(derived_keys) or len(indexed) != len(set(indexed)):
+        errors.append({"code": "derived-index-coverage-invalid", "expected": derived_keys, "actual": indexed})
 
     relations = manifest.get("relations", [])
     if not isinstance(relations, list):
@@ -2476,7 +3068,8 @@ def validate_graph(
     counts = {
         "nodes": len(nodes),
         "organizers": len(organizers),
-        "atoms": len(atoms),
+        "atoms": sum(node.get("coverage_role", "primary") == "primary" for node in atoms),
+        "derived_atoms": sum(node.get("coverage_role") == "derived" for node in atoms),
         "atom_categories": {
             category: sum(node.get("category") == category for node in atoms)
             for category in ATOM_CATEGORIES

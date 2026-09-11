@@ -37,6 +37,7 @@ def parser() -> argparse.ArgumentParser:
     concepts.add_argument("--output-dir", type=Path, required=True)
     concepts.add_argument("--max-chars", type=int, default=80000)
     concepts.add_argument("--concept-registry", type=Path)
+    concepts.add_argument("--atomization-final", type=Path, help="Run before Markdown materialization using stable virtual atom keys")
     concepts.add_argument("--overwrite", action="store_true")
 
     check_concepts = commands.add_parser("validate-concepts", help="Validate round-one concept decisions")
@@ -87,7 +88,7 @@ def main() -> int:
     args = parser().parse_args()
     try:
         if args.command == "prepare-concepts":
-            payload = prepare_concept_jobs(args.manifest, max_chars=args.max_chars, registry=args.concept_registry)
+            payload = prepare_concept_jobs(args.manifest, max_chars=args.max_chars, registry=args.concept_registry, atomization_final_path=args.atomization_final)
             path = args.output_dir.expanduser().resolve() / "concept-jobs.json"
             write_json(path, payload, args.overwrite)
             print(json.dumps({"status": "prepared", "path": str(path), "jobs": len(payload["jobs"])}, ensure_ascii=False))

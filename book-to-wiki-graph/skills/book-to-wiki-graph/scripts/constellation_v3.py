@@ -8,8 +8,12 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Iterable
 
+from compact_layout import CARD_GAP, REGION_GAP, RIGHT_GAP, DOWN_GAP, group_box, leaf_box
+
 from build_canvas import (
     ATOM_COLORS,
+    ATOM_HEIGHT,
+    ATOM_WIDTH,
     BACKBONE_COLOR,
     CHAPTER_HEIGHT,
     CHAPTER_WIDTH,
@@ -39,7 +43,6 @@ PORTAL_WIDTH, PORTAL_HEIGHT = 300, 94
 MAP_HUB_WIDTH, MAP_HUB_HEIGHT = 390, 150
 REGION_MIN_WIDTH, REGION_MIN_HEIGHT = 760, 580
 SHORT_TITLE_LIMIT = 34
-
 
 def compact_title(value: str, limit: int = SHORT_TITLE_LIMIT) -> str:
     """Keep Canvas labels readable without changing source metadata."""
@@ -144,14 +147,17 @@ class CanvasBundleBuilderV3(CanvasBundleBuilder):
         category = str(node["category"])
         prefix = "↗ 外章" if external else ("✦" if self.is_core(key) else "·")
         card["text"] = self.link_text(
-            f"{prefix} {self.atom_label(category)} · {self.display_title(key)}",
+            f"{prefix} {self.atom_label(node)} · {self.display_title(key)}",
             self.note_target(key),
             canvas_path,
         )
         return card
 
     @staticmethod
-    def atom_label(category: str) -> str:
+    def atom_label(node: dict[str, Any]) -> str:
+        if node.get("category") == "scenario" and node.get("scenario_role") == "reflection-question":
+            return "思考题"
+        category = str(node["category"])
         return {
             "knowledge": "知识点", "worked-example": "方法例题",
             "exercise": "习题", "scenario": "情景引入",
@@ -227,61 +233,6 @@ class CanvasBundleBuilderV3(CanvasBundleBuilder):
             "label": label, "color": SOURCE_ORDER_COLOR, "fromEnd": "none", "toEnd": "arrow",
         }
 
-    def layout_cluster(self, atom_keys: list[str], extra_count: int = 0) -> tuple[dict[str, tuple[int, int]], list[tuple[int, int, int, int]]]:
-        occupied: list[tuple[int, int, int, int]] = []
-        positions: dict[str, tuple[int, int]] = {}
-        ordered = self.topological_core_order(atom_keys, [
-            item for item in self.relations
-            if str(item.get("from_key")) in atom_keys and str(item.get("to_key")) in atom_keys
-        ])
-        remaining = [key for key in atom_keys if key not in ordered]
-        for index, key in enumerate([*ordered, *remaining]):
-            radius = 115 + 155 * math.sqrt(index)
-            angle = index * GOLDEN_ANGLE - math.pi / 2
-            size = (CORE_WIDTH, CORE_HEIGHT) if self.is_core(key) else (250, 66)
-            positions[key] = collision_free(
-                (radius * math.cos(angle) - size[0] / 2, radius * math.sin(angle) - size[1] / 2),
-                size, occupied, index,
-            )
-        # Reserve a compact outer arc for exercise/detail entries.
-        for index in range(extra_count):
-            angle = math.pi / 4 + index * GOLDEN_ANGLE
-            collision_free(
-                (430 * math.cos(angle), 430 * math.sin(angle)),
-                (max(EXERCISE_WIDTH, PORTAL_WIDTH), max(EXERCISE_HEIGHT, PORTAL_HEIGHT)),
-                occupied, len(atom_keys) + index,
-            )
-        return positions, occupied
-
-    def place_regions(self, payloads: list[dict[str, Any]], radius_floor: float = 980.0) -> None:
-        max_dimension = max(
-            max(item["bounds"][2] - item["bounds"][0], item["bounds"][3] - item["bounds"][1])
-            for item in payloads
-        )
-        radius = 0.0 if len(payloads) == 1 else max(radius_floor, max_dimension * len(payloads) / (2 * math.pi) + 180)
-        for _ in range(14):
-            placed: list[tuple[int, int, int, int]] = []
-            collision = False
-            for index, item in enumerate(payloads):
-                if len(payloads) == 1:
-                    center_x, center_y = 0.0, 620.0
-                else:
-                    angle = -math.pi / 2 + 2 * math.pi * index / len(payloads)
-                    center_x, center_y = radius * math.cos(angle), radius * math.sin(angle)
-                width = max(REGION_MIN_WIDTH, item["bounds"][2] - item["bounds"][0])
-                height = max(REGION_MIN_HEIGHT, item["bounds"][3] - item["bounds"][1])
-                rect = (
-                    round(center_x - width / 2), round(center_y - height / 2),
-                    round(center_x + width / 2), round(center_y + height / 2),
-                )
-                if any(overlaps(rect, other, margin=150) for other in placed):
-                    collision = True
-                placed.append(rect)
-                item["placement"] = rect
-            if not collision:
-                return
-            radius *= 1.15
-
     def representative_atom(self, concept_key: str, visible: set[str]) -> str | None:
         candidates = []
         for link in self.links_by_concept.get(concept_key, []):
@@ -346,266 +297,189 @@ class CanvasBundleBuilderV3(CanvasBundleBuilder):
                 membership_count += 1
         return atom_relation_count, concept_relation_count, membership_count
 
-    def add_isolation_fallback(self, scope: str, atom_keys: list[str], substantive: set[str], edges: list[dict[str, Any]]) -> int:
-        incident = {str(endpoint) for edge in edges for endpoint in (edge.get("fromNode"), edge.get("toNode"))}
-        ordered = sorted(atom_keys, key=lambda key: (self.source_starts[key], key))
-        fallback = 0
-        for key in ordered:
-            node_id = stable_id("card", key)
-            if node_id in incident or len(ordered) < 2:
-                continue
-            index = ordered.index(key)
-            neighbour = ordered[index - 1] if index else ordered[1]
-            left, right = (neighbour, key) if self.source_starts[neighbour] <= self.source_starts[key] else (key, neighbour)
-            edge = self.navigation_edge(scope, f"reading:{left}:{right}", stable_id("card", left), stable_id("card", right), "书序")
-            if edge["id"] not in {item["id"] for item in edges}:
-                edges.append(edge)
-                fallback += 1
-                incident.update((edge["fromNode"], edge["toNode"]))
-        return fallback
-
-    def group_payload(self, label: str, atom_keys: list[str], extra_keys: list[str]) -> dict[str, Any]:
-        positions, occupied = self.layout_cluster(atom_keys)
-        extras: dict[str, tuple[int, int]] = {}
-        for index, key in enumerate(extra_keys):
-            angle = math.pi / 2 + index * GOLDEN_ANGLE
-            extras[key] = collision_free(
-                (430 * math.cos(angle) - PORTAL_WIDTH / 2, 430 * math.sin(angle) - PORTAL_HEIGHT / 2),
-                (PORTAL_WIDTH, PORTAL_HEIGHT), occupied, len(atom_keys) + index,
-            )
-        min_x = min((item[0] for item in occupied), default=-REGION_MIN_WIDTH // 2) - GROUP_PADDING
-        min_y = min((item[1] for item in occupied), default=-REGION_MIN_HEIGHT // 2) - GROUP_PADDING
-        max_x = max((item[2] for item in occupied), default=REGION_MIN_WIDTH // 2) + GROUP_PADDING
-        max_y = max((item[3] for item in occupied), default=REGION_MIN_HEIGHT // 2) + GROUP_PADDING
-        return {"label": label, "atoms": atom_keys, "extras": extra_keys, "positions": positions, "extra_positions": extras, "bounds": (min_x, min_y, max_x, max_y)}
-
-    def chapter_canvas(self, canvas_path: Path, chapter_key: str, overview_path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
-        all_keys = descendants(self.nodes, chapter_key)[1:]
-        source_atoms = sorted((key for key in all_keys if self.nodes[key].get("layer") == "atom"), key=lambda key: (self.source_starts[key], key))
-        visible_atoms = [key for key in source_atoms if self.visible_atom(key)]
-        visible_set = set(visible_atoms)
-        sections = self.section_keys_by_chapter[chapter_key]
-        region_of = {key: self.section_for(chapter_key, key) for key in visible_atoms}
-        exercise_atoms = [key for key in source_atoms if self.nodes[key].get("category") == "exercise"]
-        exercise_count_by_section = Counter(self.section_for(chapter_key, key) for key in exercise_atoms)
-        payloads = []
-        for section in sections:
-            atoms = [key for key in visible_atoms if region_of[key] == section]
-            title = "章引入" if section == "__chapter_intro__" else str(self.nodes[section]["title"])
-            portal_key = f"portal:{chapter_key}:{section}"
-            payload = self.group_payload(title, atoms, [portal_key])
-            payload.update({"key": section, "portal_key": portal_key})
-            payloads.append(payload)
-        self.place_regions(payloads)
-        groups: list[dict[str, Any]] = []
-        cards: list[dict[str, Any]] = []
-        for order, payload in enumerate(payloads, start=1):
-            rect, local = payload["placement"], payload["bounds"]
-            offset_x, offset_y = rect[0] - local[0], rect[1] - local[1]
-            section = payload["key"]
-            groups.append({
-                "id": stable_id("region-v3", f"{chapter_key}:{section}"), "type": "group",
-                "label": f"{order:02d} · {payload['label']}", "x": rect[0], "y": rect[1],
-                "width": rect[2] - rect[0], "height": rect[3] - rect[1],
-            })
-            for key, position in payload["positions"].items():
-                cards.append(self.atom_card(key, canvas_path, (position[0] + offset_x, position[1] + offset_y)))
-            portal_position = payload["extra_positions"][payload["portal_key"]]
-            cards.append(self.section_portal_card(
-                chapter_key, section, canvas_path,
-                (portal_position[0] + offset_x, portal_position[1] + offset_y),
-                len(payload["atoms"]), exercise_count_by_section.get(section, 0),
-            ))
-        cards.append(self.map_hub(chapter_key, str(self.nodes[chapter_key]["title"]), "章节主线 · 顺时针进入各知识星域", (-MAP_HUB_WIDTH // 2, -MAP_HUB_HEIGHT // 2)))
-        cards.extend([
-            {"id": stable_id("utility", f"{chapter_key}:back:v3"), "type": "text", "text": self.link_text("← 返回全书知识星图", overview_path, canvas_path), "x": -620, "y": -55, "width": 300, "height": 86},
-            {"id": stable_id("utility", f"{chapter_key}:legend:v3"), "type": "text", "text": "**阅读图例**\n\n✦ 主线 · 彩色卡片为原子\n灰色书序只用于消除视觉孤岛\n练习下沉到小节图", "x": 320, "y": -86, "width": 410, "height": 150},
-        ])
-        occupied = [rectangle((int(card["x"]), int(card["y"])), (int(card["width"]), int(card["height"]))) for card in cards]
-        hub_keys = self.strict_concept_hubs(visible_set, region_of)
-        for index, concept in enumerate(sorted(hub_keys, key=lambda key: (int(self.concepts[key].get("first_source_order", 0)), key))):
-            endpoints = []
-            for link in self.links_by_concept.get(concept, []):
-                card = next((item for item in cards if item["id"] == stable_id("card", str(link.get("atom_key")))), None)
-                if card is not None:
-                    endpoints.append(card)
-            if endpoints:
-                preferred = (
-                    sum(center(item)[0] for item in endpoints) / len(endpoints) - CONCEPT_WIDTH / 2,
-                    sum(center(item)[1] for item in endpoints) / len(endpoints) - CONCEPT_HEIGHT / 2,
-                )
-            else:
-                preferred = (index * 280, 210)
-            position = collision_free(preferred, (CONCEPT_WIDTH, CONCEPT_HEIGHT), occupied, len(cards) + index)
-            cards.append(self.concept_card(concept, position))
-        edges: list[dict[str, Any]] = []
-        atom_edges, concept_edges, membership_edges = self.add_semantic_edges(chapter_key, visible_set, hub_keys, cards, edges)
-        hub_id = stable_id("map-hub", chapter_key)
-        for payload in payloads:
-            portal_id = stable_id("section-portal", f"{chapter_key}:{payload['key']}")
-            edges.append(self.navigation_edge(chapter_key, f"portal:{payload['key']}", hub_id, portal_id))
-        fallback_edges = self.add_isolation_fallback(chapter_key, visible_atoms, {stable_id("card", key) for key in visible_atoms}, edges)
-        all_nodes = [*groups, *cards]
-        counts = {
-            "cards": len(cards), "groups": len(groups), "edges": len(edges),
-            "internal_atoms": len(visible_atoms), "source_atoms": len(source_atoms),
-            "knowledge_atoms": sum(self.nodes[key].get("category") == "knowledge" for key in visible_atoms),
-            "scenario_atoms": sum(self.nodes[key].get("category") == "scenario" for key in visible_atoms),
-            "featured_examples": sum(self.nodes[key].get("category") == "worked-example" for key in visible_atoms),
-            "exercise_atoms_summarized": len(exercise_atoms), "exercise_portals": len(sections),
-            "exercise_relation_edges": 0, "concept_hubs": len(hub_keys),
-            "atom_relation_edges": atom_edges, "concept_relation_edges": concept_edges,
-            "concept_membership_edges": membership_edges, "source_order_fallback_edges": fallback_edges,
-            "navigation_nodes": 3 + len(sections), "regions": len(groups), "landmarks": 0,
-        }
-        return {"nodes": all_nodes, "edges": edges}, {"counts": counts, "bounds": bounds_for(all_nodes), "visual_quality": visual_quality(cards, edges)}
-
-    def subgroup_for(self, section_key: str, atom_or_owner: str) -> str:
-        if section_key == "__chapter_intro__":
-            return "__direct__"
-        cursor = atom_or_owner
-        parent = self.nodes[cursor].get("parent_key")
-        if parent is not None and str(parent) == section_key:
-            return cursor if self.nodes[cursor].get("layer") == "organizer" else "__direct__"
-        while parent is not None and str(parent) != section_key:
-            cursor = str(parent)
-            parent = self.nodes[cursor].get("parent_key")
-        return cursor if parent is not None else "__direct__"
-
-    def section_canvas(self, canvas_path: Path, chapter_key: str, section_key: str, chapter_path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
-        if section_key == "__chapter_intro__":
-            source_atoms = [str(key) for key in self.nodes[chapter_key].get("children", []) if self.nodes[str(key)].get("layer") == "atom"]
-            section_title = "章引入"
-            note_key = chapter_key
-        else:
-            source_atoms = [key for key in descendants(self.nodes, section_key)[1:] if self.nodes[key].get("layer") == "atom"]
-            section_title = str(self.nodes[section_key]["title"])
-            note_key = section_key
+    def compact_map(
+        self, canvas_path: Path, chapter_key: str, section_key: str | None, back_path: Path,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        chapter_level = section_key is None
+        root = chapter_key if chapter_level or section_key == "__chapter_intro__" else str(section_key)
+        scope = chapter_key if chapter_level else f"{chapter_key}:{section_key}"
+        source_atoms = (
+            [str(key) for key in self.nodes[chapter_key].get("children", []) if self.nodes[str(key)].get("layer") == "atom"]
+            if section_key == "__chapter_intro__" else
+            [key for key in descendants(self.nodes, root)[1:] if self.nodes[key].get("layer") == "atom"]
+        )
         source_atoms.sort(key=lambda key: (self.source_starts[key], key))
-        visible_atoms = [key for key in source_atoms if self.visible_atom(key)]
-        visible_set = set(visible_atoms)
+        visible = [key for key in source_atoms if self.visible_atom(key)]
+        visible_set = set(visible)
         exercises = [key for key in source_atoms if self.nodes[key].get("category") == "exercise"]
-        owner_by_exercise, exercises_by_owner = self.exercise_owners(chapter_key, exercises)
-        # Resolve each collapsed exercise organizer to one primary knowledge
-        # anchor before layout. Keeping both cards in the same local star
-        # region removes the long line fan produced by a separate exercise belt.
-        anchors_by_owner: dict[str, Counter[str]] = defaultdict(Counter)
-        for relation in self.relations:
-            left, right = str(relation.get("from_key")), str(relation.get("to_key"))
-            if right in owner_by_exercise and left in visible_set and self.nodes[left].get("category") == "knowledge":
-                anchors_by_owner[owner_by_exercise[right]][left] += 1
-            elif left in owner_by_exercise and right in visible_set and self.nodes[right].get("category") == "knowledge":
-                anchors_by_owner[owner_by_exercise[left]][right] += 1
-        primary_anchor: dict[str, str] = {}
-        for owner in exercises_by_owner:
-            candidates = anchors_by_owner.get(owner, Counter())
-            if candidates:
-                primary_anchor[owner] = min(
-                    candidates,
-                    key=lambda key: (-candidates[key], abs(self.source_starts[key] - self.source_starts[owner]), key),
-                )
-            elif visible_atoms:
-                primary_anchor[owner] = min(
-                    visible_atoms,
-                    key=lambda key: (abs(self.source_starts[key] - self.source_starts[owner]), key),
-                )
-        owner_group = {
-            owner: self.subgroup_for(section_key, anchor)
-            for owner, anchor in primary_anchor.items()
-        }
-        subgroup_keys: list[str] = []
-        for key in visible_atoms:
-            subgroup = self.subgroup_for(section_key, key)
-            if subgroup not in subgroup_keys:
-                subgroup_keys.append(subgroup)
-        if any(owner not in owner_group for owner in exercises_by_owner):
-            subgroup_keys.append("__exercises__")
-        if not subgroup_keys:
-            subgroup_keys = ["__exercises__" if exercises_by_owner else "__direct__"]
-        payloads = []
-        for subgroup in subgroup_keys:
-            atoms = [key for key in visible_atoms if self.subgroup_for(section_key, key) == subgroup]
-            owners = [
-                key for key in exercises_by_owner
-                if owner_group.get(key, "__exercises__") == subgroup
-            ]
-            if subgroup == "__direct__":
-                label = section_title
-            elif subgroup == "__exercises__":
-                label = "练习与习题"
-            else:
-                label = str(self.nodes[subgroup]["title"])
-            payload = self.group_payload(label, atoms, owners)
-            payload.update({"key": subgroup, "owners": owners})
-            payloads.append(payload)
-        self.place_regions(payloads, radius_floor=900.0)
-        groups: list[dict[str, Any]] = []
-        cards: list[dict[str, Any]] = []
-        for order, payload in enumerate(payloads, start=1):
-            rect, local = payload["placement"], payload["bounds"]
-            offset_x, offset_y = rect[0] - local[0], rect[1] - local[1]
-            groups.append({
-                "id": stable_id("detail-region", f"{chapter_key}:{section_key}:{payload['key']}"), "type": "group",
-                "label": f"{order:02d} · {payload['label']}", "x": rect[0], "y": rect[1],
-                "width": rect[2] - rect[0], "height": rect[3] - rect[1],
-            })
-            for key, position in payload["positions"].items():
-                cards.append(self.atom_card(key, canvas_path, (position[0] + offset_x, position[1] + offset_y)))
-            for owner, position in payload["extra_positions"].items():
-                cards.append(self.exercise_entry_card(owner, len(exercises_by_owner[owner]), canvas_path, (position[0] + offset_x, position[1] + offset_y)))
-        hub_link = self.link_text(compact_title(section_title, 40), self.note_target(note_key), canvas_path)
-        scope = f"{chapter_key}:{section_key}"
-        cards.append(self.map_hub(scope, section_title, "小节细图 · 原子、方法例题与练习入口", (-MAP_HUB_WIDTH // 2, -MAP_HUB_HEIGHT // 2), link=hub_link))
-        cards.extend([
-            {"id": stable_id("utility", f"{scope}:back"), "type": "text", "text": self.link_text("← 返回章节知识星图", chapter_path, canvas_path), "x": -610, "y": -50, "width": 290, "height": 82},
-            {"id": stable_id("utility", f"{scope}:legend"), "type": "text", "text": "**细图图例**\n\n知识主线向右推进\n练习入口只保留一条主归属边", "x": 320, "y": -65, "width": 360, "height": 116},
-        ])
-        region_of = {key: self.subgroup_for(section_key, key) for key in visible_atoms}
-        occupied = [rectangle((int(card["x"]), int(card["y"])), (int(card["width"]), int(card["height"]))) for card in cards]
-        hub_keys = self.strict_concept_hubs(visible_set, region_of)
-        for index, concept in enumerate(sorted(hub_keys, key=lambda key: (int(self.concepts[key].get("first_source_order", 0)), key))):
-            linked = []
-            for link in self.links_by_concept.get(concept, []):
-                card = next((item for item in cards if item["id"] == stable_id("card", str(link.get("atom_key")))), None)
-                if card is not None:
-                    linked.append(card)
-            preferred = (
-                sum(center(item)[0] for item in linked) / len(linked) - CONCEPT_WIDTH / 2,
-                sum(center(item)[1] for item in linked) / len(linked) - CONCEPT_HEIGHT / 2,
-            ) if linked else (index * 270, 190)
-            position = collision_free(preferred, (CONCEPT_WIDTH, CONCEPT_HEIGHT), occupied, len(cards) + index)
-            cards.append(self.concept_card(concept, position))
+        owner_by_exercise, by_owner = self.exercise_owners(chapter_key, exercises)
+        cards = [self.atom_card(key, canvas_path, (0, 0)) for key in visible]
+        owners = {stable_id("card",key): str(self.nodes[key]["parent_key"]) for key in visible}
+        order = {stable_id("card",key): (self.source_starts[key],key) for key in visible}
+        region_of = {key: self.section_for(chapter_key,key) for key in visible}
+        hub_keys = self.strict_concept_hubs(visible_set,region_of)
+
+        def ancestors(key: str) -> list[str]:
+            chain = [key]
+            while chain[-1] != root:
+                parent = self.nodes[chain[-1]].get("parent_key")
+                if parent is None:
+                    raise ValueError(f"Canvas node is outside its map: {key}")
+                chain.append(str(parent))
+            return chain
+
+        for concept in sorted(hub_keys):
+            grounded = [str(link["atom_key"]) for link in self.links_by_concept[concept] if str(link["atom_key"]) in visible_set]
+            chains = [ancestors(str(self.nodes[key]["parent_key"])) for key in grounded]
+            common = next(key for key in chains[0] if all(key in chain for chain in chains))
+            card = self.concept_card(concept,(0,0))
+            cards.append(card)
+            owners[card["id"]] = common
+            order[card["id"]] = (min(self.source_starts[key] for key in grounded),concept)
         edges: list[dict[str, Any]] = []
-        atom_edges, concept_edges, membership_edges = self.add_semantic_edges(scope, visible_set, hub_keys, cards, edges)
-        # One primary practice edge per exercise organizer. Detailed atom-to-exercise
-        # evidence remains authoritative in JSON and no longer becomes a line fan.
-        exercise_edges = 0
-        for owner in sorted(exercises_by_owner, key=lambda key: (self.source_starts[key], key)):
-            anchor = primary_anchor.get(owner)
-            if anchor is None:
+        atom_edges, concept_edges, concept_memberships = self.add_semantic_edges(scope,visible_set,hub_keys,cards,edges)
+        portals: dict[str,str] = {}
+        if chapter_level:
+            for section in self.section_keys_by_chapter[chapter_key]:
+                section_owner = chapter_key if section == "__chapter_intro__" else section
+                atoms = [key for key in visible if region_of[key] == section]
+                card = self.section_portal_card(chapter_key,section,canvas_path,(0,0),len(atoms),
+                    sum(self.section_for(chapter_key,key) == section for key in exercises))
+                cards.append(card)
+                owners[card["id"]] = section_owner
+                order[card["id"]] = (self.source_starts[section_owner]-1,card["id"])
+                portals[section_owner] = card["id"]
+
+        # Practice anchors must be knowledge, even when the nearest source text
+        # is a reflection question. A proximity-only fallback states ownership,
+        # not an unreviewed practice relation.
+        practice_edges = ownership_practice = 0
+        if not chapter_level:
+            support: dict[str,Counter[str]] = defaultdict(Counter)
+            for relation in self.relations:
+                left,right = str(relation["from_key"]),str(relation["to_key"])
+                for teaching,exercise in ((left,right),(right,left)):
+                    if exercise in owner_by_exercise and teaching in visible_set and self.nodes[teaching]["category"] == "knowledge":
+                        support[owner_by_exercise[exercise]][teaching] += 1
+            knowledge = [key for key in visible if self.nodes[key]["category"] == "knowledge"]
+            for owner in sorted(by_owner,key=lambda key:(self.source_starts[key],key)):
+                card = self.exercise_entry_card(owner,len(by_owner[owner]),canvas_path,(0,0))
+                cards.append(card)
+                owners[card["id"]] = owner
+                order[card["id"]] = (self.source_starts[owner]+0.5,owner)
+                candidates = support.get(owner,Counter())
+                if candidates:
+                    anchor = min(candidates,key=lambda key:(-candidates[key],abs(self.source_starts[key]-self.source_starts[owner]),key))
+                    label = f"练习 · {len(by_owner[owner])}题"
+                    practice_edges += 1
+                elif knowledge:
+                    anchor = min(knowledge,key=lambda key:(
+                        0 if str(self.nodes[key]["parent_key"]) == owner else 1,
+                        abs(self.source_starts[key]-self.source_starts[owner]),key))
+                    label = f"归属 · {len(by_owner[owner])}题"
+                    ownership_practice += 1
+                else:
+                    continue
+                edges.append(self.exercise_edge(scope,owner,stable_id("card",anchor),card["id"],label,"primary"))
+
+        # Symmetric edges have no prerequisite direction. Orient their drawing
+        # consistently by reading order without modifying authoritative JSON.
+        for edge in edges:
+            if edge.get("fromEnd") == "none" and edge.get("toEnd") == "none":
+                if order[edge["fromNode"]] > order[edge["toNode"]]:
+                    edge["fromNode"],edge["toNode"] = edge["toNode"],edge["fromNode"]
+        incident = {str(value) for edge in edges for value in (edge["fromNode"],edge["toNode"])}
+        memberships = 0
+        for key in visible:
+            node_id = stable_id("card",key)
+            if node_id in incident:
                 continue
-            edges.append(self.exercise_edge(scope, owner, stable_id("card", anchor), stable_id("exercise-entry", owner), f"练习 · {len(exercises_by_owner[owner])}题", "primary"))
-            exercise_edges += 1
-        # A single neutral radial entry per detail region creates map-like zoom
-        # navigation without pretending to be a semantic relation.
-        map_hub_id = stable_id("map-hub", scope)
-        for payload in payloads:
-            candidates = [stable_id("card", key) for key in payload["atoms"]]
-            candidates += [stable_id("exercise-entry", key) for key in payload["owners"]]
-            if candidates:
-                edges.append(self.navigation_edge(scope, f"region:{payload['key']}", map_hub_id, candidates[0]))
-        fallback_edges = self.add_isolation_fallback(scope, visible_atoms, {stable_id("card", key) for key in visible_atoms}, edges)
-        all_nodes = [*groups, *cards]
+            owner = str(self.nodes[key]["parent_key"])
+            if owner not in portals:
+                portal_id = stable_id("organizer-entry",f"{scope}:{owner}")
+                cards.append({
+                    "id":portal_id,"type":"text",
+                    "text":self.link_text(f"§ {self.display_title(owner)}",self.note_target(owner),canvas_path),
+                    "x":0,"y":0,"width":260,"height":66,
+                })
+                owners[portal_id] = owner
+                order[portal_id] = (self.source_starts[owner]+0.5,portal_id)
+                portals[owner] = portal_id
+            edges.append({
+                "id":stable_id("edge",f"{scope}:membership:{key}"),
+                "fromNode":node_id,"toNode":portals[owner],"fromSide":"bottom","toSide":"top",
+                "label":"归属","color":SOURCE_ORDER_COLOR,"fromEnd":"none","toEnd":"arrow",
+            })
+            memberships += 1
+        cards_by_id = {str(card["id"]):card for card in cards}
+        group_keys = {key for owner in owners.values() for key in ancestors(owner)}
+        children: dict[str,list[str]] = defaultdict(list)
+        for key in group_keys:
+            if key != root:
+                children[str(self.nodes[key]["parent_key"])].append(key)
+        direct_cards: dict[str,list[str]] = defaultdict(list)
+        for card_id, owner in owners.items():
+            direct_cards[owner].append(card_id)
+        group_records = []
+
+        def compose(key: str):
+            items = [(self.source_starts[child],child,False) for child in children.get(key,[])]
+            items += [(order[card_id][0],card_id,True) for card_id in direct_cards.get(key,[])]
+            boxes = [leaf_box(cards_by_id[value]) if is_card else compose(value)
+                     for _,value,is_card in sorted(items)]
+            group_id = stable_id("organizer-group-v4",f"{scope}:{key}")
+            title = self.display_title(key)
+            if chapter_level and key in self.section_keys_by_chapter[chapter_key]:
+                title = f"{self.section_keys_by_chapter[chapter_key].index(key)+1:02d} · {title}"
+            box = group_box(key,title,boxes,edges,group_id)
+            group_records.append({
+                "organizer_key":key,"node_id":group_id,
+                "parent_id":None if key == root else stable_id("organizer-group-v4",f"{scope}:{self.nodes[key]['parent_key']}"),
+                "member_ids":sorted(box.members),
+            })
+            return box
+
+        root_box = compose(root)
+        all_nodes = root_box.nodes
+        # A quiet header preserves navigation without a hub-and-spoke fan.
+        title = "章引入" if section_key == "__chapter_intro__" else str(self.nodes[root]["title"])
+        header_y = -180
+        all_nodes.extend([
+            self.map_hub(scope,title,"知识分簇 · 沿连线阅读",
+                (0,header_y),link=self.link_text(compact_title(title,40),self.note_target(root),canvas_path)),
+            {"id":stable_id("utility",f"{scope}:back:compact"),"type":"text",
+             "text":self.link_text("← 返回全书" if chapter_level else "← 返回章节",back_path,canvas_path),
+             "x":MAP_HUB_WIDTH+CARD_GAP,"y":header_y,"width":230,"height":66},
+            {"id":stable_id("utility",f"{scope}:legend:compact"),"type":"text",
+             "text":"✦ 知识主线　→ 发展／推导\n↓ 应用／并列　分组框＝组织层",
+             "x":MAP_HUB_WIDTH+CARD_GAP+230+CARD_GAP,"y":header_y,"width":400,"height":86},
+        ])
         counts = {
-            "cards": len(cards), "groups": len(groups), "edges": len(edges),
-            "internal_atoms": len(visible_atoms), "source_atoms": len(source_atoms),
-            "exercise_atoms_collapsed": len(exercises), "exercise_organizers": len(exercises_by_owner),
-            "exercise_relation_edges": exercise_edges, "concept_hubs": len(hub_keys),
-            "atom_relation_edges": atom_edges, "concept_relation_edges": concept_edges,
-            "concept_membership_edges": membership_edges, "source_order_fallback_edges": fallback_edges,
-            "navigation_nodes": 3, "regions": len(groups), "landmarks": 0,
+            "cards":len(cards)+3,"groups":len(group_records),"edges":len(edges),
+            "internal_atoms":len(visible),"source_atoms":len(source_atoms),
+            "knowledge_atoms":sum(self.nodes[key]["category"] == "knowledge" for key in visible),
+            "scenario_atoms":sum(self.nodes[key]["category"] == "scenario" for key in visible),
+            "featured_examples":sum(self.nodes[key]["category"] == "worked-example" for key in visible),
+            "exercise_atoms_summarized":len(exercises) if chapter_level else 0,
+            "exercise_atoms_collapsed":0 if chapter_level else len(exercises),
+            "exercise_portals":len(self.section_keys_by_chapter[chapter_key]) if chapter_level else 0,
+            "exercise_organizers":0 if chapter_level else len(by_owner),
+            "exercise_relation_edges":practice_edges,"exercise_ownership_edges":ownership_practice,
+            "concept_hubs":len(hub_keys),"atom_relation_edges":atom_edges,
+            "concept_relation_edges":concept_edges,"concept_membership_edges":concept_memberships,
+            "source_order_fallback_edges":0,"organization_membership_edges":memberships,
+            "navigation_nodes":3+len(portals),"regions":len(children.get(root,[])),"landmarks":0,
         }
-        return {"nodes": all_nodes, "edges": edges}, {"counts": counts, "bounds": bounds_for(all_nodes), "visual_quality": visual_quality(cards, edges)}
+        return {"nodes":all_nodes,"edges":edges}, {
+            "counts":counts,"bounds":bounds_for(all_nodes),
+            "visual_quality":visual_quality(all_nodes,edges),"organization_groups":group_records,
+        }
+
+    def chapter_canvas(self, canvas_path: Path, chapter_key: str, overview_path: Path):
+        return self.compact_map(canvas_path,chapter_key,None,overview_path)
+
+    def section_canvas(self, canvas_path: Path, chapter_key: str, section_key: str, chapter_path: Path):
+        return self.compact_map(canvas_path,chapter_key,section_key,chapter_path)
 
     def build(self) -> tuple[dict[Path, dict[str, Any]], dict[str, Any]]:
         payloads: dict[Path, dict[str, Any]] = {}
@@ -638,13 +512,17 @@ class CanvasBundleBuilderV3(CanvasBundleBuilder):
             "layout": {
                 "mode": "three-level-constellation", "theme": "adaptive",
                 "zoom_levels": ["book-chapters", "chapter-core", "section-detail"],
-                "learning_direction": "center-outward-clockwise",
-                "organization_encoding": "regions-with-click-through-portals",
+                "learning_direction": "edge-constrained-clusters",
+                "organization_encoding": "regions-and-organizer-groups",
                 "atom_visibility": "chapter-core-and-section-detail",
                 "exercise_representation": "chapter-counts-section-primary-entries",
-                "concept_hub_visibility": "multi-atom-and-semantic-bridge-only",
-                "edge_noise_policy": "one-primary-practice-edge-per-exercise-organizer",
+                "concept_hub_visibility": "hidden" if self.canvas_config.get("concept_nodes") == "hidden" else "multi-atom-and-semantic-bridge-only",
+                "edge_noise_policy": "semantic-or-labelled-membership" if self.isolation_policy == "semantic-or-labelled-membership" else "one-primary-practice-edge-per-exercise-organizer",
                 "edge_ports": {"progression": "right-to-left", "inspiration": "right-to-top", "support-and-containment": "bottom-to-top"},
+                "revision": "compact-v1",
+                "navigation": "unconnected-header-and-local-portals",
+                "direction_constraints": {"right_outgoing": "target.left>=source.right+gap", "bottom_outgoing": "target.top>=source.bottom+gap"},
+                "spacing": {"node_margin": CARD_GAP, "region_gap": REGION_GAP, "right_gap": RIGHT_GAP, "down_gap": DOWN_GAP},
             },
             "atlas": {"role": "book-atlas", "root_key": self.root_key, "path": "overview.canvas", **atlas_meta},
             "chapter_maps": chapter_entries,

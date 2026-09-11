@@ -187,7 +187,7 @@ def build_3level_adapter(staging_path: Path, volume_title: str, sections_meta, c
         "status": "passed",
         "reviewer_confirmed": True,
         "filename_policy": {"colon_replacement": "_"},
-        "output_policy": {"generate_index": False, "generate_canvas": False},
+        "output_policy": {"generate_index": True, "generate_canvas": False},
         "profile": str(profile_file),
         "hierarchy": {
             "source_role": "questions",
@@ -501,6 +501,21 @@ def main():
         success = process_volume(vol_title, pdf_name)
         print(f"Volume {vol_title} result: {'SUCCESS' if success else 'FAILED'}")
 
+    # Generate master book index linking all volumes
+    master_index_file = MASTER_GRAPH_ROOT / f"{MASTER_GRAPH_ROOT.name}.md"
+    master_lines = [
+        f"# {MASTER_GRAPH_ROOT.name}\n",
+    ]
+    for vol_title, _ in volumes:
+        vol_file = MASTER_GRAPH_ROOT / vol_title / f"导数专题_{vol_title}.md"
+        if vol_file.exists():
+            rel = vol_file.relative_to(VAULT_ROOT)
+            master_lines.append(f"![[{rel}]]")
+    master_lines.append("")
+    master_index_file.write_text("\n".join(master_lines), encoding="utf-8")
+    print(f"Generated master book index: {master_index_file}")
+
 
 if __name__ == "__main__":
     main()
+

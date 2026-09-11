@@ -8,7 +8,7 @@ label a local teaching activity.
 
 Keep or synthesize an organizer only when it owns more than one reusable unit
 or represents a stable navigation boundary such as a book, part, chapter,
-section, practice block, exercise set, or source-supported knowledge topic.
+section, terminal exercise set, or source-supported knowledge topic.
 
 Demote a heading when it merely says how the reader should engage with the
 immediately following content: observe, think, try, discuss, communicate,
@@ -17,9 +17,25 @@ the following atom's audited source range so ownership and adjacency remain
 traceable. The Markdown renderer omits that presentation-only heading line from
 the final heading-free atom note while retaining the prompt and teaching body.
 
-Under each TOC section, arrange knowledge-topic organizers and practice or
-exercise organizers as siblings in source order. Topic titles describe the
-knowledge subject, not the pedagogical action.
+Under each TOC section, use this canonical direct-child flow in source order:
+
+1. a section-wide framing scenario, when present;
+2. independently reusable knowledge-topic organizers;
+3. the terminal formal exercise set, when present.
+
+A short prior-knowledge question is section-wide when its answer is the set of
+several sibling topics, rather than only the first topic. Keep it as a direct
+`section-introduction` scenario and place it before those organizers. Inline
+practice blocks belong to the preceding or explicitly targeted knowledge topic;
+they are not section-level siblings. A terminal numbered exercise set remains a
+direct section organizer. Topic titles describe the knowledge subject, not the
+pedagogical action.
+
+Do not merge adjacent formal concepts merely because the printed source places
+them below one presentation heading. If each concept has its own definition,
+dependency role, and reuse value, synthesize separate topic organizers. For
+example, a universal set is a prerequisite context for complement and therefore
+remains separate from complement.
 
 ## Review artifact
 

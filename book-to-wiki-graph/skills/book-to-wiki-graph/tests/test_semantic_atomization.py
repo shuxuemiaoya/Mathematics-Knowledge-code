@@ -40,6 +40,7 @@ class SemanticAtomizationTests(unittest.TestCase):
         profile = init_book.create_profile(source, staging, book)
         # Most tests retain the v0.5 two-pass compatibility path. The focused
         # role-review test below exercises the new required v0.6 gate.
+        profile["atomization"]["mode"] = "llm-two-pass"
         profile["atomization"].pop("teaching_role_audit", None)
         profile["atomization"].pop("role_correction_confidence_threshold", None)
         profile_path = staging / "book-profile.json"
@@ -104,12 +105,128 @@ class SemanticAtomizationTests(unittest.TestCase):
             self.assertEqual(len(reviews), len(items["audit_jobs"]["audits"][0]["boundaries"]))
             self.assertTrue({"merge", "resegment", "keep"}.issubset({item["action"] for item in reviews}))
 
+    def test_category_aware_round_requires_signatures_relations_and_derived_ranges(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            base = self.make_base(root)
+            profile = json.loads(base["profile"].read_text(encoding="utf-8"))
+            profile["atomization"] = dict(semantic.DEFAULT_ATOMIZATION)
+            self.assertEqual(profile["atomization"]["knowledge_boundary_authority"], "llm-exclusive")
+            self.assertEqual(profile["atomization"]["provisional_atom_policy"], "coverage-context-only")
+            self.assertEqual(profile["atomization"]["parallel_definition_policy"], "split-when-independently-reusable")
+            base["profile"].write_text(json.dumps(profile, ensure_ascii=False), encoding="utf-8")
+            jobs = semantic.prepare_jobs(base["manifest"], ["chapter"])
+            job = jobs["jobs"][0]
+            self.assertEqual(job["instructions"]["boundary_authority"], "LLM has exclusive authority over knowledge boundaries and atom count. Baseline atoms are non-binding coverage/context hints only; ignore their titles and internal boundaries unless an explicit hard boundary is independently proven.")
+            self.assertIn("全称量词 and 存在量词", job["instructions"]["parallel_definitions"])
+            atoms = [
+                self.atom("k", [4, 9], "knowledge", "从观察到棱柱定义"),
+                self.atom("w", [10, 13], "worked-example", "棱柱判断例题"),
+                self.atom("e", [14, 16], "exercise", "棱柱练习"),
+            ]
+            decision = {
+                "job_id": job["job_id"], "packet_sha256": job["packet_sha256"], "atoms": atoms,
+                "knowledge_signatures": [{"atom_id": "k", "teaches": ["点线面体与棱柱条件"], "assumes": [], "outputs": ["棱柱判断依据"], "global_relation_needed": False, "independent_reason": ""}],
+                "local_relations": [{"from_atom_id": "k", "to_atom_id": "w", "type": "illustrates", "tier": "supporting", "evidence_kind": "pedagogical-inference", "evidence": [{"atom_id": "k", "source_range": [9, 9]}, {"atom_id": "w", "source_range": [10, 13]}], "rationale": "例题完整应用前面建立的棱柱判断条件。", "confidence": 0.99, "recall_source": ["organizer-neighborhood"]}],
+                "derived_card_candidates": [{"candidate_id": "c1", "from_atom_id": "k", "category": "concept", "title": "棱柱", "source_range": [9, 9], "selection_reason": "该连续原文给出可复用的棱柱定义与条件。", "confidence": 0.99, "expression": "", "variables": [], "conditions": [], "example_role": ""}],
+            }
+            round1 = semantic.seal_artifact({"schema_version": 2, "kind": "round-1-decisions", "jobs_sha256": jobs["artifact_sha256"], "reviewer": {"type": "agent"}, "decisions": [decision]})
+            report = semantic.validate_round1_payload(jobs, round1)
+            self.assertNotEqual(report["status"], "failed", report["structural_errors"])
+            decision.pop("knowledge_signatures")
+            stale = semantic.seal_artifact({"schema_version": 2, "kind": "round-1-decisions", "jobs_sha256": jobs["artifact_sha256"], "reviewer": {"type": "agent"}, "decisions": [decision]})
+            invalid = semantic.validate_round1_payload(jobs, stale)
+            self.assertEqual(invalid["status"], "failed")
+            self.assertIn("knowledge-signatures-missing", {item["code"] for item in invalid["structural_errors"]})
+
     def test_example_solution_and_exercise_subparts_remain_complete(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             items = self.passed(Path(temporary))
             by_category = {atom["category"]: atom for atom in items["final"]["atoms"]}
             self.assertEqual(by_category["worked-example"]["source_range"], [10, 13])
             self.assertEqual(by_category["exercise"]["source_range"], [14, 16])
+
+    def test_category_aware_materialization_creates_noncovering_derived_cards_and_indexes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            base = self.make_base(root)
+            profile = json.loads(base["profile"].read_text(encoding="utf-8"))
+            profile["atomization"] = dict(semantic.DEFAULT_ATOMIZATION)
+            base["profile"].write_text(json.dumps(profile, ensure_ascii=False), encoding="utf-8")
+            atoms = [
+                self.atom("k", [4, 9], "knowledge", "从观察到棱柱定义"),
+                self.atom("w", [10, 13], "worked-example", "棱柱判断例题"),
+                self.atom("e", [14, 16], "exercise", "棱柱练习"),
+            ]
+            final = semantic.seal_artifact({
+                "schema_version": 2, "kind": "atomization-final", "status": "passed", "unresolved_count": 0,
+                "base_manifest": str(base["manifest"]), "base_manifest_sha256": semantic.sha256_file(base["manifest"]),
+                "source_markdown": str(base["source"]), "source_markdown_sha256": semantic.sha256_file(base["source"]),
+                "scope_root_keys": ["chapter"], "atomization": dict(semantic.DEFAULT_ATOMIZATION), "atoms": atoms,
+                "knowledge_signatures": [{"atom_id": "k", "teaches": ["棱柱"], "assumes": [], "outputs": ["判断棱柱"]}],
+                "local_relations": [], "derived_card_candidates": [], "bindings": {}, "reviewer": {},
+            })
+            final_path = base["staging"] / "atomization-final-v7.json"
+            final_path.write_text(json.dumps(final, ensure_ascii=False), encoding="utf-8")
+            keys = {atom["atom_id"]: materialize_book.final_key(atom) for atom in atoms}
+            relation = semantic.seal_artifact({
+                "schema_version": 3, "kind": "relation-final-v2", "status": "passed", "unresolved_count": 0,
+                "manifest": str(base["manifest"]), "manifest_sha256": semantic.sha256_file(base["manifest"]),
+                "source_markdown_sha256": semantic.sha256_file(base["source"]), "atomization_final": str(final_path), "atomization_final_sha256": final["artifact_sha256"],
+                "relation_analysis": profile["relation_analysis"], "bindings": {}, "reviewer": {}, "boundary_feedback": [],
+                "concepts": [
+                    {"key": "c1", "preferred_label": "立体图形", "aliases": [], "definition": "由平面图形围成的空间图形。", "kind": "concept", "member_proposal_ids": ["p1"], "evidence": [{"atom_key": keys["k"], "source_range": [4, 4]}], "source_chapters": ["chapter"], "first_source_order": 4},
+                    {"key": "c2", "preferred_label": "棱柱", "aliases": [], "definition": "上下底面平行且相同的立体图形。", "kind": "definition", "member_proposal_ids": ["p2"], "evidence": [{"atom_key": keys["k"], "source_range": [8, 9]}], "source_chapters": ["chapter"], "first_source_order": 9},
+                ],
+                "atom_concept_links": [
+                    {"key": "l1", "atom_key": keys["k"], "concept_key": "c1", "role": "introduces", "evidence_ranges": [[4, 4]], "confidence": 0.99},
+                    {"key": "l2", "atom_key": keys["k"], "concept_key": "c2", "role": "introduces", "evidence_ranges": [[9, 9]], "confidence": 0.99},
+                    {"key": "l3", "atom_key": keys["w"], "concept_key": "c2", "role": "applies", "evidence_ranges": [[10, 13]], "confidence": 0.99},
+                    {"key": "l4", "atom_key": keys["e"], "concept_key": "c2", "role": "practices", "evidence_ranges": [[14, 16]], "confidence": 0.99},
+                ], "concept_relations": [],
+                "relations": [{"key": "r1", "from_key": keys["k"], "to_key": keys["w"], "type": "illustrates", "tier": "supporting", "evidence_kind": "explicit", "evidence_ranges": [{"node_key": keys["k"], "source_range": [9, 9]}, {"node_key": keys["w"], "source_range": [10, 13]}], "rationale": "完整例题直接使用前面给出的棱柱判断条件。", "confidence": 0.99, "basis_keys": [], "candidate_sources": ["test"]}],
+                "formulas": [{"key": "f1", "title": "棱柱判断条件", "expression": "上下底面平行且全等", "variables": [], "conditions": ["侧面为平行四边形"], "derived_from_key": keys["k"], "source_range": [6, 6], "selection_reason": "该条件可独立复用。", "confidence": 0.99}],
+                "atom_roles": [{"atom_key": keys["k"], "role": "core"}, {"atom_key": keys["w"], "role": "bridge"}, {"atom_key": keys["e"], "role": "satellite"}], "independent_atoms": [], "independent_components": [],
+            })
+            relation_path = base["staging"] / "relation-final-v7.json"
+            relation_path.write_text(json.dumps(relation, ensure_ascii=False), encoding="utf-8")
+            output_manifest = base["staging"] / "book-graph-v7.json"
+            materialize_book.materialize(base["manifest"], final_path, root / "book-v7", output_manifest, output_profile=base["staging"] / "book-profile-v7.json", overwrite=False, relation_final_path=relation_path)
+            graph = json.loads(output_manifest.read_text(encoding="utf-8"))
+            self.assertEqual(len(graph["source_order"]), 3)
+            self.assertEqual(len(graph["derived_order"]), 2)
+            self.assertEqual({next(node for node in graph["nodes"] if node["key"] == key)["category"] for key in graph["derived_order"]}, {"concept", "formula"})
+            self.assertEqual(len(graph["derived_indexes"]), 2)
+            indexed = [key for spec in graph["derived_indexes"] for key in spec["derived_keys"]]
+            self.assertNotEqual(indexed, graph["derived_order"])
+            validation = validate_book_graph.validate_graph(output_manifest, root / "book-v7")
+            self.assertEqual(validation["status"], "passed", validation["errors"])
+            for key in graph["derived_order"]:
+                node = next(node for node in graph["nodes"] if node["key"] == key)
+                text = (root / "book-v7" / node["filename"]).read_text(encoding="utf-8")
+                self.assertFalse(any(line.startswith("#") for line in text.splitlines()))
+                for property_name in ("atom_key", "owner_key", "source_sha256", "review_status"):
+                    self.assertIn(f"{property_name}:", text)
+            concept_names = {
+                Path(node["filename"]).name
+                for node in graph["nodes"] if node.get("category") == "concept"
+            }
+            self.assertEqual(concept_names, {"棱柱.md"})
+            for spec in graph["derived_indexes"]:
+                index_text = (root / "book-v7" / spec["filename"]).read_text(encoding="utf-8")
+                self.assertEqual(validate_book_graph.frontmatter_scalar(index_text, "node_type"), "organizer")
+                self.assertEqual(
+                    validate_book_graph.frontmatter_scalar(index_text, "parent_organizer_key"),
+                    spec["chapter_key"],
+                )
+                self.assertEqual(
+                    validate_book_graph.frontmatter_scalar(index_text, "children_count"),
+                    len(spec["derived_keys"]),
+                )
+            concept = next(item for item in graph["concepts"] if item["key"] == "c2")
+            concept_node = next(node for node in graph["nodes"] if node.get("concept_key") == "c2")
+            self.assertEqual(concept["evidence"][0]["source_range"], [8, 9])
+            self.assertEqual(concept_node["source_range"], [9, 9])
 
     def test_teaching_role_review_resegments_a_mixed_question_atom(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -162,6 +279,104 @@ class SemanticAtomizationTests(unittest.TestCase):
         hashed_asset = "![](images/" + "a" * 300 + ".jpg)"
         self.assertEqual(semantic.normalized_char_count([hashed_asset, "定义。"]), 3)
 
+    def test_post_knowledge_reflection_is_scenario_semantic_but_stored_as_thought_question(self) -> None:
+        lines = ["举例说明，用自然语言、列举法和描述法表示集合时各自的特点."]
+        atom = self.atom(
+            "reflection", [1, 1], "scenario", "思考：三种集合表示方法的特点",
+            scenario_role="reflection-question",
+        )
+        issues = semantic.quality_issues(atom, lines, semantic.DEFAULT_ATOMIZATION, "test", final=True)
+        self.assertEqual(issues, [])
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            items = self.passed(root)
+            target = next(value for value in items["final"]["atoms"] if value["atom_id"] == "final-exercise")
+            target.update({
+                "category": "scenario",
+                "title": "思考：三种集合表示方法的特点",
+                "scenario_role": "reflection-question",
+            })
+            items["final"] = semantic.seal_artifact({key: value for key, value in items["final"].items() if key != "artifact_sha256"})
+            items["final_path"].write_text(json.dumps(items["final"], ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            output_book, output_manifest = root / "thought-book", root / "thought-staging" / "book-graph.json"
+            materialize_book.materialize(items["manifest"], items["final_path"], output_book, output_manifest)
+            graph = json.loads(output_manifest.read_text(encoding="utf-8"))
+            node = next(value for value in graph["nodes"] if value.get("atomization_id") == "final-exercise")
+            self.assertEqual(node["category"], "scenario")
+            self.assertEqual(node["scenario_role"], "reflection-question")
+            self.assertRegex(node["filename"], r"^原子层/思考题/\d{4,}-T\.md$")
+            profile = json.loads(items["profile"].read_text(encoding="utf-8"))
+            frontmatter = materialize_book.atom_frontmatter(node, {value["key"]: value for value in graph["nodes"]}, "book", profile)
+            self.assertIn('scenario_role: "reflection-question"', frontmatter)
+            validation = validate_book_graph.validate_graph(output_manifest, output_book)
+            self.assertEqual(validation["status"], "passed", validation["errors"])
+
+    def test_short_scenario_requires_a_real_teaching_role(self) -> None:
+        bridge = self.atom(
+            "bridge", [1, 1], "scenario", "集合表示方式引入",
+            scenario_role="knowledge-motivation",
+        )
+        valid_lines = ["从上面的例子看到，我们可以用自然语言描述一个集合。除此之外，还可以用什么方式表示集合呢？"]
+        self.assertEqual(semantic.quality_issues(bridge, valid_lines, semantic.DEFAULT_ATOMIZATION, "test", final=True), [])
+        invalid_lines = ["观察并思考。"]
+        codes = {
+            item["code"] for item in semantic.quality_issues(
+                bridge, invalid_lines, semantic.DEFAULT_ATOMIZATION, "test", final=True,
+            )
+        }
+        self.assertIn("knowledge-motivation-not-a-bridge", codes)
+
+    def test_short_section_scope_question_is_a_section_introduction(self) -> None:
+        lines = ["我们知道，实数有加、减、乘、除等运算。集合是否也有类似的运算呢？"]
+        introduction = self.atom(
+            "section-intro", [1, 1], "scenario", "集合运算引入",
+            scenario_role="section-introduction",
+        )
+        self.assertEqual(
+            semantic.quality_issues(
+                introduction, lines, semantic.DEFAULT_ATOMIZATION, "test", final=True,
+            ),
+            [],
+        )
+
+    def test_section_scope_question_cannot_be_absorbed_into_first_knowledge(self) -> None:
+        lines = [
+            "我们知道，实数有加、减、乘、除等运算。集合是否也有类似的运算呢？",
+            "并集把属于集合 A 或属于集合 B 的所有元素组成一个新的集合；这里继续给出符号、条件、图示、辨析和完整结论，使它成为一个可独立复用的教学单元。",
+        ]
+        knowledge = self.atom("union", [1, 2], "knowledge", "并集")
+        codes = {
+            item["code"] for item in semantic.quality_issues(
+                knowledge, lines, semantic.DEFAULT_ATOMIZATION, "test", final=True,
+            )
+        }
+        self.assertIn("section-introduction-absorbed-into-knowledge", codes)
+
+    def test_section_introduction_must_be_first_before_topic_organizers(self) -> None:
+        nodes = {
+            "section": {"key": "section", "layer": "organizer", "children": ["union", "intro", "exercise"]},
+            "union": {"key": "union", "layer": "organizer", "parent_key": "section", "children": ["knowledge"]},
+            "intro": {"key": "intro", "layer": "atom", "parent_key": "section", "category": "scenario", "scenario_role": "section-introduction"},
+            "exercise": {"key": "exercise", "layer": "organizer", "parent_key": "section", "children": ["problem"]},
+            "knowledge": {"key": "knowledge", "layer": "atom", "parent_key": "union", "category": "knowledge"},
+            "problem": {"key": "problem", "layer": "atom", "parent_key": "exercise", "category": "exercise"},
+        }
+        codes = {
+            item["code"] for item in validate_book_graph.validate_section_introduction_placement(nodes)
+        }
+        self.assertIn("section-introduction-order-invalid", codes)
+        nodes["section"]["children"] = ["intro", "union", "exercise"]
+        self.assertEqual(validate_book_graph.validate_section_introduction_placement(nodes), [])
+
+    def test_definition_card_prefers_the_defining_sentence_over_preceding_examples(self) -> None:
+        lines = [
+            "四大洋组成的集合可以表示为若干元素。",
+            "把集合的所有元素一一列举并用花括号括起来的方法叫做列举法。",
+        ]
+        selected = materialize_book.definition_evidence_range([1, 2], lines, [1, 2])
+        self.assertEqual(selected, [2, 2])
+        self.assertEqual(materialize_book.render_definition_source(lines, selected), lines[1] + "\n")
+
     def test_materialization_and_review_binding_validation(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -187,10 +402,37 @@ class SemanticAtomizationTests(unittest.TestCase):
             self.assertIn("# 第一章\n\n![第一章]", (output_book / book["filename"]).read_text(encoding="utf-8"))
             self.assertIn("## 第一节\n\n![第一节]", (output_book / chapter["filename"]).read_text(encoding="utf-8"))
             lesson_body = (output_book / lesson["filename"]).read_text(encoding="utf-8")
-            self.assertNotRegex(lesson_body, r"(?m)^#{1,6}(?:\s+|$)")
-            self.assertTrue(lesson_body.startswith("!["))
+            lesson_content = "\n".join(validate_book_graph.strip_frontmatter(lesson_body))
+            self.assertNotRegex(lesson_content, r"(?m)^#{1,6}(?:\s+|$)")
+            self.assertTrue(lesson_content.lstrip().startswith("!["))
+            for organizer in (book, chapter, lesson):
+                text = (output_book / organizer["filename"]).read_text(encoding="utf-8")
+                properties = validate_book_graph.frontmatter_keys(text)
+                self.assertTrue({
+                    "organizer_key", "parent_organizer_key", "source_pdf",
+                    "organizer_level", "hierarchy_path", "children_count",
+                    "descendant_atom_count", "updated_at", "review_status",
+                }.issubset(properties))
+                self.assertEqual(
+                    validate_book_graph.frontmatter_scalar(text, "organizer_key"),
+                    organizer["key"],
+                )
+                self.assertEqual(
+                    validate_book_graph.frontmatter_scalar(text, "organizer_level"),
+                    organizer["organizer_level"],
+                )
+            root_text = (output_book / book["filename"]).read_text(encoding="utf-8")
+            self.assertIsNone(validate_book_graph.frontmatter_scalar(root_text, "parent_organizer_key"))
+            self.assertEqual(validate_book_graph.frontmatter_scalar(root_text, "organizer_role"), "root")
             validation = validate_book_graph.validate_graph(output_manifest, output_book)
             self.assertEqual(validation["status"], "passed", validation["errors"])
+
+            broken = (output_book / chapter["filename"]).read_text(encoding="utf-8").replace(
+                f"organizer_level: {chapter['organizer_level']}\n", "", 1,
+            )
+            (output_book / chapter["filename"]).write_text(broken, encoding="utf-8")
+            invalid = validate_book_graph.validate_graph(output_manifest, output_book)
+            self.assertIn("organizer-metadata-missing", {item["code"] for item in invalid["errors"]})
 
     def test_materialization_escapes_special_characters_in_link_labels(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

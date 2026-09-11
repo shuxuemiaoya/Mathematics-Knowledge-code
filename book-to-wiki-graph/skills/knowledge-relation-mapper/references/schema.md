@@ -22,6 +22,10 @@ definition conflicts, or alias collisions remain separate and enter review.
 
 Each link contains exact evidence ranges inside its atom and a confidence. The
 link explains the atom's instructional function; it is not a vague topical tag.
+A `section-introduction` has at least one `motivates` link and atom-projection
+edge to the first knowledge unit answering its framing question. It needs no
+incoming edge; unlike `knowledge-motivation`, it frames a section rather than
+bridging two already distinct knowledge units.
 
 ## Concept relations
 
@@ -40,6 +44,14 @@ source IDs.
 `relations[]` remains compatible with Canvas. It projects reviewed teaching
 logic onto atoms and stores `basis_keys` for the canonical concept relations
 that justify it. Projection types remain `prerequisite`, `develops`, `derives`,
-`motivates`, `illustrates`, `applies`, `practices`, `contrasts`, and `analogous`.
+`motivates`, `illustrates`, `applies`, `practices`, `contrasts`, `analogous`,
+and `synthesizes`.
 
 JSON is authoritative. Atom Markdown remains link-free and unchanged.
+
+## Boundary feedback
+
+`relation-final.json.boundary_feedback[]` contains `feedback_id`, `action`,
+`atom_keys`, their resolved `atom_ids`, a complete `proposed_ranges` partition,
+exact evidence, rationale, and confidence. Feedback is valid only for virtual
+atoms bound through `atomization_final_sha256`; it blocks materialization.

@@ -29,6 +29,13 @@ order. A learned idea that prompts a later question and then a new idea is:
 learned atom -> motivates -> scenario atom -> motivates -> new atom
 ```
 
+A post-knowledge thought question uses exactly this scenario semantics. Mark it
+`scenario_role: reflection-question`, keep its Markdown under `原子层/思考题`,
+and connect learned knowledge into it with `motivates`. If a later book or an
+external knowledge source answers or develops the question, the question may
+then motivate that target. Do not manufacture a canonical concept from the
+question wording alone.
+
 ## First pass — concepts
 
 Run `knowledge-relation-mapper/scripts/relate_book.py prepare-concepts`. Treat
@@ -119,3 +126,17 @@ python ../knowledge-relation-mapper/scripts/relate_book.py apply \
 
 `apply` refuses unresolved or stale results and never overwrites without
 `--overwrite`.
+
+For the default pre-materialization path, call `prepare-concepts` with the
+reviewed base manifest and `--atomization-final`. Round one receives the
+knowledge signatures, local relation seeds, and derived candidates selected
+during boundary review. Seeds are hard recall candidates, not accepted edges.
+
+Round three may emit `boundary_feedback` with action `merge`, `split`, or
+`resegment`, affected virtual atom keys, a complete proposed range partition,
+evidence, rationale, and confidence. Feedback cannot cross organizer ownership.
+Its presence sets status to `boundary_revision_required`; materialization is
+forbidden until atomization is rerun and the entire affected graph passes.
+
+Atom projection additionally permits `synthesizes`. It is a bottom-to-top
+convergence edge. Mechanical source order is never a semantic relation.

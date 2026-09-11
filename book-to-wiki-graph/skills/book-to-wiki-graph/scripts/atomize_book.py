@@ -3,14 +3,18 @@
 
 from semantic_atomization import (  # re-export the review API for Agent use
     ATOM_CATEGORY_NAMES,
+    DERIVED_CATEGORY_NAMES,
+    LOCAL_RELATION_TYPES,
     AtomizationError,
     DEFAULT_ATOMIZATION,
     actual_boundary_action,
     atomic_json,
     finalize_payload,
+    finalize_feedback,
     finalize_role_review,
     main,
     prepare_audit_jobs,
+    prepare_feedback_jobs,
     prepare_jobs,
     prepare_role_review,
     seal_artifact,

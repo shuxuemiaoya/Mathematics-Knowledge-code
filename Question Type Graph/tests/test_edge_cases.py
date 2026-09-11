@@ -796,6 +796,15 @@ class TestEdgeCases(unittest.TestCase):
         )
         self.assertEqual(safe_name("一.向量"), "一_向量")
 
+    def test_safe_name_caps_at_budget_and_strips_trailing_dots(self) -> None:
+        long_title = "这是一个非常非常非常非常非常非常非常非常非常长的题型名称用来测试长度限制.md"
+        result = safe_name(long_title)
+        self.assertLessEqual(len(result), 36)
+        self.assertTrue(result.endswith(".md"))
+
+        dot_title = "末尾包含多余点号..md"
+        self.assertEqual(safe_name(dot_title), "末尾包含多余点号.md")
+
     def test_empty_generated_directories_are_pruned_without_deleting_files(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
@@ -2058,6 +2067,19 @@ class TestEdgeCases(unittest.TestCase):
             [(item["expected"], item["actual"]) for item in errors],
             [(2, 3), (4, 2), (3, 2)],
         )
+
+    def test_question_sequence_audit_supports_cross_context_continuity_and_detects_gaps(self) -> None:
+        # Context 1: 1, 2. Context 2 continues: 3, 5 (missing 4)
+        questions = [
+            {"id": "q1", "context_key": "sec-01", "number": "1", "sequence_policy": "continuous"},
+            {"id": "q2", "context_key": "sec-01", "number": "2", "sequence_policy": "continuous"},
+            {"id": "q3", "context_key": "sec-02", "number": "3", "sequence_policy": "continuous"},
+            {"id": "q5", "context_key": "sec-02", "number": "5", "sequence_policy": "continuous"},
+        ]
+        errors = question_sequence_errors(questions)
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(errors[0]["expected"], 4)
+        self.assertEqual(errors[0]["actual"], 5)
 
     def test_reviewed_virtual_span_relocation_repairs_column_spillover(self) -> None:
         raw_lines = ["【5】Five", "## Model 2", "【7】Seven", "Unit【6】Six", "【8】Eight"]

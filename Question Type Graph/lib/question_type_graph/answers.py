@@ -1084,6 +1084,7 @@ def apply_matches(profile_path: Path, manifest_path: Path, overwrite: bool) -> d
                 int(item["start_line"]),
             ): str(item["answer"]).strip().upper()
             for item in adapter_data.get("answers", {}).get("choice_answer_overrides", [])
+            if item.get("start_line") is not None
         }
         choice_answer_overrides_by_key = {
             (
@@ -1099,6 +1100,7 @@ def apply_matches(profile_path: Path, manifest_path: Path, overwrite: bool) -> d
                 int(item["start_line"]),
             ): str(item["answer"]).strip()
             for item in adapter_data.get("answers", {}).get("short_answer_overrides", [])
+            if item.get("start_line") is not None
         }
         short_answer_overrides_by_key = {
             (

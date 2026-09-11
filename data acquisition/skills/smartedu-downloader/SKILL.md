@@ -27,7 +27,7 @@ dispatcher.py (智能识别当前网页并自动派发)
 | 业务页面 | 资源类型 | 处理适配器 (Adapter) | 核心算法与方法 | 输出文件格式 |
 | :--- | :--- | :--- | :--- | :--- |
 | **教材备课页** (`/syncClassroom/prepare`) | 课件 PPTX、教案 DOCX、整册试卷 PDF | `PrepareMaterialAdapter` | 1. React Fiber 提取 `textBookInfo`<br>2. 官方矢量 PDF 静态直链秒级下载<br>3. 高清幻灯片逐页提取并合成 PDF | `[小节名]_课件.pdf`<br>`[小节名]_教学设计.pdf`<br>`[小节名]（答案解析）.pdf` |
-| **习题库同步练习** (`/myPaper`) | 微观原子题目、LaTeX 公式、选择/填空答案、名师解析 | `ExerciseBankAdapter` | 1. 自动展开并遍历左侧目录树<br>2. 自动翻页遍历小节题目<br>3. 提取 QTI 节点 `content`<br>4. 生成带 LaTeX 的结构化 Markdown 与大图合编 PDF | `[小节名]_题库.md`<br>`[小节名]_习题与答案解析.pdf` |
+| **习题库同步练习** (`/myPaper`) | 微观原子题目、LaTeX 公式、选择/填空答案、名师微课解析视频 | `ExerciseBankAdapter` | 1. 自动展开并遍历左侧目录树<br>2. 自动翻页遍历小节题目<br>3. 提取 QTI 节点 `content`<br>4. 解包提取 1080P 高清名师微课视频并下载至同级 `videos/`<br>5. 生成带 LaTeX、插图与微课双链（`![[videos/...]]`）的标准 Markdown | `[小节名]_题库.md`<br>`images/`<br>`videos/` |
 
 ---
 
@@ -37,10 +37,17 @@ dispatcher.py (智能识别当前网页并自动派发)
 # 1. 智能自动识别（自动探查当前 Safari 页面类型并启动对应策略）
 python3 skills/smartedu-downloader/scripts/dispatcher.py
 
-# 2. 显式指定同步练习题库适配器
+# 2. 高中数学人教A版全套5册批量获取（必修第一/二册、选择性必修第一/二/三册）
+python3 skills/smartedu-downloader/scripts/fetch_renjiao_high_school.py
+
+# 3. 仅抓取当前页面打开的高中册次
+python3 skills/smartedu-downloader/scripts/fetch_renjiao_high_school.py -v current
+
+# 4. 显式指定同步练习题库适配器
 python3 skills/smartedu-downloader/scripts/dispatcher.py --adapter exercise
 
-# 3. 自定义输出目录
+# 5. 自定义输出目录
 python3 skills/smartedu-downloader/scripts/dispatcher.py \
   --output "/Users/oven/Downloads/中小学智慧平台资源/初中/新教材/北师大版/七年级上册/同步练习题库"
 ```
+

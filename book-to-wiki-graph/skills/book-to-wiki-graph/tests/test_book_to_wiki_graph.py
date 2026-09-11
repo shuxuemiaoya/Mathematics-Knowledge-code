@@ -299,12 +299,13 @@ class BookToWikiGraphTests(unittest.TestCase):
             self.assertEqual(profile["source"]["kind"], "markdown")
             self.assertEqual(
                 set(profile["atom_categories"]),
-                {"knowledge", "worked-example", "exercise", "scenario"},
+                {"knowledge", "worked-example", "exercise", "scenario", "concept", "formula"},
             )
-            self.assertEqual(profile["atomization"]["mode"], "llm-two-pass")
+            self.assertEqual(profile["atomization"]["mode"], "llm-category-aware-graph")
             self.assertEqual(profile["organization"]["activity_heading_policy"], "atom-content")
             self.assertEqual(profile["markdown_rendering"]["atom_heading_policy"], "omit")
             self.assertEqual(profile["markdown_rendering"]["leaf_organizer_policy"], "flat-note")
+            self.assertEqual(profile["markdown_rendering"]["organizer_frontmatter_policy"], "required")
             self.assertEqual(profile["markdown_rendering"]["organizer_child_heading"], "relative-depth")
             self.assertEqual(
                 profile["atomization"]["knowledge_granularity"],
@@ -313,10 +314,12 @@ class BookToWikiGraphTests(unittest.TestCase):
             self.assertEqual(profile["relation_analysis"]["mode"], "llm-three-pass")
             self.assertEqual(profile["relation_analysis"]["graph_model"], "atom-concept-dual-layer")
             self.assertEqual(profile["relation_analysis"]["concept_merge_threshold"], 0.97)
-            self.assertEqual(profile["atomization"]["teaching_role_audit"], "required-before-materialization")
+            self.assertEqual(profile["atomization"]["teaching_role_audit"], "integrated")
+            self.assertEqual(profile["atomization"]["relation_feedback_cycles"], 2)
             self.assertEqual(profile["canvas"]["mode"], "three-level-constellation")
             self.assertEqual(profile["canvas"]["section_granularity"], "atom-and-exercise-entry")
             self.assertEqual(profile["canvas"]["theme"], "adaptive")
+            self.assertEqual(profile["canvas"]["concept_nodes"], "hidden")
 
     def test_three_level_canvas_reduces_chapter_noise_and_adds_section_detail(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -331,16 +334,47 @@ class BookToWikiGraphTests(unittest.TestCase):
             index = self.load_index(output_dir)
             self.assertEqual(index["schema_version"], 3)
             self.assertEqual(index["layout"]["zoom_levels"], ["book-chapters", "chapter-core", "section-detail"])
+            self.assertEqual(index["layout"]["learning_direction"], "edge-constrained-clusters")
+            self.assertEqual(index["layout"]["organization_encoding"], "regions-and-organizer-groups")
+            self.assertEqual(index["layout"]["spacing"]["node_margin"], 100)
             chapter = self.load_canvas(output_dir, index["chapter_maps"][0]["path"])
             chapter_cards = self.card_map(chapter)
+            self.assertGreaterEqual(
+                sum(node.get("type") == "group" for node in chapter["nodes"]),
+                1,
+            )
             self.assertNotIn(build_canvas.stable_id("exercise-entry", "section-a"), chapter_cards)
             self.assertFalse(any(str(edge.get("label", "")).startswith("练习") for edge in chapter["edges"]))
+            hub = build_canvas.stable_id("map-hub", "chapter-a")
+            self.assertFalse(any(hub in {edge['fromNode'],edge['toNode']} for edge in chapter['edges']))
+            for edge in chapter["edges"]:
+                source = chapter_cards.get(edge.get("fromNode"))
+                target = chapter_cards.get(edge.get("toNode"))
+                if source is None or target is None:
+                    continue
+                label = str(edge.get("label", ""))
+                if label and edge.get("fromSide") == "right" and ("主线" in label or label in {"先修", "发展", "推导", "引发"}):
+                    self.assertGreaterEqual(target["x"], source["x"])
+                if label and edge.get("fromSide") == "bottom" and ("主线" in label or label.startswith(("对比", "类比", "应用", "练习", "归属", "包含"))):
+                    self.assertGreaterEqual(target["y"], source["y"])
             section_entry = next(item for item in index["section_maps"] if item["chapter_key"] == "chapter-a")
             section = self.load_canvas(output_dir, section_entry["path"])
             self.assertIn(build_canvas.stable_id("exercise-entry", "section-a"), self.card_map(section))
             self.assertLessEqual(sum(str(edge.get("label", "")).startswith("练习") for edge in section["edges"]), 1)
             final = validate_book_graph.validate_graph(items["manifest"], items["book"], output_dir / "canvas-index.json")
             self.assertEqual(final["status"], "passed", final["errors"])
+            # Rebuilding retains exact geometry, groups, and every semantic edge.
+            before = (output_dir / index['chapter_maps'][0]['path']).read_bytes()
+            build_canvas.build_canvas_bundle(items['manifest'],output_dir,items['book'],overwrite=True)
+            self.assertEqual(before,(output_dir / index['chapter_maps'][0]['path']).read_bytes())
+            # A frame that no longer encloses its true members must fail even
+            # when it remains syntactically valid JSON Canvas.
+            damaged = self.load_canvas(output_dir,index['chapter_maps'][0]['path'])
+            group = next(node for node in damaged['nodes'] if node['type'] == 'group')
+            group['width'] = 1
+            (output_dir / index['chapter_maps'][0]['path']).write_text(json.dumps(damaged))
+            final = validate_book_graph.validate_graph(items['manifest'],items['book'],output_dir/'canvas-index.json')
+            self.assertIn('canvas-organizer-ownership-envelope',{item['code'] for item in final['errors']})
 
     def test_bundle_builds_two_level_atlas_and_chapter_maps(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

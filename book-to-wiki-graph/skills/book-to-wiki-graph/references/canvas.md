@@ -48,11 +48,16 @@ semantic edge or broken Canvas link at either lower level.
   deleting their Markdown.
 - Direct chapter sections form source-numbered regions. Direct chapter atoms
   occupy a generated `章引入` region. Each region has exactly one click-through
-  portal showing its visible-atom and exercise counts. Do not add deeper
-  organizer landmarks: spatial regions and portals already encode ownership.
-- Backbone knowledge and scenario atoms form a deterministic center-outward
-  constellation. Supporting examples, exercises, and scenarios orbit the
-  closest connected core atom.
+  portal showing its visible-atom and exercise counts. Every deeper organizer
+  with visible cards also receives a nested Canvas `group` envelope labelled
+  `§ <组织名>`; these envelopes express ownership without drawing a directory
+  tree or adding extra cards.
+- Backbone knowledge and scenario atoms form deterministic compact clusters.
+  Within a reviewed route, progression remains left-to-right and downward
+  branches remain below their source; unrelated regions are packed in two
+  dimensions rather than connected into a decorative diagonal. Supporting
+  examples, exercises, and scenarios orbit the closest connected core atom
+  while retaining their source order.
 - Reviewed cross-chapter routes aggregate at atlas level; a future external
   atom portal may be added only if it is deduplicated and validated.
 - Render a canonical concept as an unlinked `✦ 规范概念` hub only when it
@@ -63,8 +68,14 @@ semantic edge or broken Canvas link at either lower level.
   visible grounded atom. Do not draw both the hub relation and its grounded
   atom projection.
 - Use stable IDs and deterministic placement. Resolve all card collisions.
-  For a Canvas with at least 30 cards, keep the total bounds aspect ratio
-  between `0.5` and `2.0`.
+  Knowledge cards use a generous berth (`node_margin=100`) and
+  edge-constrained cluster gaps (`region_gap=160`, `right_gap=140`,
+  `down_gap=110`). For semantic edges,
+  a right-side origin always points to a target whose x-coordinate is not
+  smaller; a bottom-side origin always points to a target whose y-coordinate
+  is not smaller. Local cluster packing provides a star-map feel without
+  reversing the learning order. For a Canvas with at least 30 cards,
+  keep the total bounds aspect ratio between `0.5` and `2.0`.
 - Every substantive card must have at least one incident edge whenever the
   chapter contains more than one substantive card. This includes internal
   atoms, section portals, external portals, and concept hubs; title, legend,
@@ -159,3 +170,12 @@ coverage and one-primary-edge limits at section scale, featured-example
 selection, strict concept-hub rules, all substantive-card connectivity, port
 sides, targets, colors, navigation, counts, bounds, overlap, and recorded
 visual-quality metrics.
+
+## Category-aware rendering override
+
+When `canvas.concept_nodes` and `canvas.formula_nodes` are `hidden`, Canvas
+renders neither canonical concept hubs nor derived Markdown cards. It shows all
+knowledge atoms, substantial scenarios, reviewed bridge examples, and exercise
+organizer entries at detail scale. A visible card without a direct visible
+semantic edge uses a labelled `归属` bottom-to-top edge to its section portal or
+map hub. `source_order_fallback_edges` must remain zero in this mode.

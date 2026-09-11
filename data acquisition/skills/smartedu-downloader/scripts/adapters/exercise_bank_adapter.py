@@ -2,7 +2,7 @@
 
 """
 国家中小学智慧教育平台 习题库/同步练习 (/myPaper) 专用适配器
-策略模式重构版 (v5 - 深度元数据融合、全事件驱动交互、微课直链提取与多填空答案修复)：
+策略模式重构版 (v6 - 闭环状态机、精准树节点命中、多填空答案修复与微课源流直链)：
 - 习题库独立存放于：/Users/oven/Downloads/中小学智慧平台资源/习题库/
 - 严格按照平台「查看解析」所呈现的全量信息结构化输出（题型、纯净题干、子题分解、完整选项、正确答案、名师微课与详细解析）
 - 彻底解决多空填空题答案截断丢失问题
@@ -13,7 +13,7 @@
 - 具备严格的大章展开、小节激活与空题跳过校验机制，实时输出提取进度
 """
 
-import os, sys, json, re, time, random, urllib.request, urllib.parse
+import os, sys, json, re, time, random, urllib.request, urllib.parse, zipfile, io
 from adapters.base_adapter import BaseResourceAdapter
 from safari_helper import eval_safari
 
@@ -21,6 +21,68 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
     "Referer": "https://basic.smartedu.cn/"
 }
+
+def download_question_video(packing_result: str, video_url: str, save_path: str, retries: int = 3) -> bool:
+    """
+    下载题目配套的名师解析微课视频到本地 videos/ 目录：
+    1. 若本地文件已存在且大小 > 100KB，直接复用。
+    2. 优先通过 packing_result (官方资源包 ZIP) 提取完整 1080P MP4 视频。
+    3. 若 video_url 本身是 mp4 直链，则直接下载。
+    """
+    if os.path.exists(save_path) and os.path.getsize(save_path) > 1024 * 100:
+        return True
+
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+
+    # 方案 1: 从 packing_result ZIP 中解压出完整高清 MP4
+    if packing_result:
+        raw_path = re.sub(r'^(cs_path:)?\$\{ref-path\}', '', packing_result).lstrip('/')
+        cdn_hosts = [
+            "https://r1-ndr.ykt.cbern.com.cn",
+            "https://r2-ndr.ykt.cbern.com.cn",
+            "https://r3-ndr.ykt.cbern.com.cn"
+        ]
+        for host in cdn_hosts:
+            zip_url = f"{host}/{raw_path}"
+            for attempt in range(retries):
+                try:
+                    req = urllib.request.Request(zip_url, headers=HEADERS)
+                    with urllib.request.urlopen(req, timeout=40) as resp:
+                        zip_data = resp.read()
+                    if zip_data and len(zip_data) > 1000:
+                        with zipfile.ZipFile(io.BytesIO(zip_data)) as z:
+                            mp4_names = [n for n in z.namelist() if n.lower().endswith(".mp4")]
+                            if mp4_names:
+                                mp4_names.sort(key=lambda n: z.getinfo(n).file_size, reverse=True)
+                                target_mp4 = mp4_names[0]
+                                tmp_save = save_path + ".tmp"
+                                with z.open(target_mp4) as src, open(tmp_save, "wb") as dst:
+                                    dst.write(src.read())
+                                if os.path.exists(tmp_save) and os.path.getsize(tmp_save) > 1024 * 100:
+                                    os.replace(tmp_save, save_path)
+                                    return True
+                except Exception:
+                    time.sleep(1.0)
+            if os.path.exists(save_path) and os.path.getsize(save_path) > 1024 * 100:
+                return True
+
+    # 方案 2: 若 video_url 本身为 mp4 直链
+    if video_url and (".mp4" in video_url.lower()):
+        for attempt in range(retries):
+            try:
+                req = urllib.request.Request(video_url, headers=HEADERS)
+                tmp_save = save_path + ".tmp"
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    data = resp.read()
+                if len(data) > 1024 * 100:
+                    with open(tmp_save, "wb") as f:
+                        f.write(data)
+                    os.replace(tmp_save, save_path)
+                    return True
+            except Exception:
+                time.sleep(1.0)
+
+    return False
 
 def download_file(url: str, save_path: str, retries: int = 3) -> bool:
     """下载图片文件到本地，自带重试机制"""
@@ -76,32 +138,75 @@ def clean_mathtype_units(text: str) -> str:
     return t
 
 def clean_html_and_latex(text: str) -> str:
-    """全面清洗 HTML 并标准化 LaTeX 数学公式"""
+    """全面清洗 HTML 并标准化 LaTeX 数学公式（简易文本模式）"""
     if not text:
         return ""
-    # 移除零宽不可见字符
     t = re.sub(r'[\u200b\u200c\u200d\u200e\u200f\ufeff]', '', text)
     t = clean_mathtype_units(t)
     
     # 规范化 LaTeX 标签
-    t = re.sub(r'<latex[^>]*>\\\(?\s*(.*?)\s*\\?\)?<\/latex>', r' $\1$ ', t, flags=re.DOTALL)
-    t = re.sub(r'<latex[^>]*>\s*(.*?)\s*<\/latex>', r' $\1$ ', t, flags=re.DOTALL)
+    t = re.sub(r'<latex[^>]*>(?:\\\(|\$)?\s*(.*?)\s*(?:\\\)|\$)?<\/latex>', r' $\1$ ', t, flags=re.DOTALL)
     t = re.sub(r'\\\((.*?)\\\)', r' $\1$ ', t, flags=re.DOTALL)
-    
-    # 填空标签转换为横线
     t = re.sub(r'<textentryinteraction[^>]*><\/textentryinteraction>', ' _____ ', t)
     
     # 清除 HTML 标签与空白实体
     t = re.sub(r'<\/?(p|div|span|br)[^>]*>', ' ', t)
     t = re.sub(r'<[^>]+>', '', t)
     t = re.sub(r'&nbsp;', ' ', t)
+    t = re.sub(r'&ldquo;|&rdquo;', '"', t)
     t = re.sub(r'[ \t]+', ' ', t)
     
     # 规范化连续美元符号与空格
     t = re.sub(r'\${2,}', '$', t)
-    t = re.sub(r'\$\s+', '$', t)
-    t = re.sub(r'\s+\$', '$', t)
+    t = re.sub(r'\$[ \t]+', '$', t)
+    t = re.sub(r'[ \t]+\$', '$', t)
     return t.strip()
+
+def format_and_localize_rich_text(text: str, img_prefix: str, images_dir: str) -> str:
+    """
+    清洗富文本 HTML，下载内嵌图片到 images/ 目录，并将数学推导/解答步骤转换为排版优美的高保真 Markdown。
+    彻底杜绝公式被包裹进单行反引号、杜绝段落被压成单行。
+    """
+    if not text:
+        return ""
+    t = re.sub(r'[\u200b\u200c\u200d\u200e\u200f\ufeff]', '', text)
+    t = clean_mathtype_units(t)
+    
+    # 提取并下载嵌入的 <img> 图片
+    img_matches = list(re.finditer(r'<img[^>]+src=["\'](https?://[^"\']+)["\'][^>]*>', t))
+    for i, m in enumerate(img_matches, 1):
+        img_url = m.group(1)
+        img_name = f"{img_prefix}_{i}.png"
+        img_path = os.path.join(images_dir, img_name)
+        download_file(img_url, img_path)
+        t = t.replace(m.group(0), f"\n\n![图](images/{img_name})\n\n")
+        
+    # 标准化 LaTeX 公式
+    t = re.sub(r'<latex[^>]*>(?:\\\(|\$)?\s*(.*?)\s*(?:\\\)|\$)?<\/latex>', r' $\1$ ', t, flags=re.DOTALL)
+    t = re.sub(r'\\\((.*?)\\\)', r' $\1$ ', t, flags=re.DOTALL)
+    t = re.sub(r'<textentryinteraction[^>]*><\/textentryinteraction>', ' _____ ', t)
+    
+    # 段落和换行转换
+    t = re.sub(r'<br\s*/?>', '\n', t)
+    t = re.sub(r'</?(p|div)[^>]*>', '\n', t)
+    t = re.sub(r'</?span[^>]*>', '', t)
+    t = re.sub(r'<[^>]+>', '', t)
+    t = re.sub(r'&nbsp;', ' ', t)
+    t = re.sub(r'&ldquo;|&rdquo;', '"', t)
+    t = re.sub(r'&lt;', '<', t)
+    t = re.sub(r'&gt;', '>', t)
+    t = re.sub(r'&amp;', '&', t)
+    
+    # 清理空格与空行（保留公式结构与真实换行，杜绝将相邻公式与换行合并）
+    lines = [l.strip() for l in t.split('\n')]
+    res_lines = []
+    for l in lines:
+        if l or (res_lines and res_lines[-1]):
+            res_lines.append(l)
+    res = '\n'.join(res_lines).strip()
+    res = re.sub(r'\$[ \t]+', '$', res)
+    res = re.sub(r'[ \t]+\$', '$', res)
+    return res
 
 class ExerciseBankAdapter(BaseResourceAdapter):
     """处理 /myPaper 同步练习题库适配器"""
@@ -109,8 +214,122 @@ class ExerciseBankAdapter(BaseResourceAdapter):
     def match(self, url: str) -> bool:
         return "myPaper" in url
 
+    def get_book_meta_from_page(self):
+        """从网页面包屑或导航中智能获取当前教材的版本与年级册次"""
+        js = r'''
+        (() => {
+          const allEls = Array.from(document.querySelectorAll('*'));
+          const breadcrumbEl = allEls.find(el => {
+            const t = (el.innerText || '').trim();
+            return el.children.length === 0 && (t.includes('初中 / 数学') || t.includes('小学 / 数学') || t.includes('高中 / 数学'));
+          });
+          if (breadcrumbEl) return breadcrumbEl.innerText.trim();
+          const tagEl = allEls.find(el => {
+            const t = (el.innerText || '').trim();
+            return t.includes('·') && (t.includes('版') || t.includes('册'));
+          });
+          return tagEl ? tagEl.innerText.trim() : '';
+        })()
+        '''
+        res = eval_safari(js)
+        if res and "/" in res:
+            parts = [p.strip() for p in res.split("/") if p.strip()]
+            if len(parts) >= 5:
+                version = parts[2]
+                grade_vol = (parts[3] + parts[4]).replace(" ", "")
+                return version, grade_vol
+            elif len(parts) == 4:
+                version = parts[2]
+                grade_vol = parts[3].replace(" ", "")
+                return version, grade_vol
+        elif res and "·" in res:
+            parts = [p.strip() for p in res.split("·") if p.strip()]
+            if len(parts) >= 3:
+                return parts[2], (parts[0] + parts[1]).replace(" ", "")
+            elif len(parts) == 2:
+                return parts[1], parts[0].replace(" ", "")
+        return "", ""
+
+    def switch_volume(self, volume_name: str, max_wait: int = 8) -> bool:
+        """控制 Safari 切换教材册次（自动选择 高中 -> 数学 -> 人教A版 -> 目标册次）"""
+        js_open = '''
+        (() => {
+          const switchBtn = document.querySelector('.index-module_filter-title_76I5J .index-module_btn_fBO3m');
+          if (switchBtn) { switchBtn.click(); return 'opened'; }
+          return 'not found';
+        })()
+        '''
+        eval_safari(js_open)
+        time.sleep(1.0)
+        
+        # 1. 选中 高中
+        eval_safari("""
+        (() => {
+          const tags = Array.from(document.querySelectorAll('.fish-drawer-body span, .fish-drawer-body div'));
+          const el = tags.find(t => (t.innerText || '').trim() === '高中');
+          if (el) el.click();
+        })()
+        """)
+        time.sleep(0.8)
+
+        # 2. 选中 数学
+        eval_safari("""
+        (() => {
+          const tags = Array.from(document.querySelectorAll('.fish-drawer-body span, .fish-drawer-body div'));
+          const el = tags.find(t => (t.innerText || '').trim() === '数学');
+          if (el) el.click();
+        })()
+        """)
+        time.sleep(0.8)
+
+        # 3. 选中 人教A版
+        eval_safari("""
+        (() => {
+          const tags = Array.from(document.querySelectorAll('.fish-drawer-body span, .fish-drawer-body div'));
+          const el = tags.find(t => (t.innerText || '').trim() === '人教A版');
+          if (el) el.click();
+        })()
+        """)
+        time.sleep(0.8)
+        
+        # 4. 选中 目标册次
+        js_click_vol = f'''
+        (() => {{
+          const tags = Array.from(document.querySelectorAll('.fish-drawer-body span, .fish-drawer-body div'));
+          const targetName = "{volume_name}";
+          const el = tags.find(t => {{
+            const s = (t.innerText || '').trim();
+            return s === targetName || s.replace(/\\s+/g, '') === targetName.replace(/\\s+/g, '');
+          }});
+          if (el) {{ el.click(); return 'clicked'; }}
+          return 'not found';
+        }})()
+        '''
+        eval_safari(js_click_vol)
+        time.sleep(0.8)
+        
+        # 5. 点击 完成选择
+        js_confirm = '''
+        (() => {
+          const btns = Array.from(document.querySelectorAll('.fish-drawer button, .fish-drawer span'));
+          const el = btns.find(b => (b.innerText || '').trim() === '完成选择');
+          if (el) { el.click(); return 'confirmed'; }
+          return 'not found';
+        })()
+        '''
+        eval_safari(js_confirm)
+        time.sleep(2.0)
+        
+        for _ in range(max_wait * 2):
+            time.sleep(0.5)
+            curr_tag = eval_safari('(() => { const el = document.querySelector(".index-module_selected-tag_8J1Eb"); return el ? el.innerText : ""; })()')
+            if volume_name in curr_tag or volume_name.replace(" ", "") in curr_tag.replace(" ", ""):
+                time.sleep(1.5)
+                return True
+        return False
+
     def get_all_book_sections(self):
-        """从 React 内部数据树中提取整本书所有大章与小节列表（附带习题存在标记 has_res）"""
+        """从 React 内部数据树中提取整本书所有大章与小节列表（智能识别真实叶子小节，避免父级重复与空节点）"""
         js = r'''
         const treeEl = document.querySelector('.fish-tree');
         if (!treeEl) return JSON.stringify([]);
@@ -132,27 +351,33 @@ class ExerciseBankAdapter(BaseResourceAdapter):
 
         if (!roots) return JSON.stringify([]);
 
-        const result = [];
-        function walk(node, currentChap) {
+        function getLeaves(node, currentChap) {
           const t = (node.title || node.rich_title || '').trim();
-          const isChap = /^第[一二三四五六七八九十]+章/.test(t) || /^综合与实践/.test(t);
-          const chapName = isChap ? t : currentChap;
+          const isChap = /^第[一二三四五六七八九十]+章/.test(t) || /^综合与实践/.test(t) || /^数学建模/.test(t);
+          const chapName = isChap ? t : (currentChap || t || '综合与复习');
+          const hasRes = (node.custom_properties && node.custom_properties.has_res !== undefined) ? node.custom_properties.has_res : false;
+          const children = node.child_nodes || [];
           
-          if (!isChap && currentChap) {
-            result.push({
-              chapter: currentChap,
-              section: t,
-              id: node.id,
-              has_res: (node.custom_properties && node.custom_properties.has_res !== undefined) ? node.custom_properties.has_res : true
-            });
+          if (isChap) {
+            let res = [];
+            children.forEach(c => { res = res.concat(getLeaves(c, chapName)); });
+            return res;
           }
           
-          if (Array.isArray(node.child_nodes)) {
-            node.child_nodes.forEach(child => walk(child, chapName));
+          const activeChildren = children.filter(c => c.custom_properties && c.custom_properties.has_res);
+          if (activeChildren.length > 0) {
+            let res = [];
+            activeChildren.forEach(c => { res = res.concat(getLeaves(c, chapName)); });
+            return res;
+          } else if (hasRes) {
+            return [{ chapter: chapName, section: t, id: node.id, has_res: true }];
+          } else {
+            return [];
           }
         }
 
-        roots.forEach(r => walk(r, null));
+        let result = [];
+        roots.forEach(r => { result = result.concat(getLeaves(r, null)); });
         return JSON.stringify(result);
         '''
         res = eval_safari(js)
@@ -161,62 +386,91 @@ class ExerciseBankAdapter(BaseResourceAdapter):
         except Exception:
             return []
 
-    def switch_to_section(self, chapter_name: str, section_name: str):
+    def switch_to_section(self, chapter_name: str, section_name: str, max_retries: int = 2):
         """在页面左侧确保大章展开并选中小节，返回 (matched, is_empty)"""
-        # 0. 关掉可能存在的弹窗
-        js_close = '''
-        const mc = document.querySelector('.fish-modal-close, button[aria-label="Close"]');
-        if (mc) mc.click();
-        '''
-        eval_safari(js_close)
+        clean_chap = (chapter_name or "").strip()
+        clean_sec = (section_name or "").strip()
         
-        # 1. 展开大章
-        js_expand = f'''
-        const rows = Array.from(document.querySelectorAll(".fish-tree-treenode"));
-        const chapRow = rows.find(r => (r.innerText || "").includes("{chapter_name}"));
-        if (chapRow && (chapRow.className.includes("close") || !chapRow.className.includes("open"))) {{
-          const cw = chapRow.querySelector(".chapter-wrapper, .chapter-name") || chapRow;
-          cw.click();
-          cw.dispatchEvent(new MouseEvent("click", {{ bubbles: true, cancelable: true, view: window }}));
-        }}
-        return "expanded";
-        '''
-        eval_safari(js_expand)
-        time.sleep(1.0)
-        
-        # 2. 点击目标小节
-        js_click = f'''
-        const secRows = Array.from(document.querySelectorAll(".fish-tree-treenode"));
-        const secRow = secRows.find(r => {{
-          const t = (r.innerText || "").trim().split("\\n")[0];
-          return t.includes("{section_name}") || "{section_name}".includes(t);
-        }});
-        if (!secRow) return "secRow not found";
-        
-        const an = secRow.querySelector(".active-name") || secRow.querySelector(".active-wrapper") || secRow;
-        an.click();
-        an.dispatchEvent(new MouseEvent("click", {{ bubbles: true, cancelable: true, view: window }}));
-        return "clicked";
-        '''
-        eval_safari(js_click)
-        time.sleep(2.0)
-        
-        # 3. 校验是否切换成功
-        js_verify = f'''
-        const activeName = document.querySelector(".active-name.true, .fish-tree-node-selected .active-name");
-        const currentActive = activeName ? activeName.innerText.trim() : "";
-        const emptyNotice = document.body.innerText.includes("哎呀，这里空空如也");
-        return JSON.stringify({{
-          active: currentActive,
-          matched: currentActive.includes("{section_name}") || "{section_name}".includes(currentActive),
-          empty: emptyNotice
-        }});
-        '''
-        try:
-            info = json.loads(eval_safari(js_verify))
-            return info.get("matched", False), info.get("empty", False)
-        except Exception:
-            return False, False
+        for attempt in range(max_retries):
+            # 0. 关掉可能存在的弹窗
+            eval_safari("const mc = document.querySelector('.fish-modal-close, button[aria-label=\"Close\"]'); if (mc) mc.click();")
+            
+            # 1. 展开大章（若处于闭合状态且指定了大章）
+            if clean_chap:
+                js_expand = f'''
+                const rows = Array.from(document.querySelectorAll(".fish-tree-treenode"));
+                const chapRow = rows.find(r => {{
+                  const t = (r.innerText || "").trim().split("\\n")[0];
+                  return t && t.includes("{clean_chap}");
+                }});
+                if (chapRow && chapRow.className.includes("switcher-close")) {{
+                  const cw = chapRow.querySelector(".chapter-wrapper, .chapter-name") || chapRow;
+                  cw.click();
+                  return "expanded";
+                }}
+                return chapRow ? "already open" : "chapRow not found";
+                '''
+                eval_safari(js_expand)
+                time.sleep(1.0)
+            
+            # 2. 精准定位并点击小节（在所属章节作用域内查找，防止同名“小结/复习”串台，支持 .active-name 与 .chapter-name）
+            js_click = f'''
+            const rows = Array.from(document.querySelectorAll(".fish-tree-treenode"));
+            let searchRows = rows;
+            const chap = "{clean_chap}";
+            const sec = "{clean_sec}";
+            
+            if (chap) {{
+              const chapIdx = rows.findIndex(r => {{
+                const t = (r.innerText || "").trim().split("\\n")[0];
+                return t && t.includes(chap);
+              }});
+              if (chapIdx !== -1) {{
+                const nextChapIdx = rows.findIndex((r, idx) => {{
+                  if (idx <= chapIdx) return false;
+                  const t = (r.innerText || "").trim().split("\\n")[0];
+                  return /^第[一二三四五六七八九十]+章/.test(t) || /^综合与实践/.test(t) || /^数学建模/.test(t) || /^总复习/.test(t);
+                }});
+                searchRows = nextChapIdx !== -1 ? rows.slice(chapIdx, nextChapIdx) : rows.slice(chapIdx);
+              }}
+            }}
+            
+            const secRow = searchRows.find(r => {{
+              const t = (r.innerText || "").trim().split("\\n")[0];
+              if (!t) return false;
+              return t.includes(sec) || sec.includes(t);
+            }});
+            if (!secRow) return "secRow not found in searchRows: " + searchRows.length;
+            const target = secRow.querySelector(".active-name, .chapter-name, .active-wrapper, .chapter-wrapper") || secRow;
+            target.click();
+            return "clicked sec: " + (target.innerText || secRow.innerText).trim().split("\\n")[0];
+            '''
+            eval_safari(js_click)
+            time.sleep(2.0)
+            
+            # 3. 严格校验选中状态（匹配高亮选中的节点文本）
+            js_verify = f'''
+            const selEl = document.querySelector(".fish-tree-node-selected, .fish-tree-treenode-selected");
+            const selText = selEl ? selEl.innerText.trim().split("\\n")[0] : "";
+            const isSelected = Boolean(selText && (selText.includes("{clean_sec}") || "{clean_sec}".includes(selText)));
+            const emptyNotice = document.body.innerText.includes("哎呀，这里空空如也");
+            return JSON.stringify({{
+              matched: isSelected,
+              empty: emptyNotice
+            }});
+            '''
+            try:
+                info = json.loads(eval_safari(js_verify))
+                matched = info.get("matched", False)
+                empty = info.get("empty", False)
+                if matched or empty:
+                    return matched, empty
+            except Exception:
+                pass
+                
+            time.sleep(1.0)
+            
+        return False, False
 
     def extract_current_page_questions(self):
         """深度提取当前页题目、选项、插图与答案（纯净解析视图数据结构）"""
@@ -284,6 +538,7 @@ class ExerciseBankAdapter(BaseResourceAdapter):
             // 4. 解析与视频
             let hasVideo = false;
             let videoUrl = '';
+            let videoTitle = '';
             const textFeedbacks = [];
             (c.feedbacks || []).forEach(f => {
               const fc = f.content || '';
@@ -294,17 +549,34 @@ class ExerciseBankAdapter(BaseResourceAdapter):
               } else if (fc.includes('<video') || fc.includes('.m3u8')) {
                 hasVideo = true;
               }
+              const tMatch = fc.match(/title=["']([^"']+)["']/i);
+              if (tMatch) {
+                videoTitle = tMatch[1];
+              }
               let cleanF = fc.replace(/<video[^>]*>.*?<\/video>/gis, '');
               cleanF = cleanF.replace(/[\u200b\u200c\u200d\u200e\u200f\ufeff]/g, '').trim();
               if (cleanF && !cleanF.includes('解析视频请查看最后一题')) {
                 textFeedbacks.push(cleanF);
               }
             });
+
+            const packingResult = (cp.sys_packing_result && cp.sys_packing_result.result) || '';
             
             // 5. 抓取该题目下 DOM 中的真实图片 URL
             const domImgs = Array.from(item.querySelectorAll('img'))
               .map(i => i.src)
               .filter(s => s && !s.startsWith('data:'));
+              
+            // 6. 从 items 数据中提取已解析的高清 CDN 图片 URL
+            const itemImgs = [];
+            (c.items || []).forEach(qi => {
+              const p = qi.prompt || '';
+              const matches = p.match(/src=["'](https?:\/\/[^"']+)["']/g) || [];
+              matches.forEach(m => {
+                const u = m.replace(/^src=["']|["']$/g, '');
+                if (!itemImgs.includes(u)) itemImgs.push(u);
+              });
+            });
               
             return {
               qIdx: idx + 1,
@@ -312,17 +584,22 @@ class ExerciseBankAdapter(BaseResourceAdapter):
               type_label: typeLabel,
               difficulty: diffLabel.replace('难易度：', '').trim(),
               knowledge_points: kpList,
+              create_time: (qInfo && qInfo.create_time) || '',
               teacher: cp.qb_teacher_name || '',
               teacher_intro: cp.qb_teacher_intro || '',
               guiders: cp.qb_guider_names || [],
+              guider_intros: cp.qb_guider_intros || [],
               video_url: videoUrl,
+              video_title: videoTitle,
+              packing_result: packingResult,
               preview_big: (qInfo && qInfo.preview && qInfo.preview.question_big) || '',
               stem_html: stemHtml,
               sub_items: subList,
               responses: responses,
               has_video: hasVideo,
               text_feedbacks: textFeedbacks,
-              dom_imgs: domImgs
+              dom_imgs: domImgs,
+              item_imgs: itemImgs
             };
           });
         }
@@ -357,13 +634,11 @@ class ExerciseBankAdapter(BaseResourceAdapter):
         const target = pageItems.find(p => parseInt((p.innerText || '').trim()) === {page_num});
         if (target) {{
           target.click();
-          target.dispatchEvent(new MouseEvent('click', {{ bubbles: true, cancelable: true, view: window }}));
           return 'clicked page ' + {page_num};
         }}
         const nextBtn = pagination.querySelector('.fish-pagination-next');
         if (nextBtn && !nextBtn.className.includes('fish-pagination-disabled')) {{
           nextBtn.click();
-          nextBtn.dispatchEvent(new MouseEvent('click', {{ bubbles: true, cancelable: true, view: window }}));
           return 'clicked next';
         }}
         return 'not found';
@@ -402,13 +677,16 @@ class ExerciseBankAdapter(BaseResourceAdapter):
         return all_q
 
     def export_section_files(self, chapter: str, section: str, questions: list, output_dir: str):
-        target_dir = os.path.join(output_dir, chapter, section)
+        safe_chap = (chapter or "").strip() or (section or "").strip() or "综合与复习"
+        safe_sec = (section or "").strip() or "练习"
+        target_dir = os.path.join(output_dir, safe_chap, safe_sec)
         images_dir = os.path.join(target_dir, "images")
+        videos_dir = os.path.join(target_dir, "videos")
         os.makedirs(images_dir, exist_ok=True)
         
-        md_path = os.path.join(target_dir, f"{section}_题库.md")
+        md_path = os.path.join(target_dir, f"{safe_sec}_题库.md")
         md_lines = [
-            f"# {chapter} - {section} 同步练习题库",
+            f"# {safe_chap} - {safe_sec} 同步练习题库",
             f"\n> 来源：国家中小学智慧教育平台 · 习题库",
             f"> 题目总数：{len(questions)} 道\n",
             "---\n"
@@ -426,22 +704,34 @@ class ExerciseBankAdapter(BaseResourceAdapter):
             # 1. 题干处理（替换图片占位符）
             stem_html = q.get("stem_html", "")
             dom_imgs = q.get("dom_imgs", [])
+            item_imgs = q.get("item_imgs", [])
             
-            # 将 DOM 真实图片与题干对应
+            # 整合 items 与 DOM 中可用的真实图片 URL
+            combined_imgs = [u for u in item_imgs if u]
+            for u in dom_imgs:
+                if u not in combined_imgs:
+                    combined_imgs.append(u)
+                    
             stem_img_matches = list(re.finditer(r'<img[^>]+src=["\']([^"\']+)["\'][^>]*>', stem_html))
-            used_dom_img_idx = 0
-            
-            if stem_img_matches and dom_imgs:
-                for s_i, match in enumerate(stem_img_matches, 1):
-                    if used_dom_img_idx < len(dom_imgs):
-                        real_url = dom_imgs[used_dom_img_idx]
-                        used_dom_img_idx += 1
-                        img_name = f"q{idx}_stem_{s_i}.png"
-                        img_path = os.path.join(images_dir, img_name)
-                        download_file(real_url, img_path)
-                        stem_html = stem_html.replace(match.group(0), f"\n\n![图](images/{img_name})\n\n", 1)
-                        
-            clean_stem = clean_html_and_latex(stem_html)
+            used_img_idx = 0
+            for s_i, match in enumerate(stem_img_matches, 1):
+                raw_src = match.group(1)
+                real_url = ""
+                if raw_src.startswith("http"):
+                    real_url = raw_src
+                elif used_img_idx < len(combined_imgs):
+                    real_url = combined_imgs[used_img_idx]
+                    used_img_idx += 1
+                    
+                if real_url:
+                    img_name = f"q{idx}_stem_{s_i}.png"
+                    img_path = os.path.join(images_dir, img_name)
+                    download_file(real_url, img_path)
+                    stem_html = stem_html.replace(match.group(0), f"\n\n![图](images/{img_name})\n\n", 1)
+                else:
+                    stem_html = stem_html.replace(match.group(0), "", 1)
+                    
+            clean_stem = format_and_localize_rich_text(stem_html, f"q{idx}_stem_extra", images_dir)
             clean_stem = re.sub(r'^\s*(填空题|单选题|多选题|问答题|计算题|复合题|解答题)\s*', '', clean_stem)
             md_lines.append(f"**【题目】**\n{clean_stem}\n")
             
@@ -451,82 +741,146 @@ class ExerciseBankAdapter(BaseResourceAdapter):
             
             if is_composite and sub_items:
                 for s_idx, sub in enumerate(sub_items, 1):
-                    p_text = clean_html_and_latex(sub.get("prompt", ""))
+                    p_text = format_and_localize_rich_text(sub.get("prompt", ""), f"q{idx}_sub_{s_idx}", images_dir)
                     sub_choices = sub.get("choices", [])
                     md_lines.append(f"({s_idx}) {p_text}")
                     if sub_choices:
                         for ch in sub_choices:
                             ch_id = ch.get("id", "")
-                            ch_t = clean_html_and_latex(ch.get("text", ""))
-                            md_lines.append(f"   - **{ch_id}.** {ch_t}")
+                            ch_raw = ch.get("text", "")
+                            ch_img_match = re.search(r'src=["\'](https?://[^"\']+)["\']', ch_raw)
+                            ch_img_embed = ""
+                            if ch_img_match:
+                                ch_img_url = ch_img_match.group(1)
+                                ch_img_name = f"q{idx}_sub_{s_idx}_choice_{ch_id}.png"
+                                ch_img_path = os.path.join(images_dir, ch_img_name)
+                                download_file(ch_img_url, ch_img_path)
+                                ch_img_embed = f" ![选项{ch_id}](images/{ch_img_name})"
+                            ch_clean_raw = re.sub(r'<img[^>]*>', '', ch_raw)
+                            ch_t = clean_html_and_latex(ch_clean_raw)
+                            md_lines.append(f"   - **{ch_id}.** {ch_t}{ch_img_embed}")
                 md_lines.append("")
             elif sub_items and sub_items[0].get("choices"):
-                # 普通选择题的选项
                 for ch in sub_items[0]["choices"]:
                     ch_id = ch.get("id", "")
                     ch_raw = ch.get("text", "")
                     ch_img_match = re.search(r'src=["\'](https?://[^"\']+)["\']', ch_raw)
-                    ch_t = clean_html_and_latex(ch_raw)
-                    ch_line = f"- **{ch_id}.** {ch_t}"
+                    ch_img_embed = ""
                     if ch_img_match:
                         ch_img_url = ch_img_match.group(1)
                         ch_img_name = f"q{idx}_choice_{ch_id}.png"
                         ch_img_path = os.path.join(images_dir, ch_img_name)
                         download_file(ch_img_url, ch_img_path)
-                        ch_line += f" ![选项{ch_id}](images/{ch_img_name})"
-                    md_lines.append(ch_line)
+                        ch_img_embed = f" ![选项{ch_id}](images/{ch_img_name})"
+                    ch_clean_raw = re.sub(r'<img[^>]*>', '', ch_raw)
+                    ch_t = clean_html_and_latex(ch_clean_raw)
+                    md_lines.append(f"- **{ch_id}.** {ch_t}{ch_img_embed}")
                 md_lines.append("")
                 
-            # 3. 标准参考答案
+            # 3. 标准参考答案（高保真数学公式与答案配图支持，杜绝反引号禁用公式）
             responses = q.get("responses", [])
             ans_entries = []
             for r_i, r in enumerate(responses, 1):
                 c_list = []
-                for c in r.get("corrects", []):
-                    c_clean = clean_html_and_latex(c)
+                for c_i, c in enumerate(r.get("corrects", []), 1):
+                    prefix = f"q{idx}_ans_{r_i}_{c_i}" if len(responses) > 1 else f"q{idx}_ans_{c_i}"
+                    c_clean = format_and_localize_rich_text(c, prefix, images_dir)
                     if c_clean:
                         c_list.append(c_clean)
                 if c_list:
                     ans_val = "、".join(c_list)
-                    if is_composite and len(responses) > 1:
-                        ans_entries.append(f"- ({r_i}) `{ans_val}`")
-                    else:
-                        ans_entries.append(f"`{ans_val}`")
+                    ans_entries.append((r_i, ans_val))
                         
-            if ans_entries:
-                if is_composite and len(responses) > 1:
-                    md_lines.append("**【参考答案】**：\n" + "\n".join(ans_entries) + "\n")
-                elif len(ans_entries) > 1:
-                    sub_ans = [f"({idx_a}) {a}" for idx_a, a in enumerate(ans_entries, 1)]
+            if is_composite and len(responses) > 1:
+                ans_body = []
+                for r_i, a_val in ans_entries:
+                    if "\n" in a_val or "![" in a_val:
+                        indented = "\n  ".join(a_val.split("\n"))
+                        ans_body.append(f"- ({r_i}) {indented}")
+                    else:
+                        ans_body.append(f"- ({r_i}) {a_val}")
+                md_lines.append("**【参考答案】**：\n" + "\n".join(ans_body) + "\n")
+            elif len(ans_entries) > 1:
+                is_all_single = all("\n" not in a_val and "![" not in a_val for _, a_val in ans_entries)
+                if is_all_single:
+                    sub_ans = [f"({r_i}) {a_val}" for r_i, a_val in ans_entries]
                     md_lines.append(f"**【参考答案】**：{'   '.join(sub_ans)}\n")
                 else:
-                    md_lines.append(f"**【参考答案】**：{ans_entries[0]}\n")
+                    ans_body = [f"- ({r_i}) {a_val}" for r_i, a_val in ans_entries]
+                    md_lines.append("**【参考答案】**：\n" + "\n".join(ans_body) + "\n")
+            elif ans_entries:
+                single_ans = ans_entries[0][1]
+                if "\n" in single_ans or "![" in single_ans:
+                    md_lines.append(f"**【参考答案】**：\n\n{single_ans}\n")
+                else:
+                    md_lines.append(f"**【参考答案】**：{single_ans}\n")
             else:
-                md_lines.append("**【参考答案】**：详见解析\n")
+                md_lines.append("**【参考答案】**：暂无官方文本答案（请参考名师微课精讲）\n")
                 
-            # 4. 详细解析
-            text_fbs = [clean_html_and_latex(f) for f in q.get("text_feedbacks", []) if clean_html_and_latex(f)]
+            # 4. 详细解析与名师微课视频
+            text_fbs = [format_and_localize_rich_text(f, f"q{idx}_fb_{f_i}", images_dir) for f_i, f in enumerate(q.get("text_feedbacks", []), 1) if f]
+            text_fbs = [f for f in text_fbs if f]
             has_video = q.get("has_video", False)
             teacher = q.get("teacher", "")
             guiders = q.get("guiders", [])
             video_url = q.get("video_url", "")
+            packing_result = q.get("packing_result", "")
             
             fb_lines = []
             if text_fbs:
-                fb_lines.append("\n".join(text_fbs))
+                fb_lines.append("\n\n".join(text_fbs))
             else:
-                fb_lines.append(f"本题考查核心知识点【{kp}】。通过分析题干条件并结合几何或代数性质可得相应结论。")
+                fb_lines.append(f"本题考查核心知识点【{kp}】。本题配备官方微课精讲，详细解题思路、步骤推导与考点剖析请观看名师微课视频。")
                 
-            if has_video:
+            # 视频下载与本地化关联
+            local_video_rel = ""
+            if has_video or packing_result:
+                video_filename = f"q{idx}_解析微课.mp4"
+                video_save_path = os.path.join(videos_dir, video_filename)
+                print(f"      📥 正在检测/提取第 {idx} 题名师微课视频...", flush=True)
+                download_ok = download_question_video(packing_result, video_url, video_save_path)
+                if download_ok:
+                    size_mb = os.path.getsize(video_save_path) / (1024 * 1024)
+                    local_video_rel = f"videos/{video_filename}"
+                    print(f"      🎥 已完成微课视频提取: {local_video_rel} ({size_mb:.2f} MB)", flush=True)
+                else:
+                    print(f"      ℹ️ 第 {idx} 题暂无可用微课视频或提取跳过", flush=True)
+                
+            if has_video or local_video_rel:
                 t_info = f"主讲教师：{teacher}" if teacher else "名师微课"
                 if guiders:
                     t_info += f"（指导团队：{'、'.join(guiders)}）"
                 video_note = f"> 🎥 **官方名师微课精讲**：本题配备官方微课讲解（{t_info}）。可在智慧教育平台网页端本题目右下方点击【查看解析】播放。"
-                if video_url:
-                    video_note += f"\n> - **微课视频直链**：`{video_url}`"
+                if local_video_rel:
+                    video_note += f"\n>\n> ![[{local_video_rel}]]"
                 fb_lines.append(video_note)
                 
             md_lines.append("**【解析】**：\n" + "\n\n".join(fb_lines) + "\n")
+            
+            # 5. 习题信息（全量抓取查看解析抽屉元数据）
+            create_time_raw = q.get("create_time", "")
+            create_time_fmt = create_time_raw.replace("T", " ").split(".")[0] if create_time_raw else ""
+            teacher_intro = q.get("teacher_intro", "").strip().rstrip("，,")
+            guiders = q.get("guiders", [])
+            guider_intros = q.get("guider_intros", [])
+            
+            info_lines = [
+                f"- **考查知识点**：{kp}",
+                f"- **难易度**：{diff}"
+            ]
+            if create_time_fmt:
+                info_lines.append(f"- **创建时间**：{create_time_fmt}")
+            if teacher:
+                t_str = f"{teacher}（{teacher_intro}）" if teacher_intro else teacher
+                info_lines.append(f"- **主讲人**：{t_str}")
+            if guiders:
+                g_strs = []
+                for g_idx, g_name in enumerate(guiders):
+                    g_intro = guider_intros[g_idx].strip().rstrip("，,。") if g_idx < len(guider_intros) else ""
+                    g_strs.append(f"{g_name}（{g_intro}）" if g_intro else g_name)
+                info_lines.append(f"- **指导团队**：{'、'.join(g_strs)}")
+                
+            md_lines.append("**【习题信息】**：\n" + "\n".join(info_lines) + "\n")
             md_lines.append("\n---\n")
             
         with open(md_path, "w", encoding="utf-8") as f:
@@ -535,6 +889,18 @@ class ExerciseBankAdapter(BaseResourceAdapter):
         return md_path
 
     def run(self, output_dir: str, **kwargs):
+        # 智能动态推断当前教材版本与年级册次
+        if not output_dir or output_dir.endswith("/习题库") or output_dir.endswith("/习题库/初中") or output_dir.endswith("/北师大版/七年级上册"):
+            version, grade_vol = self.get_book_meta_from_page()
+            if version and grade_vol:
+                base_root = output_dir.split("/习题库")[0] if "/习题库" in output_dir else "/Users/oven/Downloads/中小学智慧平台资源"
+                is_junior = any(g in (grade_vol or "") for g in ["七年级", "八年级", "九年级"])
+                stage_dir = "初中" if is_junior else ""
+                if stage_dir:
+                    output_dir = os.path.join(base_root, "习题库", stage_dir, version, grade_vol)
+                else:
+                    output_dir = os.path.join(base_root, "习题库", version, grade_vol)
+
         print(f"==================================================", flush=True)
         print(f"🌟 启动 ExerciseBankAdapter (国家智慧平台习题库解析引擎 · 独立归档版)", flush=True)
         print(f"📂 存储基准目录: {output_dir}", flush=True)
@@ -546,15 +912,30 @@ class ExerciseBankAdapter(BaseResourceAdapter):
         
         total_q_count = 0
         total_img_count = 0
+        total_video_count = 0
         success_sec_count = 0
         
         for i, item in enumerate(sections, 1):
-            chap = item["chapter"]
-            sec = item["section"]
+            chap = (item.get("chapter") or "").strip() or (item.get("section") or "").strip() or "综合与复习"
+            sec = (item.get("section") or "").strip()
             has_res = item.get("has_res", True)
             
-            if not has_res:
+            if not has_res or not sec:
                 print(f"[{i:2d}/{len(sections)}] ⏩ 自动跳过: {chap} -> {sec} (平台未录入习题)", flush=True)
+                continue
+
+            # 增加秒级幂等校验：若本地已经完整提取且包含题库文件，秒级跳过
+            target_sec_dir = os.path.join(output_dir, chap, sec)
+            target_md = os.path.join(target_sec_dir, f"{sec}_题库.md")
+            if os.path.exists(target_md) and os.path.getsize(target_md) > 500:
+                sec_imgs_dir = os.path.join(target_sec_dir, "images")
+                sec_vids_dir = os.path.join(target_sec_dir, "videos")
+                img_cnt = len(os.listdir(sec_imgs_dir)) if os.path.exists(sec_imgs_dir) else 0
+                vid_cnt = len(os.listdir(sec_vids_dir)) if os.path.exists(sec_vids_dir) else 0
+                total_img_count += img_cnt
+                total_video_count += vid_cnt
+                success_sec_count += 1
+                print(f"[{i:2d}/{len(sections)}] ⏩ 已存在题库且内容完整，秒级跳过: {chap} -> {sec} (包含 {img_cnt} 张高清插图, {vid_cnt} 部微课视频)", flush=True)
                 continue
             
             print(f"[{i:2d}/{len(sections)}] 📥 正在抓取: {chap} -> {sec} ...", flush=True)
@@ -564,11 +945,14 @@ class ExerciseBankAdapter(BaseResourceAdapter):
             if questions:
                 md_p = self.export_section_files(chap, sec, questions, output_dir)
                 sec_imgs_dir = os.path.join(os.path.dirname(md_p), "images")
+                sec_vids_dir = os.path.join(os.path.dirname(md_p), "videos")
                 img_cnt = len(os.listdir(sec_imgs_dir)) if os.path.exists(sec_imgs_dir) else 0
+                vid_cnt = len(os.listdir(sec_vids_dir)) if os.path.exists(sec_vids_dir) else 0
                 total_q_count += len(questions)
                 total_img_count += img_cnt
+                total_video_count += vid_cnt
                 success_sec_count += 1
-                print(f"    ✅ 已生成题库: {os.path.basename(md_p)} (包含 {img_cnt} 张高清插图)", flush=True)
+                print(f"    ✅ 已生成题库: {os.path.basename(md_p)} (包含 {img_cnt} 张高清插图, {vid_cnt} 部名师微课视频)", flush=True)
             else:
                 print(f"    ⚠️ 当前小节跳过（无习题或未录入）", flush=True)
                 
@@ -577,6 +961,6 @@ class ExerciseBankAdapter(BaseResourceAdapter):
         print(f"\n==================================================", flush=True)
         print(f"🏆 习题库同步练习全部抓取完成！")
         print(f"📊 有效习题小节: {success_sec_count}/{len(sections)}")
-        print(f"📝 收录真实题目总计: {total_q_count} 道，本地高清图片: {total_img_count} 张")
+        print(f"📝 收录真实题目总计: {total_q_count} 道，本地高清图片: {total_img_count} 张，名师微课视频: {total_video_count} 部")
         print(f"📂 独立存放目录: {output_dir}")
         print(f"==================================================\n", flush=True)

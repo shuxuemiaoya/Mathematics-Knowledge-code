@@ -41,7 +41,11 @@ def detect_and_dispatch(output_dir=None, adapter_name=None):
     # 默认输出路径智能推断
     if not output_dir:
         if isinstance(selected_adapter, ExerciseBankAdapter):
-            output_dir = "/Users/oven/Downloads/中小学智慧平台资源/习题库/北师大版/七年级上册"
+            version, grade_vol = selected_adapter.get_book_meta_from_page()
+            if version and grade_vol:
+                output_dir = f"/Users/oven/Downloads/中小学智慧平台资源/习题库/{version}/{grade_vol}"
+            else:
+                output_dir = "/Users/oven/Downloads/中小学智慧平台资源/习题库"
         else:
             output_dir = "/Users/oven/Downloads/中小学智慧平台资源"
 

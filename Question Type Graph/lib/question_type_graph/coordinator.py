@@ -761,6 +761,7 @@ def main(argv: list[str] | None = None) -> int:
                 vault_root=args.vault_root,
                 graph_base=args.graph_base,
                 archetype=args.archetype,
+                mirror_source_tree=getattr(args, "mirror_source_tree", True),
                 parallel=args.parallel,
                 skip_conversion=args.skip_conversion,
                 safe_auto_approve=args.safe_auto_approve,

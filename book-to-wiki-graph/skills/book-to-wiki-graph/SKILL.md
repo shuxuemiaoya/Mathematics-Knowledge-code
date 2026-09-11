@@ -1,6 +1,6 @@
 ---
 name: book-to-wiki-graph
-description: Convert a book PDF or source Markdown into a TOC-centered Wiki graph with open-depth organizers, two-pass semantic atomization plus teaching-role audit, three-pass atom-concept relation mapping, and three-level Obsidian knowledge constellations. Use for book conversion, corpus or relation audits, resumes, atomization repair, and learning-map Canvas rebuilds across subjects; do not use for summaries or prose-only exports.
+description: Convert a book PDF or source Markdown into a TOC-centered Wiki graph with category-aware joint atomization, pre-materialization relation feedback, derived concept/formula cards, and three-level Obsidian knowledge constellations. Use for book conversion, corpus or relation audits, resumes, atomization repair, and learning-map Canvas rebuilds across subjects; do not use for summaries or prose-only exports.
 ---
 
 # Book to Wiki Graph
@@ -36,51 +36,68 @@ plugin is separate and must not be modified by this workflow.
    digest-bound organizer review with `scripts/refine_organizers.py`. Keep
    chapters/sections and source-supported knowledge topics as organizers;
    demote pedagogical labels such as observe/think/try/discuss into the atom
-   content they introduce. Practice and exercise-set headings may remain
-   organizers. Lock the reviewed ownership before model atomization.
+   content they introduce. Place a section-wide introduction first, reusable
+   knowledge topics next, and the terminal formal exercise set last. A short
+   prior-knowledge question is a direct `section-introduction` when several
+   sibling topics collectively answer it. Attach inline practice to its target
+   topic, and keep adjacent defined concepts separate when their dependency and
+   reuse roles differ. Lock the reviewed ownership before model atomization.
 4. Run `scripts/atomize_book.py prepare` against the reviewed draft graph.
-   The current Agent is the default reviewer. Produce range-only round-one
-   decisions that repartition each organizer's direct prose into complete
-   teaching units.
-5. Run `validate-round1`, then `prepare-audit`. In round two, review every
-   adjacent atom as `keep`, `merge`, or `resegment`, and return the full final
-   partition. Never rewrite the source text.
+   The current Agent is the default reviewer. Each category-aware decision
+   returns one complete source partition plus every knowledge atom's
+   `teaches/assumes/outputs` signature, local evidence-bound relations, and
+   source-contained concept/formula candidates.
+   In category-aware mode the LLM exclusively decides knowledge-atom count and
+   boundaries; baseline spans are non-binding coverage context. Formal
+   definitions are semantic anchors even without transition words, so parallel
+   definitions such as 全称量词 and 存在量词 remain separate reusable topics.
+   Deterministic code validates ranges, ownership, evidence, and coverage only.
+5. Run `validate-round1`, then `prepare-audit`. Round two reviews every boundary
+   and local relation together. Merge one teaching process; split or resegment
+   independently reusable knowledge with a different dependency structure.
 6. Run `finalize`. Stop if the final status is not `passed` or
    `atomization-review-queue.json` has unresolved items.
-7. Run `prepare-role-review` on the passed atomization final. Review every
-   recalled category, boundary, or title anomaly as `keep` or an exact
-   source-range `replace`; `replace` may split, reclassify, concisely retitle,
-   or reassign inside the same top-level scope. Run `validate-role-review` and
-   `finalize-role-review`. A configured teaching-role audit must pass with zero
-   unresolved items before materialization.
-8. Run `scripts/materialize_book.py`. It copies approved source content while
-   omitting Markdown heading lines from atom bodies, rewrites/copies assets,
-   renders compact organizer notes, and binds both review passes into
-   `book-graph.json`.
-9. After materialization, invoke `$knowledge-relation-mapper`. Its first pass
-   treats atoms as immutable TextUnits, extracts book-scoped canonical concept
+7. Before Markdown materialization, invoke `$knowledge-relation-mapper` with
+   `prepare-concepts ... --atomization-final ...`. Stable temporary keys are
+   computed from organizer, range, and category. Its first pass extracts
+   book-scoped canonical concept
    proposals, and maps every atom to an explicit teaching role with source-line
    evidence. Do not recreate concepts from exercise wording alone.
-10. Its second pass disambiguates concepts and judges every hybrid candidate
+8. Its second pass disambiguates concepts and judges every hybrid candidate
    from source order, ownership, explicit mentions, text search, optional
    embeddings, graph neighbourhoods, and cross-chapter recurrence. Its third
    pass audits WCC, DAG cycles, backward prerequisite edges, redundancy,
    evidence, and unjustified isolation. Only exceptional unresolved cases go
-   to the human queue; unresolved relations block semantic chapter maps, not
-   the Markdown corpus or navigation atlas.
-11. Apply only a passed `relation-final.json`. Validate the enriched dual-layer
-    graph, build the three-level Canvas bundle with selective virtual concept
-    hubs, then validate again with `--canvas-index`. JSON remains authoritative;
-    optional Neo4j export never edits it.
+   to the human queue. It may return evidence-backed `merge`, `split`, or
+   `resegment` feedback when graph structure exposes a bad knowledge boundary.
+9. Run `prepare-feedback` and `finalize-feedback` when required, then invalidate
+   and rerun affected relation artifacts. Stop after two automatic cycles and
+   block unstable cases for human review.
+10. Only when both finals pass with zero unresolved items, run
+    `materialize_book.py --relation-final`. It writes primary atoms, derived
+    cards, organizer notes, indexes, and relations as one frozen result. The
+    legacy role-review and post-materialization `apply` path remains available
+    only for old `llm-two-pass` artifacts.
+11. Validate the graph, build the three-level Canvas bundle, then validate again
+    with `--canvas-index`. JSON remains authoritative; optional Neo4j export
+    never edits it.
 
 ## Semantic boundaries
 
 - Knowledge is a complete teaching unit: keep the definition, conditions,
   notation, explanation, derivation, and nearby conclusion together. Split
   only when both sides can be named, understood, and reused independently.
+- The LLM, not paragraph shape, owns the partition. A compound section title is
+  a recall hint rather than a reason to merge; independently reusable parallel
+  definitions remain separate even when no transition phrase appears.
 - Merge a short observation/thinking prompt with the knowledge it elicits.
   A scenario atom requires a complete narrative, real-world context,
   experiment setup, or learning motivation.
+- Keep a short prior-knowledge question as the section's first direct
+  `section-introduction` when several sibling topics collectively answer it;
+  do not absorb it into only the first topic. Inline practice belongs to the
+  preceding or explicitly targeted topic, while the terminal formal exercise
+  set remains the section's last direct organizer.
 - Keep each worked example's stem, analysis, solution, and nearby conclusion
   together. Keep each top-level exercise with all subparts, figures, tables,
   and supplied material.
@@ -94,23 +111,38 @@ plugin is separate and must not be modified by this workflow.
 
 ## Graph and Canvas invariants
 
-- The only Markdown node layers are `organizer` and `atom`; the only atom
-  categories are `knowledge`, `worked-example`, `exercise`, and `scenario`.
+- The only Markdown node layers are `organizer` and `atom`. Primary atom
+  categories are `knowledge`, `worked-example`, `exercise`, and `scenario`;
+  derived categories are `concept` and `formula`.
 - An organizer may own organizers, atoms, or both. Preserve its mixed direct
   `children` order. Do not impose a maximum depth or mandatory wrapper level.
 - Atoms have one owner, no children, and no Markdown/Wiki/HTML note links.
   Source image/media embeds are allowed. Atom bodies contain no Markdown
-  headings, and atom filenames are opaque sequence-plus-category codes such as
-  `0001-K.md`, never prose titles.
-- An organizer with only atom children is a single numbered Markdown file in
+  headings. Primary atom and formula filenames use opaque sequence-plus-category
+  codes such as `0001-K.md`; definition-only concept cards are the exception
+  and use their canonical concept name with a stable suffix only for collisions.
+- An organizer with only atom children is a single clearly named Markdown file in
   its parent's directory, not a one-file subdirectory. Organizers that own
-  other organizers retain a directory. Organizer notes do not repeat their own
-  title: the parent supplies each organizer child's root-relative directory
-  heading (`#` for a top-level child, `##` for the next level, then `###`, and
-  so on). A terminal organizer that links atoms contains embeds only and no
-  heading.
-- Every nonblank source line is covered exactly once by an atom, organizer
+  other organizers retain a directory. A nonterminal organizer note begins
+  with its own global-depth heading, then supplies each organizer child's
+  global-depth heading (`#` for the root, `##` for the next level, then `###`,
+  and so on) before its embed. A terminal organizer that links atoms contains
+  embeds only and no heading.
+- Every organizer note begins with queryable Obsidian properties: stable key,
+  immediate parent title/key/file (explicit `null` at the root), source name and
+  digest, global level, root-to-self hierarchy path, heading ranges and source
+  anchor, structural role, direct child counts, descendant atom count, update
+  date, and review status. Apply the same provenance contract to generated
+  concept/formula index notes under `组织层/`; frontmatter does not count as a
+  body heading.
+- Every nonblank source line is covered exactly once by a primary atom, organizer
   heading, or reviewed exclusion. Atom ranges never overlap.
+- `source_order` contains only primary atoms. `derived_order` contains exact
+  source excerpts inside `derived_from_key`; these duplicates do not count
+  toward coverage. Concept cards use collision-safe canonical names and formula
+  cards use `NNNN-F.md`;
+  contain no headings or note links, and are found through per-chapter index
+  notes that do not enter Canvas.
 - Reviewed semantic data forms an atom/concept dual graph and never modifies
   atom prose. Canonical concepts have source evidence; atom-concept roles state
   how each atom teaches or uses them; concept relations express prerequisite,
@@ -118,6 +150,33 @@ plugin is separate and must not be modified by this workflow.
   atom `relations` projection carries `basis_keys` back to concept relations.
   Directed edges follow learning flow, inferred edges cite both endpoints, and
   backbone relations remain acyclic.
+- Every atom Markdown note begins with Obsidian properties for `atom_key`,
+  `owner_key`, `source_pdf`, `source_sha256`, `source_range`, `used_by`,
+  `updated_at`, `review_status`, estimated study time, difficulty, importance,
+  and learning objectives. Knowledge notes additionally
+  expose estimated learning minutes, difficulty, importance, and learning
+  objectives; examples, exercises, scenarios, and derived cards carry their
+  corresponding completeness or role properties.
+- A complete post-knowledge comparison, synthesis, extension, or open inquiry
+  is a scenario-semantic atom with `scenario_role: reflection-question`. Store
+  it independently under `原子层/思考题/NNNN-T.md`; do not classify it as a
+  worked example or routine exercise. A short prompt that merely scaffolds the
+  immediately following explanation still belongs inside that knowledge atom.
+- A short bridge that explicitly refers to learned content and opens a distinct
+  next topic may stand alone as `scenario_role: knowledge-motivation`; accept
+  it only when relation review can establish `learned knowledge → bridge → new
+  knowledge`. A generic activity prompt is not such a bridge.
+- A shared organizer may group several independently reusable knowledge atoms.
+  For example, `集合的表达方式` owns separate `列举法` and `描述法` atoms rather
+  than forcing them into one atom merely because they share a topic.
+- Concept cards are definition references, not copied teaching passages. The
+  model cites only a formal definition/property/rule sentence and immediate
+  conditions or formula; examples, activity prompts, and questions stay in the
+  parent knowledge atom (an inline illustrative clause may be clipped only in
+  the derived card). Use the canonical concept name as the Markdown filename;
+  add a deterministic short suffix only when two distinct concepts collide.
+- Organizer paths use clear titles (for example `第一章…/1.1…`) and retain a
+  generated numeric prefix only when needed to resolve a real collision.
 - `overview.canvas` contains the book hub and chapters only. It aggregates
   cross-chapter routes and links each chapter to one chapter knowledge Canvas.
 - A chapter Canvas is a low-noise core map: display every knowledge/scenario
@@ -129,19 +188,23 @@ plugin is separate and must not be modified by this workflow.
   collapses all exercises into their highest exercise-only organizer Markdown
   entries. Each entry has at most one primary practice edge and is placed in
   the same local star region as its knowledge anchor. Routine examples remain
-  reachable through organizer notes. Neutral `书序` fallback edges may remove a
-  visual island but must be visibly distinguished from semantic evidence.
-- Render a virtual concept hub only when it grounds at least two visible atoms
-  and also crosses regions, has concept-relation degree at least three, or
-  participates across chapters. Fold one-to-one concepts into their atom card.
-  Reject isolated substantive cards and all overlapping nodes.
+  reachable through organizer notes. New graphs render no concept or formula
+  nodes. A truly independent visible atom may connect bottom-to-top to its
+  organizer portal with an explicit `归属` edge; never use `书序` as a disguised
+  dependency. Reject unexplained islands and all overlapping nodes.
 - Follow the port grammar adapted from the reference knowledge map: progressive
   knowledge leaves from the right and enters the next node from the left;
   `motivates` enters the inspired node from the top; example/application,
   exercise containment, contrast, and analogy branch from the bottom and enter
   from the top. Encode every edge with explicit `fromSide` and `toSide`.
-- Category changes color and label only. Use stable, collision-free,
-  center-outward constellation placement and theme-adaptive native colors.
+- Category changes color and label only. Use stable, collision-free compact
+  constellation clusters (rightward progression and downward branches only
+  where an actual edge requires them), generous node spacing, nested organizer
+  `group` envelopes, and theme-adaptive native colors. Unrelated regions use a
+  deterministic two-dimensional packing rather than a diagonal chain. A target
+  of a right-side semantic edge must never be left of its source; a target of a
+  bottom-side edge must never be above its source. The map title is a quiet
+  navigation header, not a spoke hub.
 
 ## Commands
 
@@ -180,26 +243,10 @@ python scripts/atomize_book.py finalize \
   <staging_root>/round-2-decisions.json \
   --output-dir <staging_root>
 
-python scripts/atomize_book.py prepare-role-review \
-  <staging_root>/atomization-final.json --output-dir <staging_root>
-
-python scripts/atomize_book.py validate-role-review \
-  <staging_root>/atom-role-jobs.json \
-  <staging_root>/atom-role-decisions.json
-
-python scripts/atomize_book.py finalize-role-review \
-  <staging_root>/atomization-final.json \
-  <staging_root>/atom-role-jobs.json \
-  <staging_root>/atom-role-decisions.json --output-dir <staging_root>
-
-python scripts/materialize_book.py \
-  <staging_root>/refined-draft-book-graph.json \
-  <staging_root>/atomization-final.role-reviewed.json \
-  --book-root <book_root> \
-  --output-manifest <book_root>/book-graph.json
-
 python ../knowledge-relation-mapper/scripts/relate_book.py prepare-concepts \
-  <book_root>/book-graph.json --output-dir <relation_staging>
+  <staging_root>/refined-draft-book-graph.json \
+  --atomization-final <staging_root>/atomization-final.json \
+  --output-dir <relation_staging>
 
 python ../knowledge-relation-mapper/scripts/relate_book.py prepare-relations \
   <relation_staging>/concept-jobs.json \
@@ -217,11 +264,22 @@ python ../knowledge-relation-mapper/scripts/relate_book.py finalize \
   <relation_staging>/graph-audit-jobs.json \
   <relation_staging>/round-3-audit.json --output-dir <relation_staging>
 
-python ../knowledge-relation-mapper/scripts/relate_book.py apply \
-  <book_root>/book-graph.json <relation_staging>/relation-final.json \
-  --output <book_root>/book-graph.with-relations.json
+python scripts/atomize_book.py prepare-feedback \
+  <staging_root>/atomization-final.json \
+  <relation_staging>/relation-final.json --output-dir <staging_root>
 
-python scripts/validate_book_graph.py <book_root>/book-graph.with-relations.json \
+python scripts/atomize_book.py finalize-feedback \
+  <staging_root>/atomization-final.json \
+  <staging_root>/atomization-feedback-jobs.json \
+  <staging_root>/atomization-feedback-decisions.json --output-dir <staging_root>
+
+python scripts/materialize_book.py \
+  <staging_root>/refined-draft-book-graph.json \
+  <staging_root>/atomization-final.json \
+  --relation-final <relation_staging>/relation-final.json \
+  --book-root <book_root> --output-manifest <book_root>/book-graph.json
+
+python scripts/validate_book_graph.py <book_root>/book-graph.json \
   --book-root <book_root>
 
 python scripts/build_canvas.py <book_root>/book-graph.with-relations.json \

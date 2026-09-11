@@ -29,7 +29,7 @@ CONCEPT_RELATION_TYPES = {
 }
 ATOM_RELATION_TYPES = {
     "prerequisite", "develops", "derives", "motivates", "illustrates",
-    "applies", "practices", "contrasts", "analogous",
+    "applies", "practices", "contrasts", "analogous", "synthesizes",
 }
 SYMMETRIC_CONCEPT_RELATIONS = {"contrasts", "analogous"}
 SYMMETRIC_ATOM_RELATIONS = {"contrasts", "analogous"}
@@ -257,6 +257,85 @@ def load_manifest_context(manifest_path: Path) -> tuple[dict[str, Any], dict[str
     return manifest, profile, nodes, source_path, source_path.read_text(encoding="utf-8-sig").splitlines(), root_key, chapters
 
 
+def virtual_atom_key(atom: dict[str, Any]) -> str:
+    identity = f"{atom['owner_key']}:{atom['source_range'][0]}:{atom['source_range'][1]}:{atom['category']}"
+    return f"atom-{hashlib.sha256(identity.encode()).hexdigest()[:16]}"
+
+
+def load_pre_materialization_context(
+    manifest_path: Path, atomization_final_path: Path,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, dict[str, Any]], Path, list[str], str, list[str], dict[str, Any]]:
+    """Build an in-memory manifest from frozen ranges without writing Markdown."""
+    manifest_path, atomization_final_path = manifest_path.expanduser().resolve(), atomization_final_path.expanduser().resolve()
+    manifest, final = load_json(manifest_path), load_json(atomization_final_path)
+    if final.get("kind") != "atomization-final" or final.get("artifact_sha256") != artifact_digest(final):
+        raise RelationV2Error("Invalid or stale atomization-final")
+    if final.get("status") != "passed" or final.get("unresolved_count") != 0:
+        raise RelationV2Error("Pre-materialization relation mapping requires passed atomization")
+    if final.get("base_manifest_sha256") != sha256_file(manifest_path):
+        raise RelationV2Error("Atomization final binds a different base manifest")
+    if final.get("atomization", {}).get("mode") != "llm-category-aware-graph":
+        raise RelationV2Error("--atomization-final requires llm-category-aware-graph mode")
+    profile_path = Path(str(manifest.get("profile", ""))).expanduser().resolve()
+    source_path = Path(str(manifest.get("source_markdown", ""))).expanduser().resolve()
+    if not profile_path.is_file() or not source_path.is_file() or sha256_file(source_path) != final.get("source_markdown_sha256"):
+        raise RelationV2Error("Base profile or source Markdown is missing or stale")
+    profile = load_json(profile_path)
+    raw_nodes = [dict(node) for node in manifest.get("nodes", []) if isinstance(node, dict) and isinstance(node.get("key"), str)]
+    base_nodes = {str(node["key"]): node for node in raw_nodes}
+    roots = [key for key, node in base_nodes.items() if node.get("layer") == "organizer" and node.get("parent_key") is None]
+    if len(roots) != 1:
+        raise RelationV2Error("Base manifest must contain exactly one root organizer")
+    root_key = roots[0]
+    scope = set(map(str, final.get("scope_root_keys", [])))
+    included = {root_key}
+    for scope_root in scope:
+        included.update(key for key in descendants(base_nodes, scope_root) if base_nodes.get(key, {}).get("layer") == "organizer")
+    nodes = {key: {**base_nodes[key], "children": [str(child) for child in base_nodes[key].get("children", []) if str(child) in included]} for key in included}
+    id_to_key: dict[str, str] = {}
+    for atom in final.get("atoms", []):
+        if not isinstance(atom, dict) or str(atom.get("owner_key")) not in nodes:
+            raise RelationV2Error("Atomization final contains an invalid atom owner")
+        key = virtual_atom_key(atom)
+        atom_id = str(atom.get("atom_id"))
+        id_to_key[atom_id] = key
+        node = {
+            "key": key, "title": str(atom.get("title", atom_id)), "layer": "atom",
+            "parent_key": str(atom["owner_key"]), "category": str(atom["category"]),
+            "source_range": list(atom["source_range"]), "atomization_id": atom_id,
+        }
+        if atom.get("scenario_role") is not None:
+            node["scenario_role"] = atom["scenario_role"]
+        nodes[key] = node
+        nodes[str(atom["owner_key"])].setdefault("children", []).append(key)
+    chapters = [str(key) for key in nodes[root_key].get("children", []) if nodes.get(str(key), {}).get("layer") == "organizer"]
+    if not chapters:
+        raise RelationV2Error("Selected atomization has no chapter organizer")
+    seeds = {
+        "knowledge_signatures": [
+            {**item, "atom_key": id_to_key.get(str(item.get("atom_id")), "")}
+            for item in final.get("knowledge_signatures", []) if id_to_key.get(str(item.get("atom_id")))
+        ],
+        "local_relations": [
+            {
+                **item, "from_key": id_to_key.get(str(item.get("from_atom_id")), ""),
+                "to_key": id_to_key.get(str(item.get("to_atom_id")), ""),
+                "evidence": [{**evidence, "atom_key": id_to_key.get(str(evidence.get("atom_id")), "")} for evidence in item.get("evidence", [])],
+            }
+            for item in final.get("local_relations", [])
+            if id_to_key.get(str(item.get("from_atom_id"))) and id_to_key.get(str(item.get("to_atom_id")))
+        ],
+        "derived_card_candidates": [
+            {**item, "from_key": id_to_key.get(str(item.get("from_atom_id")), "")}
+            for item in final.get("derived_card_candidates", []) if id_to_key.get(str(item.get("from_atom_id")))
+        ],
+        "atomization_final": str(atomization_final_path),
+        "atomization_final_sha256": final["artifact_sha256"],
+        "feedback_cycle": final.get("feedback_cycle", {"cycle": 0, "max_cycles": final.get("atomization", {}).get("relation_feedback_cycles", 2), "history": []}),
+    }
+    return manifest, profile, nodes, source_path, source_path.read_text(encoding="utf-8-sig").splitlines(), root_key, chapters, seeds
+
+
 def source_atom(node: dict[str, Any], nodes: dict[str, dict[str, Any]], lines: list[str], root_key: str) -> dict[str, Any]:
     start, end = (int(value) for value in node["source_range"])
     key = str(node["key"])
@@ -265,11 +344,13 @@ def source_atom(node: dict[str, Any], nodes: dict[str, dict[str, Any]], lines: l
         "atom_key": key,
         "title": str(node["title"]),
         "category": str(node["category"]),
+        "scenario_role": node.get("scenario_role"),
         "source_range": [start, end],
         "source_text": "\n".join(lines[start - 1:end]),
         "organizer_path": path,
         "organizer_titles": [str(nodes[item]["title"]) for item in path],
         "chapter_key": chapter_for(nodes, root_key, key),
+        "atomization_id": node.get("atomization_id"),
     }
 
 
@@ -284,10 +365,14 @@ def registry_binding(path: Path | None) -> dict[str, Any] | None:
     return {"path": str(resolved), "sha256": sha256_file(resolved), "concept_count": len(concepts), "mode": "read-only"}
 
 
-def prepare_concept_jobs(manifest_path: Path, max_chars: int = 80000, registry: Path | None = None) -> dict[str, Any]:
+def prepare_concept_jobs(manifest_path: Path, max_chars: int = 80000, registry: Path | None = None, atomization_final_path: Path | None = None) -> dict[str, Any]:
     if max_chars < 4000:
         raise RelationV2Error("max_chars must be at least 4000")
-    manifest, profile, nodes, source, lines, root_key, chapters = load_manifest_context(manifest_path)
+    if atomization_final_path is None:
+        manifest, profile, nodes, source, lines, root_key, chapters = load_manifest_context(manifest_path)
+        seeds: dict[str, Any] = {}
+    else:
+        manifest, profile, nodes, source, lines, root_key, chapters, seeds = load_pre_materialization_context(manifest_path, atomization_final_path)
     atoms = {
         key: source_atom(node, nodes, lines, root_key)
         for key, node in nodes.items() if node.get("layer") == "atom"
@@ -328,6 +413,9 @@ def prepare_concept_jobs(manifest_path: Path, max_chars: int = 80000, registry: 
                 "packet_count": len(packets),
                 "atoms": packet,
                 "context_atoms": context,
+                "seed_knowledge_signatures": [item for item in seeds.get("knowledge_signatures", []) if item.get("atom_key") in {atom["atom_key"] for atom in packet}],
+                "seed_local_relations": [item for item in seeds.get("local_relations", []) if item.get("from_key") in {atom["atom_key"] for atom in packet} or item.get("to_key") in {atom["atom_key"] for atom in packet}],
+                "seed_derived_card_candidates": [item for item in seeds.get("derived_card_candidates", []) if item.get("from_key") in {atom["atom_key"] for atom in packet}],
                 "registry_candidates": sorted(
                     (
                         {
@@ -348,7 +436,7 @@ def prepare_concept_jobs(manifest_path: Path, max_chars: int = 80000, registry: 
             job["packet_sha256"] = packet_digest(job)
             jobs.append(job)
     return seal_artifact({
-        "schema_version": 2,
+        "schema_version": 3 if atomization_final_path is not None else 2,
         "kind": "concept-jobs",
         "manifest": str(manifest_path.expanduser().resolve()),
         "manifest_sha256": sha256_file(manifest_path.expanduser().resolve()),
@@ -357,6 +445,9 @@ def prepare_concept_jobs(manifest_path: Path, max_chars: int = 80000, registry: 
         "root_key": root_key,
         "chapter_order": chapters,
         "relation_analysis": relation_config(profile),
+        "atomization_final": seeds.get("atomization_final"),
+        "atomization_final_sha256": seeds.get("atomization_final_sha256"),
+        "feedback_cycle": seeds.get("feedback_cycle"),
         "concept_registry": registry_binding(registry),
         "existing_relations": list(manifest.get("relations", [])),
         "jobs": jobs,
@@ -384,6 +475,8 @@ def label_issue(label: str) -> str | None:
         return "concept-label-is-activity"
     if QUESTION_LABEL_RE.search(label.strip()):
         return "concept-label-is-question"
+    if re.search(r"的(?:定义|概念)(?:[、，,和与].*)?$|知识结构与学习主线$", label.strip()):
+        return "concept-label-is-editorial-description"
     return None
 
 
@@ -691,6 +784,16 @@ def prepare_relation_jobs(
                     if right != left:
                         add_candidate(candidates, "atom-relation", left, right, "existing-two-hop", 0.8)
 
+    # Local relationships emitted during boundary selection are evidence seeds,
+    # not automatically accepted graph edges.  Preserve them as hard candidates
+    # so the independent relation pass must explicitly affirm, reverse, retype,
+    # or reject each one.
+    seeded = [item for job in concept_jobs.get("jobs", []) for item in job.get("seed_local_relations", [])]
+    for relation in seeded:
+        left, right = str(relation.get("from_key", "")), str(relation.get("to_key", ""))
+        if left in atoms and right in atoms and left != right:
+            add_candidate(candidates, "atom-relation", left, right, "atomization-local-relation", float(relation.get("confidence", 1.0)), True)
+
     atom_candidates = [item for item in candidates.values() if item["kind"] == "atom-relation"]
     kept_atom_ids: set[str] = {item["candidate_id"] for item in atom_candidates if item["hard"]}
     cap = int(retrieval["max_ranked_candidates_per_atom"])
@@ -760,6 +863,9 @@ def prepare_relation_jobs(
         "manifest": concept_jobs["manifest"], "manifest_sha256": concept_jobs["manifest_sha256"],
         "source_markdown_sha256": concept_jobs["source_markdown_sha256"],
         "relation_analysis": config, "chapter_order": concept_jobs["chapter_order"],
+        "atomization_final": concept_jobs.get("atomization_final"),
+        "atomization_final_sha256": concept_jobs.get("atomization_final_sha256"),
+        "feedback_cycle": concept_jobs.get("feedback_cycle"),
         "embedding": embedding_binding, "concepts": report["concepts"],
         "atoms": sorted(atoms.values(), key=lambda item: (item["source_range"][0], item["atom_key"])),
         "atom_concept_links": report["atom_concept_links"], "atom_roles": report["atom_roles"],
@@ -1154,6 +1260,28 @@ def graph_issues(graph: dict[str, Any], atoms: dict[str, dict[str, Any]]) -> tup
         }[category]
         if not roles.intersection(allowed):
             issues.append({"code": "atom-concept-role-orphan", "atom_key": atom_key, "category": category})
+    motivates_in: dict[str, int] = defaultdict(int)
+    motivates_out: dict[str, int] = defaultdict(int)
+    for relation in graph["relations"]:
+        if relation.get("type") == "motivates":
+            motivates_out[str(relation["from_key"])] += 1
+            motivates_in[str(relation["to_key"])] += 1
+    for atom_key, atom in atoms.items():
+        if atom.get("category") == "scenario" and atom.get("scenario_role") == "knowledge-motivation":
+            if not motivates_in[atom_key] or not motivates_out[atom_key]:
+                issues.append({
+                    "code": "knowledge-motivation-bridge-incomplete",
+                    "atom_key": atom_key,
+                    "incoming_motivates": motivates_in[atom_key],
+                    "outgoing_motivates": motivates_out[atom_key],
+                })
+        if atom.get("category") == "scenario" and atom.get("scenario_role") == "section-introduction":
+            if not motivates_out[atom_key]:
+                issues.append({
+                    "code": "section-introduction-target-missing",
+                    "atom_key": atom_key,
+                    "outgoing_motivates": motivates_out[atom_key],
+                })
     grounded = {link["concept_key"] for link in graph["atom_concept_links"]}
     for concept in concept_keys - grounded:
         issues.append({"code": "ungrounded-concept", "concept_key": concept})
@@ -1216,6 +1344,9 @@ def prepare_audit_jobs(relation_jobs: dict[str, Any], round2: dict[str, Any]) ->
         "manifest": relation_jobs["manifest"], "manifest_sha256": relation_jobs["manifest_sha256"],
         "source_markdown_sha256": relation_jobs["source_markdown_sha256"],
         "relation_analysis": relation_jobs["relation_analysis"],
+        "atomization_final": relation_jobs.get("atomization_final"),
+        "atomization_final_sha256": relation_jobs.get("atomization_final_sha256"),
+        "feedback_cycle": relation_jobs.get("feedback_cycle"),
         "audits": [audit],
     })
 
@@ -1304,6 +1435,77 @@ def validate_final_relation(raw: Any, index: int, atoms: dict[str, dict[str, Any
     }
     if not concept:
         result["basis_candidate_ids"] = [str(value) for value in raw.get("basis_candidate_ids", []) if isinstance(value, str)]
+    return result
+
+
+def validate_boundary_feedback(raw: Any, atoms: dict[str, dict[str, Any]], config: dict[str, Any], errors: list[dict[str, Any]], review: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if raw in (None, []):
+        return []
+    if not isinstance(raw, list):
+        errors.append({"code": "boundary-feedback-invalid"})
+        return []
+    if not any(atom.get("atomization_id") for atom in atoms.values()):
+        errors.append({"code": "boundary-feedback-requires-pre-materialization-mode"})
+        return []
+    result: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    occupied: set[str] = set()
+    for index, item in enumerate(raw):
+        context = f"boundary-feedback:{index}"
+        if not isinstance(item, dict):
+            errors.append({"code": "boundary-feedback-item-invalid", "context": context})
+            continue
+        feedback_id = str(item.get("feedback_id", ""))
+        keys = [str(value) for value in item.get("atom_keys", [])] if isinstance(item.get("atom_keys"), list) else []
+        action = str(item.get("action", ""))
+        if not feedback_id or feedback_id in seen or not keys or len(keys) != len(set(keys)) or any(key not in atoms for key in keys) or occupied.intersection(keys) or action not in {"merge", "split", "resegment"}:
+            errors.append({"code": "boundary-feedback-target-invalid", "context": context})
+            continue
+        seen.add(feedback_id)
+        occupied.update(keys)
+        if len({tuple(atoms[key].get("organizer_path", [])) for key in keys}) != 1:
+            errors.append({"code": "boundary-feedback-crosses-owner", "context": context})
+        ranges = item.get("proposed_ranges")
+        if not isinstance(ranges, list) or not ranges:
+            errors.append({"code": "boundary-feedback-ranges-missing", "context": context})
+            ranges = []
+        union_start = min(int(atoms[key]["source_range"][0]) for key in keys)
+        union_end = max(int(atoms[key]["source_range"][1]) for key in keys)
+        selected_ranges = sorted((int(atoms[key]["source_range"][0]), int(atoms[key]["source_range"][1])) for key in keys)
+        selected_cursor = union_start
+        for start, end in selected_ranges:
+            if start != selected_cursor:
+                errors.append({"code": "boundary-feedback-targets-not-contiguous", "context": context})
+                break
+            selected_cursor = end + 1
+        if selected_cursor != union_end + 1:
+            errors.append({"code": "boundary-feedback-targets-not-contiguous", "context": context})
+        parsed_ranges: list[list[int]] = []
+        for source_range in ranges:
+            if not isinstance(source_range, list) or len(source_range) != 2 or any(isinstance(value, bool) or not isinstance(value, int) for value in source_range):
+                errors.append({"code": "boundary-feedback-range-invalid", "context": context})
+                continue
+            parsed_ranges.append([int(source_range[0]), int(source_range[1])])
+        parsed_ranges.sort()
+        cursor = union_start
+        for start, end in parsed_ranges:
+            if start != cursor or end < start:
+                errors.append({"code": "boundary-feedback-partition-invalid", "context": context})
+            cursor = end + 1
+        if cursor != union_end + 1:
+            errors.append({"code": "boundary-feedback-partition-incomplete", "context": context})
+        rationale = str(item.get("rationale", "")).strip()
+        if len(rationale) < 12:
+            errors.append({"code": "boundary-feedback-rationale-invalid", "context": context})
+        confidence = validate_confidence(item.get("confidence"), "pedagogical-inference", config, context, errors, review)
+        evidence = validate_relation_evidence(item.get("evidence"), atoms, set(keys), context, errors, False)
+        if not evidence:
+            errors.append({"code": "boundary-feedback-evidence-missing", "context": context})
+        result.append({
+            "feedback_id": feedback_id, "action": action, "atom_keys": keys,
+            "atom_ids": [str(atoms[key].get("atomization_id")) for key in keys],
+            "proposed_ranges": parsed_ranges, "evidence": evidence, "rationale": rationale, "confidence": confidence,
+        })
     return result
 
 
@@ -1444,6 +1646,11 @@ def finalize_relations(
         for item in decision.get("independent_components", []) if isinstance(item, dict) and len(str(item.get("reason", "")).strip()) >= 12
     ]
     explained_component_sets = {tuple(item["concept_keys"]) for item in independent_components}
+    if concept_jobs.get("atomization_final_sha256"):
+        incident = {str(value) for relation in graph["relations"] for value in (relation["from_key"], relation["to_key"])}
+        for atom_key, atom in atoms.items():
+            if atom.get("category") == "knowledge" and atom_key not in incident and atom_key not in independent_atoms:
+                review.append({"code": "knowledge-semantic-orphan", "atom_key": atom_key, "detail": "Knowledge needs a reviewed semantic edge or a concrete independent reason."})
     for issue in issues:
         if issue["code"] == "atom-concept-role-orphan" and issue.get("atom_key") in independent_atoms:
             continue
@@ -1452,14 +1659,38 @@ def finalize_relations(
         if issue["code"] == "concept-transitive-redundancy" and issue.get("evidence_kind") == "explicit":
             continue
         review.append(issue)
+    boundary_feedback = validate_boundary_feedback(decision.get("boundary_feedback", []), atoms, concept_jobs["relation_analysis"], errors, review)
+    feedback_cycle = concept_jobs.get("feedback_cycle") or {"cycle": 0, "max_cycles": 0, "history": []}
+    review.extend({"code": "boundary-feedback-required", "feedback_id": item["feedback_id"], "action": item["action"], "atom_keys": item["atom_keys"]} for item in boundary_feedback)
+    if boundary_feedback and int(feedback_cycle.get("cycle", 0)) >= int(feedback_cycle.get("max_cycles", 0)):
+        review.append({"code": "boundary-feedback-cycle-limit", "cycle": feedback_cycle.get("cycle"), "max_cycles": feedback_cycle.get("max_cycles")})
     unresolved = [*errors, *review]
     candidates = [item for job in relation_jobs.get("jobs", []) for item in job.get("candidates", [])]
     quality = quality_report(graph, atoms, candidates, set(round2_report["reviewed_candidate_ids"]), wcc, unresolved)
+    formula_candidates = {
+        str(item.get("candidate_id")): item for job in concept_jobs.get("jobs", [])
+        for item in job.get("seed_derived_card_candidates", [])
+        if isinstance(item, dict) and item.get("category") == "formula"
+    }
+    formulas = [
+        {
+            "key": stable_key("formula", str(item.get("expression", "")), str(item.get("from_key", "")), str(item.get("source_range", []))),
+            "title": str(item.get("title", "")), "expression": str(item.get("expression", "")),
+            "variables": list(item.get("variables", [])), "conditions": list(item.get("conditions", [])),
+            "derived_from_key": str(item.get("from_key", "")), "source_range": list(item.get("source_range", [])),
+            "selection_reason": str(item.get("selection_reason", "")), "confidence": item.get("confidence"),
+        }
+        for item in sorted(formula_candidates.values(), key=lambda value: (value.get("source_range", [10**12])[0], str(value.get("candidate_id"))))
+    ]
+    status = "failed" if errors else ("boundary_revision_required" if boundary_feedback else ("review_required" if review else "passed"))
     final = seal_artifact({
-        "schema_version": 2, "kind": "relation-final-v2",
-        "status": "failed" if errors else ("review_required" if review else "passed"),
+        "schema_version": 3 if concept_jobs.get("atomization_final_sha256") else 2, "kind": "relation-final-v2",
+        "status": status,
         "manifest": concept_jobs["manifest"], "manifest_sha256": concept_jobs["manifest_sha256"],
         "source_markdown_sha256": concept_jobs["source_markdown_sha256"],
+        "atomization_final": concept_jobs.get("atomization_final"),
+        "atomization_final_sha256": concept_jobs.get("atomization_final_sha256"),
+        "feedback_cycle": feedback_cycle,
         "relation_analysis": concept_jobs["relation_analysis"],
         "bindings": {
             "concept_jobs": {"path": concept_jobs.get("_path"), "sha256": concept_jobs["artifact_sha256"]},
@@ -1473,10 +1704,11 @@ def finalize_relations(
             "concepts": round1.get("reviewer", {}), "relations": round2.get("reviewer", {}), "audit": round3.get("reviewer", {}),
         },
         "concepts": graph["concepts"], "atom_concept_links": graph["atom_concept_links"],
-        "concept_relations": graph["concept_relations"], "relations": graph["relations"],
+        "concept_relations": graph["concept_relations"], "relations": graph["relations"], "formulas": formulas,
         "atom_roles": graph["atom_roles"],
         "independent_atoms": [{"atom_key": key, "reason": independent_atoms[key]} for key in sorted(independent_atoms)],
         "independent_components": independent_components,
+        "boundary_feedback": boundary_feedback,
         "unresolved_count": len(unresolved),
     })
     queue = seal_artifact({
@@ -1486,6 +1718,8 @@ def finalize_relations(
         "unresolved_count": len(unresolved),
     })
     quality["relation_final_sha256"] = final["artifact_sha256"]
+    quality["counts"]["boundary_feedback"] = len(boundary_feedback)
+    quality["feedback_cycle"] = feedback_cycle
     quality = seal_artifact(quality)
     return final, queue, quality, review_markdown(final, quality, queue)
 
@@ -1494,6 +1728,8 @@ def apply_relation_final(manifest_path: Path, final_path: Path, output_path: Pat
     manifest_path, final_path, output_path = (path.expanduser().resolve() for path in (manifest_path, final_path, output_path))
     manifest = load_json(manifest_path)
     final = load_tagged(final_path, "relation-final-v2")
+    if final.get("atomization_final_sha256"):
+        raise RelationV2Error("Pre-materialization relation finals must be passed to materialize_book.py --relation-final")
     if final.get("status") != "passed" or final.get("unresolved_count") != 0:
         raise RelationV2Error("Only a passed v2 relation final can be applied")
     if final.get("manifest_sha256") != sha256_file(manifest_path) or final.get("source_markdown_sha256") != manifest.get("source_markdown_sha256"):

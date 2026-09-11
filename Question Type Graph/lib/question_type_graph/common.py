@@ -103,19 +103,21 @@ def resolve_inside(root: Path, relative: str | Path) -> Path:
     return candidate
 
 
-def safe_name(value: str, fallback: str = "node") -> str:
+def safe_name(value: str, fallback: str = "node", max_chars: int = 36) -> str:
     """Normalize one generated path component to the vault filename policy.
 
     Generated titles may contain only Unicode letters, Unicode digits, and
     underscores.  A conventional alphanumeric file suffix is preserved so
     that Markdown, JSON, Canvas, and image artifacts remain usable.
+    The filename is capped to max_chars (default 36) to prevent Windows
+    MAX_PATH and git clone/checkout failures.
     """
 
     def split_suffix(raw: str) -> tuple[str, str]:
         suffix = Path(raw).suffix
         if suffix and re.fullmatch(r"\.[A-Za-z0-9]{1,10}", suffix):
-            return raw[: -len(suffix)], suffix
-        return raw, ""
+            return raw[: -len(suffix)].rstrip(". "), suffix
+        return raw.rstrip(". "), ""
 
     def normalize_stem(raw: str) -> str:
         return "".join(character if character == "_" or character.isalnum() else "_" for character in raw)
@@ -127,8 +129,9 @@ def safe_name(value: str, fallback: str = "node") -> str:
         normalized = normalize_stem(fallback_stem).strip("_") or "node"
         if not suffix:
             suffix = fallback_suffix
-    budget = max(1, 120 - len(suffix))
-    return f"{normalized[:budget]}{suffix}"
+    budget = max(1, max_chars - len(suffix))
+    trimmed = normalized[:budget].rstrip(". ") or "node"
+    return f"{trimmed}{suffix}"
 
 
 def prune_empty_directories(root: Path) -> list[str]:

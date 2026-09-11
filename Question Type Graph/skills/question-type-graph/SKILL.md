@@ -60,6 +60,15 @@ persist the final checks with `audit --overwrite`.
 - **Stage 0 Discovery Gate**: For unfamiliar document layouts, new publishers, or unstructured exercise banks, ALWAYS execute a sample-based syntax discovery and submit a 5-dimension schema inventory (TOC, stem/subquestion boundaries, answer layout, short answer detection, metadata extraction) with rendered preview cards (`generate_stage0_preview`) to the user for confirmation BEFORE any batch processing.
 - **Pre-segmentation Continuity Gate**: Content planning (`plan_content`) MUST scan $1..N$ sequence continuity before file generation. If any gap occurs in a `continuous` sequence context, emit a blocking `question-sequence-discontinuity` review item with missing number and candidate line ranges.
 - **Confidence-Tiered Answer Gate**: Extract choice and short answers with explicit confidence tiers (HIGH > MEDIUM > LOW > FALLBACK). Log low-confidence extractions for review.
+- **Path & Filename Length Gate (Windows MAX_PATH & Cross-Platform Compatibility)**:
+  Every generated file and directory MUST strictly respect path limits:
+  1. Component names (files and directories) MUST NOT exceed 36 characters (`safe_name` capped at 36, `max_path_component_length` default 35).
+  2. Relative path depth from Vault Root MUST NOT exceed 160 characters (`max_path_length` default 160).
+  3. Raw LaTeX mathematical expressions MUST NEVER be dumped into filenames or directory names; they MUST be abstracted into short, semantic titles.
+  4. File and directory names MUST NOT contain Windows forbidden characters (`*`, `?`, `:`, `"`, `<`, `>`, `|`) or end with dots (`.`) or whitespace.
+- **Source Directory Mirroring Gate**: The destination graph root MUST preserve the relative directory tree 1:1 from the source directory. Strictly FORBID fabricating arbitrary intermediate classification folders (such as "专项训练", "单元测试", "同步讲义", "阶段测试", etc.).
+- **Autonomous Type-Folder Segmentation Gate**: When document contains concrete question type sections (`题型一`, `题型01`), ALWAYS segment each type into its own independent subfolder (`题型XX_名称/`) with a local topic hub note (`题型XX_名称.md`), containing local subdirectories for `questions/` and `answers/`. Generate a top-level `index.md` linking all type hubs. Never flatten all types into a single parent folder.
+- **Dual-Scope Synchronized Lecture Gate**: For comprehensive lecture workbooks with theory, worked examples, and exercises, MUST isolate scopes via adapter `question_scopes`: bind `variant-example` exclusively to type-lecture contexts, bind `numbered-exercise` exclusively to reinforcement-training contexts, and strictly exclude knowledge outline / theory contexts from any question matching to eliminate false-positive stem detections.
 - Freeze every source path, digest, role, page count, and output root.
 - Force MinerU OCR for PDFs and stop on incomplete page or asset coverage.
 - Build `source-provenance-index.json` from MinerU content-list blocks and carry
@@ -128,10 +137,9 @@ persist the final checks with `audit --overwrite`.
   preserving other reviewed title characters. Never apply this cleanup to
   immutable OCR source text.
 - Normalize all hierarchy output directory paths via `normalize_section_title` (`output: "考点XX_名称/考点XX_名称.md"`) to ensure uniform folder structures across all topics while keeping `title` matched with frozen Markdown for `source-heading` anchor validity.
-- Format every answer note as a collapsible outer `> [!faq]- <title>` with
-  three collapsible nested blocks: `[!success]- **【答案】**`,
-  `[!note]- **【分析】**`, and `[!note]- **【解析】**`. Prefix every nested body
-  line with `> >`. Support `【详解】`, `【思路导航】`, `【解答】`, `【解法】`, `【证法】`, `【证明】` headers alongside `【解析】`. Extract non-choice short answers cleanly into the `[!success]` Callout header while removing duplicate answer lines and `【详解】` headers from the resolution body. If the publisher does not separately label analysis, write `本题未单列分析。` without duplicating the derivation. Recover explicit publisher short-answer prefixes; use `详见解析` only for non-choice problems without a safely separable short result. Choice problems require exact option selections such as `**【答案】** A`. Preserve itemized bullet points and pedagogical sections (`💡 规律方法`, `📌 名师点拨`, `🔔 敲黑板`, `💡 点悟`, `🔗 链接教材`, `⚠️ 易错警示`).
+- Format every answer note as a collapsible outer `> [!success]- <来源名>` (e.g. `> [!success]- 优化设计`, `> [!success]- 五三解析` or `> [!faq]- <title>`) with
+  nested sub-callouts: an unfolded `> > [!success] **【答案】** <val>`, followed by collapsible `> > [!note]- **【分析】**`, `> > [!note]- **【解析】**`, and `> > [!tip]- **【总结】**`. Empty sections (e.g. absent analysis or summary) MUST NOT be rendered as empty callouts. Prefix every nested body
+  line with `> >`. Support `【详解】`, `【思路导航】`, `【解答】`, `【解法】`, `【证法】`, `【证明】` headers alongside `【解析】`. Extract non-choice short answers cleanly into the `[!success]` Callout header while removing duplicate answer lines and `【详解】` headers from the resolution body. Recover explicit publisher short-answer prefixes; use `详见解析` only for non-choice problems without a safely separable short result. Choice problems require exact option selections such as `**【答案】** A`. Preserve itemized bullet points and pedagogical sections (`💡 规律方法`, `📌 名师点拨`, `🔔 敲黑板`, `💡 点悟`, `🔗 链接教材`, `⚠️ 易错警示`).
 - Enforce zero-tolerance explanation validation: external-answer exercises MUST
   embed a valid solution callout note (`![[Q*A1]]`); worked examples MUST carry
   required important/separated metadata and embed a valid standalone publisher

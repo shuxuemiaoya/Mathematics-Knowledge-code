@@ -98,6 +98,8 @@ def process_single_source(
     vault_root: Path,
     graph_base: Path,
     archetype: str,
+    source_dir: Path | None = None,
+    mirror_source_tree: bool = True,
     answers_mode: str = "embedded",
     skip_conversion: bool = False,
     safe_auto_approve: bool = True,
@@ -110,6 +112,17 @@ def process_single_source(
     staging_path.mkdir(parents=True, exist_ok=True)
     profile_path = staging_path / "question-type-profile.json"
 
+    # Determine destination graph root, mirroring relative directory structure if enabled
+    if mirror_source_tree and source_dir:
+        try:
+            rel_parent = source_file.resolve().relative_to(source_dir.resolve()).parent
+            sanitized_parts = [safe_name(part) for part in rel_parent.parts if part not in {".", ""}]
+            dest_graph_root = graph_base.joinpath(*sanitized_parts, slug) if sanitized_parts else graph_base / slug
+        except ValueError:
+            dest_graph_root = graph_base / slug
+    else:
+        dest_graph_root = graph_base / slug
+
     # 1. Create Profile
     is_pdf = source_file.suffix.lower() == ".pdf"
     source_arg = f"questions={source_file}" if is_pdf else f"questions={source_file}"
@@ -118,7 +131,7 @@ def process_single_source(
         title=title,
         staging_root=staging_path,
         vault_root=vault_root,
-        graph_root=graph_base / slug,
+        graph_root=dest_graph_root,
         language="zh-CN",
         answers_mode=answers_mode,
         canvas=False,
@@ -183,7 +196,7 @@ def process_single_source(
         "source": str(source_file),
         "status": status,
         "staging": str(staging_path),
-        "graph_root": str(graph_base / slug),
+        "graph_root": str(dest_graph_root),
         "audit": audit_res,
     }
 
@@ -195,6 +208,7 @@ def run_batch(
     graph_base: Path,
     archetype: str,
     patterns: list[str] | None = None,
+    mirror_source_tree: bool = True,
     parallel: int = 1,
     skip_conversion: bool = False,
     safe_auto_approve: bool = True,
@@ -216,6 +230,8 @@ def run_batch(
                     vault_root,
                     graph_base,
                     archetype,
+                    source_dir=source_dir,
+                    mirror_source_tree=mirror_source_tree,
                     skip_conversion=skip_conversion,
                     safe_auto_approve=safe_auto_approve,
                     overwrite=overwrite,
@@ -240,6 +256,8 @@ def run_batch(
                     vault_root,
                     graph_base,
                     archetype,
+                    source_dir=source_dir,
+                    mirror_source_tree=mirror_source_tree,
                     skip_conversion=skip_conversion,
                     safe_auto_approve=safe_auto_approve,
                     overwrite=overwrite,
@@ -268,6 +286,7 @@ def add_batch_subparser(subparsers: argparse._SubParsersAction) -> None:
     batch_parser.add_argument("--vault-root", type=Path, required=True, help="Root of destination Obsidian vault.")
     batch_parser.add_argument("--graph-base", type=Path, required=True, help="Subdirectory in vault to place generated graphs.")
     batch_parser.add_argument("--archetype", choices=list(ARCHETYPE_REGISTRY.keys()), required=True, help="Adapter archetype.")
+    batch_parser.add_argument("--mirror-source-tree", action=argparse.BooleanOptionalAction, default=True, help="Mirror relative directory tree from source-dir into graph-base.")
     batch_parser.add_argument("--parallel", type=int, default=1, help="Concurrent worker count.")
     batch_parser.add_argument("--skip-conversion", action="store_true", help="Skip MinerU PDF conversion if markdown exists.")
     batch_parser.add_argument("--safe-auto-approve", action="store_true", default=True, help="Safely confirm clean review manifests.")

@@ -51,20 +51,30 @@ def has_duplicate_leading_heading(path: Path) -> bool:
 
 
 def question_sequence_errors(questions: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Require each reviewed matching context to expose a complete 1..N ledger."""
+    """Require each reviewed matching context to expose a complete 1..N ledger or continuous sub-sequence."""
     by_context: dict[str, list[dict[str, Any]]] = {}
     for question in questions:
         if question.get("sequence_policy", "none") != "continuous":
             continue
         by_context.setdefault(str(question.get("context_key", "")), []).append(question)
     errors: list[dict[str, Any]] = []
-    for context, items in by_context.items():
-        expected = 1
-        for item in items:
-            number = str(item.get("number", "")).strip()
-            if not number.isdecimal():
-                continue
-            actual = int(number)
+    prev_context_end: int | None = None
+    for context_idx, (context, items) in enumerate(by_context.items()):
+        decimal_items = [it for it in items if str(it.get("number", "")).strip().isdecimal()]
+        if not decimal_items:
+            continue
+        first_num = int(str(decimal_items[0].get("number", "")).strip())
+        if prev_context_end is not None and first_num == prev_context_end + 1:
+            expected = first_num
+        elif context_idx == 0 and first_num == 1:
+            expected = 1
+        elif first_num == 1:
+            expected = 1
+        else:
+            expected = first_num
+
+        for item in decimal_items:
+            actual = int(str(item.get("number", "")).strip())
             if actual != expected:
                 errors.append(
                     {
@@ -80,6 +90,7 @@ def question_sequence_errors(questions: list[dict[str, Any]]) -> list[dict[str, 
                 expected = actual + 1
             else:
                 expected += 1
+        prev_context_end = expected - 1
     return errors
 
 
@@ -216,10 +227,10 @@ def valid_solution_note(
         )
         if expected_fragment_marker not in text:
             return False, "solution-fragment-provenance-drift"
-    if not re.search(r"(?m)^> \[!faq\]-\s+\S", text):
+    if not re.search(r"(?m)^> \[!(?:faq|success)\]-\s+\S", text):
         return False, "solution-callout-invalid"
     answer_field = re.search(
-        r"(?m)^> > \[!success\]-\s+\*\*【答案】\*\*\s+(\S.*?)\s*$",
+        r"(?m)^> > \[!success\]-?\s+\*\*【答案】\*\*\s+(\S.*?)\s*$",
         text,
     )
     if answer_field is None:
@@ -229,7 +240,7 @@ def valid_solution_note(
             else "solution-answer-field-missing"
         )
     answer_marker = re.search(
-        r"(?m)^> > \[!success\]-\s+\*\*【答案】\*\*\s+([A-F]+)\b",
+        r"(?m)^> > \[!success\]-?\s+\*\*【答案】\*\*\s+([A-F]+)\b",
         text,
     )
     if require_choice_answer and answer_marker is None:

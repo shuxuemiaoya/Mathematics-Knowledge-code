@@ -25,16 +25,21 @@
     "knowledge": "原子层/知识点",
     "worked-example": "原子层/例题",
     "exercise": "原子层/习题",
-    "scenario": "原子层/情景引入"
+    "scenario": "原子层/情景引入",
+    "concept": "原子层/概念",
+    "formula": "原子层/公式"
+  },
+  "atom_subcategory_paths": {
+    "reflection-question": "原子层/思考题"
   },
   "atomization": {
-    "mode": "llm-two-pass",
+    "mode": "llm-category-aware-graph",
     "knowledge_granularity": "complete-teaching-unit",
-    "scenario_policy": "substantial-only",
+    "scenario_policy": "role-aware-bridges-and-reflections",
     "confidence_threshold": 0.90,
     "short_atom_confidence_threshold": 0.95,
-    "teaching_role_audit": "required-before-materialization",
-    "role_correction_confidence_threshold": 0.95
+    "teaching_role_audit": "integrated",
+    "relation_feedback_cycles": 2
   },
   "relation_analysis": {
     "mode": "llm-three-pass",
@@ -58,8 +63,11 @@
     "atom_heading_policy": "omit",
     "atom_filename_policy": "sequence-category-code",
     "leaf_organizer_policy": "flat-note",
-    "organizer_self_heading_policy": "omit",
-    "organizer_child_heading": "relative-depth"
+    "organizer_frontmatter_policy": "required",
+    "organizer_self_heading_policy": "nested-organizer-note",
+    "organizer_child_heading": "relative-depth",
+    "organizer_filename_policy": "clear-title",
+    "concept_filename_policy": "preferred-label-collision-safe"
   },
   "organizer_root": "组织层",
   "canvas": {
@@ -68,10 +76,58 @@
     "theme": "adaptive",
     "overview_granularity": "chapter",
     "chapter_granularity": "core-atom",
-    "section_granularity": "atom-and-exercise-entry"
+    "section_granularity": "atom-and-exercise-entry",
+    "concept_nodes": "hidden",
+    "formula_nodes": "hidden",
+    "isolation_policy": "semantic-or-labelled-membership"
   }
 }
 ```
+
+Every Markdown file under `组织层/` begins with organizer frontmatter. Required
+properties are `title`, `node_type: organizer`, `organizer_key`,
+`parent_organizer_key`, `parent_organizer`, `parent_organizer_file`,
+`source`/`source_pdf`, `source_sha256`, `organizer_level`, `organizer_role`,
+`hierarchy_path`, `heading_ranges`, `source_anchor`, `children_count`,
+`direct_organizer_count`, `direct_atom_count`, `descendant_atom_count`,
+`updated_at`, and `review_status`. Parent fields are explicit `null` for the
+book root. `organizer_role` is one of `root`, `branch`, `mixed`, or `leaf` and
+describes direct-child composition rather than a subject-specific chapter
+type. Generated concept/formula index notes use the same fields with a stable
+`derived-index:<chapter-key>:<category>` key.
+
+In category-aware mode each file under `原子层/` starts with frontmatter
+properties. The common properties are `title`, `atom_type`, `atom_key`,
+`owner_key`, `source`/`source_pdf`, `source_sha256`, `source_range`, `used_by`,
+`organizers`, `updated_at`, `review_status`, `estimated_learning_minutes`,
+`difficulty`, `importance`, and `learning_objectives`. Knowledge notes
+additionally include `prerequisites` and
+`keywords`; scenarios include `scenario_role`, worked examples
+`complete_solution`, exercises `exercise_scope`, and concept/formula cards
+`derived_from`. Concept cards set `is_definition_card: true` and contain only
+definition-form source text (not examples or prompts); inline illustrative
+clauses on the same physical line are clipped only in the derived card, never
+in the parent knowledge atom.
+
+Concept Markdown uses its canonical concept label as the filename. If two
+distinct concepts normalize to the same filename, append a deterministic short
+hash to both; do not fall back to a meaningless sequence number.
+The canonical label is the term being defined, not an editorial phrase such as
+`X 的定义` or `X 的概念、格式与约定`. A virtual graph concept without formal
+definition-form evidence has no Markdown card and therefore no
+`derived_atom_key`.
+
+`scenario_role: reflection-question` uses `原子层/思考题/NNNN-T.md`. Its
+primary category remains `scenario`, so relation analysis and Canvas treat it
+as an inquiry that can be motivated by learned knowledge while storage and
+search distinguish it from chapter/section introductions.
+
+`scenario_role: section-introduction` is a direct child of the section and its
+first direct child. It may be short when it explicitly starts from prior
+knowledge and asks a framing question answered by several following sibling
+topics. It is not owned by the first topic. Inline practice atoms are owned by
+the knowledge topic they exercise; only the terminal formal exercise-set
+organizer remains a direct child of the section.
 
 ## `book-graph.json`
 
@@ -100,7 +156,7 @@ Create this reviewed manifest after TOC extraction and complete atomization:
   },
   "atomization_review": {
     "status": "passed",
-    "mode": "llm-two-pass",
+    "mode": "llm-category-aware-graph",
     "final_artifact": {
       "path": "/absolute/staging/atomization-final.json",
       "sha256": "<sealed artifact digest>"
@@ -224,11 +280,14 @@ it as an allow-list; it does not alter Markdown or relation endpoints.
 - Atom filenames contain no prose title. They use a global source-order number
   plus category code: `K` knowledge, `W` worked example, `E` exercise, or `S`
   scenario.
-- A leaf organizer with only atom children is a numbered `.md` file in its
+- A leaf organizer with only atom children is a clearly named `.md` file in its
   parent's directory. Only organizers that own organizer children retain their
-  own directory. Organizer notes omit their own title. Every organizer-child
-  embed in a parent note is immediately preceded by its root-relative heading:
-  top-level `#`, second-level `##`, third-level `###`, capped at `H6`.
+  own directory. A nonterminal organizer note starts with its own root-relative
+  heading so the note is readable by itself. Every organizer-child embed in a
+  parent note is immediately preceded by that child's root-relative heading:
+  top-level `#`, second-level `##`, third-level `###`, capped at `H6`. A terminal
+  organizer that directly embeds atoms omits headings and contains only the
+  ordered atom embeds.
 - Atom notes omit all Markdown heading lines from their audited source ranges;
   their human-readable `title` remains metadata and an organizer/Canvas label.
 - There is exactly one parentless node and it is an organizer at level 1.
@@ -249,7 +308,12 @@ it as an allow-list; it does not alter Markdown or relation endpoints.
 - `review.status` remains `review_required` until the whole manifest and
   rendered corpus satisfy the architecture contract.
 - `atomization` is optional for legacy profiles. New profiles default to the
-  two-pass configuration shown above.
+  category-aware graph configuration shown above; `llm-two-pass` remains readable.
+- Category-aware profiles also declare `knowledge_boundary_authority:
+  llm-exclusive`, `provisional_atom_policy: coverage-context-only`, and
+  `parallel_definition_policy: split-when-independently-reusable`. These fields
+  make clear that LLM semantic judgment, not deterministic paragraph splitting,
+  controls knowledge-atom boundaries.
 - When `profile.atomization.mode` is `llm-two-pass`, `atomization_review` is
   required. Every bound artifact must exist and match its sealed digest; the
   final artifact must be `passed`, have zero unresolved items, bind the same
@@ -269,3 +333,21 @@ it as an allow-list; it does not alter Markdown or relation endpoints.
   exist, match their sealed digests and source Markdown, contain zero
   unresolved items, and exactly match manifest `concepts`,
   `atom_concept_links`, `concept_relations`, and `relations` in three-pass mode.
+
+## v0.7 additions
+
+- `atomization-final.json` may contain `knowledge_signatures`,
+  `local_relations`, `derived_card_candidates`, and `feedback_cycle`.
+- A pre-materialization `relation-final.json` binds
+  `atomization_final_sha256` and may contain `boundary_feedback`. It cannot be
+  materialized until status is `passed`, feedback is empty, and unresolved
+  count is zero.
+- `source_order` contains primary `knowledge`, `worked-example`, `exercise`,
+  and `scenario` atoms only. `derived_order` contains `concept` and `formula`
+  atom keys. Every derived node has `coverage_role: derived`,
+  `derived_from_key`, and a range contained by its primary source.
+- `formulas[]` records the normalized expression, variables, conditions,
+  evidence range, and source atom. Canonical `concepts[]` and formulas may
+  expose their deterministic `derived_atom_key` after materialization.
+- `derived_indexes[]` records per-chapter concept/formula index notes. These
+  notes are discoverability artifacts, not organizer-tree or Canvas nodes.

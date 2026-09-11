@@ -1,4 +1,4 @@
-# Two-pass Semantic Atomization
+# Category-aware Semantic Atomization
 
 Use this contract after the organizer hierarchy and direct-content ownership
 have been reviewed. The input is a draft `book-graph.json`: its atom boundaries
@@ -49,6 +49,30 @@ Seal the document with `artifact_sha256`, calculated from canonical JSON after
 omitting that field. Decisions may contain ranges and metadata only. Fields
 such as `body`, `content`, `markdown`, or rewritten text are rejected.
 
+Derived concept cards are definition references. Their evidence must remain
+inside a knowledge atom and select only the formal definition/property/rule
+sentence with immediate conditions or formula; examples, prompts, questions,
+and activity scaffolding are never copied into the concept card. If a textbook
+places an inline illustration on the same physical line, the materializer
+clips that illustrative clause from the derived card while leaving the parent
+knowledge atom unchanged.
+
+### LLM-exclusive knowledge boundaries
+
+For `llm-category-aware-graph`, the LLM alone decides the number, titles, and
+boundaries of knowledge atoms. Draft atoms are provisional coverage/context
+hints, never binding partitions. Deterministic validators check only continuous
+source ranges, hard ownership boundaries, evidence, and complete coverage.
+Formal definition starts are semantic anchors even without a transition word:
+adjacent independently reusable definitions (such as 全称量词 and 存在量词)
+must be separate atoms. A compound section heading is not evidence that its
+concepts should be merged.
+
+Each materialized concept card names exactly one term. Use the term itself as
+the label and filename (`列举法.md`, not `列举法的定义.md`). If a canonical graph
+node is useful for reasoning but lacks formal definition-form source evidence,
+keep it in JSON only and do not create a Markdown concept card.
+
 ## Second pass
 
 `prepare-audit` joins packet seams belonging to the same owner run and creates
@@ -59,6 +83,17 @@ an audit for every round-one adjacency. A round-two decision must:
 - return the complete final contiguous partition for the audit range;
 - preserve all hard boundaries;
 - merge short prompts with the knowledge they introduce;
+- keep a short prior-knowledge question as a direct
+  `scenario_role: section-introduction` when several sibling knowledge topics
+  collectively answer it; place it before those topics and never absorb it
+  into only the first topic;
+- keep a short `knowledge-motivation` separately only when it explicitly
+  bridges learned content to a distinct next topic and the relation pass can
+  support `learned knowledge → bridge → new knowledge`;
+- retain a complete post-knowledge comparison, synthesis, extension, or open
+  inquiry as `category: scenario` with
+  `scenario_role: reflection-question`; store it as a thought question rather
+  than treating it as an example or routine exercise;
 - keep examples and exercises source-complete.
 
 For a short knowledge atom that legitimately remains independent, add
@@ -100,3 +135,26 @@ Run `validate-role-review`, then `finalize-role-review`. When the profile sets
 `teaching_role_audit` to `required-before-materialization`, the materialized
 manifest must bind a passed role review with zero unresolved items. Relation
 mapping also refuses a corpus whose required role audit is missing or stale.
+
+## Category-aware graph mode
+
+`llm-category-aware-graph` is the default. Both model rounds return, alongside
+the complete partition, `knowledge_signatures`, `local_relations`, and
+`derived_card_candidates`. Knowledge uses complete teaching semantics;
+worked examples preserve stem-analysis-solution-conclusion; one top-level
+exercise preserves every subpart and resource; a short activity prompt merges
+into the knowledge it elicits. A post-knowledge reflection question is the
+exception: it remains an independent scenario-semantic atom, because it can
+connect learned knowledge to later or extra-text inquiry. Topic grouping does
+not erase atomic boundaries: independently reusable methods such as enumeration
+and description remain separate knowledge atoms under their shared organizer.
+Likewise, adjacent defined concepts with distinct dependency roles remain
+separate; a prerequisite context such as a universal set is not merged into the
+dependent operation such as complement. Inline practice questions attach to
+the knowledge topic they exercise, while only the terminal formal exercise set
+remains a direct section-level organizer.
+
+The relation audit may return evidence-bound boundary feedback. Run
+`prepare-feedback` and `finalize-feedback`; do not edit ranges in place. At most
+two automatic cycles are permitted. Legacy `llm-two-pass` keeps the focused
+post-partition role audit described above.

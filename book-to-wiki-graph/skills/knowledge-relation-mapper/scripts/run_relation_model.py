@@ -116,6 +116,17 @@ INDEPENDENT_COMPONENT = {
     "properties": {"concept_keys": {"type": "array", "items": {"type": "string"}}, "reason": {"type": "string"}},
     "required": ["concept_keys", "reason"],
 }
+BOUNDARY_FEEDBACK = {
+    "type": "object", "additionalProperties": False,
+    "properties": {
+        "feedback_id": {"type": "string"}, "action": {"type": "string", "enum": ["merge", "split", "resegment"]},
+        "atom_keys": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+        "proposed_ranges": {"type": "array", "minItems": 1, "items": RANGE},
+        "evidence": {"type": "array", "minItems": 1, "items": EVIDENCE},
+        "rationale": {"type": "string"}, "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    },
+    "required": ["feedback_id", "action", "atom_keys", "proposed_ranges", "evidence", "rationale", "confidence"],
+}
 
 
 def schema(phase: str) -> dict[str, Any]:
@@ -144,7 +155,8 @@ def schema(phase: str) -> dict[str, Any]:
         "relations": {"type": "array", "items": ATOM_RELATION},
         "independent_atoms": {"type": "array", "items": INDEPENDENT_ATOM},
         "independent_components": {"type": "array", "items": INDEPENDENT_COMPONENT},
-    }, "required": ["audit_id", "packet_sha256", "reviewed_issue_ids", "concepts", "atom_concept_links", "concept_relations", "relations", "independent_atoms", "independent_components"]}
+        "boundary_feedback": {"type": "array", "items": BOUNDARY_FEEDBACK},
+    }, "required": ["audit_id", "packet_sha256", "reviewed_issue_ids", "concepts", "atom_concept_links", "concept_relations", "relations", "independent_atoms", "independent_components", "boundary_feedback"]}
 
 
 def instructions(phase: str) -> str:
@@ -158,18 +170,37 @@ def instructions(phase: str) -> str:
             "Extract reusable canonical concept proposals from each TextUnit-like atom. Do not use a whole problem, "
             "activity heading, truncated sentence, or exercise number as a concept name. Exercises may only map to "
             "concepts evidenced elsewhere in the packet/context. Classify every atom as core, bridge, or satellite; "
-            "bridge is reserved for worked examples with a substantial reusable mathematical method."
+            "bridge is reserved for worked examples with a substantial reusable mathematical method. A concept card "
+            "must be a definition-form statement: select only the formal definition/property/rule sentence and its "
+            "immediate conditions or formula, never examples, prompts, questions, or surrounding activity prose. "
+            "The preferred_label should be only the mathematical term being defined: use '列举法', not '列举法的定义', "
+            "and split labels such as 'X 的概念、符号与约定' when the source actually defines reusable units separately. "
+            "Do not use a sentence, exercise title, chapter summary, or editorial description as the label. "
+            "A section-introduction framing question maps to the concepts collectively answering it and creates no concept "
+            "from the question wording. "
+            "A scenario atom with scenario_role reflection-question is a post-knowledge inquiry: map it to the learned "
+            "concepts that trigger it, but do not manufacture a concept from its question wording."
         )
     if phase == "relations":
         return shared + (
             "Review every candidate ID. For atom and concept candidates decide relation, reverse relation, or no relation; "
             "absence from relation arrays means no relation. Return one merge decision for every concept-merge candidate. "
-            "Pedagogical inferences require evidence from both endpoints. Keep the backbone acyclic."
+            "Pedagogical inferences require evidence from both endpoints. A reflection-question remains scenario-semantic: "
+            "use an incoming motivates edge from the learned knowledge and, when grounded evidence exists, an outgoing "
+            "motivates edge to the later or external knowledge it opens. A short knowledge-motivation must have both an "
+            "incoming edge from learned content and an outgoing edge to a distinct next topic; otherwise flag its boundary "
+            "instead of inventing a relation. A section-introduction needs an outgoing motivates edge to the first knowledge "
+            "unit that begins answering its framing question; add further outgoing edges only when each sibling is directly "
+            "grounded by the wording. Keep the backbone acyclic."
         )
     return shared + (
         "Audit the complete graph. Review every issue ID, then return a complete replacement graph: correct merges, "
         "add/delete/reverse/retype edges, remove transitive inferred prerequisites, and connect unjustified components. "
-        "Independent atoms/components require a concrete mathematical reason; 'unclear relation' is not sufficient."
+        "Independent atoms/components require a concrete mathematical reason; 'unclear relation' is not sufficient. "
+        "When graph evidence proves that a knowledge boundary is wrong, return merge/split/resegment boundary_feedback; "
+        "otherwise return an empty boundary_feedback array. A short knowledge-motivation with only one side of its bridge "
+        "is a boundary defect. A section-introduction without a grounded outgoing target is incomplete. Do not compensate "
+        "for a bad boundary with a vague edge."
     )
 
 

@@ -19,6 +19,7 @@ import run_embeddings
 import run_relation_model
 import sync_neo4j
 import build_canvas
+import constellation_v3
 
 
 def digest(path: Path) -> str:
@@ -121,6 +122,44 @@ class KnowledgeRelationMapperTests(unittest.TestCase):
             self.assertIn("未解决项：0", review)
             self.assertEqual(quality["counts"]["components"], 1)
 
+    def test_pre_materialization_context_binds_frozen_atoms_and_boundary_feedback(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest, payload = self.fixture(root)
+            atoms = [
+                {"atom_id": "a-point", "owner_key": "section", "source_range": [1, 1], "category": "knowledge", "title": "点"},
+                {"atom_id": "a-scene", "owner_key": "section", "source_range": [2, 2], "category": "scenario", "title": "连线思考"},
+                {"atom_id": "a-line", "owner_key": "section", "source_range": [3, 3], "category": "knowledge", "title": "线"},
+                {"atom_id": "a-example", "owner_key": "section", "source_range": [4, 4], "category": "worked-example", "title": "连线方法"},
+                {"atom_id": "a-exercise", "owner_key": "section", "source_range": [5, 5], "category": "exercise", "title": "画线练习"},
+            ]
+            final = kr.seal_artifact({
+                "schema_version": 2, "kind": "atomization-final", "status": "passed", "unresolved_count": 0,
+                "base_manifest": str(manifest), "base_manifest_sha256": digest(manifest),
+                "source_markdown": payload["source_markdown"], "source_markdown_sha256": payload["source_markdown_sha256"],
+                "scope_root_keys": ["chapter"], "atomization": {"mode": "llm-category-aware-graph", "relation_feedback_cycles": 2},
+                "atoms": atoms,
+                "knowledge_signatures": [{"atom_id": "a-point", "teaches": ["点"], "assumes": [], "outputs": ["位置表示"]}, {"atom_id": "a-line", "teaches": ["线"], "assumes": ["点"], "outputs": ["路径表示"]}],
+                "local_relations": [{"from_atom_id": "a-point", "to_atom_id": "a-line", "type": "develops", "confidence": 0.99, "evidence": []}],
+                "derived_card_candidates": [], "feedback_cycle": {"cycle": 0, "max_cycles": 2, "history": []},
+            })
+            final_path = root / "atomization-final.json"
+            final_path.write_text(json.dumps(final, ensure_ascii=False), encoding="utf-8")
+            jobs = kr.prepare_concept_jobs(manifest, atomization_final_path=final_path)
+            self.assertEqual(jobs["atomization_final_sha256"], final["artifact_sha256"])
+            self.assertEqual(sum(len(job["atoms"]) for job in jobs["jobs"]), 5)
+            self.assertTrue(any(job["seed_local_relations"] for job in jobs["jobs"]))
+            virtual_atoms = {item["atom_key"]: item for job in jobs["jobs"] for item in job["atoms"]}
+            point = next(key for key, item in virtual_atoms.items() if item.get("atomization_id") == "a-point")
+            scene = next(key for key, item in virtual_atoms.items() if item.get("atomization_id") == "a-scene")
+            line = next(key for key, item in virtual_atoms.items() if item.get("atomization_id") == "a-line")
+            normalized = kr.validate_boundary_feedback([{
+                "feedback_id": "f1", "action": "merge", "atom_keys": [point, scene, line],
+                "proposed_ranges": [[1, 3]], "evidence": [{"atom_key": point, "source_range": [1, 1]}, {"atom_key": line, "source_range": [3, 3]}],
+                "rationale": "全图依赖证据表明这两个边界属于同一连续教学过程。", "confidence": 0.99,
+            }], virtual_atoms, kr.DEFAULT_CONFIG, [], [])
+            self.assertEqual(normalized[0]["atom_ids"], ["a-point", "a-scene", "a-line"])
+
     def test_activity_title_and_low_merge_confidence_enter_review(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             manifest, _ = self.fixture(Path(temporary))
@@ -131,6 +170,8 @@ class KnowledgeRelationMapperTests(unittest.TestCase):
             report = kr.validate_concept_payload(jobs, round1)
             self.assertEqual(report["status"], "review_required")
             self.assertIn("concept-label-is-activity", {item["code"] for item in report["review_items"]})
+            self.assertEqual(kr.label_issue("列举法的定义"), "concept-label-is-editorial-description")
+            self.assertIsNone(kr.label_issue("列举法"))
 
     def test_embedding_artifact_is_optional_bound_and_candidate_only(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -285,6 +326,80 @@ class KnowledgeRelationMapperTests(unittest.TestCase):
             self.assertEqual(index["chapter_maps"][0]["counts"]["concept_hubs"], 2)
             incident = {str(endpoint) for edge in canvas["edges"] for endpoint in (edge["fromNode"], edge["toNode"])}
             self.assertTrue({build_canvas.stable_id("concept", "c-point"), build_canvas.stable_id("concept", "c-line")}.issubset(incident))
+
+    def test_category_aware_canvas_hides_concepts_and_labels_membership_without_book_order(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest_path, graph = self.fixture(root)
+            profile_path = Path(graph["profile"])
+            profile = json.loads(profile_path.read_text(encoding="utf-8"))
+            profile["canvas"] = {"mode": "three-level-constellation", "concept_nodes": "hidden", "formula_nodes": "hidden", "isolation_policy": "semantic-or-labelled-membership"}
+            profile_path.write_text(json.dumps(profile, ensure_ascii=False), encoding="utf-8")
+            for node in graph["nodes"]:
+                target = root / node["filename"]
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text("内容\n", encoding="utf-8")
+            graph["relation_review"] = {"status": "passed", "unresolved_count": 0, "mode": "llm-three-pass", "graph_model": "atom-concept-dual-layer", "featured_example_keys": ["w1"]}
+            graph["concepts"] = [{"key": "c1", "preferred_label": "点线关系", "first_source_order": 1}]
+            graph["atom_concept_links"] = [{"key": "l1", "atom_key": "k1", "concept_key": "c1", "role": "introduces"}]
+            graph["concept_relations"] = []
+            graph["relations"] = [{"key": "r1", "from_key": "k1", "to_key": "s1", "type": "motivates", "tier": "backbone", "basis_keys": []}, {"key": "r2", "from_key": "s1", "to_key": "k2", "type": "develops", "tier": "backbone", "basis_keys": []}]
+            manifest_path.write_text(json.dumps(graph, ensure_ascii=False), encoding="utf-8")
+            builder = constellation_v3.CanvasBundleBuilderV3(graph, manifest_path, root, root / "Canvas")
+            payloads, index = builder.build()
+            chapter = next(value for path, value in payloads.items() if path.parent.name == "chapters")
+            self.assertFalse(any(node["id"] == build_canvas.stable_id("concept", "c1") for node in chapter["nodes"]))
+            self.assertNotIn("书序", {edge.get("label") for edge in chapter["edges"]})
+            self.assertIn("归属", {edge.get("label") for edge in chapter["edges"]})
+            self.assertEqual(index["chapter_maps"][0]["counts"]["concept_hubs"], 0)
+
+    def test_short_knowledge_motivation_requires_both_sides_of_bridge(self) -> None:
+        atoms = {
+            "k1": {"category": "knowledge"},
+            "s1": {"category": "scenario", "scenario_role": "knowledge-motivation"},
+            "k2": {"category": "knowledge"},
+        }
+        graph = {
+            "concepts": [{"key": "c1", "first_source_order": 1}],
+            "atom_concept_links": [
+                {"atom_key": "k1", "concept_key": "c1", "role": "introduces"},
+                {"atom_key": "s1", "concept_key": "c1", "role": "motivates"},
+                {"atom_key": "k2", "concept_key": "c1", "role": "explains"},
+            ],
+            "concept_relations": [],
+            "relations": [
+                {"key": "r1", "from_key": "k1", "to_key": "s1", "type": "motivates", "tier": "backbone"},
+            ],
+        }
+        issues, _ = kr.graph_issues(graph, atoms)
+        self.assertIn("knowledge-motivation-bridge-incomplete", {item["code"] for item in issues})
+        graph["relations"].append(
+            {"key": "r2", "from_key": "s1", "to_key": "k2", "type": "motivates", "tier": "backbone"}
+        )
+        issues, _ = kr.graph_issues(graph, atoms)
+        self.assertNotIn("knowledge-motivation-bridge-incomplete", {item["code"] for item in issues})
+
+    def test_section_introduction_requires_an_outgoing_knowledge_target(self) -> None:
+        atoms = {
+            "intro": {"category": "scenario", "scenario_role": "section-introduction"},
+            "union": {"category": "knowledge"},
+        }
+        graph = {
+            "concepts": [{"key": "c-union", "first_source_order": 1}],
+            "atom_concept_links": [
+                {"atom_key": "intro", "concept_key": "c-union", "role": "motivates"},
+                {"atom_key": "union", "concept_key": "c-union", "role": "introduces"},
+            ],
+            "concept_relations": [],
+            "relations": [],
+        }
+        issues, _ = kr.graph_issues(graph, atoms)
+        self.assertIn("section-introduction-target-missing", {item["code"] for item in issues})
+        graph["relations"].append(
+            {"key": "r-intro", "from_key": "intro", "to_key": "union", "type": "motivates", "tier": "backbone"}
+        )
+        issues, _ = kr.graph_issues(graph, atoms)
+        self.assertNotIn("section-introduction-target-missing", {item["code"] for item in issues})
 
 
 if __name__ == "__main__":

@@ -21,15 +21,23 @@ from validate_book_graph import load_json, validate_graph
 
 ATOM_COLORS = {"knowledge": "2", "worked-example": "4", "exercise": "6", "scenario": "5"}
 ATOM_LABELS = {"knowledge": "知识点", "worked-example": "例题", "exercise": "习题", "scenario": "情景引入"}
+
+
+def atom_label(node: dict[str, Any]) -> str:
+    if node.get("category") == "scenario" and node.get("scenario_role") == "reflection-question":
+        return "思考题"
+    return ATOM_LABELS[str(node["category"])]
 RELATION_LABELS = {
     "prerequisite": "先修", "develops": "发展", "derives": "推导",
     "motivates": "引发", "illustrates": "例证", "applies": "应用",
     "practices": "练习", "contrasts": "对比", "analogous": "类比",
+    "synthesizes": "汇合",
 }
 RELATION_COLORS = {
     "prerequisite": "1", "develops": "2", "derives": "4",
     "motivates": "5", "illustrates": "4", "applies": "4",
     "practices": "6", "contrasts": "1", "analogous": "5",
+    "synthesizes": "3",
 }
 CONCEPT_RELATION_LABELS = {
     "prerequisite": "先修", "develops": "发展", "derives": "推导",
@@ -54,6 +62,7 @@ PORTAL_WIDTH, PORTAL_HEIGHT = 250, 66
 EXERCISE_WIDTH, EXERCISE_HEIGHT = 260, 72
 JUNCTION_WIDTH, JUNCTION_HEIGHT = 210, 60
 CONCEPT_WIDTH, CONCEPT_HEIGHT = 230, 76
+# Legacy v2 spacing. New compact maps own their spacing in compact_layout.py.
 GROUP_PADDING = 130
 NODE_MARGIN = 72
 
@@ -190,6 +199,9 @@ class CanvasBundleBuilder:
             raise ValueError("Canvas bundle needs at least one chapter organizer")
         self.chapter_paths = self._chapter_paths()
         review = manifest.get("relation_review")
+        profile = load_json(Path(str(manifest["profile"])).expanduser().resolve())
+        self.canvas_config = profile.get("canvas", {}) if isinstance(profile.get("canvas"), dict) else {}
+        self.isolation_policy = str(self.canvas_config.get("isolation_policy", "source-order-fallback"))
         self.semantic_ready = isinstance(review, dict) and review.get("status") == "passed" and review.get("unresolved_count") == 0
         self.relations = list(manifest.get("relations", [])) if self.semantic_ready else []
         self.concepts = {
@@ -201,6 +213,7 @@ class CanvasBundleBuilder:
         self.dual_layer = bool(
             self.concepts and isinstance(review, dict)
             and review.get("graph_model") == "atom-concept-dual-layer"
+            and self.canvas_config.get("concept_nodes", "selective") != "hidden"
         )
         featured = review.get("featured_example_keys", []) if isinstance(review, dict) else []
         self.featured_examples = {
@@ -291,7 +304,7 @@ class CanvasBundleBuilder:
         prefix = "↗ 外章" if external else ("✦" if core else "·")
         return {
             "id": stable_id("external" if external else "card", key), "type": "text",
-            "text": self.link_text(f"{prefix} {ATOM_LABELS[category]} · {node['title']}", self.note_target(key), canvas_path),
+            "text": self.link_text(f"{prefix} {atom_label(node)} · {node['title']}", self.note_target(key), canvas_path),
             "x": position[0], "y": position[1], "width": width, "height": height,
             "color": ATOM_COLORS[category] if not external else SOURCE_ORDER_COLOR,
         }
@@ -383,7 +396,7 @@ class CanvasBundleBuilder:
         relation_type, tier = str(relation["type"]), str(relation["tier"])
         if relation_type == "motivates":
             from_side, to_side = "right", "top"
-        elif relation_type in {"illustrates", "applies", "practices", "contrasts", "analogous"}:
+        elif relation_type in {"illustrates", "applies", "practices", "contrasts", "analogous", "synthesizes"}:
             from_side, to_side = "bottom", "top"
         else:
             from_side, to_side = "right", "left"

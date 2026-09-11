@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic contracts for two-pass, range-only semantic atomization."""
+"""Deterministic contracts for legacy and category-aware graph atomization."""
 
 from __future__ import annotations
 
@@ -16,12 +16,26 @@ from validate_book_graph import artifact_digest, canonical_digest, load_json, sh
 
 
 ATOM_CATEGORY_NAMES = {"knowledge", "worked-example", "exercise", "scenario"}
+SCENARIO_ROLES = {
+    "chapter-introduction", "section-introduction", "knowledge-motivation",
+    "reflection-question",
+}
+DERIVED_CATEGORY_NAMES = {"concept", "formula"}
+LOCAL_RELATION_TYPES = {
+    "prerequisite", "develops", "derives", "motivates", "contrasts",
+    "analogous", "synthesizes", "illustrates", "applies",
+}
 DEFAULT_ATOMIZATION = {
-    "mode": "llm-two-pass",
+    "mode": "llm-category-aware-graph",
     "knowledge_granularity": "complete-teaching-unit",
-    "scenario_policy": "substantial-only",
+    "scenario_policy": "role-aware-bridges-and-reflections",
     "confidence_threshold": 0.90,
     "short_atom_confidence_threshold": 0.95,
+    "teaching_role_audit": "integrated",
+    "relation_feedback_cycles": 2,
+    "knowledge_boundary_authority": "llm-exclusive",
+    "provisional_atom_policy": "coverage-context-only",
+    "parallel_definition_policy": "split-when-independently-reusable",
 }
 FORMAL_STANDALONE_KINDS = {"formal-definition", "theorem", "law"}
 FORBIDDEN_DECISION_FIELDS = {"body", "content", "markdown", "source_text", "rewritten_text"}
@@ -30,6 +44,14 @@ EXERCISE_RE = re.compile(r"^\s*(?:#{1,6}\s*)?\d+[.．、]\s*\S+")
 EXERCISE_HEADING_RE = re.compile(r"^\s*(?:#{1,6}\s*)?【?(?:练习|习题|复习题)[^】]*】?(?:\s|[.．、：:]|$)")
 ACTIVITY_HEADING_RE = re.compile(r"^\s*#{1,6}\s*(?:观察|思考|尝试|操作|交流|探究|讨论)[·・、]?", re.MULTILINE)
 TASK_LANGUAGE_RE = re.compile(r"(?:请你|请同伴|你能|你认为|怎样|如何|与同伴.*交流|[？?])")
+REFLECTION_LANGUAGE_RE = re.compile(r"(?:举例说明|比较|概括|归纳|评价|探究|思考|说明.+特点|[？?])")
+KNOWLEDGE_MOTIVATION_RE = re.compile(r"(?:从上面|由此想到|在此基础上|除此之外|还能|接下来|下面(?:先|来)|进一步|为了.+需要|如何|什么方式|为什么|[？?])")
+INTRODUCTION_LANGUAGE_RE = re.compile(r"(?:本章(?:我们)?将|本节(?:我们)?将|我们将学习|学习目标|研究.+基础|为了.+需要|下面(?:先|来))")
+SECTION_SCOPE_QUESTION_RE = re.compile(
+    r"^\s*(?:#+\s*)?(?:我们知道|我们已经知道|已经知道|此前|前面(?:已经)?.{0,24}(?:学习|研究|接触)|"
+    r"在.{0,36}(?:已经)?(?:学习|研究|接触)).{0,180}?(?:是否|能否|可否|有没有|也有|又有).{0,100}?[？?]",
+    re.DOTALL,
+)
 SOLUTION_LANGUAGE_RE = re.compile(r"(?:解法[一二三四五六七八九十\d]+|^\s*(?:解|证明|分析)\s*[：:]|因此|所以|可得|叫作|称为|法则)", re.MULTILINE)
 
 
@@ -111,14 +133,23 @@ def config_from_profile(profile: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(supplied, dict):
         raise AtomizationError("profile.atomization must be an object")
     config = {**DEFAULT_ATOMIZATION, **supplied}
-    if config.get("mode") != "llm-two-pass":
-        raise AtomizationError("Two-pass preparation requires mode=llm-two-pass")
+    if config.get("mode") not in {"llm-two-pass", "llm-category-aware-graph"}:
+        raise AtomizationError("atomization.mode must be llm-two-pass or llm-category-aware-graph")
+    if config.get("mode") == "llm-two-pass" and "teaching_role_audit" not in supplied:
+        config.pop("teaching_role_audit", None)
     for field in ("confidence_threshold", "short_atom_confidence_threshold"):
         value = config.get(field)
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= float(value) <= 1:
             raise AtomizationError(f"atomization.{field} must be between 0 and 1")
         config[field] = float(value)
+    cycles = config.get("relation_feedback_cycles", 2)
+    if isinstance(cycles, bool) or not isinstance(cycles, int) or not 0 <= cycles <= 2:
+        raise AtomizationError("atomization.relation_feedback_cycles must be an integer from 0 to 2")
     return config
+
+
+def category_aware(config: dict[str, Any]) -> bool:
+    return config.get("mode") == "llm-category-aware-graph"
 
 
 def explicit_boundary(atom: dict[str, Any], lines: list[str]) -> dict[str, Any] | None:
@@ -224,19 +255,28 @@ def prepare_jobs(manifest_path: Path, selected_roots: list[str] | None = None, m
                     "baseline_atoms": [{"key": str(atom["key"]), "source_range": list(atom["source_range"]), "category": atom.get("category"), "title": atom.get("title")} for atom in packet_atoms],
                     "hard_boundaries": [marker for marker in (explicit_boundary(atom, lines) for atom in packet_atoms) if marker],
                     "instructions": {
+                        "boundary_authority": "LLM has exclusive authority over knowledge boundaries and atom count. Baseline atoms are non-binding coverage/context hints only; ignore their titles and internal boundaries unless an explicit hard boundary is independently proven.",
+                        "parallel_definitions": "No transition word is required. If adjacent prose independently defines parallel reusable terms (for example 全称量词 and 存在量词), create separate knowledge atoms and topic assignments. Keep each prompt with the concept it scaffolds.",
                         "knowledge": "Keep definition, conditions, notation, explanation, derivation, and nearby conclusion in one complete teaching unit.",
-                        "scenario": "Only substantial narrative, real-world context, experiment setup, or motivation may stand alone; merge short prompts into knowledge.",
+                        "scenario": "Use chapter-introduction or section-introduction for complete context. A short prior-knowledge question whose answer spans several sibling topics is a direct section-introduction and precedes those topics; do not absorb it into only the first topic. Use knowledge-motivation only for an explicit learned-content-to-new-topic bridge; use reflection-question for a complete post-knowledge comparison, synthesis, extension, or open inquiry. Merge ordinary short prompts that scaffold only one immediately following explanation into that knowledge atom.",
+                        "reflection_question": "A complete post-knowledge comparison, synthesis, extension, or open inquiry may stand alone as category scenario with scenario_role reflection-question; it is not an exercise merely because it is phrased as a question.",
                         "worked_example": "Keep complete stem, analysis, solution, and nearby conclusion.",
                         "exercise": "Keep a top-level question with all subparts, figures, tables, and materials.",
                         "source_fidelity": "Choose contiguous source ranges only; never rewrite source text."
                     },
                 }
+                if category_aware(config):
+                    job["instructions"].update({
+                        "joint_output": "Return the partition, a teaches/assumes/outputs signature for every knowledge atom, local logical relations with two-sided evidence, and source-grounded concept/formula candidates in one decision. Do not copy the baseline partition: determine knowledge atom count and boundaries from teaching semantics alone.",
+                        "boundary_relation_consistency": "Merge knowledge fragments that are one teaching process; split only independently reusable knowledge with different dependency signatures.",
+                        "derived_cards": "Concept candidates come only from knowledge and must cite a definition-form source span only (formal definition/property/rule plus immediate conditions; exclude examples, prompts, and questions). Formula candidates require a reusable expression plus variables, conditions, or explanation and come only from knowledge or a bridge worked example.",
+                    })
                 job["packet_sha256"] = canonical_digest(job)
                 jobs.append(job)
     if not jobs:
         raise AtomizationError("Selected roots contain no draft atoms")
     return seal_artifact({
-        "schema_version": 1, "kind": "atomization-jobs",
+        "schema_version": 2 if category_aware(config) else 1, "kind": "atomization-jobs",
         "base_manifest": str(manifest_path), "base_manifest_sha256": sha256_file(manifest_path),
         "profile": str(profile_path), "profile_sha256": sha256_file(profile_path),
         "source_markdown": str(source_path), "source_markdown_sha256": sha256_file(source_path),
@@ -261,6 +301,9 @@ def validate_atom(atom: Any, field: str, owner: str, lines: list[str], errors: l
         errors.append({"code": "decision-owner-invalid", "field": field})
     if atom.get("category") not in ATOM_CATEGORY_NAMES:
         errors.append({"code": "decision-category-invalid", "field": field})
+    scenario_role = atom.get("scenario_role")
+    if scenario_role is not None and (atom.get("category") != "scenario" or scenario_role not in SCENARIO_ROLES):
+        errors.append({"code": "decision-scenario-role-invalid", "field": field, "scenario_role": scenario_role})
     for name in ("title", "boundary_reason", "cohesion_reason", "atom_id"):
         if not isinstance(atom.get(name), str) or not atom[name].strip():
             errors.append({"code": "decision-field-missing", "field": field, "name": name})
@@ -295,6 +338,169 @@ def validate_partition(atoms: Any, expected: list[int], owner: str, lines: list[
     return [item[2] for item in parsed]
 
 
+def _string_list(value: Any, field: str, errors: list[dict[str, Any]], allow_empty: bool = True) -> list[str]:
+    if not isinstance(value, list) or not all(isinstance(item, str) and item.strip() for item in value):
+        errors.append({"code": "joint-string-list-invalid", "field": field})
+        return []
+    result = [item.strip() for item in value]
+    if not allow_empty and not result:
+        errors.append({"code": "joint-string-list-empty", "field": field})
+    return result
+
+
+def validate_joint_metadata(
+    decision: dict[str, Any], atoms: list[dict[str, Any]], lines: list[str], location: str,
+    config: dict[str, Any], errors: list[dict[str, Any]], review: list[dict[str, Any]], final: bool,
+) -> dict[str, list[dict[str, Any]]]:
+    """Validate semantics emitted with a category-aware partition.
+
+    These records refer to temporary atom ids.  They deliberately contain no
+    rewritten body text and are rebound to stable atom keys only after the
+    boundary/relationship loop is frozen.
+    """
+    atom_by_id = {str(atom.get("atom_id")): atom for atom in atoms}
+    knowledge_ids = {key for key, atom in atom_by_id.items() if atom.get("category") == "knowledge"}
+    signatures_raw = decision.get("knowledge_signatures")
+    if not isinstance(signatures_raw, list):
+        errors.append({"code": "knowledge-signatures-missing", "location": location})
+        signatures_raw = []
+    signatures: list[dict[str, Any]] = []
+    seen_signatures: set[str] = set()
+    for index, raw in enumerate(signatures_raw):
+        field = f"{location}.knowledge_signatures[{index}]"
+        if not isinstance(raw, dict):
+            errors.append({"code": "knowledge-signature-invalid", "field": field})
+            continue
+        atom_id = str(raw.get("atom_id", ""))
+        if atom_id not in knowledge_ids or atom_id in seen_signatures:
+            errors.append({"code": "knowledge-signature-atom-invalid", "field": field, "atom_id": atom_id})
+            continue
+        seen_signatures.add(atom_id)
+        teaches = _string_list(raw.get("teaches"), f"{field}.teaches", errors, allow_empty=False)
+        assumes = _string_list(raw.get("assumes"), f"{field}.assumes", errors)
+        outputs = _string_list(raw.get("outputs"), f"{field}.outputs", errors)
+        global_needed = raw.get("global_relation_needed", False)
+        if not isinstance(global_needed, bool):
+            errors.append({"code": "knowledge-signature-global-flag-invalid", "field": field})
+            global_needed = False
+        independent_reason = str(raw.get("independent_reason", "")).strip()
+        if independent_reason and len(independent_reason) < 12:
+            review.append({"code": "knowledge-independent-reason-too-short", "location": location, "atom_id": atom_id})
+        signatures.append({
+            "atom_id": atom_id, "teaches": teaches, "assumes": assumes, "outputs": outputs,
+            "global_relation_needed": global_needed, "independent_reason": independent_reason,
+        })
+    if seen_signatures != knowledge_ids:
+        errors.append({"code": "knowledge-signature-coverage-invalid", "location": location, "missing": sorted(knowledge_ids - seen_signatures), "extra": sorted(seen_signatures - knowledge_ids)})
+
+    relations_raw = decision.get("local_relations")
+    if not isinstance(relations_raw, list):
+        errors.append({"code": "local-relations-missing", "location": location})
+        relations_raw = []
+    relations: list[dict[str, Any]] = []
+    identities: set[tuple[str, str, str]] = set()
+    incident: set[str] = set()
+    for index, raw in enumerate(relations_raw):
+        field = f"{location}.local_relations[{index}]"
+        if not isinstance(raw, dict):
+            errors.append({"code": "local-relation-invalid", "field": field})
+            continue
+        left, right, relation_type = str(raw.get("from_atom_id", "")), str(raw.get("to_atom_id", "")), str(raw.get("type", ""))
+        identity = (left, right, relation_type)
+        if left not in atom_by_id or right not in atom_by_id or left == right or relation_type not in LOCAL_RELATION_TYPES or identity in identities:
+            errors.append({"code": "local-relation-endpoint-or-type-invalid", "field": field})
+            continue
+        identities.add(identity)
+        confidence = raw.get("confidence")
+        if isinstance(confidence, bool) or not isinstance(confidence, (int, float)) or not 0 <= float(confidence) <= 1:
+            errors.append({"code": "local-relation-confidence-invalid", "field": field})
+            confidence = 0.0
+        elif float(confidence) < float(config["confidence_threshold"]):
+            review.append({"code": "local-relation-low-confidence", "field": field, "confidence": confidence})
+        rationale = str(raw.get("rationale", "")).strip()
+        if len(rationale) < 12:
+            errors.append({"code": "local-relation-rationale-invalid", "field": field})
+        evidence_raw = raw.get("evidence")
+        evidence: list[dict[str, Any]] = []
+        evidence_atoms: set[str] = set()
+        if not isinstance(evidence_raw, list):
+            errors.append({"code": "local-relation-evidence-missing", "field": field})
+            evidence_raw = []
+        for evidence_index, item in enumerate(evidence_raw):
+            if not isinstance(item, dict) or str(item.get("atom_id", "")) not in {left, right}:
+                errors.append({"code": "local-relation-evidence-invalid", "field": f"{field}.evidence[{evidence_index}]"})
+                continue
+            atom_id = str(item["atom_id"])
+            try:
+                start, end = parse_range(item.get("source_range"), f"{field}.evidence[{evidence_index}].source_range", len(lines))
+            except Exception as exc:
+                errors.append({"code": "local-relation-evidence-range-invalid", "field": field, "detail": str(exc)})
+                continue
+            owner_start, owner_end = atom_by_id[atom_id]["source_range"]
+            if start < int(owner_start) or end > int(owner_end):
+                errors.append({"code": "local-relation-evidence-outside-atom", "field": field, "atom_id": atom_id})
+                continue
+            evidence_atoms.add(atom_id)
+            evidence.append({"atom_id": atom_id, "source_range": [start, end]})
+        if evidence_atoms != {left, right}:
+            errors.append({"code": "local-relation-two-sided-evidence-missing", "field": field})
+        recall_source = _string_list(raw.get("recall_source"), f"{field}.recall_source", errors, allow_empty=False)
+        incident.update({left, right})
+        relations.append({
+            "from_atom_id": left, "to_atom_id": right, "type": relation_type,
+            "tier": str(raw.get("tier", "supporting")), "evidence_kind": str(raw.get("evidence_kind", "pedagogical-inference")),
+            "evidence": evidence, "rationale": rationale, "confidence": float(confidence), "recall_source": recall_source,
+        })
+    for signature in signatures:
+        atom_id = signature["atom_id"]
+        if atom_id not in incident and not signature["global_relation_needed"] and not signature["independent_reason"]:
+            review.append({"code": "knowledge-local-relation-missing", "location": location, "atom_id": atom_id})
+
+    candidates_raw = decision.get("derived_card_candidates")
+    if not isinstance(candidates_raw, list):
+        errors.append({"code": "derived-card-candidates-missing", "location": location})
+        candidates_raw = []
+    candidates: list[dict[str, Any]] = []
+    seen_candidates: set[str] = set()
+    for index, raw in enumerate(candidates_raw):
+        field = f"{location}.derived_card_candidates[{index}]"
+        if not isinstance(raw, dict):
+            errors.append({"code": "derived-card-candidate-invalid", "field": field})
+            continue
+        candidate_id, atom_id, derived_category = str(raw.get("candidate_id", "")), str(raw.get("from_atom_id", "")), str(raw.get("category", ""))
+        source_atom_value = atom_by_id.get(atom_id)
+        allowed_source = source_atom_value and (source_atom_value.get("category") == "knowledge" or (derived_category == "formula" and source_atom_value.get("category") == "worked-example" and raw.get("example_role") == "bridge"))
+        if not candidate_id or candidate_id in seen_candidates or derived_category not in DERIVED_CATEGORY_NAMES or not allowed_source:
+            errors.append({"code": "derived-card-source-or-category-invalid", "field": field})
+            continue
+        seen_candidates.add(candidate_id)
+        try:
+            start, end = parse_range(raw.get("source_range"), f"{field}.source_range", len(lines))
+        except Exception as exc:
+            errors.append({"code": "derived-card-range-invalid", "field": field, "detail": str(exc)})
+            continue
+        owner_start, owner_end = source_atom_value["source_range"]
+        if start < int(owner_start) or end > int(owner_end):
+            errors.append({"code": "derived-card-range-outside-source", "field": field})
+        title, reason = str(raw.get("title", "")).strip(), str(raw.get("selection_reason", "")).strip()
+        if not title or len(reason) < 12:
+            errors.append({"code": "derived-card-description-invalid", "field": field})
+        confidence = raw.get("confidence")
+        if isinstance(confidence, bool) or not isinstance(confidence, (int, float)) or not 0 <= float(confidence) <= 1:
+            errors.append({"code": "derived-card-confidence-invalid", "field": field})
+            confidence = 0.0
+        if derived_category == "formula" and not str(raw.get("expression", "")).strip():
+            errors.append({"code": "derived-formula-expression-missing", "field": field})
+        candidates.append({
+            "candidate_id": candidate_id, "from_atom_id": atom_id, "category": derived_category,
+            "title": title, "source_range": [start, end], "selection_reason": reason,
+            "confidence": float(confidence), "expression": str(raw.get("expression", "")).strip(),
+            "variables": list(raw.get("variables", [])) if isinstance(raw.get("variables"), list) else [],
+            "conditions": list(raw.get("conditions", [])) if isinstance(raw.get("conditions"), list) else [],
+        })
+    return {"knowledge_signatures": signatures, "local_relations": relations, "derived_card_candidates": candidates}
+
+
 def hard_boundary_issues(atoms: list[dict[str, Any]], markers: list[dict[str, Any]], location: str) -> list[dict[str, Any]]:
     starts = {int(atom["source_range"][0]): atom for atom in atoms if isinstance(atom.get("source_range"), list)}
     return [{"code": "hard-boundary-violation", "location": location, "line": marker.get("line"), "required_category": marker.get("category"), "evidence": marker.get("evidence")} for marker in markers if starts.get(marker.get("line"), {}).get("category") != marker.get("category")]
@@ -305,8 +511,40 @@ def quality_issues(atom: dict[str, Any], lines: list[str], config: dict[str, Any
     confidence = atom.get("confidence")
     if isinstance(confidence, (int, float)) and not isinstance(confidence, bool) and float(confidence) < float(config["confidence_threshold"]):
         issues.append({"code": "low-confidence", "location": location, "atom_id": atom.get("atom_id"), "confidence": confidence})
+    if category_aware(config) and final:
+        body_text = "\n".join(source_slice(lines, atom["source_range"]))
+        if atom.get("category") == "worked-example" and (not EXAMPLE_RE.search(body_text) or not SOLUTION_LANGUAGE_RE.search(body_text)):
+            issues.append({"code": "worked-example-incomplete", "location": location, "atom_id": atom.get("atom_id")})
+        if atom.get("category") == "exercise" and not (EXERCISE_RE.search(body_text) or EXERCISE_HEADING_RE.search(body_text)):
+            issues.append({"code": "exercise-top-level-boundary-unproven", "location": location, "atom_id": atom.get("atom_id")})
+        if atom.get("category") == "scenario":
+            role = atom.get("scenario_role")
+            length = normalized_char_count(source_slice(lines, atom["source_range"]))
+            if role not in SCENARIO_ROLES:
+                issues.append({"code": "scenario-role-missing-or-invalid", "location": location, "atom_id": atom.get("atom_id")})
+            elif role == "reflection-question":
+                if not REFLECTION_LANGUAGE_RE.search(body_text):
+                    issues.append({"code": "reflection-question-not-actionable", "location": location, "atom_id": atom.get("atom_id")})
+            elif role == "knowledge-motivation":
+                if length < 150 and not KNOWLEDGE_MOTIVATION_RE.search(body_text):
+                    issues.append({"code": "knowledge-motivation-not-a-bridge", "location": location, "atom_id": atom.get("atom_id")})
+            elif length < 150 and not (
+                INTRODUCTION_LANGUAGE_RE.search(body_text)
+                or (role == "section-introduction" and SECTION_SCOPE_QUESTION_RE.search(body_text))
+            ):
+                issues.append({"code": "scenario-not-substantial", "location": location, "atom_id": atom.get("atom_id")})
     if atom.get("category") != "knowledge":
         return issues
+    if category_aware(config) and final:
+        body_text = "\n".join(source_slice(lines, atom["source_range"]))
+        section_scope_match = SECTION_SCOPE_QUESTION_RE.search(body_text)
+        if section_scope_match and len(body_text[section_scope_match.end():].strip()) >= 20:
+            issues.append({
+                "code": "section-introduction-absorbed-into-knowledge",
+                "location": location,
+                "atom_id": atom.get("atom_id"),
+                "source_range": atom.get("source_range"),
+            })
     body = source_slice(lines, atom["source_range"])
     short = normalized_char_count(body) < 150 or sum(bool(line.strip()) for line in body) <= 1
     if not short:
@@ -340,6 +578,7 @@ def validate_round1_payload(jobs: dict[str, Any], decisions: dict[str, Any]) -> 
     if len(by_job) != len(raw) or set(by_job) != expected:
         errors.append({"code": "round1-job-coverage-invalid", "missing": sorted(expected-set(by_job)), "extra": sorted(set(by_job)-expected)})
     normalized: dict[str, list[dict[str, Any]]] = {}
+    normalized_semantics: dict[str, dict[str, list[dict[str, Any]]]] = {}
     for job in jobs.get("jobs", []):
         decision = by_job.get(job["job_id"])
         if not isinstance(decision, dict):
@@ -348,10 +587,14 @@ def validate_round1_payload(jobs: dict[str, Any], decisions: dict[str, Any]) -> 
             errors.append({"code": "round1-packet-digest-mismatch", "job_id": job["job_id"]})
         atoms = validate_partition(decision.get("atoms"), job["source_range"], job["owner_key"], lines, f"job:{job['job_id']}", errors)
         normalized[job["job_id"]] = atoms
+        if category_aware(jobs["atomization"]):
+            normalized_semantics[job["job_id"]] = validate_joint_metadata(
+                decision, atoms, lines, f"job:{job['job_id']}", jobs["atomization"], errors, review, False,
+            )
         review.extend(hard_boundary_issues(atoms, job.get("hard_boundaries", []), job["job_id"]))
         for atom in atoms:
             review.extend(quality_issues(atom, lines, jobs["atomization"], job["job_id"], False))
-    return {"schema_version": 1, "status": "failed" if errors else ("review_required" if review else "passed"), "structural_errors": errors, "review_items": review, "counts": {"jobs": len(jobs.get("jobs", [])), "atoms": sum(len(value) for value in normalized.values()), "review_items": len(review)}, "normalized_atoms": normalized}
+    return {"schema_version": 2 if category_aware(jobs["atomization"]) else 1, "status": "failed" if errors else ("review_required" if review else "passed"), "structural_errors": errors, "review_items": review, "counts": {"jobs": len(jobs.get("jobs", [])), "atoms": sum(len(value) for value in normalized.values()), "review_items": len(review)}, "normalized_atoms": normalized, "normalized_semantics": normalized_semantics}
 
 
 def prepare_audit_jobs(jobs: dict[str, Any], round1: dict[str, Any]) -> dict[str, Any]:
@@ -377,10 +620,14 @@ def prepare_audit_jobs(jobs: dict[str, Any], round1: dict[str, Any]) -> dict[str
             boundaries.append({"boundary_id": f"boundary-{index:04d}-{identity}", "line_after": int(left["source_range"][1]), "left_atom_id": left.get("atom_id"), "right_atom_id": right.get("atom_id"), "left_range": left.get("source_range"), "right_range": right.get("source_range")})
         audit_id = f"audit-{len(audits)+1:04d}-{hashlib.sha256(run_id.encode()).hexdigest()[:8]}"
         start, end = int(atoms[0]["source_range"][0]), int(atoms[-1]["source_range"][1])
-        audit = {"audit_id": audit_id, "run_id": run_id, "owner_key": run_jobs[0]["owner_key"], "top_level_key": run_jobs[0]["top_level_key"], "source_range": [start, end], "source_lines": [{"line": number, "text": lines[number-1]} for number in range(start, end+1)], "round1_atoms": atoms, "boundaries": boundaries, "hard_boundaries": markers, "instructions": {"required": "Review every boundary and return the complete final partition.", "actions": ["keep", "merge", "resegment"], "fragment_gate": "Short knowledge must merge unless it is a formal independent definition, theorem, or law with confidence >= 0.95.", "source_fidelity": "Never rewrite source text."}}
+        round1_semantics = {
+            key: [item for job in run_jobs for item in report["normalized_semantics"].get(job["job_id"], {}).get(key, [])]
+            for key in ("knowledge_signatures", "local_relations", "derived_card_candidates")
+        }
+        audit = {"audit_id": audit_id, "run_id": run_id, "owner_key": run_jobs[0]["owner_key"], "top_level_key": run_jobs[0]["top_level_key"], "source_range": [start, end], "source_lines": [{"line": number, "text": lines[number-1]} for number in range(start, end+1)], "round1_atoms": atoms, "round1_semantics": round1_semantics, "boundaries": boundaries, "hard_boundaries": markers, "instructions": {"required": "Review every boundary and return the complete final partition plus signatures, local relations, and derived candidates for that final partition.", "actions": ["keep", "merge", "resegment"], "fragment_gate": "Short knowledge must merge unless it is a formal independent definition, theorem, or law with confidence >= 0.95.", "category_rules": "Knowledge follows complete teaching semantics; worked examples preserve stem-analysis-solution-conclusion; each top-level exercise preserves every subpart and resource; short prompts merge into the knowledge they motivate.", "relation_boundary_consistency": "Merge knowledge atoms that are one teaching process; resegment an atom that teaches independently reusable concepts with different dependency structures.", "source_fidelity": "Never rewrite source text."}}
         audit["packet_sha256"] = canonical_digest(audit)
         audits.append(audit)
-    return seal_artifact({"schema_version": 1, "kind": "round-2-jobs", "jobs_sha256": jobs["artifact_sha256"], "round_1_decisions_sha256": round1["artifact_sha256"], "source_markdown": jobs["source_markdown"], "source_markdown_sha256": jobs["source_markdown_sha256"], "scope_root_keys": jobs["scope_root_keys"], "atomization": jobs["atomization"], "audits": audits})
+    return seal_artifact({"schema_version": 2 if category_aware(jobs["atomization"]) else 1, "kind": "round-2-jobs", "jobs_sha256": jobs["artifact_sha256"], "round_1_decisions_sha256": round1["artifact_sha256"], "source_markdown": jobs["source_markdown"], "source_markdown_sha256": jobs["source_markdown_sha256"], "scope_root_keys": jobs["scope_root_keys"], "atomization": jobs["atomization"], "audits": audits})
 
 
 def actual_boundary_action(final_atoms: list[dict[str, Any]], boundary: dict[str, Any]) -> str:
@@ -416,6 +663,9 @@ def finalize_payload(jobs: dict[str, Any], round1: dict[str, Any], audit_jobs: d
     if len(by_audit) != len(raw) or set(by_audit) != expected_audits:
         errors.append({"code": "round2-audit-coverage-invalid", "missing": sorted(expected_audits-set(by_audit)), "extra": sorted(set(by_audit)-expected_audits)})
     final_atoms: list[dict[str, Any]] = []
+    final_signatures: list[dict[str, Any]] = []
+    final_local_relations: list[dict[str, Any]] = []
+    final_derived_candidates: list[dict[str, Any]] = []
     for audit in audit_jobs.get("audits", []):
         decision = by_audit.get(audit["audit_id"])
         if not isinstance(decision, dict):
@@ -423,6 +673,13 @@ def finalize_payload(jobs: dict[str, Any], round1: dict[str, Any], audit_jobs: d
         if decision.get("packet_sha256") != audit.get("packet_sha256"):
             errors.append({"code": "round2-packet-digest-mismatch", "audit_id": audit["audit_id"]})
         atoms = validate_partition(decision.get("atoms"), audit["source_range"], audit["owner_key"], lines, f"audit:{audit['audit_id']}", errors)
+        if category_aware(jobs["atomization"]):
+            semantics = validate_joint_metadata(
+                decision, atoms, lines, f"audit:{audit['audit_id']}", jobs["atomization"], errors, review, True,
+            )
+            final_signatures.extend(semantics["knowledge_signatures"])
+            final_local_relations.extend(semantics["local_relations"])
+            final_derived_candidates.extend(semantics["derived_card_candidates"])
         raw_reviews = decision.get("boundary_reviews")
         if not isinstance(raw_reviews, list):
             raw_reviews = []
@@ -457,7 +714,7 @@ def finalize_payload(jobs: dict[str, Any], round1: dict[str, Any], audit_jobs: d
         errors.append({"code": "final-atom-id-duplicate"})
     unresolved = [*errors, *review]
     bindings = {name: {"path": payload.get("_path"), "sha256": payload["artifact_sha256"]} for name, payload in (("jobs", jobs), ("round_1_decisions", round1), ("round_2_jobs", audit_jobs), ("round_2_decisions", round2))}
-    final = seal_artifact({"schema_version": 1, "kind": "atomization-final", "status": "passed" if not unresolved else "review_required", "source_markdown": jobs["source_markdown"], "source_markdown_sha256": jobs["source_markdown_sha256"], "base_manifest": jobs["base_manifest"], "base_manifest_sha256": jobs["base_manifest_sha256"], "scope_root_keys": jobs["scope_root_keys"], "atomization": jobs["atomization"], "reviewer": {"round_1": round1.get("reviewer"), "round_2": round2.get("reviewer")}, "bindings": bindings, "unresolved_count": len(unresolved), "atoms": final_atoms})
+    final = seal_artifact({"schema_version": 2 if category_aware(jobs["atomization"]) else 1, "kind": "atomization-final", "status": "passed" if not unresolved else "review_required", "source_markdown": jobs["source_markdown"], "source_markdown_sha256": jobs["source_markdown_sha256"], "base_manifest": jobs["base_manifest"], "base_manifest_sha256": jobs["base_manifest_sha256"], "scope_root_keys": jobs["scope_root_keys"], "atomization": jobs["atomization"], "reviewer": {"round_1": round1.get("reviewer"), "round_2": round2.get("reviewer")}, "bindings": bindings, "unresolved_count": len(unresolved), "atoms": final_atoms, "knowledge_signatures": final_signatures, "local_relations": final_local_relations, "derived_card_candidates": final_derived_candidates, "feedback_cycle": {"cycle": 0, "max_cycles": int(jobs["atomization"].get("relation_feedback_cycles", 2)), "history": []}})
     queue = seal_artifact({"schema_version": 1, "kind": "atomization-review-queue", "status": "passed" if not unresolved else "blocked", "atomization_final_sha256": final["artifact_sha256"], "unresolved_count": len(unresolved), "items": unresolved})
     return final, queue
 
@@ -488,10 +745,128 @@ def teaching_role_flags(atom: dict[str, Any], lines: list[str]) -> list[str]:
     return sorted(set(flags))
 
 
+def prepare_feedback_jobs(final_path: Path, relation_final_path: Path) -> dict[str, Any]:
+    """Turn graph-audit boundary feedback into bounded re-atomization jobs."""
+    final_path, relation_final_path = final_path.expanduser().resolve(), relation_final_path.expanduser().resolve()
+    final, relation_final = load_json(final_path), load_json(relation_final_path)
+    verify_artifact(final, "atomization-final")
+    verify_artifact(relation_final, "relation-final-v2")
+    if final.get("status") != "passed" or final.get("unresolved_count") != 0:
+        raise AtomizationError("Boundary feedback requires a passed atomization-final")
+    if relation_final.get("atomization_final_sha256") != final.get("artifact_sha256"):
+        raise AtomizationError("Relation final is not bound to this atomization-final")
+    feedback = relation_final.get("boundary_feedback")
+    if not isinstance(feedback, list) or not feedback:
+        raise AtomizationError("Relation final contains no boundary feedback")
+    cycle = int(final.get("feedback_cycle", {}).get("cycle", 0))
+    maximum = int(final.get("feedback_cycle", {}).get("max_cycles", final.get("atomization", {}).get("relation_feedback_cycles", 2)))
+    if cycle >= maximum:
+        raise AtomizationError("Automatic boundary feedback cycle limit reached")
+    source = Path(str(final.get("source_markdown", ""))).expanduser().resolve()
+    if not source.is_file() or sha256_file(source) != final.get("source_markdown_sha256"):
+        raise AtomizationError("Atomization source is missing or stale")
+    lines = source.read_text(encoding="utf-8-sig").splitlines()
+    atoms = {str(item.get("atom_id")): item for item in final.get("atoms", []) if isinstance(item, dict)}
+    jobs: list[dict[str, Any]] = []
+    occupied: list[tuple[int, int]] = []
+    for index, item in enumerate(feedback, start=1):
+        if not isinstance(item, dict) or item.get("action") not in {"merge", "split", "resegment"}:
+            raise AtomizationError(f"Invalid boundary feedback item {index}")
+        atom_ids = [str(value) for value in item.get("atom_ids", [])]
+        selected = [atoms[value] for value in atom_ids if value in atoms]
+        if len(selected) != len(atom_ids) or not selected:
+            raise AtomizationError(f"Boundary feedback item {index} has unknown atoms")
+        owners = {str(atom.get("owner_key")) for atom in selected}
+        if len(owners) != 1:
+            raise AtomizationError("Automatic feedback cannot cross organizer ownership")
+        start = min(int(atom["source_range"][0]) for atom in selected)
+        end = max(int(atom["source_range"][1]) for atom in selected)
+        if any(not (end < left or start > right) for left, right in occupied):
+            raise AtomizationError("Boundary feedback items overlap")
+        occupied.append((start, end))
+        job = {
+            "feedback_id": str(item.get("feedback_id") or f"feedback-{index:04d}"),
+            "action": str(item["action"]), "atom_ids": atom_ids, "owner_key": next(iter(owners)),
+            "source_range": [start, end],
+            "source_lines": [{"line": number, "text": lines[number - 1]} for number in range(start, end + 1)],
+            "current_atoms": selected, "graph_evidence": item.get("evidence", []),
+            "rationale": str(item.get("rationale", "")),
+            "instructions": "Return a complete category-aware partition and its signatures, local relations, and derived candidates. Do not rewrite source.",
+        }
+        job["packet_sha256"] = canonical_digest(job)
+        jobs.append(job)
+    return seal_artifact({
+        "schema_version": 2, "kind": "atomization-feedback-jobs",
+        "atomization_final": str(final_path), "atomization_final_sha256": final["artifact_sha256"],
+        "relation_final": str(relation_final_path), "relation_final_sha256": relation_final["artifact_sha256"],
+        "source_markdown": str(source), "source_markdown_sha256": final["source_markdown_sha256"],
+        "feedback_cycle": cycle + 1, "max_cycles": maximum, "atomization": final["atomization"], "jobs": jobs,
+    })
+
+
+def finalize_feedback(final: dict[str, Any], jobs: dict[str, Any], decisions: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    for payload, kind in ((final, "atomization-final"), (jobs, "atomization-feedback-jobs"), (decisions, "atomization-feedback-decisions")):
+        verify_artifact(payload, kind)
+    if jobs.get("atomization_final_sha256") != final.get("artifact_sha256") or decisions.get("feedback_jobs_sha256") != jobs.get("artifact_sha256"):
+        raise AtomizationError("Boundary feedback artifact chain is stale")
+    source = Path(str(jobs["source_markdown"])).expanduser().resolve()
+    lines = source.read_text(encoding="utf-8-sig").splitlines()
+    raw = decisions.get("decisions")
+    if not isinstance(raw, list):
+        raw = []
+    by_id = {str(item.get("feedback_id")): item for item in raw if isinstance(item, dict)}
+    expected = {str(item["feedback_id"]) for item in jobs["jobs"]}
+    errors: list[dict[str, Any]] = []
+    review: list[dict[str, Any]] = []
+    if set(by_id) != expected or len(by_id) != len(raw):
+        errors.append({"code": "feedback-decision-coverage-invalid", "missing": sorted(expected - set(by_id)), "extra": sorted(set(by_id) - expected)})
+    replacement_ids: set[str] = set()
+    replacement_atoms: list[dict[str, Any]] = []
+    signatures: list[dict[str, Any]] = []
+    relations: list[dict[str, Any]] = []
+    candidates: list[dict[str, Any]] = []
+    for job in jobs["jobs"]:
+        decision = by_id.get(str(job["feedback_id"]))
+        if not isinstance(decision, dict):
+            continue
+        if decision.get("packet_sha256") != job.get("packet_sha256"):
+            errors.append({"code": "feedback-packet-digest-mismatch", "feedback_id": job["feedback_id"]})
+        atoms = validate_partition(decision.get("atoms"), job["source_range"], job["owner_key"], lines, f"feedback:{job['feedback_id']}", errors)
+        metadata = validate_joint_metadata(decision, atoms, lines, f"feedback:{job['feedback_id']}", jobs["atomization"], errors, review, True)
+        replacement_ids.update(map(str, job["atom_ids"]))
+        for atom in atoms:
+            copied = {key: value for key, value in atom.items() if key not in FORBIDDEN_DECISION_FIELDS}
+            copied["source_text_sha256"] = canonical_digest(source_slice(lines, atom["source_range"]))
+            replacement_atoms.append(copied)
+        signatures.extend(metadata["knowledge_signatures"])
+        relations.extend(metadata["local_relations"])
+        candidates.extend(metadata["derived_card_candidates"])
+    retained = [dict(atom) for atom in final.get("atoms", []) if str(atom.get("atom_id")) not in replacement_ids]
+    retained_ids = {str(atom.get("atom_id")) for atom in retained}
+    merged_atoms = sorted([*retained, *replacement_atoms], key=lambda atom: (int(atom["source_range"][0]), int(atom["source_range"][1]), str(atom["atom_id"])))
+    signatures = [item for item in final.get("knowledge_signatures", []) if str(item.get("atom_id")) in retained_ids] + signatures
+    relations = [item for item in final.get("local_relations", []) if str(item.get("from_atom_id")) in retained_ids and str(item.get("to_atom_id")) in retained_ids] + relations
+    candidates = [item for item in final.get("derived_card_candidates", []) if str(item.get("from_atom_id")) in retained_ids] + candidates
+    unresolved = [*errors, *review]
+    history = list(final.get("feedback_cycle", {}).get("history", []))
+    history.append({"cycle": jobs["feedback_cycle"], "relation_final_sha256": jobs["relation_final_sha256"], "feedback_jobs_sha256": jobs["artifact_sha256"], "decisions_sha256": decisions["artifact_sha256"], "replaced_atom_ids": sorted(replacement_ids)})
+    result = seal_artifact({
+        **{key: value for key, value in final.items() if key not in {"artifact_sha256", "status", "unresolved_count", "atoms", "knowledge_signatures", "local_relations", "derived_card_candidates", "feedback_cycle"}},
+        "status": "passed" if not unresolved else "review_required", "unresolved_count": len(unresolved),
+        "atoms": merged_atoms, "knowledge_signatures": signatures, "local_relations": relations,
+        "derived_card_candidates": candidates,
+        "feedback_cycle": {"cycle": jobs["feedback_cycle"], "max_cycles": jobs["max_cycles"], "history": history},
+    })
+    queue = seal_artifact({"schema_version": 2, "kind": "atomization-review-queue", "status": "passed" if not unresolved else "blocked", "atomization_final_sha256": result["artifact_sha256"], "unresolved_count": len(unresolved), "items": unresolved})
+    return result, queue
+
+
 def prepare_role_review(final_path: Path) -> dict[str, Any]:
     final_path = final_path.expanduser().resolve()
     final = load_json(final_path)
     verify_artifact(final, "atomization-final")
+    if category_aware({**DEFAULT_ATOMIZATION, **dict(final.get("atomization", {}))}):
+        raise AtomizationError("Category-aware mode integrates teaching-role review into both atomization rounds")
     if final.get("status") != "passed" or final.get("unresolved_count") != 0:
         raise AtomizationError("Role review requires a passed atomization-final artifact")
     source = Path(str(final.get("source_markdown", ""))).expanduser().resolve()
@@ -740,6 +1115,17 @@ def main(argv: list[str] | None = None) -> int:
     finish.add_argument("round2", type=Path)
     finish.add_argument("--output-dir", type=Path, required=True)
     finish.add_argument("--overwrite", action="store_true")
+    feedback_prepare = sub.add_parser("prepare-feedback")
+    feedback_prepare.add_argument("atomization_final", type=Path)
+    feedback_prepare.add_argument("relation_final", type=Path)
+    feedback_prepare.add_argument("--output-dir", type=Path, required=True)
+    feedback_prepare.add_argument("--overwrite", action="store_true")
+    feedback_finish = sub.add_parser("finalize-feedback")
+    feedback_finish.add_argument("atomization_final", type=Path)
+    feedback_finish.add_argument("feedback_jobs", type=Path)
+    feedback_finish.add_argument("feedback_decisions", type=Path)
+    feedback_finish.add_argument("--output-dir", type=Path, required=True)
+    feedback_finish.add_argument("--overwrite", action="store_true")
     role_prepare = sub.add_parser("prepare-role-review")
     role_prepare.add_argument("atomization_final", type=Path)
     role_prepare.add_argument("--output-dir", type=Path, required=True)
@@ -780,6 +1166,21 @@ def main(argv: list[str] | None = None) -> int:
             atomic_json(queue_path, queue, args.overwrite)
             report = {"status": final["status"], "atomization_final": str(final_path), "review_queue": str(queue_path), "atoms": len(final["atoms"]), "unresolved_count": final["unresolved_count"]}
             code = 0 if final["status"] == "passed" else 2
+        elif args.command == "prepare-feedback":
+            payload = prepare_feedback_jobs(args.atomization_final, args.relation_final)
+            output = args.output_dir.expanduser().resolve() / "atomization-feedback-jobs.json"
+            atomic_json(output, payload, args.overwrite)
+            report, code = {"status": "created", "path": str(output), "jobs": len(payload["jobs"]), "cycle": payload["feedback_cycle"]}, 0
+        elif args.command == "finalize-feedback":
+            original = load_tagged(args.atomization_final, "atomization-final")
+            jobs = load_tagged(args.feedback_jobs, "atomization-feedback-jobs")
+            decisions = load_tagged(args.feedback_decisions, "atomization-feedback-decisions")
+            final, queue = finalize_feedback(original, jobs, decisions)
+            output_dir = args.output_dir.expanduser().resolve()
+            final_path, queue_path = output_dir / "atomization-final.json", output_dir / "atomization-review-queue.json"
+            atomic_json(final_path, final, args.overwrite)
+            atomic_json(queue_path, queue, args.overwrite)
+            report, code = {"status": final["status"], "atomization_final": str(final_path), "review_queue": str(queue_path), "feedback_cycle": final["feedback_cycle"]["cycle"], "unresolved_count": final["unresolved_count"]}, (0 if final["status"] == "passed" else 2)
         elif args.command == "prepare-role-review":
             payload = prepare_role_review(args.atomization_final)
             output = args.output_dir.expanduser().resolve() / "atom-role-jobs.json"

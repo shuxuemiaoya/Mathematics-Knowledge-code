@@ -39,6 +39,21 @@ that agent while operating here.
   在内容切分（`plan_content`）阶段完成题目提取后，必须立即执行 $1..N$ 连续性扫描。若在连续编号上下文（`sequence_policy: continuous`）发现断号，必须立即将状态置为 `review_required` 并记录具体缺失题号、候选行号区间及页面，禁止漏题静默渗透至后续生成与应用阶段。
 - **Confidence-Tiered Answer Extraction (分级置信度答案提取)**:
   选择题与填空题答案提取必须遵循明确的置信度分级（HIGH > MEDIUM > LOW > FALLBACK），低置信度（LOW/FALLBACK）题目必须记录在清单中以便抽检复核或小模型介入，严禁静默进行不可靠的模糊猜测。
+- **Strict Filename & Path Length Policy (文件名与目录长度约束与跨平台兼容标准)**:
+  为彻底杜绝 Windows 平台 260 字符 `MAX_PATH` 溢出及 Git / GitHub Clone / ZIP 解压失败（`Filename too long`），必须严格遵循以下硬性约束：
+  1. **单个文件名与目录名上限**：单个 Markdown 文件名（含 `.md` 后缀）及各层级目录名长度严禁超过 36 个字符（`safe_name` 预算默认截断为 36，`content.max_path_component_length` 默认限制为 35）。
+  2. **总体路径深度预算**：相对于知识库根目录的相对路径长度严禁超过 160 个字符（`content.max_path_length` 默认上限为 160），预留充足的前缀余量。
+  3. **严禁 Raw LaTeX 堆砌命名**：遇到公式型标题（如 $\sin(\omega x+\varphi)$、$\frac{f(x)}{x}$、递推式），严禁将原始 LaTeX 字符串转写为数十字符的下划线 slug 拼入文件名/目录名；必须在切分大纲与适配器中提炼语义化精简中文（如 `正弦型函数图象`、`商型函数递推`、`辅助函数构造`）。
+  4. **严禁 Windows 禁用字符与末尾点/空格**：文件名和目录名中严禁包含 `*`、`?`、`:`、`"`、`<`、`>`、`|`、`\` 等 Windows 保留字符；严禁以点号或空格结尾（禁止 `..md`、` .md`、`文件夹.` 等格式）。
+- **Strict Scope Isolation & Destructive Operation Guardrail (严格作用域隔离与破坏性操作禁令)**:
+  在执行任何生成、重构、清理（Clean）、修补或迁移任务时，受影响的文件和目录集合**必须严格限定在当前任务明确指定的单一范围（Scope：特定分册、章节或专题）内**：
+  1. **严禁全局通配清理**：严禁在清理代码或 Shell 命令中使用超出当前处理对象的宽泛通配符（如 `*/*/{分类}`、`rm -rf *`）。
+  2. **局部测试绝对隔离**：若当前指令或参数为单册/单章测试（例如 `--book 2 --chapter "第八章"`），禁止触发任何跨书籍、跨章节的清理或重置动作；
+  3. **防静默粉碎**：任何对已有图谱目录的删除或清理，必须打印受影响的精确路径白名单；严禁静默执行 `shutil.rmtree(..., ignore_errors=True)`。
+- **Post-Mutation Git Audit Gate (变更后工作区 Git 守卫门禁)**:
+  任何批处理或重构流水线执行完成后，**必须强制执行工作区检查（如 `git status --porcelain`）**：
+  1. 核验变更集合：所有修改、新增或删除的文件必须 100% 属于本次任务的目标 Scope；
+  2. 异常阻断：若检测到非目标分册/章节出现意外的 `deleted` 或被修改文件，必须立即阻断后续提交与流程，向用户发出警报，严禁静默判定为任务完成。
 - Treat every source PDF and registered raw Markdown file as immutable.
 - Run preflight before OCR or graph mutation. Resolve credentials from an
   explicit path, process environment, or deterministic profile/project-root
@@ -204,11 +219,12 @@ that agent while operating here.
 - Use adapter-configured `answers.callout_title` for answer callouts rather than hardcoding publisher names.
 - When OCR drops a choice answer header but preserves an explicit authoritative conclusion such as `故选:D`, recover `D` into a separate `**【答案】** D` field. Never infer an option from isolated capital letters or mathematical prose. Choice-question audit must fail on a missing answer field, and authoritative notes must agree with the source conclusion.
 - Every generated solution note must use a collapsible outer
-  `> [!faq]- <title>` and three collapsible nested callouts:
-  `> > [!success]- **【答案】**`, `> > [!note]- **【分析】**`, and
-  `> > [!note]- **【解析】**`. All nested content lines must retain the `> >`
-  prefix. Recover a bounded publisher-stated result that appears before
-  an explicit `解析:`/`【解析】` marker. When a non-choice problem has no safely
+  `> [!success]- <来源名>` (or `> [!faq]- <title>`) with nested sub-callouts:
+  `> > [!success] **【答案】** <val>` (unfolded for immediate visibility upon opening outer source),
+  followed by collapsible `> > [!note]- **【分析】**`, `> > [!note]- **【解析】**`, and `> > [!tip]- **【总结】**`.
+  Empty sections (such as omitted analysis or summary) MUST NOT be rendered as empty blocks.
+  All nested content lines must retain the `> >` prefix. Recover a bounded publisher-stated result
+  that appears before an explicit `解析:`/`【解析】` marker. When a non-choice problem has no safely
   separable short result, write `**【答案】** 详见解析`; never use that fallback
   for a choice problem, whose exact option remains mandatory.
 - Ensure question and answer regex patterns use a single named group (e.g. `^【?(?P<number>\d+)[】.．、]?\s*`) to prevent Python regex duplicate group name errors.

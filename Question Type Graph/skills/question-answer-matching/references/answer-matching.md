@@ -35,8 +35,10 @@ The final audit rejects a missing choice-answer field and rejects an
 authoritative answer field that disagrees with the source conclusion.
 
 Every solution note, including non-choice problems, must contain a collapsible
-outer FAQ callout and collapsible nested `【答案】`, `【分析】`, and `【解析】`
-callouts. The answer uses `success`; analysis and explanation use `note`; every
+outer provenance callout (`> [!success]- <来源名>` or `> [!faq]- <title>`) with nested
+`【答案】` (unfolded `> > [!success]`), and collapsible `【分析】`, `【解析】`, and `【总结】`
+(collapsible `> > [!note]-` / `> > [!tip]-`) callouts. Empty sections must not be emitted.
+The answer uses `success`; analysis and explanation use `note`; summary uses `tip`; every
 nested content line keeps the `> >` prefix.
 
 Answer value extraction scans authoritative sources in strict order:

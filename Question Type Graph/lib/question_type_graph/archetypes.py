@@ -436,6 +436,290 @@ class ModularTopicArchetype:
         return adapter
 
 
+class SyncedLectureArchetype:
+    """Archetype for high school synchronized lecture workbooks & type-based training series
+    (e.g. 人教A版高中数学同步讲义/专题培优专项训练).
+
+    Features:
+    - Autonomous type-folder segmentation: splits 题型一/题型01 into independent subfolders.
+    - Dual-scope question isolation: scopes variant-example to type sections and numbered-exercise to training sections.
+    - Complete protection for knowledge outline / theory sections (no false-positive questions).
+    - Intelligent LaTeX superscript cleaning and missing answer marker injection for blanks.
+    """
+
+    @staticmethod
+    def sanitize_raw_markdown(raw_file: Path):
+        if not raw_file.is_file():
+            return
+        text = raw_file.read_text(encoding="utf-8-sig")
+
+        # Replace superscript numbers in question headers: 【变式 $^{2}$ 】 -> 【变式2】
+        text = re.sub(r"【\s*(变式|例|典例)\s*\$\^\{?(\d+)\}?\$", r"【\1 \2", text)
+        text = re.sub(r"【\s*(变式|例|典例)\s*\^(\d+)", r"【\1 \2", text)
+        text = re.sub(r"【\s*(变式|例|典例)\s*(\d+)\s*】", r"【\1\2】", text)
+
+        # If a fill-in-the-blank question is followed directly by an equation/text without 【答案】/【解析】/【详解】
+        lines = text.splitlines()
+        new_lines = []
+        sol_markers = ("【答案】", "【解析】", "【分析】", "【详解】", "【思路导航】")
+        for i, l in enumerate(lines):
+            new_lines.append(l)
+            if re.match(r"^\s*(?:\d+[\.．]|【\s*(?:例|变式|练)[^】]*】)", l) and re.search(r"(?:(?:\\_|_){2,}|（\s*）|\(\s*\)|为|是)[。：\.\s]*$", l):
+                for nxt_idx in range(i + 1, min(len(lines), i + 5)):
+                    nxt_line = lines[nxt_idx].strip()
+                    if not nxt_line:
+                        continue
+                    if not any(nxt_line.startswith(m) for m in sol_markers) and not re.match(r"^\s*(?:\d+[\.．]|【\s*(?:例|变式|练)[^】]*】|#)", nxt_line):
+                        new_lines.append("\n【答案】")
+                    break
+        text = "\n".join(new_lines)
+        raw_file.write_text(text, encoding="utf-8")
+
+    @staticmethod
+    def make_folder_name(raw_title: str) -> str:
+        t = re.sub(r"^\s*#{1,6}\s*", "", raw_title).strip()
+        t = re.sub(r"（共\d+小题）|\(共\d+小题\)", "", t).strip()
+
+        # 1. 题型 pattern: 题型一：... / 题型01 ...
+        m = re.match(r"^(题型\s*[0-9一二三四五六七八九十]+)[：:、\s]*(.*)", t)
+        if m:
+            num_part = re.sub(r"\s+", "", m.group(1))
+            desc_part = re.sub(r"[\s/\\:*?\"<>|【】（）()\$]+", "_", m.group(2)).strip("_")
+            return f"{num_part}_{desc_part}" if desc_part else num_part
+
+        # 2. 一、选择题 pattern
+        m_choice = re.match(r"^([一二三四五六七八九十]+[、\.\s][^：:\n]+)", t)
+        if m_choice:
+            short = m_choice.group(1).split("：")[0].split(":")[0].strip()
+            return re.sub(r"[\s/\\:*?\"<>|【】（）()\$]+", "_", short).strip("_")
+
+        # 3. Fallback
+        short_title = t.split("：")[0].split(":")[0].strip()
+        clean_t = re.sub(r"[\s/\\:*?\"<>|【】（）()\$]+", "_", short_title).strip("_")
+        return clean_t[:25] if len(clean_t) > 25 else clean_t
+
+    @staticmethod
+    def extract_content_headings(lines: list[str]) -> list[tuple[int, str, str]]:
+        content_start_line = 1
+        for i, line in enumerate(lines, 1):
+            if re.search(r"^\s*#{0,3}\s*(?:题型专练|考点专练|专项训练|题型精讲)", line):
+                content_start_line = i
+                break
+
+        tx_headings = []
+        seen_num = set()
+        tx_pattern = r"^\s*#{0,4}\s*(题型\s*[0-9一二三四五六七八九十]+[：:、\s][^\n]+)"
+        for i, line in enumerate(lines, 1):
+            if i < content_start_line and content_start_line > 1:
+                continue
+            m = re.match(tx_pattern, line)
+            if m:
+                num_m = re.search(r"题型\s*([0-9一二三四五六七八九十]+)", line)
+                num_id = num_m.group(1) if num_m else line
+                if num_id not in seen_num:
+                    seen_num.add(num_id)
+                    raw_title = re.sub(r"^\s*#{1,6}\s+", "", line).strip()
+                    folder_name = SyncedLectureArchetype.make_folder_name(raw_title)
+                    tx_headings.append((i, raw_title, folder_name))
+
+        if tx_headings:
+            for i, line in enumerate(lines, 1):
+                if i > tx_headings[-1][0]:
+                    m_qh = re.match(r"^\s*#{1,4}\s*(强化训练|【即学即练】|考点专练)", line)
+                    if m_qh:
+                        raw_title = re.sub(r"^\s*#{1,6}\s+", "", line).strip()
+                        tx_headings.append((i, raw_title, SyncedLectureArchetype.make_folder_name(raw_title)))
+                        break
+            return tx_headings
+
+        sec_headings = []
+        sec_pattern = r"^\s*#{1,4}\s*(知识清单|知识点\s*\d+.*|【即学即练】|题型精讲|强化训练|一、选择题.*|二、多选题.*|三、填空题.*|四、解答题.*|第[一二三四五]部分.*|专题\d+.*)"
+        for i, line in enumerate(lines, 1):
+            m = re.match(sec_pattern, line)
+            if m:
+                raw_title = re.sub(r"^\s*#{1,6}\s+", "", line).strip()
+                folder_name = SyncedLectureArchetype.make_folder_name(raw_title)
+                sec_headings.append((i, raw_title, folder_name))
+
+        if sec_headings:
+            return sec_headings
+
+        fb_headings = []
+        for i, line in enumerate(lines, 1):
+            m = re.match(r"^\s*#{1,3}\s*([^#\n]+)", line)
+            if m and not re.search(r"教学目标|教学重难点|答案|解析|分析", m.group(1)):
+                raw_title = re.sub(r"^\s*#{1,6}\s+", "", line).strip()
+                folder_name = SyncedLectureArchetype.make_folder_name(raw_title)
+                fb_headings.append((i, raw_title, folder_name))
+
+        return fb_headings
+
+    @staticmethod
+    def build(profile_path: Path, **kwargs) -> dict[str, Any]:
+        profile = load_profile(profile_path)
+        staging_root = Path(profile["paths"]["staging_root"]).resolve()
+        raw_file = staging_root / "raw" / "questions.raw.md"
+        if not raw_file.is_file():
+            raw_file = staging_root / "raw" / "combined.raw.md"
+        if not raw_file.is_file() and profile.get("sources"):
+            src_path = Path(profile["sources"][0]["path"])
+            if src_path.is_file() and src_path.suffix.lower() in {".md", ".markdown"}:
+                raw_file = src_path
+
+        if not raw_file.is_file():
+            raise ConfigurationError(f"Raw markdown missing for SyncedLectureArchetype in {staging_root}")
+
+        SyncedLectureArchetype.sanitize_raw_markdown(raw_file)
+        lines = raw_file.read_text(encoding="utf-8-sig").splitlines()
+
+        headings = SyncedLectureArchetype.extract_content_headings(lines)
+        if not headings:
+            clean_title = safe_name(profile["title"])
+            headings = [(1, clean_title, clean_title)]
+
+        entries = []
+        authority = []
+        exercise_contexts = []
+        variant_contexts = []
+
+        has_jiangyi = any("题型" in t for _, t, _ in headings) and any("强化训练" in t or "即学即练" in t for _, t, _ in headings)
+
+        for idx, (l_no, title, folder_name) in enumerate(headings, 1):
+            key = f"sec-{idx:02d}"
+            authority.append({
+                "key": key,
+                "title": title,
+                "level": 1,
+                "source_line": l_no,
+                "reviewer_confirmed": True,
+            })
+            entries.append({
+                "key": key,
+                "title": title,
+                "level": 1,
+                "output": f"{folder_name}/{folder_name}.md",
+                "body_anchor": {
+                    "kind": "source-heading",
+                    "start_line": l_no,
+                    "reviewer_confirmed": True,
+                },
+                "emit_title": False,
+                "reviewer_confirmed": True,
+            })
+
+            is_knowledge_section = any(k in title for k in ["基础知识", "知识清单", "方法与技巧", "方法技巧", "考点归纳", "易错点汇总", "教学目标", "描述", "复习", "易错点12"])
+            if has_jiangyi:
+                if "强化训练" in title or "即学即练" in title:
+                    exercise_contexts.append(key)
+                elif "题型" in title:
+                    variant_contexts.append(key)
+            else:
+                has_xiaoti = any("小题" in t for _, t, _ in headings)
+                if has_xiaoti:
+                    if "小题" in title:
+                        exercise_contexts.append(key)
+                elif not is_knowledge_section:
+                    exercise_contexts.append(key)
+
+        q_pattern_num = r"^(?P<number>[1-9]\d{0,2})[.．、]\s*(?!\d)"
+        q_pattern_var = r"^【(?P<number>(?:变式|例|典例)\s*\d+)】"
+
+        question_scopes = []
+        if has_jiangyi:
+            if variant_contexts:
+                question_scopes.append({"contexts": variant_contexts, "kinds": ["variant-example"]})
+            if exercise_contexts:
+                question_scopes.append({"contexts": exercise_contexts, "kinds": ["numbered-exercise"]})
+        else:
+            active_contexts = exercise_contexts if exercise_contexts else [e["key"] for e in entries]
+            question_scopes = [{"contexts": active_contexts, "kinds": ["numbered-exercise", "variant-example"]}]
+
+        clean_topic = safe_name(profile["title"])
+        vault_root = Path(profile["paths"]["vault_root"]).resolve() if profile.get("paths", {}).get("vault_root") else None
+        registry_path = str(vault_root / "question-qid-registry.json") if vault_root else None
+
+        content_cfg = {
+            "max_path_length": 300,
+            "max_path_component_length": 60,
+            "unknown_label_policy": "retain",
+            "question_folder": "questions",
+            "question_title_template": "题 {number}",
+            "question_patterns": [
+                q_pattern_var,
+                q_pattern_num,
+            ],
+            "inline_question_patterns": [],
+            "question_kind_rules": [
+                {
+                    "kind": "variant-example",
+                    "pattern": q_pattern_var,
+                    "answer_handling": "separate-authoritative",
+                    "preserve_internal_headings": True,
+                    "folder": "questions",
+                },
+                {
+                    "kind": "numbered-exercise",
+                    "pattern": q_pattern_num,
+                    "sequence_policy": "continuous",
+                    "answer_handling": "separate-authoritative",
+                    "preserve_internal_headings": True,
+                    "folder": "questions",
+                },
+            ],
+            "worked_example_solution_patterns": [
+                r"^\s*【答案】",
+                r"^\s*【解析】",
+                r"^\s*【分析】",
+                r"^\s*【详解】",
+                r"^\s*【思路导航】",
+            ],
+            "worked_example_solution_backtrack_fence": True,
+            "worked_example_callout_title": f"《{clean_topic}》官方解析",
+            "answer_callout_layout_version": 2,
+            "question_scopes": question_scopes,
+            "roles": [],
+        }
+        if registry_path:
+            content_cfg["question_repository_root"] = registry_path
+
+        adapter = {
+            "schema_version": 1,
+            "title": profile["title"],
+            "root_path": profile["paths"]["graph_root"],
+            "status": "passed",
+            "reviewer_confirmed": True,
+            "filename_policy": {"colon_replacement": "_"},
+            "output_policy": {"generate_index": True, "generate_canvas": False},
+            "profile": str(profile_path),
+            "hierarchy": {
+                "source_role": "questions",
+                "root_output": "index.md",
+                "region": {"start_line": 1, "end_line": len(lines)},
+                "primary_authority": {
+                    "status": "passed",
+                    "reviewer_confirmed": True,
+                    "start_line": 1,
+                    "end_line": len(lines),
+                    "reading_order": "source-stream",
+                    "entries": authority,
+                },
+                "entries": entries,
+            },
+            "content": content_cfg,
+            "answers": {
+                "source_role": "questions",
+                "callout_title": f"《{clean_topic}》参考答案",
+                "region": {"start_line": 1, "end_line": len(lines)},
+                "contexts": [],
+                "answer_patterns": [
+                    r"^(?P<number>[1-9]\d?)[.．、]\s*",
+                ],
+                "answer_kind_rules": [],
+            },
+        }
+        return adapter
+
+
 ARCHETYPE_REGISTRY = {
     "smartedu": SmartEduSyncedArchetype,
     "smartedu_synced": SmartEduSyncedArchetype,
@@ -443,6 +727,8 @@ ARCHETYPE_REGISTRY = {
     "teacher_interleaved": TeacherInterleavedArchetype,
     "modular": ModularTopicArchetype,
     "modular_topic": ModularTopicArchetype,
+    "synced_lecture": SyncedLectureArchetype,
+    "tongbu_jiangyi": SyncedLectureArchetype,
 }
 
 
