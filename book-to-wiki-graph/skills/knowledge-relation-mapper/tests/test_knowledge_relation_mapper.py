@@ -160,6 +160,27 @@ class KnowledgeRelationMapperTests(unittest.TestCase):
             }], virtual_atoms, kr.DEFAULT_CONFIG, [], [])
             self.assertEqual(normalized[0]["atom_ids"], ["a-point", "a-scene", "a-line"])
 
+    def test_whole_book_introduction_uses_a_book_scope_relation_job(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest, payload = self.fixture(root)
+            graph = json.loads(manifest.read_text(encoding="utf-8"))
+            book_intro = {
+                "key": "book-intro", "layer": "atom", "category": "scenario",
+                "scenario_role": "book-introduction", "title": "读者导读",
+                "parent_key": "root", "children": [], "source_range": [1, 1],
+                "filename": "原子层/情景引入/0001-S.md",
+            }
+            graph["nodes"].append(book_intro)
+            root_node = next(node for node in graph["nodes"] if node["key"] == "root")
+            root_node["children"] = ["book-intro", "chapter"]
+            manifest.write_text(json.dumps(graph, ensure_ascii=False), encoding="utf-8")
+            jobs = kr.prepare_concept_jobs(manifest)
+            self.assertEqual(jobs["chapter_order"][0], "root")
+            root_job = next(job for job in jobs["jobs"] if job["chapter_key"] == "root")
+            self.assertEqual([atom["atom_key"] for atom in root_job["atoms"]], ["book-intro"])
+            self.assertEqual(root_job["atoms"][0]["scenario_role"], "book-introduction")
+
     def test_activity_title_and_low_merge_confidence_enter_review(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             manifest, _ = self.fixture(Path(temporary))

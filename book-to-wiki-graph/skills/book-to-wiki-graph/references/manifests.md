@@ -35,11 +35,17 @@
   "atomization": {
     "mode": "llm-category-aware-graph",
     "knowledge_granularity": "complete-teaching-unit",
-    "scenario_policy": "role-aware-bridges-and-reflections",
+    "scenario_policy": "preserve-and-role-classify-activities",
+    "activity_prompt_policy": "preserve-marker-and-explicit-disposition",
     "confidence_threshold": 0.90,
     "short_atom_confidence_threshold": 0.95,
     "teaching_role_audit": "integrated",
-    "relation_feedback_cycles": 2
+    "relation_feedback_cycles": 2,
+    "knowledge_boundary_authority": "llm-exclusive",
+    "provisional_atom_policy": "coverage-context-only",
+    "parallel_definition_policy": "split-when-independently-reusable",
+    "scoped_introduction_policy": "one-source-complete-atom-per-owner",
+    "knowledge_motivation_policy": "complete-problem-or-context"
   },
   "relation_analysis": {
     "mode": "llm-three-pass",
@@ -61,10 +67,10 @@
   },
   "markdown_rendering": {
     "atom_heading_policy": "omit",
-    "atom_filename_policy": "sequence-category-code",
+    "atom_filename_policy": "per-folder-sequence-category-code",
     "leaf_organizer_policy": "flat-note",
     "organizer_frontmatter_policy": "required",
-    "organizer_self_heading_policy": "nested-organizer-note",
+    "organizer_self_heading_policy": "omit",
     "organizer_child_heading": "relative-depth",
     "organizer_filename_policy": "clear-title",
     "concept_filename_policy": "preferred-label-collision-safe"
@@ -79,7 +85,15 @@
     "section_granularity": "atom-and-exercise-entry",
     "concept_nodes": "hidden",
     "formula_nodes": "hidden",
-    "isolation_policy": "semantic-or-labelled-membership"
+    "isolation_policy": "semantic-or-labelled-membership",
+    "png_preview": "required-every-canvas",
+    "png_width": 2400,
+    "review": {
+      "mode": "llm-png-two-pass",
+      "scope": "every-canvas",
+      "required_before_completion": true,
+      "max_optimization_cycles": 2
+    }
   }
 }
 ```
@@ -121,6 +135,15 @@ definition-form evidence has no Markdown card and therefore no
 primary category remains `scenario`, so relation analysis and Canvas treat it
 as an inquiry that can be motivated by learned knowledge while storage and
 search distinguish it from chapter/section introductions.
+
+The full role set is `book-introduction`, `chapter-introduction`,
+`section-introduction`, `knowledge-motivation`, and `reflection-question`.
+Each scoped introduction (`book`, `chapter`, or `section`) occurs at most once
+under one owner and is the owner's first direct child. It includes all
+contiguous introductory paragraphs, questions, figures and captions before the
+next structural heading. Continuation and image-only fragments are invalid.
+`knowledge-motivation` instead targets one knowledge topic and preserves its
+complete problem/context and final question.
 
 `scenario_role: section-introduction` is a direct child of the section and its
 first direct child. It may be short when it explicitly starts from prior
@@ -277,19 +300,21 @@ it as an allow-list; it does not alter Markdown or relation endpoints.
 - Paths are absolute for profile/source fields and book-relative POSIX paths
   for node `filename`.
 - Keys are unique stable strings. Filenames are unique case-insensitively.
-- Atom filenames contain no prose title. They use a global source-order number
-  plus category code: `K` knowledge, `W` worked example, `E` exercise, or `S`
-  scenario.
+- Atom filenames contain no prose title. Primary files use a sequence that
+  restarts in each destination folder plus a category code: `K` knowledge,
+  `W` worked example, `E` exercise, `S` scenario, and `T` reflection question.
 - A leaf organizer with only atom children is a clearly named `.md` file in its
   parent's directory. Only organizers that own organizer children retain their
-  own directory. A nonterminal organizer note starts with its own root-relative
-  heading so the note is readable by itself. Every organizer-child embed in a
+  own directory. An organizer note omits its own duplicated title. Every
+  organizer-child embed in a
   parent note is immediately preceded by that child's root-relative heading:
   top-level `#`, second-level `##`, third-level `###`, capped at `H6`. A terminal
   organizer that directly embeds atoms omits headings and contains only the
   ordered atom embeds.
-- Atom notes omit all Markdown heading lines from their audited source ranges;
-  their human-readable `title` remains metadata and an organizer/Canvas label.
+- Atom notes omit structural Markdown heading syntax from their audited source
+  ranges; printed activity markers such as `思考` and `观察` remain as plain
+  source lines. Their human-readable `title` remains metadata and an
+  organizer/Canvas label.
 - There is exactly one parentless node and it is an organizer at level 1.
 - Organizer `children` is nonempty and lists every direct child exactly once.
 - Atom `source_range` is `[start, end]`, inclusive and one-based.
@@ -305,13 +330,20 @@ it as an allow-list; it does not alter Markdown or relation endpoints.
 - Every organizer's `children` order must agree with child source positions.
   An organizer's first heading range is its normal source anchor; when it has
   no heading range, the validator uses its earliest descendant.
+- Every child subtree's latest source position must precede the next sibling's
+  earliest position. A printed non-exercise organizer with only exercise
+  descendants is invalid. Category-aware graphs require a passed digest-bound
+  `organizer_review`; its absence blocks preparation, materialization, and
+  final validation.
 - `review.status` remains `review_required` until the whole manifest and
   rendered corpus satisfy the architecture contract.
 - `atomization` is optional for legacy profiles. New profiles default to the
   category-aware graph configuration shown above; `llm-two-pass` remains readable.
 - Category-aware profiles also declare `knowledge_boundary_authority:
   llm-exclusive`, `provisional_atom_policy: coverage-context-only`, and
-  `parallel_definition_policy: split-when-independently-reusable`. These fields
+  `parallel_definition_policy: split-when-independently-reusable`, plus
+  `scoped_introduction_policy: one-source-complete-atom-per-owner` and
+  `knowledge_motivation_policy: complete-problem-or-context`. These fields
   make clear that LLM semantic judgment, not deterministic paragraph splitting,
   controls knowledge-atom boundaries.
 - When `profile.atomization.mode` is `llm-two-pass`, `atomization_review` is

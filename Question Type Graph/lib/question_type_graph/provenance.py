@@ -146,7 +146,7 @@ def map_markdown_lines(markdown: Path, blocks: list[dict[str, Any]]) -> dict[str
             candidates = [
                 block
                 for block_text, block in by_part[current_part]
-                if normalized in block_text or block_text in normalized
+                if len(block_text) >= 10 and (normalized in block_text or (len(normalized) >= 20 and block_text in normalized))
             ]
             method = "normalized-containment"
         if not candidates:
@@ -159,6 +159,9 @@ def map_markdown_lines(markdown: Path, blocks: list[dict[str, Any]]) -> dict[str
         if not forward:
             continue
         earliest_page = min(int(item["source_page"]) for item in forward)
+        # Guard against wild forward jumps caused by short repetitive headings/TOC text
+        if last_page_by_part[current_part] > 0 and earliest_page - last_page_by_part[current_part] > 4 and len(normalized) < 25:
+            continue
         candidates = [
             item for item in forward if int(item["source_page"]) == earliest_page
         ]

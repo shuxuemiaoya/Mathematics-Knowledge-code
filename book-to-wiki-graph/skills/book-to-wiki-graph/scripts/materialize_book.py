@@ -13,12 +13,13 @@ import shutil
 import tempfile
 import unicodedata
 import urllib.parse
+from collections import defaultdict
 from datetime import date
 from pathlib import Path, PurePosixPath
 from typing import Any
 
 from semantic_atomization import ATOM_CATEGORY_NAMES, verify_artifact
-from validate_book_graph import artifact_digest, load_json, sha256_file
+from validate_book_graph import artifact_digest, load_json, sha256_file, validate_organizer_review
 
 
 CATEGORY_PATHS = {
@@ -35,10 +36,10 @@ PRIMARY_CATEGORIES = set(ATOM_CATEGORY_NAMES)
 DERIVED_CATEGORIES = {"concept", "formula"}
 MARKDOWN_RENDERING = {
     "atom_heading_policy": "omit",
-    "atom_filename_policy": "sequence-category-code",
+    "atom_filename_policy": "per-folder-sequence-category-code",
     "leaf_organizer_policy": "flat-note",
     "organizer_frontmatter_policy": "required",
-    "organizer_self_heading_policy": "nested-organizer-note",
+    "organizer_self_heading_policy": "omit",
     "organizer_child_heading": "relative-depth",
     "organizer_filename_policy": "clear-title",
     "concept_filename_policy": "preferred-label-collision-safe",
@@ -46,6 +47,10 @@ MARKDOWN_RENDERING = {
 MD_IMAGE_RE = re.compile(r"(!\[[^\]]*\]\()((?:[^()]|\([^()]*\))*)(\))")
 HTML_IMAGE_RE = re.compile(r"(<img\b[^>]*?\bsrc=[\"'])([^\"']+)([\"'])", re.I)
 ATOM_HEADING_RE = re.compile(r"^\s{0,3}#{1,6}(?:\s+.*)?$")
+ACTIVITY_TITLE_RE = re.compile(
+    r"^(?:观察|思考|尝试|操作|交流|探究|探索|讨论|做一做|议一议)"
+    r"(?:[·・、]\s*(?:观察|思考|尝试|操作|交流|探究|探索|讨论))?(?:\s*[：:].*)?$"
+)
 DEFINITION_FORM_RE = re.compile(r"(?:一般地|定义(?:为)?|称为|叫做|称作|是指|:=|\bis called\b|\bis defined as\b|\bwe call\b|\bmeans\b)", re.I)
 
 
@@ -85,9 +90,22 @@ def final_key(atom: dict[str, Any]) -> str:
 
 
 def render_atom_source(lines: list[str], source_range: list[int]) -> str:
-    """Render exact source content while omitting source Markdown title lines."""
+    """Render source content without editorial titles.
+
+    Structural Markdown headings are omitted because the atom filename and
+    frontmatter already identify the note.  Printed activity markers such as
+    ``思考`` and ``观察·思考`` are teaching content, however, so they are
+    preserved as plain text instead of disappearing with the heading syntax.
+    """
     start, end = source_range
-    rendered = [line for line in lines[start - 1 : end] if not ATOM_HEADING_RE.match(line)]
+    rendered: list[str] = []
+    for line in lines[start - 1 : end]:
+        if not ATOM_HEADING_RE.match(line):
+            rendered.append(line)
+            continue
+        title = re.sub(r"^\s{0,3}#{1,6}\s*", "", line).strip()
+        if ACTIVITY_TITLE_RE.fullmatch(title):
+            rendered.append(title)
     while rendered and not rendered[0].strip():
         rendered.pop(0)
     while rendered and not rendered[-1].strip():
@@ -489,11 +507,11 @@ def prepare_nodes(base: dict[str, Any], final: dict[str, Any]) -> tuple[list[dic
         original = base_nodes[key]
         nodes[key] = {field: original.get(field) for field in ("key", "title", "layer", "parent_key", "organizer_level", "filename", "heading_ranges")}
         nodes[key]["children"] = []
-    nodes[root]["children"] = [str(key) for key in scope]
     atoms = final.get("atoms")
     if not isinstance(atoms, list) or not atoms:
         raise MaterializationError("Final atomization has no atoms")
     atoms = sorted(atoms, key=lambda item: (int(item["source_range"][0]), int(item["source_range"][1])))
+    folder_sequences: dict[str, int] = defaultdict(int)
     for sequence, atom in enumerate(atoms, start=1):
         if atom.get("category") not in ATOM_CATEGORY_NAMES or str(atom.get("owner_key")) not in nodes:
             raise MaterializationError(f"Invalid category or owner for {atom.get('atom_id')}")
@@ -504,7 +522,8 @@ def prepare_nodes(base: dict[str, Any], final: dict[str, Any]) -> tuple[list[dic
         scenario_role = atom.get("scenario_role")
         if atom["category"] == "scenario" and scenario_role in SCENARIO_ROLE_PATHS:
             category_path, category_code = SCENARIO_ROLE_PATHS[str(scenario_role)]
-        filename = f"{category_path}/{sequence:04d}-{category_code}.md"
+        folder_sequences[category_path] += 1
+        filename = f"{category_path}/{folder_sequences[category_path]:04d}-{category_code}.md"
         nodes[key] = {"key": key, "title": title, "layer": "atom", "parent_key": str(atom["owner_key"]), "category": atom["category"], "coverage_role": "primary", "filename": filename, "source_range": list(atom["source_range"]), "atomization_id": atom["atom_id"]}
         if scenario_role is not None:
             nodes[key]["scenario_role"] = scenario_role
@@ -513,16 +532,20 @@ def prepare_nodes(base: dict[str, Any], final: dict[str, Any]) -> tuple[list[dic
     # heading range, so their anchor depends on children that may otherwise be
     # visited later in an arbitrary set-derived dictionary order.
     for key, node in nodes.items():
-        if node.get("layer") != "organizer" or key == root:
+        if node.get("layer") != "organizer":
             continue
-        organizer_children = [str(child) for child in base_nodes[key].get("children", []) if str(child) in included and base_nodes.get(str(child), {}).get("layer") == "organizer"]
+        organizer_children = (
+            [str(child) for child in scope]
+            if key == root else
+            [str(child) for child in base_nodes[key].get("children", []) if str(child) in included and base_nodes.get(str(child), {}).get("layer") == "organizer"]
+        )
         atom_children = [final_key(atom) for atom in atoms if str(atom.get("owner_key")) == key]
         node["children"] = organizer_children + atom_children
         if not node["children"]:
             raise MaterializationError(f"Selected organizer has no children: {key}")
     cache: dict[str, int] = {}
     for key, node in nodes.items():
-        if node.get("layer") == "organizer" and key != root:
+        if node.get("layer") == "organizer":
             node["children"] = sorted(node["children"], key=lambda child: (anchor(nodes[child], nodes, cache), child))
     flatten_leaf_organizer_filenames(nodes, root)
     normalize_organizer_filenames(nodes)
@@ -702,6 +725,24 @@ def materialize(base_path: Path, final_path: Path, book_root: Path, output_manif
     if final.get("base_manifest_sha256") != sha256_file(base_path):
         raise MaterializationError("Final atomization binds a different base manifest")
     new_mode = final.get("atomization", {}).get("mode") == "llm-category-aware-graph"
+    if new_mode:
+        raw_nodes = base.get("nodes", [])
+        node_keys = {
+            str(node["key"])
+            for node in raw_nodes
+            if isinstance(node, dict) and isinstance(node.get("key"), str)
+        }
+        organizer_errors = validate_organizer_review(
+            base,
+            base.get("source_markdown_sha256"),
+            node_keys,
+            required=True,
+        )
+        if organizer_errors:
+            raise MaterializationError(
+                "Category-aware materialization requires a passed, digest-bound organizer review: "
+                + json.dumps(organizer_errors, ensure_ascii=False)
+            )
     relation_final: dict[str, Any] | None = None
     if relation_final_path is not None:
         relation_final_path = relation_final_path.expanduser().resolve()
@@ -725,10 +766,10 @@ def materialize(base_path: Path, final_path: Path, book_root: Path, output_manif
         if isinstance(rendering_profile, dict) else "omit"
     )
     if new_mode:
-        # Category-aware v0.7 outputs use explicit self-headed index notes so a
-        # section can be opened and read independently. Legacy profiles keep
-        # the historical child-only rendering contract.
-        self_heading_policy = "nested-organizer-note"
+        # The note filename/frontmatter already names the organizer.  Its body
+        # is an index of direct children, so repeating its own title adds no
+        # navigation value and makes embedded notes visibly duplicate it.
+        self_heading_policy = "omit"
     lines = source.read_text(encoding="utf-8-sig").splitlines()
     output_nodes, root = prepare_nodes(base, final)
     derived_order: list[str] = []
@@ -824,8 +865,8 @@ def materialize(base_path: Path, final_path: Path, book_root: Path, output_manif
             "concept_nodes": "hidden", "formula_nodes": "hidden",
             "isolation_policy": "semantic-or-labelled-membership",
         }
-    # Preserve legacy profiles that intentionally omitted the rendering
-    # contract while enabling the self-headed organizer index for new profiles.
+    # Preserve the child-heading directory contract while omitting the note's
+    # own duplicated heading.
     base_profile["markdown_rendering"] = {
         **MARKDOWN_RENDERING,
         "organizer_self_heading_policy": self_heading_policy,

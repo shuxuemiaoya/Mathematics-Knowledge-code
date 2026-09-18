@@ -1,0 +1,60 @@
+{
+  "R1_deleted_condition_changed_formula": {
+    "headings": true,
+    "tables": true,
+    "links": true,
+    "images": true,
+    "formula_numbering": true,
+    "source_order": true,
+    "quoted_body_callout_continuity": true
+  },
+  "R1_final_audit_after_body_loss": {
+    "before": "passed",
+    "after": "passed",
+    "errors": []
+  },
+  "R2_missing_OCR_pages": {
+    "status": "completed",
+    "page_count": 100,
+    "returned_page_ids": [
+      0
+    ],
+    "validation": {
+      "source_hash_unchanged": true,
+      "page_coverage_complete": true,
+      "target_nonempty": true,
+      "assets_committed": true
+    }
+  },
+  "R3_interrupted_running_stage": {
+    "state": "running",
+    "retry_error": "stage cannot begin from status running"
+  },
+  "R3_concept_partial_commit": {
+    "concept_exists": true,
+    "manifest_exists": false,
+    "source_linked": false,
+    "retry_error": "concept directory is not empty: /var/folders/qx/zqmgc_bd1cbg4h24423g90hr0000gn/T/tmp10p2ybdy/vault/book/概念"
+  },
+  "R4_stale_toc_report": {
+    "stage_status": "completed",
+    "report_matches_file": false
+  },
+  "R5_metadata_list_loss": {
+    "status": "passed",
+    "aliases_value_preserved": false,
+    "tags_value_preserved": false,
+    "grade_for_required_volume_2": "高二"
+  },
+  "R6_disabled_concepts_for_general_book": {
+    "enabled_roles": [
+      "content"
+    ],
+    "status": "failed",
+    "errors": [
+      {
+        "code": "concept-manifest-not-provided"
+      }
+    ]
+  }
+}

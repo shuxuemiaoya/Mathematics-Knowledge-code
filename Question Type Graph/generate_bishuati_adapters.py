@@ -64,9 +64,61 @@ def build_adapter_for_book(staging_name: str, book_idx: int):
         q_offset = 7
         a_offset = -98
 
-    # Extract TOC lines
+    def infer_chapter(tit: str, qp: int | None) -> tuple[str, str]:
+        t = tit.strip()
+        if book_idx == 1:
+            if qp is not None:
+                if qp <= 38:
+                    return "01_第四章_数列", t
+                elif qp <= 85:
+                    return "02_第五章_一元函数的导数及其应用", t
+                else:
+                    return "03_综合专练与模块测试", t
+            return "01_第四章_数列", t
+        elif book_idx == 2:
+            if "4.1.1" in t:
+                t = "4.1.1 n次方根与分数指数幂及4.1.2 无理数指数幂及其运算性质"
+            elif "4.4.1" in t:
+                t = "4.4.1 对数函数的概念及4.4.2 对数函数的图象和性质"
+            elif "5.6.1" in t:
+                t = "5.6.1 匀速圆周运动的数学模型及5.6.2 函数 y = A sin(ωx + φ) 的图象"
+
+            if qp is not None:
+                if qp <= 19:
+                    return "01_第一章_集合与常用逻辑用语", t
+                elif qp <= 32:
+                    return "02_第二章_一元二次函数_方程和不等式", t
+                elif qp <= 61:
+                    return "03_第三章_函数的概念与性质", t
+                elif qp <= 94:
+                    return "04_第四章_指数函数与对数函数", t
+                elif qp <= 140:
+                    return "05_第五章_三角函数", t
+                else:
+                    return "06_综合专练与模块测试", t
+            return "01_第一章_集合与常用逻辑用语", t
+        elif book_idx == 3:
+            if "1.3.1" in t and "表示" in t:
+                t = "1.3.1 空间直角坐标系与空间向量运算的坐标表示"
+            elif "2.1.1" in t and "判定" in t:
+                t = "2.1.1 倾斜角与斜率及两条直线平行和垂直的判定"
+
+            if qp is not None:
+                if qp <= 28:
+                    return "01_第一章_空间向量与立体几何", t
+                elif qp <= 53:
+                    return "02_第二章_直线和圆的方程", t
+                elif qp <= 91:
+                    return "03_第三章_圆锥曲线的方程", t
+                else:
+                    return "04_综合专练与模块测试", t
+            return "01_第一章_空间向量与立体几何", t
+        return "01_第一章", t
+
+    # Extract TOC lines with multiline support
     toc_entries = []
     in_toc = False
+    raw_toc_lines = []
     for i, line in enumerate(q_lines, 1):
         if re.search(r"^\s*#{1,3}\s*(?:CONTENTS\s*目录|目录)\s*$", line):
             in_toc = True
@@ -75,67 +127,164 @@ def build_adapter_for_book(staging_name: str, book_idx: int):
             if re.search(r"^\s*#{1,3}\s*(?:易错警示|重难专题|重难就要刷又刷|高考新动向|强基计划)\b", line):
                 in_toc = False
                 continue
-            m = re.match(r"^([^…]+?)\s*(?:……|\.{3,}).*?\((\d+)\)\s*\((\d+)\)", line)
-            if m:
-                tit = m.group(1).strip()
-                qp = int(m.group(2))
-                ap = int(m.group(3))
-                toc_entries.append((tit, qp, ap, i))
-            else:
-                m_chap = re.match(r"^(第[一二三四五六七八九十0-9]+章\s*[^…\n]+)", line)
-                if m_chap:
-                    tit = m_chap.group(1).strip()
-                    toc_entries.append((tit, None, None, i))
+            raw_toc_lines.append((i, line))
+
+    idx = 0
+    while idx < len(raw_toc_lines):
+        l_num, l_text = raw_toc_lines[idx]
+        if not l_text.strip():
+            idx += 1
+            continue
+        m = re.match(r"^([^…]+?)\s*(?:……|\.{3,}).*?\((\d+)\)\s*\((\d+)\)", l_text)
+        if m:
+            toc_entries.append((m.group(1).strip(), int(m.group(2)), int(m.group(3)), l_num))
+            idx += 1
+        elif re.match(r"^第[一二三四五六七八九十0-9]+章", l_text):
+            toc_entries.append((l_text.strip(), None, None, l_num))
+            idx += 1
+        else:
+            if idx + 1 < len(raw_toc_lines):
+                next_num, next_text = raw_toc_lines[idx + 1]
+                combined = l_text.strip() + " " + next_text.strip()
+                m2 = re.match(r"^([^…]+?)\s*(?:……|\.{3,}).*?\((\d+)\)\s*\((\d+)\)", combined)
+                if m2:
+                    toc_entries.append((m2.group(1).strip(), int(m2.group(2)), int(m2.group(3)), l_num))
+                    idx += 2
+                    continue
+            idx += 1
 
     print(f"[{staging_name}] Extracted {len(toc_entries)} TOC entries")
 
     authority = []
     entries = []
     answer_contexts = []
-    current_chapter_folder = "01-第一章"
     last_q_line = 1
     last_a_line = 1
 
     entry_idx = 1
-    for tit, qp, ap, toc_line in toc_entries:
+    for raw_tit, qp, ap, toc_line in toc_entries:
         if qp is None:
-            # Chapter heading in TOC
-            current_chapter_folder = f"{entry_idx:02d}-{clean_title(tit)}"
+            # Skip pure chapter line if handled by infer_chapter
             continue
+
+        current_chapter_folder, tit = infer_chapter(raw_tit, qp)
 
         # Estimate question PDF page
         target_q_pdf_page = qp + q_offset
-        candidate_q_lines = q_page_lines.get(target_q_pdf_page) or q_page_lines.get(target_q_pdf_page + 1) or []
+        candidate_q_lines = []
+        for off in [0, 1, -1, 2, -2]:
+            if (target_q_pdf_page + off) in q_page_lines:
+                candidate_q_lines = q_page_lines[target_q_pdf_page + off]
+                break
         if candidate_q_lines:
             q_start = max(min(candidate_q_lines), last_q_line + 1)
         else:
             q_start = last_q_line + 1
 
         # Look for explicit heading around q_start
-        for l_num in range(max(1, q_start - 10), min(len(q_lines), q_start + 50)):
-            l_text = q_lines[l_num - 1]
-            if re.search(rf"\b{re.escape(tit[:4])}\b", l_text) or "刷基础" in l_text or "刷难关" in l_text:
-                q_start = max(l_num, last_q_line + 1)
-                break
+        m_code = re.match(r"^(\d+\.\d+(?:\.\d+)?|课时\s*\d+|专题\s*\d+|第[一二三四五]章[^\s]+|专练\s*\d+|模块综合测试)", tit)
+        code = m_code.group(1) if m_code else ""
+        clean_tit = re.sub(r"^[0-9\.\s]+", "", tit)
+        clean_tit = re.sub(r"[①②③④⑤\(\)]", "", clean_tit).strip()
+
+        search_q_start = max(last_q_line + 1, q_start - 30)
+        search_q_end = min(len(q_lines), q_start + 60)
+
+        found_code = None
+        if code:
+            for l_num in range(search_q_start, search_q_end):
+                l_text = q_lines[l_num - 1]
+                if l_text.startswith("#") and code in l_text:
+                    found_code = l_num
+                    break
+        if found_code:
+            q_start = found_code
+        else:
+            for l_num in range(search_q_start, search_q_end):
+                l_text = q_lines[l_num - 1]
+                if not l_text.startswith("#"):
+                    continue
+                if len(clean_tit) >= 4 and clean_tit[:4] in l_text:
+                    q_start = l_num
+                    break
+                if "综合训练" in tit and ("刷能力" in l_text or "能力" in l_text):
+                    q_start = l_num
+                    break
+                if "专题" in tit and "刷难关" in l_text:
+                    q_start = l_num
+                    break
+                if "素养检测" in tit and "刷速度" in l_text:
+                    q_start = l_num
+                    break
+                if "高考强化" in tit and "刷真题" in l_text:
+                    q_start = l_num
+                    break
+                if "课时" in tit and "刷基础" in l_text:
+                    q_start = l_num
+                    break
+                if "刷基础" in l_text:
+                    q_start = l_num
+                    break
 
         last_q_line = q_start
 
         # Estimate answer PDF page
         target_a_pdf_page = ap + a_offset
-        candidate_a_lines = a_page_lines.get(target_a_pdf_page) or a_page_lines.get(target_a_pdf_page + 1) or []
+        candidate_a_lines = []
+        for off in [0, 1, -1, 2, -2]:
+            if (target_a_pdf_page + off) in a_page_lines:
+                candidate_a_lines = a_page_lines[target_a_pdf_page + off]
+                break
         if candidate_a_lines:
             a_start = max(min(candidate_a_lines), last_a_line + 1)
         else:
             a_start = last_a_line + 1
 
         # Look for explicit answer heading around a_start
-        for l_num in range(max(1, a_start - 15), min(len(a_lines), a_start + 40)):
-            l_text = a_lines[l_num - 1]
-            if re.search(rf"\b{re.escape(tit[:4])}\b", l_text) or "刷基础" in l_text:
-                a_start = max(l_num, last_a_line + 1)
-                break
+        search_a_start = max(last_a_line + 1, a_start - 25)
+        search_a_end = min(len(a_lines), a_start + 45)
+        found_a_code = None
+        if code:
+            for l_num in range(search_a_start, search_a_end):
+                l_text = a_lines[l_num - 1]
+                if l_text.startswith("#") and code in l_text:
+                    found_a_code = l_num
+                    break
+        if found_a_code:
+            a_start = found_a_code
+        else:
+            for l_num in range(search_a_start, search_a_end):
+                l_text = a_lines[l_num - 1]
+                if not l_text.startswith("#"):
+                    continue
+                if len(clean_tit) >= 4 and clean_tit[:4] in l_text:
+                    a_start = l_num
+                    break
+                if "综合训练" in tit and ("综合训练" in l_text or "刷能力" in l_text):
+                    a_start = l_num
+                    break
+                if "专题" in tit and ("专题" in l_text or "刷难关" in l_text):
+                    a_start = l_num
+                    break
+                if "素养检测" in tit and "素养检测" in l_text:
+                    a_start = l_num
+                    break
+                if "高考强化" in tit and "高考强化" in l_text:
+                    a_start = l_num
+                    break
+                if "课时" in tit and (tit[:4] in l_text or "刷基础" in l_text):
+                    a_start = l_num
+                    break
 
         last_a_line = a_start
+
+        # Avoid empty line for answer anchor
+        while a_start <= len(a_lines) and not a_lines[a_start - 1].strip():
+            a_start += 1
+        if a_start > len(a_lines):
+            a_start = len(a_lines)
+            while a_start > 1 and not a_lines[a_start - 1].strip():
+                a_start -= 1
 
         key = f"sec-{entry_idx:03d}"
         folder_name = clean_title(tit)

@@ -113,27 +113,32 @@ def refine_manifest(base_path: Path, review_path: Path) -> tuple[dict[str, Any],
         raise OrganizerReviewError("content_runs must be a nonempty array")
     runs: list[dict[str, Any]] = []
     seen_owners: set[str] = set()
+    synthesized_owners: set[str] = set()
     for index, item in enumerate(raw_runs):
         if not isinstance(item, dict):
             raise OrganizerReviewError(f"content_runs[{index}] must be an object")
         start, end = parse_range(item.get("source_range"), f"content_runs[{index}].source_range", len(lines))
         owner = item.get("owner_key")
-        if not isinstance(owner, str) or not owner or owner in seen_owners:
-            raise OrganizerReviewError("Every content run needs a unique owner_key")
-        seen_owners.add(owner)
+        if not isinstance(owner, str) or not owner:
+            raise OrganizerReviewError("Every content run needs an owner_key")
         create = bool(item.get("create_organizer", False))
         if create:
             parent = item.get("parent_key")
             title = item.get("title")
             if not isinstance(parent, str) or base_nodes.get(parent, {}).get("layer") != "organizer" or parent in demoted:
                 raise OrganizerReviewError(f"Invalid parent for synthesized organizer: {owner}")
-            if owner in base_nodes or not isinstance(title, str) or not title.strip():
+            if owner in base_nodes or owner in seen_owners or not isinstance(title, str) or not title.strip():
                 raise OrganizerReviewError(f"Invalid synthesized organizer: {owner}")
             reason = item.get("reason")
             if not isinstance(reason, str) or len(reason.strip()) < 12:
                 raise OrganizerReviewError(f"Synthesized organizer needs a concrete reason: {owner}")
-        elif base_nodes.get(owner, {}).get("layer") != "organizer" or owner in demoted:
+            synthesized_owners.add(owner)
+        elif base_nodes.get(owner, {}).get("layer") != "organizer" or owner in demoted or owner in synthesized_owners:
             raise OrganizerReviewError(f"Existing content-run owner is invalid: {owner}")
+        # Existing printed organizers may own discontiguous prose immediately
+        # before and after their retained heading. Synthesized organizers stay
+        # single-run so they cannot steal text across a printed boundary.
+        seen_owners.add(owner)
         runs.append({**item, "owner_key": owner, "source_range": [start, end], "create_organizer": create})
     runs.sort(key=lambda item: (item["source_range"][0], item["source_range"][1]))
     for left, right in zip(runs, runs[1:]):

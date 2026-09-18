@@ -12,13 +12,22 @@ import tempfile
 from pathlib import Path
 from typing import Any, Iterable
 
-from validate_book_graph import artifact_digest, canonical_digest, load_json, sha256_file
+from validate_book_graph import (
+    artifact_digest,
+    canonical_digest,
+    load_json,
+    sha256_file,
+    validate_organizer_review,
+)
 
 
 ATOM_CATEGORY_NAMES = {"knowledge", "worked-example", "exercise", "scenario"}
 SCENARIO_ROLES = {
-    "chapter-introduction", "section-introduction", "knowledge-motivation",
-    "reflection-question",
+    "book-introduction", "chapter-introduction", "section-introduction",
+    "knowledge-motivation", "reflection-question",
+}
+SCOPED_INTRO_ROLES = {
+    "book-introduction", "chapter-introduction", "section-introduction",
 }
 DERIVED_CATEGORY_NAMES = {"concept", "formula"}
 LOCAL_RELATION_TYPES = {
@@ -28,7 +37,8 @@ LOCAL_RELATION_TYPES = {
 DEFAULT_ATOMIZATION = {
     "mode": "llm-category-aware-graph",
     "knowledge_granularity": "complete-teaching-unit",
-    "scenario_policy": "role-aware-bridges-and-reflections",
+    "scenario_policy": "preserve-and-role-classify-activities",
+    "activity_prompt_policy": "preserve-marker-and-explicit-disposition",
     "confidence_threshold": 0.90,
     "short_atom_confidence_threshold": 0.95,
     "teaching_role_audit": "integrated",
@@ -36,13 +46,21 @@ DEFAULT_ATOMIZATION = {
     "knowledge_boundary_authority": "llm-exclusive",
     "provisional_atom_policy": "coverage-context-only",
     "parallel_definition_policy": "split-when-independently-reusable",
+    "scoped_introduction_policy": "one-source-complete-atom-per-owner",
+    "knowledge_motivation_policy": "complete-problem-or-context",
 }
 FORMAL_STANDALONE_KINDS = {"formal-definition", "theorem", "law"}
 FORBIDDEN_DECISION_FIELDS = {"body", "content", "markdown", "source_text", "rewritten_text"}
 EXAMPLE_RE = re.compile(r"^\s*(?:#{1,6}\s*)?【?例题?\s*(?:\d+|[一二三四五六七八九十]+)】?(?:\s|[.．、：:]|$)")
 EXERCISE_RE = re.compile(r"^\s*(?:#{1,6}\s*)?\d+[.．、]\s*\S+")
 EXERCISE_HEADING_RE = re.compile(r"^\s*(?:#{1,6}\s*)?【?(?:练习|习题|复习题)[^】]*】?(?:\s|[.．、：:]|$)")
-ACTIVITY_HEADING_RE = re.compile(r"^\s*#{1,6}\s*(?:观察|思考|尝试|操作|交流|探究|讨论)[·・、]?", re.MULTILINE)
+ACTIVITY_MARKER_RE = re.compile(
+    r"^\s*(?:#{1,6}\s*)?(?:\*\*|__)?"
+    r"(?:观察|思考|尝试|操作|交流|探究|探索|讨论|做一做|议一议)"
+    r"(?:[·・、]\s*(?:观察|思考|尝试|操作|交流|探究|探索|讨论))?"
+    r"(?:\*\*|__)?\s*(?:[：:].*)?$"
+)
+ACTIVITY_HEADING_RE = re.compile(r"^\s*#{1,6}\s*(?:观察|思考|尝试|操作|交流|探究|探索|讨论|做一做|议一议)[·・、]?(?:\s|$)", re.MULTILINE)
 TASK_LANGUAGE_RE = re.compile(r"(?:请你|请同伴|你能|你认为|怎样|如何|与同伴.*交流|[？?])")
 REFLECTION_LANGUAGE_RE = re.compile(r"(?:举例说明|比较|概括|归纳|评价|探究|思考|说明.+特点|[？?])")
 KNOWLEDGE_MOTIVATION_RE = re.compile(r"(?:从上面|由此想到|在此基础上|除此之外|还能|接下来|下面(?:先|来)|进一步|为了.+需要|如何|什么方式|为什么|[？?])")
@@ -53,6 +71,10 @@ SECTION_SCOPE_QUESTION_RE = re.compile(
     re.DOTALL,
 )
 SOLUTION_LANGUAGE_RE = re.compile(r"(?:解法[一二三四五六七八九十\d]+|^\s*(?:解|证明|分析)\s*[：:]|因此|所以|可得|叫作|称为|法则)", re.MULTILINE)
+CONTINUATION_TITLE_RE = re.compile(
+    r"(?:^|[\s·・、_-])(?:续(?:\s*\d+)?|continued|continuation|part\s*\d+)(?:$|[\s·・、_-])",
+    re.IGNORECASE,
+)
 
 
 class AtomizationError(ValueError):
@@ -103,6 +125,23 @@ def source_slice(lines: list[str], source_range: list[int] | tuple[int, int]) ->
     return lines[start - 1 : end]
 
 
+def activity_markers(lines: list[str], source_range: list[int] | tuple[int, int]) -> list[dict[str, Any]]:
+    """Return printed activity labels that must be dispositioned by the LLM.
+
+    The marker is deliberately kept separate from the atom category: a
+    ``思考`` heading may be a scenario, a reflection question, an exercise, or
+    an inseparable scaffold for the following definition.  The model decides
+    that role, but it may not silently drop the marker.
+    """
+    start, end = int(source_range[0]), int(source_range[1])
+    result: list[dict[str, Any]] = []
+    for number in range(start, end + 1):
+        text = lines[number - 1].strip()
+        if ACTIVITY_MARKER_RE.fullmatch(text):
+            result.append({"line": number, "text": text})
+    return result
+
+
 def normalized_char_count(lines: Iterable[str]) -> int:
     text = "\n".join(lines)
     # Resource filenames are converter metadata, not teaching content.  A long
@@ -145,6 +184,16 @@ def config_from_profile(profile: dict[str, Any]) -> dict[str, Any]:
     cycles = config.get("relation_feedback_cycles", 2)
     if isinstance(cycles, bool) or not isinstance(cycles, int) or not 0 <= cycles <= 2:
         raise AtomizationError("atomization.relation_feedback_cycles must be an integer from 0 to 2")
+    if category_aware(config):
+        for field, expected in {
+            "knowledge_boundary_authority": "llm-exclusive",
+            "provisional_atom_policy": "coverage-context-only",
+            "parallel_definition_policy": "split-when-independently-reusable",
+            "scoped_introduction_policy": "one-source-complete-atom-per-owner",
+            "knowledge_motivation_policy": "complete-problem-or-context",
+        }.items():
+            if config.get(field) != expected:
+                raise AtomizationError(f"atomization.{field} must be {expected}")
     return config
 
 
@@ -208,6 +257,18 @@ def prepare_jobs(manifest_path: Path, selected_roots: list[str] | None = None, m
     if len(roots) != 1:
         raise AtomizationError("Base manifest must contain one root organizer")
     root = roots[0]
+    if category_aware(config):
+        organizer_errors = validate_organizer_review(
+            manifest,
+            manifest.get("source_markdown_sha256"),
+            set(nodes),
+            required=True,
+        )
+        if organizer_errors:
+            raise AtomizationError(
+                "Category-aware atomization requires a passed, digest-bound organizer review: "
+                + json.dumps(organizer_errors, ensure_ascii=False)
+            )
     available = [str(key) for key in nodes[root].get("children", []) if nodes.get(str(key), {}).get("layer") == "organizer"]
     scope = list(selected_roots or available)
     if not scope or any(key not in available for key in scope):
@@ -215,6 +276,10 @@ def prepare_jobs(manifest_path: Path, selected_roots: list[str] | None = None, m
     selected: set[str] = set()
     for key in scope:
         selected.update(descendants(nodes, key))
+    # Whole-book runs also review direct root prose such as a preface or reader
+    # guide. A chapter-only experiment intentionally leaves it out of scope.
+    if set(scope) == set(available):
+        selected.add(root)
 
     def top_level(key: str) -> str:
         current = key
@@ -240,39 +305,66 @@ def prepare_jobs(manifest_path: Path, selected_roots: list[str] | None = None, m
                 parse_range(atom.get("source_range"), f"node {atom.get('key')}.source_range", len(lines))
                 run_atoms.append(atom)
                 index += 1
-            run_number += 1
-            run_id = f"run-{run_number:04d}-{hashlib.sha256(owner.encode()).hexdigest()[:8]}"
-            packets = split_run(run_atoms, lines, max_chars)
-            for part, packet_atoms in enumerate(packets, start=1):
-                start, end = int(packet_atoms[0]["source_range"][0]), int(packet_atoms[-1]["source_range"][1])
-                identity = hashlib.sha256(f"{owner}:{start}:{end}".encode()).hexdigest()[:8]
-                job = {
-                    "job_id": f"job-{len(jobs)+1:04d}-{identity}", "run_id": run_id,
-                    "part_index": part, "part_count": len(packets), "owner_key": owner,
-                    "owner_title": organizer.get("title"), "top_level_key": top_level(owner),
-                    "source_range": [start, end],
-                    "source_lines": [{"line": number, "text": lines[number-1]} for number in range(start, end+1)],
-                    "baseline_atoms": [{"key": str(atom["key"]), "source_range": list(atom["source_range"]), "category": atom.get("category"), "title": atom.get("title")} for atom in packet_atoms],
-                    "hard_boundaries": [marker for marker in (explicit_boundary(atom, lines) for atom in packet_atoms) if marker],
-                    "instructions": {
-                        "boundary_authority": "LLM has exclusive authority over knowledge boundaries and atom count. Baseline atoms are non-binding coverage/context hints only; ignore their titles and internal boundaries unless an explicit hard boundary is independently proven.",
-                        "parallel_definitions": "No transition word is required. If adjacent prose independently defines parallel reusable terms (for example 全称量词 and 存在量词), create separate knowledge atoms and topic assignments. Keep each prompt with the concept it scaffolds.",
-                        "knowledge": "Keep definition, conditions, notation, explanation, derivation, and nearby conclusion in one complete teaching unit.",
-                        "scenario": "Use chapter-introduction or section-introduction for complete context. A short prior-knowledge question whose answer spans several sibling topics is a direct section-introduction and precedes those topics; do not absorb it into only the first topic. Use knowledge-motivation only for an explicit learned-content-to-new-topic bridge; use reflection-question for a complete post-knowledge comparison, synthesis, extension, or open inquiry. Merge ordinary short prompts that scaffold only one immediately following explanation into that knowledge atom.",
-                        "reflection_question": "A complete post-knowledge comparison, synthesis, extension, or open inquiry may stand alone as category scenario with scenario_role reflection-question; it is not an exercise merely because it is phrased as a question.",
-                        "worked_example": "Keep complete stem, analysis, solution, and nearby conclusion.",
-                        "exercise": "Keep a top-level question with all subparts, figures, tables, and materials.",
-                        "source_fidelity": "Choose contiguous source ranges only; never rewrite source text."
-                    },
-                }
-                if category_aware(config):
-                    job["instructions"].update({
-                        "joint_output": "Return the partition, a teaches/assumes/outputs signature for every knowledge atom, local logical relations with two-sided evidence, and source-grounded concept/formula candidates in one decision. Do not copy the baseline partition: determine knowledge atom count and boundaries from teaching semantics alone.",
-                        "boundary_relation_consistency": "Merge knowledge fragments that are one teaching process; split only independently reusable knowledge with different dependency signatures.",
-                        "derived_cards": "Concept candidates come only from knowledge and must cite a definition-form source span only (formal definition/property/rule plus immediate conditions; exclude examples, prompts, and questions). Formula candidates require a reusable expression plus variables, conditions, or explanation and come only from knowledge or a bridge worked example.",
-                    })
-                job["packet_sha256"] = canonical_digest(job)
-                jobs.append(job)
+            # An existing printed organizer may legitimately own a motivation
+            # immediately before its own heading and the teaching body after
+            # that heading. Never send the retained heading through an atom
+            # packet: split the owner's source runs at its heading boundary.
+            heading_lines = sorted(
+                int(value)
+                for item in organizer.get("heading_ranges", [])
+                if isinstance(item, list) and len(item) == 2
+                for value in item
+                if isinstance(value, int)
+            )
+            semantic_runs: list[list[dict[str, Any]]] = []
+            current_run: list[dict[str, Any]] = []
+            for atom in run_atoms:
+                if current_run:
+                    previous_end = int(current_run[-1]["source_range"][1])
+                    current_start = int(atom["source_range"][0])
+                    if any(previous_end < line < current_start for line in heading_lines):
+                        semantic_runs.append(current_run)
+                        current_run = []
+                current_run.append(atom)
+            if current_run:
+                semantic_runs.append(current_run)
+            for semantic_run in semantic_runs:
+                run_number += 1
+                run_identity = f"{owner}:{semantic_run[0]['source_range'][0]}"
+                run_id = f"run-{run_number:04d}-{hashlib.sha256(run_identity.encode()).hexdigest()[:8]}"
+                packets = split_run(semantic_run, lines, max_chars)
+                for part, packet_atoms in enumerate(packets, start=1):
+                    start, end = int(packet_atoms[0]["source_range"][0]), int(packet_atoms[-1]["source_range"][1])
+                    identity = hashlib.sha256(f"{owner}:{start}:{end}".encode()).hexdigest()[:8]
+                    job = {
+                        "job_id": f"job-{len(jobs)+1:04d}-{identity}", "run_id": run_id,
+                        "part_index": part, "part_count": len(packets), "owner_key": owner,
+                        "owner_title": organizer.get("title"), "top_level_key": top_level(owner),
+                        "source_range": [start, end],
+                        "source_lines": [{"line": number, "text": lines[number-1]} for number in range(start, end+1)],
+                        "baseline_atoms": [{"key": str(atom["key"]), "source_range": list(atom["source_range"]), "category": atom.get("category"), "title": atom.get("title")} for atom in packet_atoms],
+                        "hard_boundaries": [marker for marker in (explicit_boundary(atom, lines) for atom in packet_atoms) if marker],
+                        "activity_markers": activity_markers(lines, [start, end]),
+                        "instructions": {
+                            "boundary_authority": "LLM has exclusive authority over knowledge boundaries and atom count. Baseline atoms are non-binding coverage/context hints only; ignore their titles and internal boundaries unless an explicit hard boundary is independently proven.",
+                            "parallel_definitions": "No transition word is required. If adjacent prose independently defines parallel reusable terms (for example 全称量词 and 存在量词), create separate knowledge atoms and topic assignments. Keep each prompt with the concept it scaffolds.",
+                            "knowledge": "Keep definition, conditions, notation, explanation, derivation, and nearby conclusion in one complete teaching unit.",
+                            "scenario": "Preserve every meaningful printed activity marker (观察、思考、尝试、交流、探究等) and its question/context. Classify a complete prompt as scenario, book-introduction, chapter-introduction, section-introduction, knowledge-motivation, or reflection-question; classify a complete top-level task as exercise. A book/chapter/section introduction is one discourse-level atom containing all contiguous introductory paragraphs, questions, figures, and captions up to the next structural heading; never split it into continuation or image-only atoms. A knowledge motivation preserves the complete problem or context, including its figure/caption and final question, and points to one target topic. Only merge an activity marker into knowledge when the prompt and the immediately following definition/explanation are one inseparable teaching unit, and return an explicit activity_disposition with that reason. A post-knowledge unanswered 思考 is normally a reflection-question, not a knowledge fragment.",
+                            "reflection_question": "A complete post-knowledge comparison, synthesis, extension, or open inquiry may stand alone as category scenario with scenario_role reflection-question; it is not an exercise merely because it is phrased as a question.",
+                            "worked_example": "Keep complete stem, analysis, solution, and nearby conclusion.",
+                            "exercise": "Keep a top-level question with all subparts, figures, tables, and materials.",
+                            "source_fidelity": "Choose contiguous source ranges only; never rewrite source text."
+                        },
+                    }
+                    if category_aware(config):
+                        job["instructions"].update({
+                            "joint_output": "Return the partition, a teaches/assumes/outputs signature for every knowledge atom, local logical relations with two-sided evidence, and source-grounded concept/formula candidates in one decision. Do not copy the baseline partition: determine knowledge atom count and boundaries from teaching semantics alone.",
+                            "boundary_relation_consistency": "Merge knowledge fragments that are one teaching process; split only independently reusable knowledge with different dependency signatures.",
+                            "derived_cards": "Concept candidates come only from knowledge and must cite a definition-form source span only (formal definition/property/rule plus immediate conditions; exclude examples, prompts, and questions). Formula candidates require a reusable expression plus variables, conditions, or explanation and come only from knowledge or a bridge worked example.",
+                            "activity_dispositions": "For every activity_markers line, return exactly one activity_disposition {line, atom_id, disposition: scenario|exercise|merged-with-knowledge, rationale}. A marker may not be omitted or hidden by deleting its heading.",
+                        })
+                    job["packet_sha256"] = canonical_digest(job)
+                    jobs.append(job)
     if not jobs:
         raise AtomizationError("Selected roots contain no draft atoms")
     return seal_artifact({
@@ -359,6 +451,59 @@ def validate_joint_metadata(
     boundary/relationship loop is frozen.
     """
     atom_by_id = {str(atom.get("atom_id")): atom for atom in atoms}
+    # Activity headings are source content, not disposable Markdown chrome.
+    # Every marker in the packet must be explicitly classified by the model so
+    # a lost ``思考``/``观察`` cannot silently turn into a knowledge atom.
+    marker_lines: dict[int, dict[str, Any]] = {}
+    for atom in atoms:
+        for marker in activity_markers(lines, atom["source_range"]):
+            marker_lines[int(marker["line"])] = marker
+    dispositions_raw = decision.get("activity_dispositions", [])
+    if marker_lines and not isinstance(dispositions_raw, list):
+        errors.append({"code": "activity-dispositions-missing", "location": location})
+        dispositions_raw = []
+    disposition_by_line: dict[int, dict[str, Any]] = {}
+    if isinstance(dispositions_raw, list):
+        for index, raw in enumerate(dispositions_raw):
+            field = f"{location}.activity_dispositions[{index}]"
+            if not isinstance(raw, dict):
+                errors.append({"code": "activity-disposition-invalid", "field": field})
+                continue
+            try:
+                line = int(raw.get("line"))
+            except (TypeError, ValueError):
+                errors.append({"code": "activity-disposition-line-invalid", "field": field})
+                continue
+            if line not in marker_lines or line in disposition_by_line:
+                errors.append({"code": "activity-disposition-coverage-invalid", "field": field, "line": line})
+                continue
+            atom_id = str(raw.get("atom_id", ""))
+            atom = next((item for item in atoms if int(item["source_range"][0]) <= line <= int(item["source_range"][1])), None)
+            disposition = str(raw.get("disposition", ""))
+            if atom is None or atom_id != str(atom.get("atom_id")):
+                errors.append({"code": "activity-disposition-atom-invalid", "field": field, "line": line})
+                continue
+            if disposition not in {"scenario", "exercise", "merged-with-knowledge"}:
+                errors.append({"code": "activity-disposition-kind-invalid", "field": field, "line": line})
+                continue
+            rationale = str(raw.get("rationale", "")).strip()
+            if len(rationale) < 12:
+                errors.append({"code": "activity-disposition-rationale-invalid", "field": field, "line": line})
+            if disposition == "merged-with-knowledge" and atom.get("category") != "knowledge":
+                errors.append({"code": "activity-disposition-merge-target-invalid", "field": field, "line": line})
+            if disposition == "scenario" and atom.get("category") != "scenario":
+                errors.append({"code": "activity-disposition-scenario-target-invalid", "field": field, "line": line})
+            if disposition == "exercise" and atom.get("category") != "exercise":
+                errors.append({"code": "activity-disposition-exercise-target-invalid", "field": field, "line": line})
+            disposition_by_line[line] = {"line": line, "atom_id": atom_id, "disposition": disposition, "rationale": rationale}
+    if marker_lines:
+        missing = sorted(set(marker_lines) - set(disposition_by_line))
+        if missing:
+            errors.append({"code": "activity-disposition-coverage-invalid", "location": location, "missing_lines": missing})
+    for disposition in disposition_by_line.values():
+        target = next((item for item in atoms if str(item.get("atom_id")) == str(disposition["atom_id"])), None)
+        if target is not None:
+            target.setdefault("activity_dispositions", []).append(dict(disposition))
     knowledge_ids = {key for key, atom in atom_by_id.items() if atom.get("category") == "knowledge"}
     signatures_raw = decision.get("knowledge_signatures")
     if not isinstance(signatures_raw, list):
@@ -498,7 +643,12 @@ def validate_joint_metadata(
             "variables": list(raw.get("variables", [])) if isinstance(raw.get("variables"), list) else [],
             "conditions": list(raw.get("conditions", [])) if isinstance(raw.get("conditions"), list) else [],
         })
-    return {"knowledge_signatures": signatures, "local_relations": relations, "derived_card_candidates": candidates}
+    return {
+        "knowledge_signatures": signatures,
+        "local_relations": relations,
+        "derived_card_candidates": candidates,
+        "activity_dispositions": list(disposition_by_line.values()),
+    }
 
 
 def hard_boundary_issues(atoms: list[dict[str, Any]], markers: list[dict[str, Any]], location: str) -> list[dict[str, Any]]:
@@ -513,6 +663,14 @@ def quality_issues(atom: dict[str, Any], lines: list[str], config: dict[str, Any
         issues.append({"code": "low-confidence", "location": location, "atom_id": atom.get("atom_id"), "confidence": confidence})
     if category_aware(config) and final:
         body_text = "\n".join(source_slice(lines, atom["source_range"]))
+        markers = activity_markers(lines, atom["source_range"])
+        if atom.get("category") == "knowledge" and markers:
+            dispositions = {
+                int(item.get("line")): str(item.get("disposition"))
+                for item in atom.get("activity_dispositions", []) if isinstance(item, dict)
+            }
+            if any(dispositions.get(int(item["line"])) != "merged-with-knowledge" for item in markers):
+                issues.append({"code": "knowledge-activity-marker-requires-scenario-or-explicit-merge", "location": location, "atom_id": atom.get("atom_id"), "lines": [item["line"] for item in markers]})
         if atom.get("category") == "worked-example" and (not EXAMPLE_RE.search(body_text) or not SOLUTION_LANGUAGE_RE.search(body_text)):
             issues.append({"code": "worked-example-incomplete", "location": location, "atom_id": atom.get("atom_id")})
         if atom.get("category") == "exercise" and not (EXERCISE_RE.search(body_text) or EXERCISE_HEADING_RE.search(body_text)):
@@ -553,6 +711,72 @@ def quality_issues(atom: dict[str, Any], lines: list[str], config: dict[str, Any
         issues.append({"code": "short-knowledge-requires-round2-audit", "location": location, "atom_id": atom.get("atom_id"), "source_range": atom.get("source_range")})
     elif not (atom.get("standalone_kind") in FORMAL_STANDALONE_KINDS and isinstance(atom.get("standalone_reason"), str) and len(atom["standalone_reason"].strip()) >= 12 and isinstance(confidence, (int, float)) and float(confidence) >= float(config["short_atom_confidence_threshold"])):
         issues.append({"code": "short-knowledge-not-independent", "location": location, "atom_id": atom.get("atom_id"), "source_range": atom.get("source_range"), "required_confidence": config["short_atom_confidence_threshold"]})
+    return issues
+
+
+def scoped_scenario_issues(
+    atoms: list[dict[str, Any]],
+    lines: list[str],
+    location: str = "final",
+) -> list[dict[str, Any]]:
+    """Reject paragraph-level fragmentation of book/chapter/section introductions.
+
+    These introductions are discourse units, not a bag of paragraphs.  A
+    figure-only continuation, a title such as ``续 2``, or several atoms with
+    the same scoped role and owner means the final partition is not stable.
+    """
+    issues: list[dict[str, Any]] = []
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    scoped_by_owner: dict[str, list[dict[str, Any]]] = {}
+    for atom in atoms:
+        if atom.get("category") != "scenario" or atom.get("scenario_role") not in SCOPED_INTRO_ROLES:
+            continue
+        role = str(atom["scenario_role"])
+        owner = str(atom.get("owner_key", ""))
+        grouped.setdefault((owner, role), []).append(atom)
+        scoped_by_owner.setdefault(owner, []).append(atom)
+        title = str(atom.get("title", "")).strip()
+        if CONTINUATION_TITLE_RE.search(title):
+            issues.append({
+                "code": "scoped-introduction-continuation-title",
+                "location": location,
+                "owner_key": owner,
+                "scenario_role": role,
+                "atom_id": atom.get("atom_id"),
+                "title": title,
+            })
+        body = "\n".join(source_slice(lines, atom["source_range"]))
+        without_media = re.sub(r"!\[[^\]]*\]\((?:[^()]|\([^()]*\))*\)", "", body)
+        without_media = re.sub(r"<img\b[^>]*>", "", without_media, flags=re.IGNORECASE)
+        without_media = re.sub(r"^\s{0,3}#{1,6}\s*", "", without_media, flags=re.MULTILINE)
+        if not re.sub(r"\s+", "", without_media):
+            issues.append({
+                "code": "scoped-introduction-media-only-fragment",
+                "location": location,
+                "owner_key": owner,
+                "scenario_role": role,
+                "atom_id": atom.get("atom_id"),
+            })
+    for (owner, role), members in grouped.items():
+        if len(members) > 1:
+            issues.append({
+                "code": "scoped-introduction-fragmented",
+                "location": location,
+                "owner_key": owner,
+                "scenario_role": role,
+                "atom_ids": [item.get("atom_id") for item in members],
+                "source_ranges": [item.get("source_range") for item in members],
+            })
+    for owner, members in scoped_by_owner.items():
+        roles = sorted({str(item.get("scenario_role")) for item in members})
+        if len(roles) > 1:
+            issues.append({
+                "code": "scoped-introduction-role-conflict",
+                "location": location,
+                "owner_key": owner,
+                "scenario_roles": roles,
+                "atom_ids": [item.get("atom_id") for item in members],
+            })
     return issues
 
 
@@ -622,9 +846,9 @@ def prepare_audit_jobs(jobs: dict[str, Any], round1: dict[str, Any]) -> dict[str
         start, end = int(atoms[0]["source_range"][0]), int(atoms[-1]["source_range"][1])
         round1_semantics = {
             key: [item for job in run_jobs for item in report["normalized_semantics"].get(job["job_id"], {}).get(key, [])]
-            for key in ("knowledge_signatures", "local_relations", "derived_card_candidates")
+            for key in ("knowledge_signatures", "local_relations", "derived_card_candidates", "activity_dispositions")
         }
-        audit = {"audit_id": audit_id, "run_id": run_id, "owner_key": run_jobs[0]["owner_key"], "top_level_key": run_jobs[0]["top_level_key"], "source_range": [start, end], "source_lines": [{"line": number, "text": lines[number-1]} for number in range(start, end+1)], "round1_atoms": atoms, "round1_semantics": round1_semantics, "boundaries": boundaries, "hard_boundaries": markers, "instructions": {"required": "Review every boundary and return the complete final partition plus signatures, local relations, and derived candidates for that final partition.", "actions": ["keep", "merge", "resegment"], "fragment_gate": "Short knowledge must merge unless it is a formal independent definition, theorem, or law with confidence >= 0.95.", "category_rules": "Knowledge follows complete teaching semantics; worked examples preserve stem-analysis-solution-conclusion; each top-level exercise preserves every subpart and resource; short prompts merge into the knowledge they motivate.", "relation_boundary_consistency": "Merge knowledge atoms that are one teaching process; resegment an atom that teaches independently reusable concepts with different dependency structures.", "source_fidelity": "Never rewrite source text."}}
+        audit = {"audit_id": audit_id, "run_id": run_id, "owner_key": run_jobs[0]["owner_key"], "top_level_key": run_jobs[0]["top_level_key"], "source_range": [start, end], "source_lines": [{"line": number, "text": lines[number-1]} for number in range(start, end+1)], "round1_atoms": atoms, "round1_semantics": round1_semantics, "boundaries": boundaries, "hard_boundaries": markers, "instructions": {"required": "Review every boundary and return the complete final partition plus signatures, local relations, and derived candidates for that final partition.", "actions": ["keep", "merge", "resegment"], "fragment_gate": "Short knowledge must merge unless it is a formal independent definition, theorem, or law with confidence >= 0.95.", "category_rules": "Knowledge follows complete teaching semantics; worked examples preserve stem-analysis-solution-conclusion; each top-level exercise preserves every subpart and resource; every printed activity marker must be preserved and dispositioned as scenario, exercise, or an explicitly justified merged scaffold.", "scoped_introductions": "Merge every contiguous book, chapter, or section introduction into one complete scenario atom per owner and role, including all introductory paragraphs, questions, figures, and captions. Reject continuation and media-only fragments.", "knowledge_motivations": "Keep a complete problem/context, figure or caption, and final motivating question together and bind it to the one knowledge topic it introduces.", "relation_boundary_consistency": "Merge knowledge atoms that are one teaching process; resegment an atom that teaches independently reusable concepts with different dependency structures.", "source_fidelity": "Never rewrite source text."}}
         audit["packet_sha256"] = canonical_digest(audit)
         audits.append(audit)
     return seal_artifact({"schema_version": 2 if category_aware(jobs["atomization"]) else 1, "kind": "round-2-jobs", "jobs_sha256": jobs["artifact_sha256"], "round_1_decisions_sha256": round1["artifact_sha256"], "source_markdown": jobs["source_markdown"], "source_markdown_sha256": jobs["source_markdown_sha256"], "scope_root_keys": jobs["scope_root_keys"], "atomization": jobs["atomization"], "audits": audits})
@@ -666,6 +890,7 @@ def finalize_payload(jobs: dict[str, Any], round1: dict[str, Any], audit_jobs: d
     final_signatures: list[dict[str, Any]] = []
     final_local_relations: list[dict[str, Any]] = []
     final_derived_candidates: list[dict[str, Any]] = []
+    final_activity_dispositions: list[dict[str, Any]] = []
     for audit in audit_jobs.get("audits", []):
         decision = by_audit.get(audit["audit_id"])
         if not isinstance(decision, dict):
@@ -680,6 +905,7 @@ def finalize_payload(jobs: dict[str, Any], round1: dict[str, Any], audit_jobs: d
             final_signatures.extend(semantics["knowledge_signatures"])
             final_local_relations.extend(semantics["local_relations"])
             final_derived_candidates.extend(semantics["derived_card_candidates"])
+            final_activity_dispositions.extend(semantics.get("activity_dispositions", []))
         raw_reviews = decision.get("boundary_reviews")
         if not isinstance(raw_reviews, list):
             raw_reviews = []
@@ -712,9 +938,11 @@ def finalize_payload(jobs: dict[str, Any], round1: dict[str, Any], audit_jobs: d
     ids = [atom.get("atom_id") for atom in final_atoms]
     if len(ids) != len(set(ids)):
         errors.append({"code": "final-atom-id-duplicate"})
+    if category_aware(jobs["atomization"]):
+        review.extend(scoped_scenario_issues(final_atoms, lines))
     unresolved = [*errors, *review]
     bindings = {name: {"path": payload.get("_path"), "sha256": payload["artifact_sha256"]} for name, payload in (("jobs", jobs), ("round_1_decisions", round1), ("round_2_jobs", audit_jobs), ("round_2_decisions", round2))}
-    final = seal_artifact({"schema_version": 2 if category_aware(jobs["atomization"]) else 1, "kind": "atomization-final", "status": "passed" if not unresolved else "review_required", "source_markdown": jobs["source_markdown"], "source_markdown_sha256": jobs["source_markdown_sha256"], "base_manifest": jobs["base_manifest"], "base_manifest_sha256": jobs["base_manifest_sha256"], "scope_root_keys": jobs["scope_root_keys"], "atomization": jobs["atomization"], "reviewer": {"round_1": round1.get("reviewer"), "round_2": round2.get("reviewer")}, "bindings": bindings, "unresolved_count": len(unresolved), "atoms": final_atoms, "knowledge_signatures": final_signatures, "local_relations": final_local_relations, "derived_card_candidates": final_derived_candidates, "feedback_cycle": {"cycle": 0, "max_cycles": int(jobs["atomization"].get("relation_feedback_cycles", 2)), "history": []}})
+    final = seal_artifact({"schema_version": 2 if category_aware(jobs["atomization"]) else 1, "kind": "atomization-final", "status": "passed" if not unresolved else "review_required", "source_markdown": jobs["source_markdown"], "source_markdown_sha256": jobs["source_markdown_sha256"], "base_manifest": jobs["base_manifest"], "base_manifest_sha256": jobs["base_manifest_sha256"], "scope_root_keys": jobs["scope_root_keys"], "atomization": jobs["atomization"], "reviewer": {"round_1": round1.get("reviewer"), "round_2": round2.get("reviewer")}, "bindings": bindings, "unresolved_count": len(unresolved), "atoms": final_atoms, "knowledge_signatures": final_signatures, "local_relations": final_local_relations, "derived_card_candidates": final_derived_candidates, "activity_dispositions": final_activity_dispositions, "feedback_cycle": {"cycle": 0, "max_cycles": int(jobs["atomization"].get("relation_feedback_cycles", 2)), "history": []}})
     queue = seal_artifact({"schema_version": 1, "kind": "atomization-review-queue", "status": "passed" if not unresolved else "blocked", "atomization_final_sha256": final["artifact_sha256"], "unresolved_count": len(unresolved), "items": unresolved})
     return final, queue
 

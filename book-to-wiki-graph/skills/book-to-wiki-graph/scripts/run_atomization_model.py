@@ -32,7 +32,7 @@ ATOM_SCHEMA = {
         "cohesion_reason": {"type": "string"}, "confidence": {"type": "number", "minimum": 0, "maximum": 1},
         "standalone_kind": {"type": ["string", "null"], "enum": ["formal-definition", "theorem", "law", None]},
         "standalone_reason": {"type": ["string", "null"]},
-        "scenario_role": {"type": ["string", "null"], "enum": ["chapter-introduction", "section-introduction", "knowledge-motivation", "reflection-question", None]},
+        "scenario_role": {"type": ["string", "null"], "enum": ["book-introduction", "chapter-introduction", "section-introduction", "knowledge-motivation", "reflection-question", None]},
     },
     "required": ["atom_id", "owner_key", "source_range", "category", "title", "boundary_reason", "cohesion_reason", "confidence", "standalone_kind", "standalone_reason", "scenario_role"],
 }
@@ -70,10 +70,19 @@ DERIVED_SCHEMA = {
     },
     "required": ["candidate_id", "from_atom_id", "category", "title", "source_range", "selection_reason", "confidence", "expression", "variables", "conditions", "example_role"],
 }
+ACTIVITY_DISPOSITION_SCHEMA = {
+    "type": "object", "additionalProperties": False,
+    "properties": {
+        "line": {"type": "integer", "minimum": 1}, "atom_id": {"type": "string"},
+        "disposition": {"type": "string", "enum": ["scenario", "exercise", "merged-with-knowledge"]},
+        "rationale": {"type": "string"},
+    },
+    "required": ["line", "atom_id", "disposition", "rationale"],
+}
 
 
 def output_schema(round_number: int, category_aware_mode: bool = False) -> dict[str, Any]:
-    semantic_properties = {"knowledge_signatures": {"type": "array", "items": SIGNATURE_SCHEMA}, "local_relations": {"type": "array", "items": LOCAL_RELATION_SCHEMA}, "derived_card_candidates": {"type": "array", "items": DERIVED_SCHEMA}}
+    semantic_properties = {"knowledge_signatures": {"type": "array", "items": SIGNATURE_SCHEMA}, "local_relations": {"type": "array", "items": LOCAL_RELATION_SCHEMA}, "derived_card_candidates": {"type": "array", "items": DERIVED_SCHEMA}, "activity_dispositions": {"type": "array", "items": ACTIVITY_DISPOSITION_SCHEMA}}
     semantic_required = list(semantic_properties) if category_aware_mode else []
     if round_number == 1:
         return {"type": "object", "additionalProperties": False, "properties": {"job_id": {"type": "string"}, "packet_sha256": {"type": "string"}, "atoms": {"type": "array", "minItems": 1, "items": ATOM_SCHEMA}, **semantic_properties}, "required": ["job_id", "packet_sha256", "atoms", *semantic_required]}
@@ -82,8 +91,8 @@ def output_schema(round_number: int, category_aware_mode: bool = False) -> dict[
 
 
 def prompt(round_number: int, category_aware_mode: bool = False) -> str:
-    shared = "Audit book atomization using only numbered source lines. The LLM alone determines knowledge partition and atom count; baseline spans are nonbinding coverage/context hints and must not dictate boundaries. Return ranges and metadata only; never rewrite, summarize, translate, or omit source. Preserve organizer ownership and hard boundaries. Knowledge is a complete teaching unit; examples include solutions; exercises include all subparts. Assign every scenario one scenario_role. Chapter and section introductions are framing units. A short prior-knowledge question whose answer spans several sibling topics is a direct section-introduction and must precede those topics; do not absorb it into only the first topic. A short knowledge-motivation may stand alone only when it explicitly bridges learned content to a distinct next topic and can support both an incoming and outgoing motivates relation. A complete post-knowledge comparison, synthesis, extension, or open inquiry is scenario_role reflection-question, not an exercise. Short prompts that scaffold only one immediately following explanation merge into that knowledge atom. No transition word is required for parallel formal definitions: independently reusable terms such as 全称量词 and 存在量词 must remain separate knowledge atoms even in a compound section."
-    category = " Jointly return each knowledge atom's teaches/assumes/outputs signature, evidence-bound local relations, and source-contained concept/formula candidates. Use category-specific boundaries: independently reusable knowledge such as enumeration and description methods remains separate even when a shared organizer groups them; keep whole worked solutions and whole top-level exercises with subparts; retain reflection questions as scenario-semantic atoms." if category_aware_mode else ""
+    shared = "Audit book atomization using only numbered source lines. The LLM alone determines knowledge partition and atom count; baseline spans are nonbinding coverage/context hints and must not dictate boundaries. Return ranges and metadata only; never rewrite, summarize, translate, or omit source. Preserve organizer ownership and hard boundaries. Knowledge is a complete teaching unit; examples include solutions; exercises include all subparts. Assign every scenario one scenario_role. A whole-book preface/reader guide is book-introduction. A book, chapter, or section introduction is one complete discourse atom per owner and role: keep all contiguous introductory paragraphs, questions, figures, and captions together until the next structural heading, and never create continuation or image-only fragments. A complete problem or real-world context that points to one target knowledge topic is knowledge-motivation; keep its statement, figure/caption, and final question together. A short prior-knowledge question whose answer spans several sibling topics is a direct section-introduction and must precede those topics; do not absorb it into only the first topic. A complete post-knowledge comparison, synthesis, extension, or open inquiry is scenario_role reflection-question, not an exercise. Preserve every printed 观察、思考、尝试、交流、探究 marker and return one activity_disposition for each marker as scenario, exercise, or explicitly justified merged-with-knowledge; never delete the marker. No transition word is required for parallel formal definitions: independently reusable terms such as 全称量词 and 存在量词 must remain separate knowledge atoms even in a compound section."
+    category = " Jointly return each knowledge atom's teaches/assumes/outputs signature, evidence-bound local relations, source-contained concept/formula candidates, and activity dispositions. Use category-specific boundaries: independently reusable knowledge such as enumeration and description methods remains separate even when a shared organizer groups them; keep whole worked solutions and whole top-level exercises with subparts; retain reflection questions as scenario-semantic atoms." if category_aware_mode else ""
     return shared + category + (" Produce a complete contiguous first-pass partition." if round_number == 1 else " Review every adjacency as keep, merge, or resegment and return the complete final partition. Short knowledge must merge unless it is a formal independent definition, theorem, or law.")
 
 

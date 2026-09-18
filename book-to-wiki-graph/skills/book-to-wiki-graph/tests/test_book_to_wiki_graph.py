@@ -320,6 +320,10 @@ class BookToWikiGraphTests(unittest.TestCase):
             self.assertEqual(profile["canvas"]["section_granularity"], "atom-and-exercise-entry")
             self.assertEqual(profile["canvas"]["theme"], "adaptive")
             self.assertEqual(profile["canvas"]["concept_nodes"], "hidden")
+            self.assertEqual(profile["canvas"]["png_preview"], "required-every-canvas")
+            self.assertEqual(profile["canvas"]["review"]["priority"][0], "knowledge-logic-completeness")
+            self.assertEqual(profile["markdown_rendering"]["atom_filename_policy"], "per-folder-sequence-category-code")
+            self.assertEqual(profile["markdown_rendering"]["organizer_self_heading_policy"], "omit")
 
     def test_three_level_canvas_reduces_chapter_noise_and_adds_section_detail(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -332,6 +336,10 @@ class BookToWikiGraphTests(unittest.TestCase):
             self.assertEqual(report["canvases"], 5)
             self.assertEqual(report["section_maps"], 2)
             index = self.load_index(output_dir)
+            self.assertEqual(index["png_previews"]["count"], report["canvases"])
+            for entry in [index["atlas"], *index["chapter_maps"], *index["section_maps"]]:
+                self.assertTrue((output_dir / entry["path"]).with_suffix(".png").is_file())
+                self.assertEqual(entry["png_path"], str(Path(entry["path"]).with_suffix(".png")))
             self.assertEqual(index["schema_version"], 3)
             self.assertEqual(index["layout"]["zoom_levels"], ["book-chapters", "chapter-core", "section-detail"])
             self.assertEqual(index["layout"]["learning_direction"], "edge-constrained-clusters")
@@ -433,7 +441,7 @@ class BookToWikiGraphTests(unittest.TestCase):
             self.assertEqual(len(positions), len(keys))
             expected = {
                 "scenario": ("5", "情景引入 · "),
-                "knowledge": ("2", "知识点 · "),
+                "knowledge": ("2", "✦ "),
                 "example": ("4", "例题 · "),
             }
             for key, (color, label) in expected.items():
@@ -627,6 +635,49 @@ class BookToWikiGraphTests(unittest.TestCase):
             report = validate_book_graph.validate_graph(items["manifest"], items["book"])
             self.assertEqual(report["status"], "failed")
             self.assertIn("organizer-child-source-order", {item["code"] for item in report["errors"]})
+
+    def test_book_introduction_is_a_hidden_root_atom_not_a_chapter_card(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source_lines = ["# Book", "Reader guide.", "## Chapter", "Knowledge body."]
+            nodes = [
+                {"key": "book", "title": "Book", "layer": "organizer", "parent_key": None, "organizer_level": 1, "filename": "组织层/Book/Book.md", "heading_ranges": [[1, 1]], "children": ["book-intro", "chapter"]},
+                {"key": "book-intro", "title": "Reader guide", "layer": "atom", "parent_key": "book", "category": "scenario", "scenario_role": "book-introduction", "filename": "原子层/情景引入/Reader.md", "source_range": [2, 2]},
+                {"key": "chapter", "title": "Chapter", "layer": "organizer", "parent_key": "book", "organizer_level": 2, "filename": "组织层/Book/Chapter/Chapter.md", "heading_ranges": [[3, 3]], "children": ["knowledge"]},
+                {"key": "knowledge", "title": "Knowledge", "layer": "atom", "parent_key": "chapter", "category": "knowledge", "filename": "原子层/知识点/Knowledge.md", "source_range": [4, 4]},
+            ]
+            items = self.materialize_graph(root, source_lines, nodes)
+            output_dir = items["book"] / "Canvas"
+            build_canvas.build_canvas_bundle(items["manifest"], output_dir, items["book"])
+            index = self.load_index(output_dir)
+            self.assertEqual([entry["root_key"] for entry in index["chapter_maps"]], ["chapter"])
+            atlas = self.load_canvas(output_dir, index["atlas"]["path"])
+            self.assertFalse(any("Reader guide" in str(node.get("text", "")) for node in atlas["nodes"]))
+            report = validate_book_graph.validate_graph(items["manifest"], items["book"], output_dir / "canvas-index.json")
+            self.assertEqual(report["status"], "passed", report["errors"])
+
+    def test_child_subtree_must_not_cross_the_next_printed_sibling_heading(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source_lines = [
+                "# Book", "## Chapter", "### Synthesized topic",
+                "### 5.1.1 Printed section", "Text wrongly stolen by the synthesized topic.",
+                "Exercise left under the printed section.",
+            ]
+            nodes = [
+                {"key": "book", "title": "Book", "layer": "organizer", "parent_key": None, "organizer_level": 1, "filename": "组织层/Book/Book.md", "heading_ranges": [[1, 1]], "children": ["chapter"]},
+                {"key": "chapter", "title": "Chapter", "layer": "organizer", "parent_key": "book", "organizer_level": 2, "filename": "组织层/Book/Chapter/Chapter.md", "heading_ranges": [[2, 2]], "children": ["topic", "printed"]},
+                {"key": "topic", "title": "Synthesized topic", "layer": "organizer", "parent_key": "chapter", "organizer_level": 3, "filename": "组织层/Book/Chapter/Topic.md", "heading_ranges": [[3, 3]], "children": ["stolen"]},
+                {"key": "stolen", "title": "Stolen", "layer": "atom", "parent_key": "topic", "category": "knowledge", "filename": "原子层/知识点/Stolen.md", "source_range": [5, 5]},
+                {"key": "printed", "title": "5.1.1 Printed section", "layer": "organizer", "parent_key": "chapter", "organizer_level": 3, "filename": "组织层/Book/Chapter/Printed.md", "heading_ranges": [[4, 4]], "children": ["exercise"]},
+                {"key": "exercise", "title": "Exercise", "layer": "atom", "parent_key": "printed", "category": "exercise", "filename": "原子层/习题/Exercise.md", "source_range": [6, 6]},
+            ]
+            items = self.materialize_graph(root, source_lines, nodes)
+            report = validate_book_graph.validate_graph(items["manifest"], items["book"])
+            self.assertIn(
+                "organizer-child-source-span-crosses-next-sibling",
+                {item["code"] for item in report["errors"]},
+            )
 
     def test_unicode_special_and_duplicate_chapter_titles_are_collision_safe(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

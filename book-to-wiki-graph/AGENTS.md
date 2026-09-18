@@ -8,7 +8,7 @@ textbook-, subject-, publisher-, or edition-specific hierarchy rules.
 Convert any complete book into exactly two Markdown node layers:
 
 - organizers: an open-depth, TOC-centered ownership hierarchy. A nonterminal
-  organizer note begins with its own global-depth heading, then contains
+  organizer note omits its own duplicated title, then contains
   ordered direct-child embeds; each organizer-child embed is preceded by that
   child's global-depth heading (`#`, then `##`, then `###`, capped at `H6`). A
   terminal organizer linking atoms has no heading. Such leaves are flat,
@@ -70,21 +70,38 @@ it; do not absorb it into the first topic. Inline practice belongs to the
 preceding or explicitly targeted topic, not beside that topic at section level.
 Keep adjacent formally defined concepts separate when their dependency and
 reuse roles differ. Apply a digest-bound organizer review before atomization so
-demoted headings remain traceable in exact source ranges.
+demoted headings remain traceable in exact source ranges. Category-aware
+atomization and materialization stop when this review is missing or stale. No
+synthesized topic subtree may cross the next retained printed heading, and a
+printed instructional subsection may not be reduced to exercises only. When a
+knowledge-topic prompt occurs just before its printed heading, the same printed
+organizer may own one reviewed run before the heading and another after it;
+model packets split at the retained heading.
 
 ## Atomization rules
 
 - A knowledge atom is a complete teaching unit. Keep its definition,
   conditions, notation, explanation, derivation, and nearby conclusion
-  together. Blank lines, images, formulas, boxes, and ordinary activity labels
-  are soft boundaries only.
-- A short observation, question, or thinking prompt stays with the knowledge it
-  elicits. Only a complete narrative, real-world context, experiment setup, or
-  learning motivation may be a `scenario` atom.
+  together. Blank lines, images, formulas, and boxes are soft boundaries only.
+- Preserve every printed `观察`/`思考`/`尝试`/`交流`/`探究` marker. The LLM must
+  explicitly classify each as a scenario, exercise, or `merged-with-knowledge`
+  and give a reason; the marker remains a plain source line in the atom.
+  Complete prompts are scenarios, while a short prompt may merge with the
+  knowledge it elicits only when the teaching arc is inseparable.
 - A short `knowledge-motivation` may stand alone when it explicitly connects
   learned content to a distinct next topic. It must support a reviewed incoming
   and outgoing `motivates` chain; otherwise merge it into the knowledge it
   scaffolds.
+- Introductions are scope-aware: use `book-introduction` for a preface/reader
+  guide, `chapter-introduction` for a chapter opening,
+  `section-introduction` for a passage framing several child topics, and
+  `knowledge-motivation` for one complete problem/context aimed at one topic.
+  A book/chapter/section introduction is exactly one source-complete atom per
+  owner and role, including contiguous paragraphs, questions, figures and
+  captions. Continuation and image-only fragments are blocking errors.
+- A knowledge motivation preserves the whole context, figure/caption and final
+  question. Its relationship to the target knowledge is audited together with
+  its boundary; paragraph breaks and page layout never split it.
 - A complete post-knowledge comparison, synthesis, extension, or open inquiry
   is the exception: keep it independently as `category: scenario` with
   `scenario_role: reflection-question`, store it under
@@ -136,6 +153,13 @@ visible cards is encoded as a Canvas `group` envelope inside its section region.
 The title/header is navigation only and never fans out spokes to every region.
 An incomplete relation review permits the atlas but
 never an unreviewed semantic chapter or section map.
+
+The builder emits a sibling PNG for every generated `.canvas`. After building,
+the Agent must open every listed PNG with the host image viewer (such as
+`view_image`) through `canvas_review.py`: knowledge-logic
+completeness, relation direction, port correctness, and unexplained islands are
+hard gates before aesthetic suggestions. `canvas-review-final.json` binds the
+PNG and index digests and must have zero unresolved items before completion.
 
 Work in task-scoped staging and write outputs atomically. Never replace an
 existing corpus, manifest, or Canvas without explicit authorization.

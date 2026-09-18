@@ -579,6 +579,16 @@ def extract_choice_answer(body: str) -> str | None:
     separate answer field.  Only explicit answer/conclusion phrases are
     accepted; isolated capital letters in mathematical prose are ignored.
     """
+    lines = body.strip().splitlines()
+    if lines:
+        first_line = lines[0].strip()
+        header = re.match(
+            r"^(?:#{1,6}\s*)?【?\d+】?[\.、\s]*([A-F]{1,4})\b\s*(?:【?(?:解析|详解)】?)?\s*",
+            first_line,
+        )
+        if header:
+            return header.group(1).upper()
+
     m_conc = re.search(r"(?:故选|选|因此选|故选：|选：)\s*([A-D]+)\b|(?:故|则)?\s*([A-D])\s*项正确", body)
     if m_conc:
         return (m_conc.group(1) or m_conc.group(2)).upper()
@@ -593,15 +603,6 @@ def extract_choice_answer(body: str) -> str | None:
         if val:
             return val.upper()
 
-    lines = body.strip().splitlines()
-    if lines:
-        first_line = lines[0].strip()
-        header = re.match(
-            r"^(?:#{1,6}\s*)?【?\d+】?[\.、\s]*([A-F]{1,4})\b\s*(?:【?(?:解析|详解)】?)?\s*",
-            first_line,
-        )
-        if header:
-            return header.group(1).upper()
     return None
 
 

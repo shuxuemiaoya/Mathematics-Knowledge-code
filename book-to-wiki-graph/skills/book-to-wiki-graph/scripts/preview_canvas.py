@@ -9,19 +9,42 @@ import re
 from pathlib import Path
 
 
-def render(canvas: Path, output: Path, font: Path, width: int = 2400) -> None:
+FONT_CANDIDATES = (
+    "/System/Library/Fonts/PingFang.ttc",
+    "/System/Library/Fonts/STHeiti Medium.ttc",
+    "/System/Library/Fonts/Hiragino Sans GB.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.otf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+)
+
+
+def discover_font(explicit: Path | None = None) -> Path:
+    candidates = ([explicit] if explicit is not None else []) + [Path(item) for item in FONT_CANDIDATES]
+    for candidate in candidates:
+        if candidate is not None and candidate.is_file():
+            return candidate
+    raise RuntimeError("PNG Canvas preview needs a readable font; pass --font or install a CJK-capable font")
+
+
+def render_payload(payload: dict, output: Path, font: Path | None = None, width: int = 2400, max_height: int = 12000) -> dict[str, int]:
     from PIL import Image, ImageDraw, ImageFont
-    data = json.loads(canvas.read_text(encoding="utf-8"))
+    data = payload
     nodes = data["nodes"]
+    if not nodes:
+        raise ValueError("Canvas has no nodes")
     by_id = {node["id"]:node for node in nodes}
     x0,y0 = min(n['x'] for n in nodes)-80,min(n['y'] for n in nodes)-80
     x1,y1 = max(n['x']+n['width'] for n in nodes)+80,max(n['y']+n['height'] for n in nodes)+80
-    scale = width / (x1-x0)
-    image = Image.new('RGB',(width,math.ceil((y1-y0)*scale)), '#202122')
+    scale = min(width / max(1, x1-x0), max_height / max(1, y1-y0))
+    image_width = max(1, math.ceil((x1-x0)*scale))
+    image_height = max(1, math.ceil((y1-y0)*scale))
+    image = Image.new('RGB',(image_width,image_height), '#202122')
     draw = ImageDraw.Draw(image)
     colors = {'1':'#c86e75','2':'#c19e59','3':'#aaa45e','4':'#6ca58a','5':'#6ba6b4','6':'#a989bb'}
     def pt(x,y): return ((x-x0)*scale,(y-y0)*scale)
-    def face(size): return ImageFont.truetype(str(font), max(9,round(size*scale)))
+    font_path = discover_font(font)
+    def face(size): return ImageFont.truetype(str(font_path), max(9,round(size*scale)))
     def label(node):
         text = node.get('label',node.get('text','')).split('\n')[0].lstrip('# ')
         return re.sub(r'\[([^\]]+)\]\([^)]*\)',r'\1',text)
@@ -63,10 +86,15 @@ def render(canvas: Path, output: Path, font: Path, width: int = 2400) -> None:
         draw.text(pt(node['x']+10,node['y']+(node['height']-22)/2),text,font=f,fill='#c5b4ec')
     output.parent.mkdir(parents=True,exist_ok=True)
     image.save(output)
+    return {"width": image_width, "height": image_height}
+
+
+def render(canvas: Path, output: Path, font: Path | None = None, width: int = 2400) -> dict[str, int]:
+    return render_payload(json.loads(canvas.read_text(encoding="utf-8")), output, font, width)
 
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('canvas',type=Path);parser.add_argument('--output',type=Path,required=True)
-    parser.add_argument('--font',type=Path,required=True);parser.add_argument('--width',type=int,default=2400)
+    parser.add_argument('--font',type=Path);parser.add_argument('--width',type=int,default=2400)
     args=parser.parse_args();render(args.canvas,args.output,args.font,args.width)

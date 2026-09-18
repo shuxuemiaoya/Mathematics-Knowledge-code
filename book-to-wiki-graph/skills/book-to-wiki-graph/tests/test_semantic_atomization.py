@@ -79,6 +79,27 @@ class SemanticAtomizationTests(unittest.TestCase):
         sealed["_path"] = str(path.resolve())
         return sealed
 
+    def attach_organizer_review(self, base: dict[str, Path]) -> None:
+        manifest = json.loads(base["manifest"].read_text(encoding="utf-8"))
+        review = semantic.seal_artifact({
+            "schema_version": 1,
+            "kind": "organizer-review",
+            "status": "passed",
+            "base_manifest_sha256": semantic.sha256_file(base["manifest"]),
+            "source_markdown_sha256": semantic.sha256_file(base["source"]),
+            "reviewer": {"type": "fixture"},
+            "demote_organizer_keys": [],
+            "content_runs": [{"owner_key": "lesson", "create_organizer": False, "source_range": [4, 16]}],
+            "renumber_parent_keys": [],
+        })
+        review_path = base["staging"] / "organizer-review.json"
+        review_path.write_text(json.dumps(review, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        manifest["organizer_review"] = {
+            "status": "passed", "path": str(review_path), "sha256": review["artifact_sha256"],
+            "demoted_organizer_keys": [], "synthesized_organizer_keys": [],
+        }
+        base["manifest"].write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
     def passed(self, root: Path) -> dict[str, Any]:
         base = self.make_base(root)
         jobs = self.write_artifact(base["staging"] / "atomization-jobs.json", semantic.prepare_jobs(base["manifest"], ["chapter"]))
@@ -115,6 +136,7 @@ class SemanticAtomizationTests(unittest.TestCase):
             self.assertEqual(profile["atomization"]["provisional_atom_policy"], "coverage-context-only")
             self.assertEqual(profile["atomization"]["parallel_definition_policy"], "split-when-independently-reusable")
             base["profile"].write_text(json.dumps(profile, ensure_ascii=False), encoding="utf-8")
+            self.attach_organizer_review(base)
             jobs = semantic.prepare_jobs(base["manifest"], ["chapter"])
             job = jobs["jobs"][0]
             self.assertEqual(job["instructions"]["boundary_authority"], "LLM has exclusive authority over knowledge boundaries and atom count. Baseline atoms are non-binding coverage/context hints only; ignore their titles and internal boundaries unless an explicit hard boundary is independently proven.")
@@ -153,6 +175,7 @@ class SemanticAtomizationTests(unittest.TestCase):
             profile = json.loads(base["profile"].read_text(encoding="utf-8"))
             profile["atomization"] = dict(semantic.DEFAULT_ATOMIZATION)
             base["profile"].write_text(json.dumps(profile, ensure_ascii=False), encoding="utf-8")
+            self.attach_organizer_review(base)
             atoms = [
                 self.atom("k", [4, 9], "knowledge", "从观察到棱柱定义"),
                 self.atom("w", [10, 13], "worked-example", "棱柱判断例题"),
@@ -351,6 +374,117 @@ class SemanticAtomizationTests(unittest.TestCase):
             )
         }
         self.assertIn("section-introduction-absorbed-into-knowledge", codes)
+
+    def test_scoped_chapter_introduction_is_one_complete_atom(self) -> None:
+        lines = [
+            "周期现象广泛存在。", "函数可以描述变化规律。",
+            "本章将研究三角函数。", "![章导图](chapter.png)",
+        ]
+        fragments = [
+            self.atom("s1", [1, 1], "scenario", "第五章导语", scenario_role="chapter-introduction"),
+            self.atom("s2", [2, 2], "scenario", "第五章导语 续 2", scenario_role="chapter-introduction"),
+            self.atom("s3", [3, 3], "scenario", "第五章导语 续 3", scenario_role="chapter-introduction"),
+            self.atom("s4", [4, 4], "scenario", "第五章导图", scenario_role="chapter-introduction"),
+        ]
+        for atom in fragments:
+            atom["owner_key"] = "chapter-5"
+        codes = {item["code"] for item in semantic.scoped_scenario_issues(fragments, lines)}
+        self.assertIn("scoped-introduction-fragmented", codes)
+        self.assertIn("scoped-introduction-continuation-title", codes)
+        self.assertIn("scoped-introduction-media-only-fragment", codes)
+        combined = self.atom(
+            "chapter-intro", [1, 4], "scenario", "第五章导语",
+            scenario_role="chapter-introduction",
+        )
+        combined["owner_key"] = "chapter-5"
+        self.assertEqual(semantic.scoped_scenario_issues([combined], lines), [])
+
+    def test_book_introduction_is_a_supported_scenario_role(self) -> None:
+        atom = self.atom(
+            "preface", [1, 1], "scenario", "读者导读",
+            scenario_role="book-introduction",
+        )
+        errors: list[dict[str, Any]] = []
+        semantic.validate_atom(atom, "preface", "lesson", ["本书将帮助读者建立完整知识结构。"], errors)
+        self.assertEqual(errors, [])
+
+    def test_materialized_book_introduction_precedes_chapter_organizers(self) -> None:
+        base = {
+            "nodes": [
+                {"key": "book", "title": "Book", "layer": "organizer", "parent_key": None, "organizer_level": 1, "filename": "组织层/Book/Book.md", "heading_ranges": [[1, 1]], "children": ["chapter"]},
+                {"key": "chapter", "title": "Chapter", "layer": "organizer", "parent_key": "book", "organizer_level": 2, "filename": "组织层/Book/Chapter/Chapter.md", "heading_ranges": [[4, 4]], "children": ["draft"]},
+                {"key": "draft", "title": "Draft", "layer": "atom", "parent_key": "chapter", "category": "knowledge", "filename": "_draft/draft.md", "source_range": [5, 5]},
+            ]
+        }
+        final = {
+            "scope_root_keys": ["chapter"],
+            "atoms": [
+                self.atom("preface", [2, 3], "scenario", "读者导读", scenario_role="book-introduction"),
+                self.atom("chapter-knowledge", [5, 5], "knowledge", "Chapter knowledge", standalone_kind="formal-definition", standalone_reason="Complete reusable definition."),
+            ],
+        }
+        final["atoms"][0]["owner_key"] = "book"
+        final["atoms"][1]["owner_key"] = "chapter"
+        output_nodes, _root = materialize_book.prepare_nodes(base, final)
+        by_key = {node["key"]: node for node in output_nodes}
+        self.assertEqual(by_key["book"]["children"][0], materialize_book.final_key(final["atoms"][0]))
+        self.assertEqual(by_key["book"]["children"][1], "chapter")
+
+    def test_category_aware_prepare_requires_organizer_review(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = self.make_base(Path(temporary))
+            profile = json.loads(base["profile"].read_text(encoding="utf-8"))
+            profile["atomization"] = dict(semantic.DEFAULT_ATOMIZATION)
+            base["profile"].write_text(json.dumps(profile, ensure_ascii=False), encoding="utf-8")
+            with self.assertRaisesRegex(semantic.AtomizationError, "organizer review"):
+                semantic.prepare_jobs(base["manifest"], ["chapter"])
+
+    def test_prepare_splits_one_owner_at_its_retained_printed_heading(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source.md"
+            source.write_text(
+                "# Book\n## Chapter\n圆周运动如何刻画位置变化？\n### 5.1.1 任意角\n角可以记录旋转的方向与大小。\n",
+                encoding="utf-8",
+            )
+            staging, book = root / "staging", root / "book"
+            staging.mkdir()
+            profile = init_book.create_profile(source, staging, book)
+            profile["atomization"]["mode"] = "llm-two-pass"
+            profile["atomization"].pop("teaching_role_audit", None)
+            profile_path = staging / "book-profile.json"
+            profile_path.write_text(json.dumps(profile, ensure_ascii=False), encoding="utf-8")
+            nodes = [
+                {"key": "book", "title": "Book", "layer": "organizer", "parent_key": None, "organizer_level": 1, "filename": "组织层/Book/Book.md", "heading_ranges": [[1, 1]], "children": ["chapter"]},
+                {"key": "chapter", "title": "Chapter", "layer": "organizer", "parent_key": "book", "organizer_level": 2, "filename": "组织层/Book/Chapter/Chapter.md", "heading_ranges": [[2, 2]], "children": ["angle"]},
+                {"key": "angle", "title": "5.1.1 任意角", "layer": "organizer", "parent_key": "chapter", "organizer_level": 3, "filename": "组织层/Book/Chapter/Angle.md", "heading_ranges": [[4, 4]], "children": ["motivation", "knowledge"]},
+                {"key": "motivation", "title": "圆周运动问题", "layer": "atom", "parent_key": "angle", "category": "scenario", "filename": "_draft/motivation.md", "source_range": [3, 3]},
+                {"key": "knowledge", "title": "任意角", "layer": "atom", "parent_key": "angle", "category": "knowledge", "filename": "_draft/knowledge.md", "source_range": [5, 5]},
+            ]
+            manifest = {
+                "schema_version": 1, "profile": str(profile_path),
+                "source_markdown": str(source), "source_markdown_sha256": semantic.sha256_file(source),
+                "nodes": nodes, "source_order": ["motivation", "knowledge"], "relations": [],
+            }
+            manifest_path = staging / "book-graph.json"
+            manifest_path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
+            jobs = semantic.prepare_jobs(manifest_path, ["chapter"])
+            angle_jobs = [job for job in jobs["jobs"] if job["owner_key"] == "angle"]
+            self.assertEqual([job["source_range"] for job in angle_jobs], [[3, 3], [5, 5]])
+            self.assertEqual(len({job["run_id"] for job in angle_jobs}), 2)
+
+    def test_printed_instructional_section_cannot_contain_only_exercises(self) -> None:
+        nodes = {
+            "angle": {"key": "angle", "title": "5.1.1 任意角", "layer": "organizer", "heading_ranges": [[10, 10]], "children": ["practice"]},
+            "practice": {"key": "practice", "title": "练习 1", "layer": "organizer", "parent_key": "angle", "heading_ranges": [[20, 20]], "children": ["e"]},
+            "e": {"key": "e", "layer": "atom", "parent_key": "practice", "category": "exercise"},
+        }
+        issues = validate_book_graph.validate_instructional_organizer_content(nodes)
+        self.assertIn("instructional-organizer-exercise-only", {item["code"] for item in issues})
+        self.assertEqual(
+            validate_book_graph.validate_instructional_organizer_content({"practice": nodes["practice"], "e": nodes["e"]}),
+            [],
+        )
 
     def test_section_introduction_must_be_first_before_topic_organizers(self) -> None:
         nodes = {

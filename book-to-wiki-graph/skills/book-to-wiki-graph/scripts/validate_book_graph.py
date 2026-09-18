@@ -47,6 +47,17 @@ ATOM_CATEGORY_CODES = {
     "formula": "F",
 }
 SCENARIO_ROLE_PATHS = {"reflection-question": ("原子层/思考题", "T")}
+SCENARIO_ROLES = {
+    "book-introduction", "chapter-introduction", "section-introduction",
+    "knowledge-motivation", "reflection-question",
+}
+SCOPED_INTRO_ROLES = {
+    "book-introduction", "chapter-introduction", "section-introduction",
+}
+EXERCISE_ORGANIZER_RE = re.compile(
+    r"^(?:(?:练习|习题|复习题|复习参考题|基础巩固|复习巩固|综合运用|拓广探索|章末检测|测试|检测|作业)(?:\s|$|[\d一二三四五六七八九十（(])|(?:exercise|practice|review\s+questions?)\b)",
+    re.IGNORECASE,
+)
 
 
 def atom_path_and_code(node: dict[str, Any]) -> tuple[str | None, str | None]:
@@ -64,6 +75,13 @@ def atom_label(node: dict[str, Any]) -> str:
     return ATOM_LABELS.get(str(node.get("category")), "原子")
 
 
+def canvas_atom_label_fragment(node: dict[str, Any]) -> str:
+    """Canonical visible prefix; knowledge uses only the star marker."""
+    if node.get("category") == "knowledge":
+        return "✦ "
+    return f"{atom_label(node)} · "
+
+
 def concept_filename_stem(value: str) -> str:
     value = unicodedata.normalize("NFKC", value).strip()
     value = re.sub(r"[\x00-\x1f<>:\"/\\|?*#]+", "-", value)
@@ -75,7 +93,7 @@ PRIMARY_ATOM_CATEGORIES = {"knowledge", "worked-example", "exercise", "scenario"
 DERIVED_ATOM_CATEGORIES = {"concept", "formula"}
 MARKDOWN_RENDERING_CONTRACT = {
     "atom_heading_policy": "omit",
-    "atom_filename_policy": "sequence-category-code",
+    "atom_filename_policy": "per-folder-sequence-category-code",
     "leaf_organizer_policy": "flat-note",
     "organizer_child_heading": "relative-depth",
     "concept_filename_policy": "preferred-label-collision-safe",
@@ -318,6 +336,104 @@ def resolve_canvas_index_path(value: Any, index_root: Path) -> Path:
     return resolved
 
 
+def resolve_canvas_png_path(value: Any, index_root: Path) -> Path:
+    if not isinstance(value, str) or not value.strip():
+        raise GraphValidationError("Canvas PNG path must be a nonempty string")
+    candidate = Path(value.replace("\\", "/"))
+    if candidate.is_absolute() or any(part in {"", ".", ".."} for part in candidate.parts):
+        raise GraphValidationError(f"Unsafe Canvas PNG path: {value}")
+    if candidate.suffix.casefold() != ".png":
+        raise GraphValidationError(f"Canvas PNG path must end in .png: {value}")
+    resolved = (index_root / candidate).resolve()
+    try:
+        resolved.relative_to(index_root)
+    except ValueError as exc:
+        raise GraphValidationError(f"Canvas PNG path escapes index directory: {value}") from exc
+    return resolved
+
+
+def validate_canvas_png_previews(index: dict[str, Any], index_root: Path, required: bool) -> list[dict[str, Any]]:
+    """Check that every indexed Canvas has a fresh, readable PNG preview."""
+    errors: list[dict[str, Any]] = []
+    entries: list[dict[str, Any]] = []
+    for key in ("atlas", "chapter_maps", "section_maps"):
+        value = index.get(key)
+        if isinstance(value, dict):
+            entries.append(value)
+        elif isinstance(value, list):
+            entries.extend(item for item in value if isinstance(item, dict))
+    seen: set[str] = set()
+    for entry in entries:
+        canvas_value = entry.get("path")
+        if not isinstance(canvas_value, str) or not canvas_value:
+            continue
+        try:
+            canvas_path = resolve_canvas_index_path(canvas_value, index_root)
+        except Exception:
+            continue
+        if canvas_value in seen:
+            errors.append({"code": "canvas-index-duplicate-path", "path": canvas_value})
+            continue
+        seen.add(canvas_value)
+        png_value = entry.get("png_path")
+        if not isinstance(png_value, str) or not png_value:
+            if required:
+                errors.append({"code": "canvas-png-metadata-missing", "path": str(canvas_path)})
+            continue
+        try:
+            png_path = resolve_canvas_png_path(png_value, index_root)
+        except Exception as exc:
+            errors.append({"code": "canvas-png-path-invalid", "path": str(canvas_path), "detail": str(exc)})
+            continue
+        expected_png = canvas_path.with_suffix(".png")
+        if png_path != expected_png:
+            errors.append({"code": "canvas-png-sibling-invalid", "path": str(canvas_path), "png_path": png_value})
+        if not png_path.is_file():
+            errors.append({"code": "canvas-png-missing", "path": str(png_path)})
+            continue
+        if entry.get("png_sha256") != sha256_file(png_path):
+            errors.append({"code": "canvas-png-digest-mismatch", "path": str(png_path)})
+        try:
+            header = png_path.read_bytes()[:24]
+            if header[:8] != b"\x89PNG\r\n\x1a\n" or header[12:16] != b"IHDR":
+                raise ValueError("invalid PNG signature or IHDR")
+            width, height = int.from_bytes(header[16:20], "big"), int.from_bytes(header[20:24], "big")
+            if width <= 0 or height <= 0:
+                raise ValueError("PNG dimensions must be positive")
+            if entry.get("png_dimensions") != [width, height]:
+                errors.append({"code": "canvas-png-dimensions-mismatch", "path": str(png_path), "expected": [width, height], "actual": entry.get("png_dimensions")})
+        except Exception as exc:
+            errors.append({"code": "canvas-png-invalid", "path": str(png_path), "detail": str(exc)})
+    if required:
+        declared = index.get("png_previews")
+        if not isinstance(declared, dict) or declared.get("required") is not True:
+            errors.append({"code": "canvas-png-contract-missing"})
+        elif declared.get("count") != len(seen):
+            errors.append({"code": "canvas-png-count-mismatch", "expected": len(seen), "actual": declared.get("count")})
+    return errors
+
+
+def validate_canvas_review_artifact(review_path: Path, canvas_index_path: Path) -> list[dict[str, Any]]:
+    """Bind the final PNG review to the exact Canvas index it inspected."""
+    try:
+        review = load_json(review_path.expanduser().resolve())
+    except Exception as exc:
+        return [{"code": "canvas-review-final-invalid", "detail": str(exc)}]
+    errors: list[dict[str, Any]] = []
+    if review.get("kind") != "canvas-review-final":
+        errors.append({"code": "canvas-review-final-kind-invalid"})
+    if review.get("artifact_sha256") != artifact_digest(review):
+        errors.append({"code": "canvas-review-final-stale"})
+    index_path = canvas_index_path.expanduser().resolve()
+    if Path(str(review.get("canvas_index", ""))).expanduser().resolve() != index_path:
+        errors.append({"code": "canvas-review-index-binding-invalid"})
+    if review.get("canvas_index_sha256") != sha256_file(index_path):
+        errors.append({"code": "canvas-review-index-digest-mismatch"})
+    if review.get("status") != "passed" or review.get("unresolved_count") != 0:
+        errors.append({"code": "canvas-review-not-passed", "status": review.get("status"), "unresolved_count": review.get("unresolved_count")})
+    return errors
+
+
 def read_canvas_document(
     canvas_path: Path,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Path], list[dict[str, Any]]]:
@@ -507,7 +623,7 @@ def validate_tree_canvas(
             category = str(node.get("category"))
             expected_color = ATOM_COLORS.get(category)
             text = card.get("text")
-            if not isinstance(text, str) or f"{atom_label(node)} · " not in text:
+            if not isinstance(text, str) or canvas_atom_label_fragment(node) not in text:
                 errors.append({"code": "canvas-atom-label-invalid", "path": str(canvas_path), "node": key})
         if card.get("color") != expected_color:
             errors.append({"code": "canvas-card-color-invalid", "path": str(canvas_path), "node": key})
@@ -1153,7 +1269,7 @@ def validate_chapter_constellation(
             continue
         if targets.get(card_id) != (book_root / str(nodes[key]["_filename"])).resolve():
             errors.append({"code": "canvas-atom-target-invalid", "chapter": chapter_key, "atom": key})
-        if card.get("color") != ATOM_COLORS.get(str(nodes[key].get("category"))) or f"{atom_label(nodes[key])} · " not in str(card.get("text")):
+        if card.get("color") != ATOM_COLORS.get(str(nodes[key].get("category"))) or canvas_atom_label_fragment(nodes[key]) not in str(card.get("text")):
             errors.append({"code": "canvas-atom-visual-invalid", "chapter": chapter_key, "atom": key})
     forbidden_atom_cards = {
         stable_canvas_id("card", key) for key in source_atoms
@@ -1562,6 +1678,8 @@ def validate_constellation_bundle_v3(
     manifest_payload = load_json(manifest_path)
     profile_payload = load_json(Path(str(manifest_payload.get("profile", ""))).expanduser().resolve())
     canvas_config = profile_payload.get("canvas", {}) if isinstance(profile_payload.get("canvas"), dict) else {}
+    png_required = canvas_config.get("png_preview") == "required-every-canvas"
+    errors.extend(validate_canvas_png_previews(index, index_root, png_required))
     hidden_concepts = canvas_config.get("concept_nodes") == "hidden"
     membership_policy = canvas_config.get("isolation_policy") == "semantic-or-labelled-membership"
     if Path(str(index.get("manifest", ""))).expanduser().resolve() != manifest_path or index.get("manifest_sha256") != sha256_file(manifest_path):
@@ -1721,6 +1839,10 @@ def validate_constellation_bundle(
             relations, relation_review, concepts, atom_concept_links, concept_relations,
         )
     index_root = canvas_index_path.parent
+    manifest_payload = load_json(manifest_path)
+    profile_payload = load_json(Path(str(manifest_payload.get("profile", ""))).expanduser().resolve())
+    canvas_config = profile_payload.get("canvas", {}) if isinstance(profile_payload.get("canvas"), dict) else {}
+    errors.extend(validate_canvas_png_previews(index, index_root, canvas_config.get("png_preview") == "required-every-canvas"))
     if index.get("schema_version") != 2:
         errors.append({"code": "canvas-index-schema-version"})
     if Path(str(index.get("manifest", ""))).expanduser().resolve() != manifest_path or index.get("manifest_sha256") != sha256_file(manifest_path):
@@ -1747,8 +1869,14 @@ def validate_constellation_bundle(
         return [*errors, {"code": "canvas-index-root-unavailable"}]
     root_key = str(roots[0]["key"])
     chapter_keys = [str(key) for key in nodes[root_key].get("_children", []) if nodes.get(str(key), {}).get("layer") == "organizer"]
-    if any(nodes.get(str(key), {}).get("layer") == "atom" for key in nodes[root_key].get("_children", [])):
-        errors.append({"code": "canvas-root-atoms-forbidden"})
+    root_atoms = [str(key) for key in nodes[root_key].get("_children", []) if nodes.get(str(key), {}).get("layer") == "atom"]
+    invalid_root_atoms = [
+        key for key in root_atoms
+        if nodes[key].get("category") != "scenario"
+        or nodes[key].get("scenario_role") != "book-introduction"
+    ]
+    if invalid_root_atoms:
+        errors.append({"code": "canvas-root-atoms-forbidden", "nodes": invalid_root_atoms})
     semantic_ready = isinstance(relation_review, dict) and relation_review.get("status") == "passed" and relation_review.get("unresolved_count") == 0
     featured_examples = {
         str(key) for key in relation_review.get("featured_example_keys", [])
@@ -1780,18 +1908,27 @@ def validate_constellation_bundle(
                 errors.append({"code": "canvas-chapter-path-invalid", "chapter": key, "detail": str(exc)})
         elif entry.get("path") is not None or entry.get("counts") is not None or entry.get("bounds") is not None:
             errors.append({"code": "canvas-pending-chapter-must-have-no-output", "chapter": key})
-    atom_chapter = {str(atom["key"]): validator_chapter_for(nodes, root_key, str(atom["key"])) for atom in atoms}
+    atom_chapter = {
+        str(atom["key"]): validator_chapter_for(nodes, root_key, str(atom["key"]))
+        for atom in atoms if str(atom["key"]) not in root_atoms
+    }
+    canvas_relations = [
+        relation for relation in relations
+        if str(relation.get("from_key")) in atom_chapter
+        and str(relation.get("to_key")) in atom_chapter
+    ]
     try:
         atlas_path = resolve_canvas_index_path(atlas_entry.get("path"), index_root)
         expected_chapter_paths = chapter_paths if semantic_ready else {key: (book_root / str(nodes[key]["_filename"])).resolve() for key in chapter_keys}
-        errors.extend(validate_atlas_canvas(atlas_path, atlas_entry, nodes, root_key, chapter_keys, expected_chapter_paths, book_root, relations, atom_chapter, semantic_ready, featured_examples))
+        errors.extend(validate_atlas_canvas(atlas_path, atlas_entry, nodes, root_key, chapter_keys, expected_chapter_paths, book_root, canvas_relations, atom_chapter, semantic_ready, featured_examples))
     except Exception as exc:
         errors.append({"code": "canvas-atlas-path-invalid", "detail": str(exc)})
         atlas_path = index_root / "overview.canvas"
     if semantic_ready:
         occurrences = {
             str(atom["key"]): 0 for atom in atoms
-            if validator_visible_atom(nodes, str(atom["key"]), featured_examples)
+            if str(atom["key"]) not in root_atoms
+            and validator_visible_atom(nodes, str(atom["key"]), featured_examples)
         }
         by_key = {str(entry.get("root_key")): entry for entry in raw_chapters}
         for chapter_key in chapter_keys:
@@ -1801,7 +1938,7 @@ def validate_constellation_bundle(
             if chapter_key in chapter_paths:
                 errors.extend(validate_chapter_constellation(
                     chapter_paths[chapter_key], by_key[chapter_key], nodes, root_key,
-                    chapter_key, atlas_path, book_root, relations, atom_chapter,
+                    chapter_key, atlas_path, book_root, canvas_relations, atom_chapter,
                     featured_examples, concepts, atom_concept_links, concept_relations,
                 ))
         invalid = {key: value for key, value in occurrences.items() if value != 1}
@@ -1830,6 +1967,8 @@ def validate_atomization_review(
             "knowledge_boundary_authority": "llm-exclusive",
             "provisional_atom_policy": "coverage-context-only",
             "parallel_definition_policy": "split-when-independently-reusable",
+            "scoped_introduction_policy": "one-source-complete-atom-per-owner",
+            "knowledge_motivation_policy": "complete-problem-or-context",
         })
     if mode not in {"llm-two-pass", "llm-category-aware-graph"}:
         errors.append({"code": "atomization-config-invalid", "field": "mode"})
@@ -1842,11 +1981,11 @@ def validate_atomization_review(
                     "expected": expected,
                 }
             )
-    if config.get("scenario_policy") not in {"substantial-only", "role-aware-bridges-and-reflections"}:
+    if config.get("scenario_policy") not in {"substantial-only", "role-aware-bridges-and-reflections", "preserve-and-role-classify-activities"}:
         errors.append({
             "code": "atomization-config-invalid",
             "field": "scenario_policy",
-            "expected": "role-aware-bridges-and-reflections",
+            "expected": "preserve-and-role-classify-activities",
         })
     for field in ("confidence_threshold", "short_atom_confidence_threshold"):
         value = config.get(field)
@@ -1991,11 +2130,12 @@ def validate_organizer_review(
     manifest: dict[str, Any],
     source_markdown_sha256: str | None,
     node_keys: set[str],
+    required: bool = False,
 ) -> list[dict[str, Any]]:
-    """Validate optional evidence that activity headings were demoted safely."""
+    """Validate evidence that printed structure and semantic owners were reviewed."""
     binding = manifest.get("organizer_review")
     if binding is None:
-        return []
+        return [{"code": "organizer-review-missing-for-category-aware-atomization"}] if required else []
     if not isinstance(binding, dict) or binding.get("status") != "passed":
         return [{"code": "organizer-review-invalid"}]
     path = Path(str(binding.get("path", ""))).expanduser().resolve()
@@ -2220,40 +2360,102 @@ def validate_relation_review(
     return errors
 
 
-def validate_section_introduction_placement(
+def validate_scoped_introduction_placement(
     nodes: dict[str, dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Require a section-wide introduction to precede its sibling topic organizers."""
+    """Require one complete scoped introduction first under its organizer."""
     errors: list[dict[str, Any]] = []
+    grouped: dict[str, list[tuple[str, str]]] = defaultdict(list)
     for key, node in nodes.items():
         if node.get("layer") != "atom" or node.get("category") != "scenario":
             continue
-        if node.get("scenario_role") != "section-introduction":
+        role = str(node.get("scenario_role", ""))
+        if role not in SCOPED_INTRO_ROLES:
             continue
         parent_key = node.get("parent_key")
         parent = nodes.get(str(parent_key)) if parent_key is not None else None
         if parent is None or parent.get("layer") != "organizer":
-            errors.append({"code": "section-introduction-owner-invalid", "node": key})
+            errors.append({"code": "scoped-introduction-owner-invalid", "node": key, "scenario_role": role})
             continue
+        grouped[str(parent_key)].append((key, role))
         children = parent.get("_children", parent.get("children", []))
-        organizer_children = [
-            child_key
-            for child_key in children
-            if child_key in nodes and nodes[child_key].get("layer") == "organizer"
-        ]
-        if not organizer_children:
+        if len(children) < 2:
             errors.append({
-                "code": "section-introduction-owner-invalid",
+                "code": "scoped-introduction-owner-invalid",
                 "node": key,
                 "parent": parent_key,
-                "detail": "section introduction must frame following topic organizers",
+                "scenario_role": role,
+                "detail": "scoped introduction must frame following content",
             })
         if not children or children[0] != key:
             errors.append({
-                "code": "section-introduction-order-invalid",
+                "code": "scoped-introduction-order-invalid",
                 "node": key,
                 "parent": parent_key,
+                "scenario_role": role,
                 "actual_index": children.index(key) if key in children else None,
+            })
+    for parent_key, members in grouped.items():
+        if len(members) > 1:
+            errors.append({
+                "code": "scoped-introduction-duplicate",
+                "parent": parent_key,
+                "nodes": [key for key, _role in members],
+                "scenario_roles": [role for _key, role in members],
+            })
+    return errors
+
+
+def validate_section_introduction_placement(
+    nodes: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Backward-compatible wrapper for the generalized scoped-intro check."""
+    mapping = {
+        "scoped-introduction-owner-invalid": "section-introduction-owner-invalid",
+        "scoped-introduction-order-invalid": "section-introduction-order-invalid",
+        "scoped-introduction-duplicate": "section-introduction-duplicate",
+    }
+    return [
+        {**item, "code": mapping.get(str(item.get("code")), str(item.get("code")))}
+        for item in validate_scoped_introduction_placement(nodes)
+    ]
+
+
+def validate_instructional_organizer_content(
+    nodes: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Reject printed instructional sections whose semantic body was stolen.
+
+    An organizer such as ``5.1.1 任意角`` may end with practice, but it
+    cannot contain only exercises after a synthesized sibling topic has taken
+    all of its teaching prose.
+    """
+    errors: list[dict[str, Any]] = []
+    for key, node in nodes.items():
+        if node.get("layer") != "organizer" or not node.get("_heading_ranges", node.get("heading_ranges", [])):
+            continue
+        title = str(node.get("title", "")).strip()
+        if EXERCISE_ORGANIZER_RE.match(title):
+            continue
+        categories: list[str] = []
+        pending = list(node.get("_children", node.get("children", [])))
+        seen: set[str] = set()
+        while pending:
+            child_key = str(pending.pop())
+            if child_key in seen or child_key not in nodes:
+                continue
+            seen.add(child_key)
+            child = nodes[child_key]
+            if child.get("layer") == "atom" and child.get("coverage_role", "primary") == "primary":
+                categories.append(str(child.get("category")))
+            elif child.get("layer") == "organizer":
+                pending.extend(child.get("_children", child.get("children", [])))
+        if categories and set(categories) == {"exercise"}:
+            errors.append({
+                "code": "instructional-organizer-exercise-only",
+                "node": key,
+                "title": title,
+                "exercise_count": len(categories),
             })
     return errors
 
@@ -2262,12 +2464,15 @@ def validate_graph(
     manifest_path: Path,
     book_root: Path,
     canvas_index_path: Path | None = None,
+    canvas_review_path: Path | None = None,
 ) -> dict[str, Any]:
     manifest_path = manifest_path.expanduser().resolve()
     book_root = book_root.expanduser().resolve()
     manifest = load_json(manifest_path)
     errors: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
+    if canvas_review_path is not None and canvas_index_path is None:
+        errors.append({"code": "canvas-review-requires-index"})
     rendering_contract_enabled = False
     organizer_self_heading_policy = "omit"
     organizer_metadata_contract_enabled = False
@@ -2449,6 +2654,12 @@ def validate_graph(
             coverage_role = node.get("coverage_role", "primary")
             if category not in ATOM_CATEGORIES:
                 errors.append({"code": "atom-category-invalid", "node": key})
+            scenario_role = node.get("scenario_role")
+            if atom_metadata_contract_enabled:
+                if category == "scenario" and scenario_role not in SCENARIO_ROLES:
+                    errors.append({"code": "atom-scenario-role-invalid", "node": key, "scenario_role": scenario_role})
+                elif category != "scenario" and scenario_role is not None:
+                    errors.append({"code": "atom-scenario-role-invalid", "node": key, "scenario_role": scenario_role})
             expected_path, expected_code = atom_path_and_code(node)
             if category in ATOM_CATEGORIES and (expected_path is None or not filename.startswith(expected_path + "/")):
                 errors.append({"code": "atom-path-invalid", "node": key})
@@ -2475,6 +2686,27 @@ def validate_graph(
             except Exception as exc:
                 errors.append({"code": "atom-source-range-invalid", "node": key, "detail": str(exc)})
 
+    if rendering_contract_enabled:
+        # Primary atoms use a local sequence per destination folder.  A global
+        # source-order counter would create harmless-looking gaps such as
+        # 0001-S, 0007-S, 0014-S after knowledge/example atoms were interleaved.
+        numbered_by_folder: dict[str, list[int]] = defaultdict(list)
+        for node in atoms:
+            category = str(node.get("category"))
+            if category not in PRIMARY_ATOM_CATEGORIES | {"formula"}:
+                continue
+            filename = str(node.get("_filename", ""))
+            folder = str(PurePosixPath(filename).parent)
+            code = atom_path_and_code(node)[1]
+            match = re.fullmatch(r"(\d+)-([A-Z])\.md", PurePosixPath(filename).name)
+            if code is None or match is None or match.group(2) != code:
+                continue
+            numbered_by_folder[folder].append(int(match.group(1)))
+        for folder, values in numbered_by_folder.items():
+            expected = list(range(1, len(values) + 1))
+            if sorted(values) != expected:
+                errors.append({"code": "atom-folder-sequence-not-contiguous", "folder": folder, "expected": expected, "actual": sorted(values)})
+
     roots = [node for node in organizers if node.get("parent_key") is None]
     if len(roots) != 1 or roots[0].get("organizer_level") != 1:
         errors.append({"code": "root-organizer-invalid"})
@@ -2494,7 +2726,9 @@ def validate_graph(
         if node.get("layer") == "organizer" and node.get("organizer_level") != parent.get("organizer_level", 0) + 1:
             errors.append({"code": "organizer-level-discontinuity", "node": key})
 
-    errors.extend(validate_section_introduction_placement(nodes))
+    errors.extend(validate_scoped_introduction_placement(nodes))
+    if atom_metadata_contract_enabled:
+        errors.extend(validate_instructional_organizer_content(nodes))
 
     for organizer in organizers:
         key = str(organizer.get("key"))
@@ -2508,12 +2742,12 @@ def validate_graph(
             errors.append({"code": "bottom-organizer-must-own-atoms", "node": key})
         if child_layers == {"organizer", "atom"}:
             direct_atoms = [nodes[child] for child in children if child in nodes and nodes[child].get("layer") == "atom"]
-            canonical_section_introductions = direct_atoms and all(
+            canonical_scoped_introductions = direct_atoms and all(
                 atom.get("category") == "scenario"
-                and atom.get("scenario_role") == "section-introduction"
+                and atom.get("scenario_role") in SCOPED_INTRO_ROLES
                 for atom in direct_atoms
             )
-            if not canonical_section_introductions:
+            if not canonical_scoped_introductions:
                 warnings.append({"code": "mixed-organizer-and-atom-children", "node": key})
         if rendering_contract_enabled and child_layers == {"atom"} and organizer.get("parent_key") is not None:
             parent = nodes.get(str(organizer.get("parent_key")))
@@ -2548,6 +2782,7 @@ def validate_graph(
         errors.append({"code": "unreachable-nodes", "nodes": unreachable})
 
     source_start_cache: dict[str, int | None] = {}
+    source_end_cache: dict[str, int | None] = {}
 
     def first_source_line(key: str, trail: set[str] | None = None) -> int | None:
         if key in source_start_cache:
@@ -2570,6 +2805,27 @@ def validate_graph(
         source_start_cache[key] = result
         return result
 
+    def last_source_line(key: str, trail: set[str] | None = None) -> int | None:
+        if key in source_end_cache:
+            return source_end_cache[key]
+        current_trail = set() if trail is None else set(trail)
+        if key in current_trail or key not in nodes:
+            return None
+        current_trail.add(key)
+        node = nodes[key]
+        candidates: list[int] = []
+        if node.get("layer") == "atom" and "_source_range" in node:
+            candidates.append(int(node["_source_range"][1]))
+        if node.get("layer") == "organizer":
+            candidates.extend(int(item[1]) for item in node.get("_heading_ranges", []))
+            for child in node.get("_children", []):
+                child_end = last_source_line(str(child), current_trail)
+                if child_end is not None:
+                    candidates.append(child_end)
+        result = max(candidates) if candidates else None
+        source_end_cache[key] = result
+        return result
+
     for organizer in organizers:
         organizer_key = str(organizer.get("key"))
         children = [str(child) for child in organizer.get("_children", []) if str(child) in nodes]
@@ -2587,6 +2843,18 @@ def validate_graph(
                     "actual": children,
                 }
             )
+        for left, right in zip(children, children[1:]):
+            left_end = last_source_line(left)
+            right_start = positions[right]
+            if left_end is not None and right_start is not None and int(left_end) >= int(right_start):
+                errors.append({
+                    "code": "organizer-child-source-span-crosses-next-sibling",
+                    "node": organizer_key,
+                    "left_child": left,
+                    "left_end": left_end,
+                    "right_child": right,
+                    "right_start": right_start,
+                })
 
     expected_order = [
         str(node["key"])
@@ -3022,6 +3290,7 @@ def validate_graph(
             manifest,
             manifest.get("source_markdown_sha256"),
             set(nodes),
+            required=profile.get("atomization", {}).get("mode") == "llm-category-aware-graph",
         )
     )
 
@@ -3058,6 +3327,8 @@ def validate_graph(
                 [item for item in manifest.get("concept_relations", []) if isinstance(item, dict)],
             )
         )
+        if canvas_review_path is not None:
+            errors.extend(validate_canvas_review_artifact(canvas_review_path, canvas_index_path))
 
     for node in raw_nodes:
         if isinstance(node, dict):
@@ -3094,10 +3365,11 @@ def main() -> int:
     parser.add_argument("manifest", type=Path)
     parser.add_argument("--book-root", type=Path, required=True)
     parser.add_argument("--canvas-index", type=Path)
+    parser.add_argument("--canvas-review", type=Path, help="Final PNG-backed Canvas review artifact")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     try:
-        report = validate_graph(args.manifest, args.book_root, args.canvas_index)
+        report = validate_graph(args.manifest, args.book_root, args.canvas_index, args.canvas_review)
     except Exception as exc:
         report = {
             "schema_version": 1,

@@ -1,7 +1,7 @@
 {
   "name": "book-to-wiki-graph",
-  "version": "0.8.0",
-  "description": "Convert books into fully attributed TOC indexes, LLM-led semantic teaching atoms, audited relation graphs, and three-level knowledge constellations.",
+  "version": "0.10.0",
+  "description": "Convert books into scope-aware introductions, fully attributed TOC indexes, LLM-led teaching atoms, audited relation graphs, and three-level knowledge constellations.",
   "author": {
     "name": "Local developer"
   },
@@ -20,7 +20,11 @@
       "Let the LLM exclusively determine knowledge boundaries and count: distinguish complete knowledge, parallel formal definitions, solved examples, exercises, introductions, and post-knowledge reflection questions before materialization.",
       "Keep section-wide framing questions first, attach inline practice to its knowledge topic, preserve independently reusable concepts, and split adjacent parallel definitions even without transition words.",
       "Use the knowledge-relation mapper to build a three-pass atom-concept teaching graph.",
-      "Build three-level knowledge constellations with hidden derived cards, collapsed exercise entries, reviewed major-method examples, and labelled organization edges."
+      "Build three-level knowledge constellations with hidden derived cards, collapsed exercise entries, reviewed major-method examples, and labelled organization edges.",
+      "Render a sibling PNG for every Canvas and require a PNG-backed logic-first review before completion.",
+      "Preserve and explicitly classify every printed 观察、思考、尝试、交流、探究 marker; never silently discard activity context.",
+      "Treat a preface, chapter introduction, section introduction, and single-topic motivation as distinct scenario scopes; never split one scoped introduction into paragraph or image fragments.",
+      "Reject organizer ownership that crosses the next printed heading or leaves an instructional subsection with exercises only."
     ]
   }
 }

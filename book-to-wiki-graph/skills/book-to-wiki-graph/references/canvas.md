@@ -16,8 +16,9 @@ spatial clustering.
 - `sections/NN-NN-<title>-<stable-id>.canvas`, one detail map per direct
   section, including the generated chapter-introduction section when present;
 - `canvas-index.json` schema v3, which binds the manifest and records all three
-  roles, review status, paths, counts, geometry, visual-quality metrics, and the
-  layout contract.
+  roles, review status, paths, counts, geometry, visual-quality metrics, PNG
+  preview paths/digests, and the layout contract. Every generated `.canvas` has
+  a sibling `.png` preview rendered by `preview_canvas.py`.
 
 There is no standalone `semantics.canvas`. Chapter cards open chapter core
 maps; section portals open detail maps; atom and exercise-entry cards open
@@ -106,7 +107,7 @@ Atom cards retain category identity without modifying atom Markdown:
 
 | Category | Label | Color |
 | --- | --- | --- |
-| `knowledge` | `知识点 · <title>` | `2` |
+| `knowledge` | `✦ <title>` | `2` |
 | `worked-example` | `例题 · <title>` | `4` |
 | `exercise` | `习题 · <title>` | `6` |
 | `scenario` | `情景引入 · <title>` | `5` |
@@ -114,10 +115,27 @@ Atom cards retain category identity without modifying atom Markdown:
 Exercise organizer cards use color `6`. Virtual concept hubs have no Markdown
 link and must never appear in `book-graph.json` as corpus nodes.
 
-Prefix backbone participants with `✦`; use `·` for supporting atoms and
-`↗ 外章` for cross-chapter portals. Use the host
-application's native colors so the result remains usable in light and dark
-themes; do not generate a background image.
+Use `✦` as the only knowledge-point marker; use `·` for scenarios/examples and
+`↗ 外章` for cross-chapter portals. Prefix backbone styling is expressed by
+color/size rather than repeating a category label. Use the host application's
+native colors so the result remains usable in light and dark themes; do not
+generate a background image.
+
+## PNG-backed evaluation loop
+
+After building, run `scripts/canvas_review.py prepare`. The current Agent must
+open every listed `png_path` with the host image viewer (such as `view_image`),
+inspect it, and write one decision per Canvas. The decision compares
+the image with the authoritative relation/ownership excerpt in the job, then
+reports missing or reversed links, port-direction violations, isolated
+substantive nodes, group/section confusion, crossings and density. Logic
+completeness and relation correctness are mandatory first gates; aesthetics is
+reviewed only after those gates. `canvas_review.py finalize` writes a digest-bound
+`canvas-review-final.json`, queue, quality report and Markdown summary. A graph
+cannot be accepted with `--canvas-review` until the queue is empty. If a logic
+issue is found, repair relation data and rebuild the Canvas/PNG before starting
+the next review cycle; do not draw an unreviewed relation merely to improve the
+picture.
 
 ## Relation grammar
 
@@ -160,7 +178,8 @@ python scripts/build_canvas.py <book-root>/book-graph.json \
 
 python scripts/validate_book_graph.py <book-root>/book-graph.json \
   --book-root <book-root> \
-  --canvas-index <book-root>/Canvas/canvas-index.json
+  --canvas-index <book-root>/Canvas/canvas-index.json \
+  --canvas-review <staging-root>/canvas-review/canvas-review-final.json
 ```
 
 The builder writes atomically and requires `--overwrite` for existing output.

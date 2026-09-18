@@ -22,8 +22,8 @@ An organizer may own organizers, atoms, or both. Mixed children remain in the
 order in which their earliest source content appears. In the common case, only
 the deepest organizer owns atoms; this is a tendency, not a validity rule.
 
-A nonterminal organizer note begins with its own global-depth heading so the
-note remains a complete directory when opened directly. It then has one
+A nonterminal organizer note does not repeat its own filename/title in the body.
+It then has one
 embedded Markdown note link per direct child. Every organizer-child embed is
 preceded by the child's global-depth heading: `#` for the book root, `##` for a
 chapter, `###` for the next level, and so on (capped at Markdown `H6`). Atom
@@ -42,7 +42,9 @@ A Markdown heading is not automatically an organizer. Printed TOC entries and
 source-supported reusable knowledge topics are organizational. Pedagogical
 labels such as observe, think, try, discuss, communicate, operate, or explore
 normally introduce one atomic activity and belong inside that atom's source
-range. An inline practice heading may remain as source presentation metadata,
+range. The marker text itself is preserved as a plain source line and the LLM
+must record whether it is a scenario, exercise, or explicitly merged scaffold.
+An inline practice heading may remain as source presentation metadata,
 but its questions belong to the preceding or explicitly targeted knowledge
 topic. A terminal formal exercise-set/group heading may remain a direct section
 organizer when it owns multiple questions.
@@ -65,9 +67,11 @@ split that arc because a converter inserted a blank line, image, formula,
 activity label, or box boundary. Split only when both sides can be named,
 understood, and reused independently.
 
-A short “observe”, “think”, or “try” prompt belongs with the knowledge it
-elicits. A standalone scenario must be a complete narrative, real-world
-context, experiment setup, or learning motivation. Keep an example stem with
+A short “observe”, “think”, or “try” prompt may be merged with the knowledge it
+elicits only with an explicit disposition and preserved marker; a complete
+unanswered post-knowledge question is a reflection scenario. A standalone
+scenario must be a complete narrative, real-world context, experiment setup,
+or learning motivation. Keep an example stem with
 its analysis, solution, and nearby conclusion. Keep a top-level exercise with
 all subparts, figures, tables, and supplied material.
 
@@ -76,6 +80,15 @@ explicitly points backward to learned material, opens a distinct next topic,
 and can support the reviewed chain `learned knowledge → bridge → new knowledge`.
 Otherwise it is ordinary instructional scaffolding and merges into the
 knowledge it elicits.
+
+Scope precedes paragraph shape when classifying introductions. Use
+`book-introduction` for a preface/reader guide, `chapter-introduction` for a
+chapter opening, `section-introduction` for a passage framing multiple child
+topics, and `knowledge-motivation` for a complete problem/context aimed at one
+topic. A book/chapter/section introduction is one complete atom per owner and
+role, including its contiguous prose, questions, figures and captions. Reject
+continuation and media-only fragments. A knowledge motivation likewise keeps
+its whole setup and final question together.
 
 A complete question asked after teaching—especially one requiring comparison,
 synthesis, extension, or open inquiry—remains independent with
@@ -117,7 +130,8 @@ shape so no organizational note becomes provenance-blind.
 
 Organizer ownership, reviewed exclusions, explicit worked-example starts, and
 top-level exercise starts are hard constraints. Empty lines, images, formulas,
-boxed conclusions, and ordinary activity labels are soft boundary evidence.
+and boxed conclusions are soft boundary evidence. Activity labels are source
+content and require an explicit disposition.
 
 Knowledge under 150 normalized characters or containing one nonblank line is
 always audited. It remains independent only when it is a formal definition,
@@ -135,6 +149,13 @@ Combining atom ranges, organizer heading ranges, and exclusions must cover
 every nonblank source line exactly once. Primary atom ranges never overlap, and
 `source_order` equals primary atoms sorted by source position. Classification affects
 storage and Canvas color only; it never changes reading order.
+
+Sibling organizer subtrees also obey interval order: each child's latest
+source position must precede the next child's earliest position. A non-exercise
+printed organizer with only exercise descendants is invalid. Category-aware
+runs cannot proceed without a passed digest-bound organizer review. An existing
+printed organizer may own reviewed runs immediately before and after its own
+heading; no individual run crosses that heading.
 
 ## Teaching relations and learning maps
 

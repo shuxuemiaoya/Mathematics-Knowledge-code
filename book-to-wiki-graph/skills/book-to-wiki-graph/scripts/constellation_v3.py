@@ -146,8 +146,9 @@ class CanvasBundleBuilderV3(CanvasBundleBuilder):
         node = self.nodes[key]
         category = str(node["category"])
         prefix = "↗ 外章" if external else ("✦" if self.is_core(key) else "·")
+        label = f"✦ {self.display_title(key)}" if not external and category == "knowledge" else f"{prefix} {self.atom_label(node)} · {self.display_title(key)}"
         card["text"] = self.link_text(
-            f"{prefix} {self.atom_label(node)} · {self.display_title(key)}",
+            label,
             self.note_target(key),
             canvas_path,
         )

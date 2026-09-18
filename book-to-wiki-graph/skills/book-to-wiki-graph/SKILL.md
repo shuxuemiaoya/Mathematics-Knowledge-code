@@ -41,7 +41,12 @@ plugin is separate and must not be modified by this workflow.
    prior-knowledge question is a direct `section-introduction` when several
    sibling topics collectively answer it. Attach inline practice to its target
    topic, and keep adjacent defined concepts separate when their dependency and
-   reuse roles differ. Lock the reviewed ownership before model atomization.
+   reuse roles differ. A printed instructional subsection must not be left with
+   exercises only, and no synthesized topic subtree may extend past the next
+   retained printed heading. Existing printed organizers may own reviewed
+   source runs on both sides of their own heading. Lock the reviewed ownership
+   before model atomization; category-aware preparation and materialization
+   reject a missing or stale organizer review.
 4. Run `scripts/atomize_book.py prepare` against the reviewed draft graph.
    The current Agent is the default reviewer. Each category-aware decision
    returns one complete source partition plus every knowledge atom's
@@ -79,8 +84,13 @@ plugin is separate and must not be modified by this workflow.
     legacy role-review and post-materialization `apply` path remains available
     only for old `llm-two-pass` artifacts.
 11. Validate the graph, build the three-level Canvas bundle, then validate again
-    with `--canvas-index`. JSON remains authoritative; optional Neo4j export
-    never edits it.
+    with `--canvas-index`. The builder emits a sibling PNG for every Canvas.
+    Run `canvas_review.py prepare`, open every listed `png_path` with the image
+    viewer (for this host, `view_image`) and inspect it with the current Agent,
+    write structured decisions, and finalize the review before validating with
+    `--canvas-review`. Logic completeness, relation direction, and unexplained
+    islands are reviewed before visual polish; PNGs are visual evidence while
+    JSON remains authoritative. Optional Neo4j export never edits it.
 
 ## Semantic boundaries
 
@@ -90,9 +100,26 @@ plugin is separate and must not be modified by this workflow.
 - The LLM, not paragraph shape, owns the partition. A compound section title is
   a recall hint rather than a reason to merge; independently reusable parallel
   definitions remain separate even when no transition phrase appears.
-- Merge a short observation/thinking prompt with the knowledge it elicits.
-  A scenario atom requires a complete narrative, real-world context,
-  experiment setup, or learning motivation.
+- Preserve every printed activity marker (`观察`, `思考`, `尝试`, `交流`,
+  `探究`, etc.) in the source slice. The LLM must explicitly disposition each
+  marker as a scenario, exercise, or `merged-with-knowledge` with a reason;
+  silent deletion is invalid. A complete prompt is normally a scenario (a
+  post-knowledge unanswered question is `reflection-question`). Merge a short
+  marker only when its prompt and the immediately following definition form
+  one inseparable teaching unit, and keep the marker as a plain source line.
+- Classify introductions at their actual scope. A preface or reader guide is
+  `book-introduction`; a chapter opening is `chapter-introduction`; a section
+  opening that frames several child topics is `section-introduction`; and a
+  complete problem or real-world context aimed at one topic is
+  `knowledge-motivation`. Each book/chapter/section introduction is one
+  source-complete discourse atom per owner and role, including every contiguous
+  paragraph, question, figure and caption until the next structural heading.
+  Never emit `续 2`/`part 2` or image-only introduction fragments.
+- Keep a knowledge motivation's whole statement, figure/caption and final
+  question together. It may be owned by a printed subsection even when the
+  prompt occurs immediately before that subsection's heading; the retained
+  heading splits model packets but does not force the prompt into an unrelated
+  sibling topic.
 - Keep a short prior-knowledge question as the section's first direct
   `section-introduction` when several sibling topics collectively answer it;
   do not absorb it into only the first topic. Inline practice belongs to the
@@ -102,8 +129,9 @@ plugin is separate and must not be modified by this workflow.
   together. Keep each top-level exercise with all subparts, figures, tables,
   and supplied material.
 - Organizer ownership, exclusions, explicit example starts, and top-level
-  exercise starts are hard constraints. Blank lines, images, formulas, boxes,
-  and ordinary activity labels are soft evidence only.
+  exercise starts are hard constraints. Blank lines, images, formulas and
+  boxes are soft evidence; activity labels remain source content and require
+  an explicit LLM disposition.
 - Knowledge shorter than 150 normalized characters or with one nonblank line
   requires second-pass audit. It may remain independent only as a formal
   definition, theorem, or law with a concrete reason and confidence at or above
@@ -119,12 +147,13 @@ plugin is separate and must not be modified by this workflow.
 - Atoms have one owner, no children, and no Markdown/Wiki/HTML note links.
   Source image/media embeds are allowed. Atom bodies contain no Markdown
   headings. Primary atom and formula filenames use opaque sequence-plus-category
-  codes such as `0001-K.md`; definition-only concept cards are the exception
+  codes such as `0001-K.md`, with the number restarting independently in each
+  destination folder; definition-only concept cards are the exception
   and use their canonical concept name with a stable suffix only for collisions.
 - An organizer with only atom children is a single clearly named Markdown file in
   its parent's directory, not a one-file subdirectory. Organizers that own
-  other organizers retain a directory. A nonterminal organizer note begins
-  with its own global-depth heading, then supplies each organizer child's
+  other organizers retain a directory. An organizer note does not repeat its
+  own filename/title in the body. It supplies each organizer child's
   global-depth heading (`#` for the root, `##` for the next level, then `###`,
   and so on) before its embed. A terminal organizer that links atoms contains
   embeds only and no heading.
@@ -137,6 +166,9 @@ plugin is separate and must not be modified by this workflow.
   body heading.
 - Every nonblank source line is covered exactly once by a primary atom, organizer
   heading, or reviewed exclusion. Atom ranges never overlap.
+- Every organizer child subtree ends before the next sibling's earliest source
+  anchor. A printed non-exercise organizer whose primary descendants are all
+  exercises is invalid: rerun organizer ownership review before atomization.
 - `source_order` contains only primary atoms. `derived_order` contains exact
   source excerpts inside `derived_from_key`; these duplicates do not count
   toward coverage. Concept cards use collision-safe canonical names and formula
@@ -282,12 +314,26 @@ python scripts/materialize_book.py \
 python scripts/validate_book_graph.py <book_root>/book-graph.json \
   --book-root <book_root>
 
-python scripts/build_canvas.py <book_root>/book-graph.with-relations.json \
+python scripts/build_canvas.py <book_root>/book-graph.json \
   --book-root <book_root> --output-dir <book_root>/Canvas
 
-python scripts/validate_book_graph.py <book_root>/book-graph.with-relations.json \
+python scripts/validate_book_graph.py <book_root>/book-graph.json \
   --book-root <book_root> \
   --canvas-index <book_root>/Canvas/canvas-index.json
+python scripts/canvas_review.py prepare <book-root>/Canvas/canvas-index.json \
+  --output <staging-root>/canvas-review-jobs.json
+
+# The current Agent views every jobs[*].png_path and writes decisions with
+# logic evidence before visual suggestions.
+python scripts/canvas_review.py finalize \
+  <staging-root>/canvas-review-jobs.json \
+  <staging-root>/canvas-review-decisions.json \
+  --output-dir <staging-root>/canvas-review
+
+python scripts/validate_book_graph.py <book-root>/book-graph.json \
+  --book-root <book-root> \
+  --canvas-index <book-root>/Canvas/canvas-index.json \
+  --canvas-review <staging-root>/canvas-review/canvas-review-final.json
 ```
 
 For optional external execution, require an exact model and explicit consent:

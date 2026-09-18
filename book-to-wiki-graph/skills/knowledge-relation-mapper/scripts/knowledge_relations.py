@@ -187,6 +187,8 @@ def descendants(nodes: dict[str, dict[str, Any]], root_key: str) -> list[str]:
 def chapter_for(nodes: dict[str, dict[str, Any]], root_key: str, key: str) -> str:
     cursor = key
     parent = nodes[cursor].get("parent_key")
+    if parent is not None and str(parent) == root_key and nodes[cursor].get("layer") == "atom":
+        return root_key
     while parent is not None and str(parent) != root_key:
         cursor = str(parent)
         parent = nodes[cursor].get("parent_key")
@@ -254,7 +256,9 @@ def load_manifest_context(manifest_path: Path) -> tuple[dict[str, Any], dict[str
     chapters = [str(key) for key in nodes[root_key].get("children", []) if nodes.get(str(key), {}).get("layer") == "organizer"]
     if not chapters:
         raise RelationV2Error("Manifest must contain chapter organizers")
-    return manifest, profile, nodes, source_path, source_path.read_text(encoding="utf-8-sig").splitlines(), root_key, chapters
+    root_atoms = [str(key) for key in nodes[root_key].get("children", []) if nodes.get(str(key), {}).get("layer") == "atom"]
+    analysis_scopes = ([root_key] if root_atoms else []) + chapters
+    return manifest, profile, nodes, source_path, source_path.read_text(encoding="utf-8-sig").splitlines(), root_key, analysis_scopes
 
 
 def virtual_atom_key(atom: dict[str, Any]) -> str:
@@ -311,6 +315,8 @@ def load_pre_materialization_context(
     chapters = [str(key) for key in nodes[root_key].get("children", []) if nodes.get(str(key), {}).get("layer") == "organizer"]
     if not chapters:
         raise RelationV2Error("Selected atomization has no chapter organizer")
+    root_atoms = [str(key) for key in nodes[root_key].get("children", []) if nodes.get(str(key), {}).get("layer") == "atom"]
+    analysis_scopes = ([root_key] if root_atoms else []) + chapters
     seeds = {
         "knowledge_signatures": [
             {**item, "atom_key": id_to_key.get(str(item.get("atom_id")), "")}
@@ -333,7 +339,7 @@ def load_pre_materialization_context(
         "atomization_final_sha256": final["artifact_sha256"],
         "feedback_cycle": final.get("feedback_cycle", {"cycle": 0, "max_cycles": final.get("atomization", {}).get("relation_feedback_cycles", 2), "history": []}),
     }
-    return manifest, profile, nodes, source_path, source_path.read_text(encoding="utf-8-sig").splitlines(), root_key, chapters, seeds
+    return manifest, profile, nodes, source_path, source_path.read_text(encoding="utf-8-sig").splitlines(), root_key, analysis_scopes, seeds
 
 
 def source_atom(node: dict[str, Any], nodes: dict[str, dict[str, Any]], lines: list[str], root_key: str) -> dict[str, Any]:

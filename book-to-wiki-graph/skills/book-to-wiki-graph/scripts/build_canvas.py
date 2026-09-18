@@ -113,6 +113,63 @@ def atomic_json(path: Path, payload: dict[str, Any], overwrite: bool) -> None:
         raise
 
 
+def canvas_png_path(canvas_path: Path) -> Path:
+    """Return the stable sibling preview path for a Canvas file."""
+    return canvas_path.with_suffix(".png")
+
+
+def _index_canvas_entries(index: dict[str, Any]) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    for key in ("atlas", "chapter_maps", "section_maps"):
+        value = index.get(key)
+        if isinstance(value, dict):
+            entries.append(value)
+        elif isinstance(value, list):
+            entries.extend(item for item in value if isinstance(item, dict))
+    return entries
+
+
+def render_canvas_previews(
+    payloads: dict[Path, dict[str, Any]], index: dict[str, Any],
+    output_dir: Path, width: int = 2400, font: Path | None = None,
+) -> dict[str, Any]:
+    """Render one PNG next to every generated Canvas and bind its digest.
+
+    The Canvas JSON remains authoritative.  PNGs are deterministic previews
+    used for human/LLM visual QA, never as a replacement for graph evidence.
+    """
+    from preview_canvas import render
+
+    by_relative: dict[str, dict[str, Any]] = {}
+    for canvas_path, payload in payloads.items():
+        relative = canvas_path.relative_to(output_dir).as_posix()
+        png_path = canvas_png_path(canvas_path)
+        descriptor, temporary_name = tempfile.mkstemp(prefix=f".{png_path.name}.", suffix=".tmp.png", dir=png_path.parent)
+        os.close(descriptor)
+        temporary = Path(temporary_name)
+        try:
+            dimensions = render(canvas_path, temporary, font, width)
+            os.replace(temporary, png_path)
+        except Exception:
+            temporary.unlink(missing_ok=True)
+            raise
+        by_relative[relative] = {
+            "png_path": png_path.relative_to(output_dir).as_posix(),
+            "png_sha256": sha256_file(png_path),
+            "png_dimensions": [int(dimensions["width"]), int(dimensions["height"])],
+        }
+    for entry in _index_canvas_entries(index):
+        path = entry.get("path")
+        if isinstance(path, str) and path in by_relative:
+            entry.update(by_relative[path])
+    index["png_previews"] = {
+        "required": True, "count": len(by_relative),
+        "paths": sorted(item["png_path"] for item in by_relative.values()),
+        "renderer": "preview_canvas.py",
+    }
+    return {"count": len(by_relative), "paths": sorted(item["png_path"] for item in by_relative.values())}
+
+
 def descendants(nodes: dict[str, dict[str, Any]], root_key: str) -> list[str]:
     ordered: list[str] = []
 
@@ -192,8 +249,14 @@ class CanvasBundleBuilder:
             node_source_start(self.nodes, key, self.source_starts)
         root_children = [str(key) for key in self.nodes[self.root_key].get("children", [])]
         root_atoms = [key for key in root_children if self.nodes[key].get("layer") == "atom"]
-        if root_atoms:
-            raise ValueError(f"Canvas atlas requires chapter ownership for every atom: {root_atoms}")
+        invalid_root_atoms = [
+            key for key in root_atoms
+            if self.nodes[key].get("category") != "scenario"
+            or self.nodes[key].get("scenario_role") != "book-introduction"
+        ]
+        if invalid_root_atoms:
+            raise ValueError(f"Canvas atlas only permits hidden book-introduction root atoms: {invalid_root_atoms}")
+        self.book_intro_atoms = set(root_atoms)
         self.chapter_keys = [key for key in root_children if self.nodes[key].get("layer") == "organizer"]
         if not self.chapter_keys:
             raise ValueError("Canvas bundle needs at least one chapter organizer")
@@ -220,7 +283,19 @@ class CanvasBundleBuilder:
             str(key) for key in featured
             if str(key) in self.nodes and self.nodes[str(key)].get("category") == "worked-example"
         }
-        self.atom_chapter = {key: self._chapter_for(key) for key, node in self.nodes.items() if node.get("layer") == "atom"}
+        self.atom_chapter = {
+            key: self._chapter_for(key)
+            for key, node in self.nodes.items()
+            if node.get("layer") == "atom" and key not in self.book_intro_atoms
+        }
+        # Whole-book introductions remain discoverable through the root
+        # organizer and are audited in JSON, but the chapter-only Canvas scales
+        # intentionally do not draw them as chapter atoms or cross-map portals.
+        self.relations = [
+            relation for relation in self.relations
+            if str(relation.get("from_key")) in self.atom_chapter
+            and str(relation.get("to_key")) in self.atom_chapter
+        ]
         self.links_by_concept: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for link in self.atom_concept_links:
             if str(link.get("concept_key")) in self.concepts and str(link.get("atom_key")) in self.atom_chapter:
@@ -302,9 +377,13 @@ class CanvasBundleBuilder:
         core = self.is_core(key)
         width, height = (CORE_WIDTH, CORE_HEIGHT) if core and not external else ((PORTAL_WIDTH, PORTAL_HEIGHT) if external else (ATOM_WIDTH, ATOM_HEIGHT))
         prefix = "↗ 外章" if external else ("✦" if core else "·")
+        # A star is the knowledge-point marker.  Category prose such as
+        # ``知识点 ·`` made the cards noisy and pushed the mathematical title
+        # too far right; scenarios/examples retain their explicit role labels.
+        label = f"✦ {node['title']}" if not external and category == "knowledge" else f"{prefix} {atom_label(node)} · {node['title']}"
         return {
             "id": stable_id("external" if external else "card", key), "type": "text",
-            "text": self.link_text(f"{prefix} {atom_label(node)} · {node['title']}", self.note_target(key), canvas_path),
+            "text": self.link_text(label, self.note_target(key), canvas_path),
             "x": position[0], "y": position[1], "width": width, "height": height,
             "color": ATOM_COLORS[category] if not external else SOURCE_ORDER_COLOR,
         }
@@ -943,7 +1022,7 @@ class CanvasBundleBuilder:
         return payloads, index
 
 
-def build_canvas_bundle(manifest_path: Path, output_dir: Path, book_root: Path, overwrite: bool = False) -> dict[str, Any]:
+def build_canvas_bundle(manifest_path: Path, output_dir: Path, book_root: Path, overwrite: bool = False, font: Path | None = None) -> dict[str, Any]:
     manifest_path, output_dir, book_root = (path.expanduser().resolve() for path in (manifest_path, output_dir, book_root))
     validation = validate_graph(manifest_path, book_root)
     if validation["status"] != "passed":
@@ -962,19 +1041,25 @@ def build_canvas_bundle(manifest_path: Path, output_dir: Path, book_root: Path, 
         raise ValueError(f"Unsupported canvas.mode: {canvas_mode}")
     payloads, index = builder.build()
     index_path = output_dir / "canvas-index.json"
-    planned = [*payloads, index_path]
+    planned = [*payloads, *[canvas_png_path(path) for path in payloads], index_path]
     if not overwrite:
         existing = [str(path) for path in planned if path.exists()]
         if existing:
             raise FileExistsError("Canvas bundle output exists; pass --overwrite explicitly: " + ", ".join(existing))
     for path, payload in payloads.items():
         atomic_json(path, payload, overwrite=True)
+    png_report = render_canvas_previews(
+        payloads, index, output_dir,
+        width=int(profile.get("canvas", {}).get("png_width", 2400)) if isinstance(profile.get("canvas"), dict) else 2400,
+        font=font,
+    )
     atomic_json(index_path, index, overwrite=True)
     report = {
         "status": "passed", "canvas_index": str(index_path), "canvases": len(payloads),
         "atlas": str(output_dir / index["atlas"]["path"]),
         "chapter_maps": sum(entry["status"] == "ready" for entry in index["chapter_maps"]),
         "relation_status": index["relation_status"],
+        "png_previews": png_report,
     }
     if "section_maps" in index:
         report["section_maps"] = sum(entry["status"] == "ready" for entry in index["section_maps"])
@@ -987,9 +1072,10 @@ def main() -> int:
     parser.add_argument("--book-root", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--overwrite", action="store_true")
+    parser.add_argument("--font", type=Path, help="Optional CJK-capable font used for PNG previews")
     args = parser.parse_args()
     try:
-        report, code = build_canvas_bundle(args.manifest, args.output_dir, args.book_root, overwrite=args.overwrite), 0
+        report, code = build_canvas_bundle(args.manifest, args.output_dir, args.book_root, overwrite=args.overwrite, font=args.font), 0
     except Exception as exc:
         report, code = {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}, 1
     print(json.dumps(report, ensure_ascii=False, indent=2))

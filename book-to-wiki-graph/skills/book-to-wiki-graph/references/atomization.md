@@ -3,7 +3,9 @@
 Use this contract after the organizer hierarchy and direct-content ownership
 have been reviewed. The input is a draft `book-graph.json`: its atom boundaries
 may be heuristic, but its organizer tree, heading ranges, exclusions, source
-digest, and direct owners must already be trustworthy.
+digest, and direct owners must already be trustworthy. In
+`llm-category-aware-graph` mode, a missing or stale digest-bound organizer
+review blocks both preparation and materialization.
 
 ## Hard and soft boundaries
 
@@ -14,9 +16,11 @@ Hard boundaries cannot be crossed or reclassified without human review:
 - explicit worked-example starts;
 - top-level exercise starts and their complete subparts.
 
-Blank lines, images, formulas, boxed conclusions, and ordinary activity labels
-are soft evidence only. They do not justify a boundary when the teaching arc
-continues.
+Blank lines, images, formulas, boxed conclusions, and activity labels are soft
+boundary evidence, but activity labels are not disposable: each printed
+`观察`/`思考`/`尝试`/`交流`/`探究` marker must be preserved in a source slice
+and explicitly dispositioned by the LLM as scenario, exercise, or
+`merged-with-knowledge`.
 
 ## First pass
 
@@ -30,6 +34,9 @@ For every job, create one `round-1-decisions.json` entry:
 {
   "job_id": "job-0001-...",
   "packet_sha256": "<packet digest>",
+  "activity_dispositions": [
+    {"line": 104, "atom_id": "review-local-id", "disposition": "scenario", "rationale": "完整问题引发后续概念"}
+  ],
   "atoms": [
     {
       "atom_id": "review-local-id",
@@ -57,6 +64,31 @@ places an inline illustration on the same physical line, the materializer
 clips that illustrative clause from the derived card while leaving the parent
 knowledge atom unchanged.
 
+### Scenario scope before paragraph shape
+
+Choose a scenario role before choosing its boundaries:
+
+- `book-introduction`: preface, reader guide, or whole-book orientation;
+- `chapter-introduction`: one chapter-opening discourse;
+- `section-introduction`: one framing passage/question answered by several
+  sibling topics;
+- `knowledge-motivation`: one complete problem, example, experiment, or
+  real-world context aimed at one target knowledge topic;
+- `reflection-question`: a complete post-teaching inquiry.
+
+A book/chapter/section introduction is exactly one contiguous atom per owner
+and role. Keep all paragraphs, questions, figures and captions through the last
+introductory line before the next structural heading. Paragraph breaks, page
+breaks and image placement are never atom boundaries. Titles such as `续 2`
+or `part 2`, multiple same-role atoms under one owner, and image-only
+continuations enter the blocking review queue.
+
+A knowledge motivation keeps the complete context, figure/caption and final
+question. It may appear just before the printed heading of the topic it
+introduces. The retained heading divides model packets, but the organizer
+review may assign reviewed source runs on both sides of that heading to the
+same existing printed organizer.
+
 ### LLM-exclusive knowledge boundaries
 
 For `llm-category-aware-graph`, the LLM alone decides the number, titles, and
@@ -82,7 +114,8 @@ an audit for every round-one adjacency. A round-two decision must:
 - give a reason and confidence for each action;
 - return the complete final contiguous partition for the audit range;
 - preserve all hard boundaries;
-- merge short prompts with the knowledge they introduce;
+- preserve activity markers and either classify their complete prompt as a
+  scenario/exercise or explicitly merge them into the knowledge they introduce;
 - keep a short prior-knowledge question as a direct
   `scenario_role: section-introduction` when several sibling knowledge topics
   collectively answer it; place it before those topics and never absorb it
@@ -90,6 +123,10 @@ an audit for every round-one adjacency. A round-two decision must:
 - keep a short `knowledge-motivation` separately only when it explicitly
   bridges learned content to a distinct next topic and the relation pass can
   support `learned knowledge → bridge → new knowledge`;
+- merge paragraph-, continuation-, or image-level fragments of one
+  book/chapter/section introduction into one complete scoped atom;
+- verify every `knowledge-motivation` contains the complete problem/context,
+  figure or caption, and final question rather than only one fragment;
 - retain a complete post-knowledge comparison, synthesis, extension, or open
   inquiry as `category: scenario` with
   `scenario_role: reflection-question`; store it as a thought question rather
@@ -142,8 +179,9 @@ mapping also refuses a corpus whose required role audit is missing or stale.
 the complete partition, `knowledge_signatures`, `local_relations`, and
 `derived_card_candidates`. Knowledge uses complete teaching semantics;
 worked examples preserve stem-analysis-solution-conclusion; one top-level
-exercise preserves every subpart and resource; a short activity prompt merges
-into the knowledge it elicits. A post-knowledge reflection question is the
+exercise preserves every subpart and resource; a short activity prompt may
+merge into the knowledge it elicits only with an explicit disposition and the
+marker preserved. A post-knowledge reflection question is the
 exception: it remains an independent scenario-semantic atom, because it can
 connect learned knowledge to later or extra-text inquiry. Topic grouping does
 not erase atomic boundaries: independently reusable methods such as enumeration

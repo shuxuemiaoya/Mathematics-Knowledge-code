@@ -25,7 +25,11 @@ Canvas. JSON is always authoritative. Neo4j is an optional analysis copy.
    remains supported. Never rewrite source or change organizer ownership.
 2. Treat frozen atom ranges as immutable
    TextUnits. The current Agent is the default reviewer; emit exact source-line
-   evidence for every concept and atom-concept role.
+   evidence for every concept and atom-concept role. Whole-book
+   `book-introduction` atoms use the root organizer as a dedicated analysis
+   scope before chapter scopes. They remain in the authoritative JSON graph
+   and root organizer note, but chapter-only Canvas views intentionally hide
+   them instead of pretending that they belong to the first chapter.
 3. Run `validate-concepts`. Resolve every structural error. Send questionable
    labels, exercise-only concepts, aliases, or low confidence to review.
 4. Run `prepare-relations`. Review every supplied hard and ranked candidate as
@@ -141,3 +145,18 @@ python scripts/run_embeddings.py <concept-jobs.json> <round-1-concepts.json> \
 Report concept count, merges, candidate channels, acceptance rates, relation
 distribution, component sizes, unresolved exceptions, and representative
 before/after decisions. More edges are not inherently better.
+
+## Canvas review handoff
+
+After `apply` or the main Skill's materialization, Canvas is a presentation of
+the reviewed graph, not a second source of truth. The main Skill runs
+`book-to-wiki-graph/scripts/canvas_review.py prepare` and binds every Canvas to
+its sibling PNG plus the exact graph/index digests. The current Agent inspects
+each PNG and first checks that all approved knowledge relations, direction and
+four-side ports are represented, that no substantive knowledge node is an
+unexplained island, and that organizer groups do not hide a missing edge. Only
+then are spacing, crossings, density and visual style scored. A visual fix may
+adjust layout, but a missing or wrong relation must return to this Skill's
+relation/atomization audit; never add a decorative edge to make a PNG look
+connected. `canvas-review-final.json` must be passed with
+`validate_book_graph.py --canvas-review` before completion.

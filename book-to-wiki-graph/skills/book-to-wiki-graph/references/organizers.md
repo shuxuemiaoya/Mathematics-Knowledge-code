@@ -4,6 +4,9 @@ Run organizer review after TOC extraction and before semantic atomization.
 Its purpose is to distinguish real ownership structure from headings that only
 label a local teaching activity.
 
+Category-aware atomization and materialization require the sealed organizer
+review. A profile setting alone is not evidence that ownership was reviewed.
+
 ## Decision test
 
 Keep or synthesize an organizer only when it owns more than one reusable unit
@@ -14,8 +17,9 @@ Demote a heading when it merely says how the reader should engage with the
 immediately following content: observe, think, try, discuss, communicate,
 operate, investigate, reflect, and similar labels. Keep the heading line inside
 the following atom's audited source range so ownership and adjacency remain
-traceable. The Markdown renderer omits that presentation-only heading line from
-the final heading-free atom note while retaining the prompt and teaching body.
+traceable. The Markdown renderer removes only the Markdown heading syntax: the
+printed activity marker remains as a plain source line, and the LLM records
+whether it is a scenario, exercise, or explicitly merged scaffold.
 
 Under each TOC section, use this canonical direct-child flow in source order:
 
@@ -36,6 +40,19 @@ them below one presentation heading. If each concept has its own definition,
 dependency role, and reuse value, synthesize separate topic organizers. For
 example, a universal set is a prerequisite context for complement and therefore
 remains separate from complement.
+
+Never let a synthesized topic subtree continue beyond the next retained
+printed sibling heading. Compare both the earliest and latest source position
+of every sibling subtree. A printed instructional organizer such as `5.1.1
+任意角` must own instructional prose; if all of its primary descendants are
+exercises, ownership review has failed even when the exercise links resolve.
+
+An existing printed organizer may appear in more than one `content_runs`
+entry when its motivating question is immediately before its own retained
+heading and its definition/exposition follows that heading. Each run remains
+contiguous and no run crosses the heading. A synthesized organizer must still
+have exactly one run; this prevents it from reaching through a printed section
+boundary and stealing later prose.
 
 ## Review artifact
 

@@ -24,7 +24,8 @@ ATOM_SUBCATEGORY_PATHS = {"reflection-question": "原子层/思考题"}
 DEFAULT_ATOMIZATION = {
     "mode": "llm-category-aware-graph",
     "knowledge_granularity": "complete-teaching-unit",
-    "scenario_policy": "role-aware-bridges-and-reflections",
+    "scenario_policy": "preserve-and-role-classify-activities",
+    "activity_prompt_policy": "preserve-marker-and-explicit-disposition",
     "teaching_role_audit": "integrated",
     "relation_feedback_cycles": 2,
     "confidence_threshold": 0.90,
@@ -33,6 +34,8 @@ DEFAULT_ATOMIZATION = {
     "knowledge_boundary_authority": "llm-exclusive",
     "provisional_atom_policy": "coverage-context-only",
     "parallel_definition_policy": "split-when-independently-reusable",
+    "scoped_introduction_policy": "one-source-complete-atom-per-owner",
+    "knowledge_motivation_policy": "complete-problem-or-context",
 }
 DEFAULT_ORGANIZATION = {
     "mode": "toc-plus-reviewed-topics",
@@ -41,10 +44,10 @@ DEFAULT_ORGANIZATION = {
 }
 DEFAULT_MARKDOWN_RENDERING = {
     "atom_heading_policy": "omit",
-    "atom_filename_policy": "sequence-category-code",
+    "atom_filename_policy": "per-folder-sequence-category-code",
     "leaf_organizer_policy": "flat-note",
     "organizer_frontmatter_policy": "required",
-    "organizer_self_heading_policy": "nested-organizer-note",
+    "organizer_self_heading_policy": "omit",
     "organizer_child_heading": "relative-depth",
     "organizer_filename_policy": "clear-title",
     "concept_filename_policy": "preferred-label-collision-safe",
@@ -77,6 +80,21 @@ DEFAULT_CANVAS = {
     "concept_nodes": "hidden",
     "formula_nodes": "hidden",
     "isolation_policy": "semantic-or-labelled-membership",
+    "png_preview": "required-every-canvas",
+    "png_width": 2400,
+    "review": {
+        "mode": "llm-png-two-pass",
+        "scope": "every-canvas",
+        "required_before_completion": True,
+        "max_optimization_cycles": 2,
+        "priority": [
+            "knowledge-logic-completeness",
+            "relation-correctness",
+            "direction-and-ports",
+            "organization-clarity",
+            "aesthetics",
+        ],
+    },
 }
 
 

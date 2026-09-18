@@ -241,17 +241,25 @@ def update_stage(
             None,
         )
         if terminal_attempt is not None and not terminal_attempt.get("manifest"):
-            attempt_id = str(terminal_attempt["attempt_id"])
+            run_id = str(terminal_attempt.get("run_id", "legacy-run"))
+            counter = int(record.get("attempts", 1))
+            attempt_id = str(terminal_attempt.get("attempt_id") or f"{run_id}:{stage}:{counter:03d}")
             manifest_path = (
                 state_path.resolve().parent
                 / "run-history"
-                / str(terminal_attempt.get("run_id", "legacy-run"))
+                / run_id
                 / f"{attempt_id.replace(':', '__')}.json"
             )
-            if manifest_path.exists():
-                raise ConfigurationError(
-                    f"Immutable stage-attempt manifest already exists: {manifest_path}"
+            while manifest_path.exists():
+                counter += 1
+                attempt_id = f"{run_id}:{stage}:{counter:03d}"
+                manifest_path = (
+                    state_path.resolve().parent
+                    / "run-history"
+                    / run_id
+                    / f"{attempt_id.replace(':', '__')}.json"
                 )
+            terminal_attempt["attempt_id"] = attempt_id
             write_json_atomic(
                 manifest_path,
                 {

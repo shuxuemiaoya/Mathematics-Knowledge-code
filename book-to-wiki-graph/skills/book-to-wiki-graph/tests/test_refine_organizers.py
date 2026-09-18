@@ -87,6 +87,12 @@ class RefineOrganizerTests(unittest.TestCase):
             )
             self.assertNotIn("## Observe and think", rendered)
             self.assertIn("What do you notice?", rendered)
+            chinese_activity = materialize_book.render_atom_source(
+                ["## 思考", "上面的例子说明了一个问题。", "## 集合"],
+                [1, 2],
+            )
+            self.assertIn("思考", chinese_activity)
+            self.assertNotIn("## 思考", chinese_activity)
 
     def test_stale_organizer_review_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -97,6 +103,33 @@ class RefineOrganizerTests(unittest.TestCase):
             review.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
             with self.assertRaises(refine_organizers.OrganizerReviewError):
                 refine_organizers.refine_manifest(manifest, review)
+
+    def test_existing_printed_organizer_may_own_runs_on_both_sides_of_activity_heading(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            manifest, review = self.make_fixture(Path(temporary))
+            payload = json.loads(review.read_text(encoding="utf-8"))
+            payload["content_runs"] = [
+                {
+                    "owner_key": "section", "create_organizer": False,
+                    "source_range": [4, 4],
+                    "reason": "The section owns its introductory prompt before the retained teaching body.",
+                },
+                {
+                    "owner_key": "section", "create_organizer": False,
+                    "source_range": [5, 7],
+                    "reason": "The same printed section owns the activity and resulting reusable knowledge.",
+                },
+            ]
+            payload = semantic.seal_artifact({key: value for key, value in payload.items() if key != "artifact_sha256"})
+            review.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            refined, report = refine_organizers.refine_manifest(manifest, review)
+            nodes = {node["key"]: node for node in refined["nodes"]}
+            section_atoms = [
+                nodes[key] for key in nodes["section"]["children"]
+                if nodes[key]["layer"] == "atom"
+            ]
+            self.assertEqual([atom["source_range"] for atom in section_atoms], [[4, 4], [5, 7]])
+            self.assertEqual(report["counts"]["content_runs"], 2)
 
 
 if __name__ == "__main__":
