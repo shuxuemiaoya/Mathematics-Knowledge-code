@@ -35,21 +35,23 @@ class CanvasReviewTests(unittest.TestCase):
             self.assertEqual(len(jobs["jobs"]), 1)
             decision = {
                 "job_id": jobs["jobs"][0]["job_id"],
-                "png_sha256": jobs["jobs"][0]["png_sha256"],
-                "canvas_sha256": jobs["jobs"][0]["canvas_sha256"],
                 "image_observations": ["PNG 已检查，节点边界清晰"],
                 "logic": {"score": 1.0, "missing_relations": [], "wrong_relations": [], "orphan_nodes": [], "port_violations": []},
                 "visual": {"score": 0.9, "visual_issues": []},
                 "verdict": "passed", "confidence": 0.98,
                 "actions": [{"priority": "logic", "action": "no-change", "evidence": "无逻辑修改"}],
             }
-            decisions = canvas_review.seal({
-                "schema_version": 1, "kind": "canvas-review-decisions",
-                "canvas_review_jobs_sha256": jobs["artifact_sha256"],
-                "reviewer": {"type": "codex-agent", "model": "test"}, "decisions": [decision],
-            })
+            draft_path = root / "canvas-review-draft.json"
+            draft_path.write_text(json.dumps({
+                "reviewer": {"type": "codex-agent", "model": "test"},
+                "decisions": [decision],
+            }, ensure_ascii=False), encoding="utf-8")
             decisions_path = root / "canvas-review-decisions.json"
-            decisions_path.write_text(json.dumps(decisions, ensure_ascii=False), encoding="utf-8")
+            decisions = canvas_review.seal_decisions(jobs_path, draft_path, decisions_path)
+            self.assertEqual(
+                decisions["decisions"][0]["png_sha256"],
+                jobs["jobs"][0]["png_sha256"],
+            )
             report = canvas_review.validate(jobs_path, decisions_path)
             self.assertEqual(report["status"], "passed", report)
             final = canvas_review.finalize(jobs_path, decisions_path, root / "review")

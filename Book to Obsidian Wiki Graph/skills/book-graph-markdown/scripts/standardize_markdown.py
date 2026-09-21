@@ -13,6 +13,11 @@ import tempfile
 from collections import Counter
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
+from book_graph_integrity import content_tokens, corpus_snapshot
+from book_graph_scope import managed_notes
+from book_graph_transaction import guarded_write_batch
+
 
 LESSON_FLOW_SCRIPT_DIRECTORY = (
     Path(__file__).resolve().parents[2]
@@ -442,10 +447,8 @@ def standardize_text(
                     converted_headings += 1
                     index = end
                     continue
-                # A functional label stranded at an atomic split boundary has
-                # no source body of its own.  It is presentation scaffolding,
-                # not a reusable heading or an empty callout.
-                removed_artifact_headings += 1
+                # Keep the source label without constructing an empty callout.
+                output.append(title)
                 index += 1
                 continue
             if title.rstrip().endswith(("?", "？")):
@@ -555,7 +558,8 @@ def standardize_text(
         result
     )
     result, detached_owned_child_links = detach_owned_child_links(result)
-    result, repaired_ocr_math_fragments = repair_spaced_digits_in_math(result)
+    # Mathematical repairs require exact, source-reviewed decisions. Formatting
+    # must not silently guess whether separated digits should be concatenated.
     return result, {
         "converted_headings": converted_headings,
         "converted_examples": converted_examples,
@@ -651,7 +655,7 @@ def invariants(before: str, after: str) -> dict[str, bool]:
         "images": destinations(IMAGE_RE, before) == destinations(IMAGE_RE, after),
         "formula_numbering": Counter(FORMULA_NUMBER_RE.findall(before))
         == Counter(FORMULA_NUMBER_RE.findall(after)),
-        "source_order": True,
+        "source_order": content_tokens(before) == content_tokens(after),
         "quoted_body_callout_continuity": valid_quoted_callouts(after),
     }
 
@@ -686,6 +690,8 @@ def run(
     report_path: Path,
     lesson_flow_manifest_path: Path | None = None,
 ) -> dict:
+    profile_path = profile_path.resolve()
+    guards = {profile_path: hashlib.sha256(profile_path.read_bytes()).hexdigest()}
     profile = json.loads(profile_path.read_text(encoding="utf-8"))
     decomposition = profile.get("decomposition", {})
     require_lesson_flow = bool(
@@ -713,8 +719,11 @@ def run(
             ).resolve(),
             profile_path=profile_path.resolve(),
         )
-    book_root = Path(profile["paths"]["book_root"])
-    files = sorted(book_root.rglob("*.md"))
+    book_root = Path(profile["paths"]["book_root"]).resolve()
+    if report_path.resolve().is_relative_to(book_root):
+        raise ValueError("Keep the Markdown report outside the managed corpus")
+    files, evidence = managed_notes(profile, profile_path)
+    guards.update(evidence)
     before_items: list[tuple[str, str]] = []
     after_items: list[tuple[str, str]] = []
     reports: list[dict] = []
@@ -730,6 +739,7 @@ def run(
     }
     pending: list[tuple[Path, str]] = []
     for path in files:
+        guards[path] = hashlib.sha256(path.read_bytes()).hexdigest()
         relative = path.relative_to(book_root).as_posix()
         before = path.read_text(encoding="utf-8")
         after, changes = standardize_text(
@@ -758,8 +768,7 @@ def run(
         raise ValueError(
             "protected invariants failed: " + ", ".join(invariant_failures[:20])
         )
-    for path, after in pending:
-        atomic_write(path, after)
+    guarded_write_batch(pending, guards, writer=atomic_write)
     report = {
         "schema_version": 1,
         "stage": "markdown-standardization",
@@ -768,6 +777,8 @@ def run(
         "source_sha256": profile["source"]["sha256"],
         "input_corpus_sha256": corpus_sha256(before_items),
         "output_corpus_sha256": corpus_sha256(after_items),
+        "corpus_snapshot": corpus_snapshot(book_root),
+        "evidence_files": {str(path): digest for path, digest in evidence.items()},
         "protected_invariants": combined,
         "lesson_flow_manifest": (
             str(lesson_flow_manifest_path.resolve())

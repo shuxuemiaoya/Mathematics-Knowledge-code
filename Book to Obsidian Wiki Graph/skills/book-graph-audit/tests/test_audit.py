@@ -88,12 +88,17 @@ class GraphAuditTests(unittest.TestCase):
                     "schema_version": 1,
                     "profile": str(profile_path.resolve()),
                     "source_sha256": source_sha256,
+                    "integrity": {"algorithm": audit_tool.ALGORITHM,
+                        "source_markdown": {"path": str(source), "sha256": source_sha256, "line_count": 1},
+                        "expected_keys": ["block-1"], "excluded_lines": []},
                     "units": [
                         {
                             "source_key": "block-1",
                             "source_order": 1,
                             "status": "assigned",
                             "target": "主题/集合.md",
+                            "owned_ranges": [[1, 1]],
+                            "content_sha256": audit_tool.content_sha256((book / "主题/集合.md").read_text(encoding="utf-8")),
                         }
                     ],
                 },
@@ -112,6 +117,7 @@ class GraphAuditTests(unittest.TestCase):
                         {
                             "name": "集合",
                             "target": "术语/集合.md",
+                            "content_sha256": audit_tool.content_sha256((book / "术语/集合.md").read_text(encoding="utf-8")),
                             "linked_from": ["主题/集合.md"],
                         }
                     ],
@@ -341,6 +347,7 @@ class GraphAuditTests(unittest.TestCase):
                 "# 集合\n\n#### 思考\n\n问题。\n",
                 encoding="utf-8",
             )
+            self.freeze_fixture_content(book, coverage)
             report = audit_tool.audit_book(
                 book.resolve(),
                 vault.resolve(),
@@ -361,6 +368,7 @@ class GraphAuditTests(unittest.TestCase):
                 "把研究对象组成的总体叫做[集合](../术语/集合.md)。\n",
                 encoding="utf-8",
             )
+            self.freeze_fixture_content(book, coverage)
             report = audit_tool.audit_book(
                 book.resolve(),
                 vault.resolve(),
@@ -372,6 +380,13 @@ class GraphAuditTests(unittest.TestCase):
             )
             self.assertEqual(report["status"], "passed", report["errors"])
             self.assertEqual(report["counts"]["callout_body_violations"], 0)
+
+    def freeze_fixture_content(self, book: Path, coverage: Path) -> None:
+        """Set up a different source fixture before auditing presentation rules."""
+        payload = json.loads(coverage.read_text(encoding="utf-8"))
+        for unit in payload["units"]:
+            unit["content_sha256"] = audit_tool.content_sha256((book / unit["target"]).read_text(encoding="utf-8"))
+        coverage.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
     def test_quoted_body_callout_rejects_unquoted_lesson_body(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

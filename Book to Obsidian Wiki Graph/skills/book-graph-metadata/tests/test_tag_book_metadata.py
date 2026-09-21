@@ -147,6 +147,10 @@ class TestTagBookMetadata(unittest.TestCase):
             }
             profile_path = staging_root / "book-profile.json"
             profile_path.write_text(json.dumps(profile_payload, ensure_ascii=False), encoding="utf-8")
+            identity = {"profile": str(profile_path.resolve()), "source_sha256": "a" * 64}
+            target = note_file.relative_to(book_root).as_posix()
+            (staging_root / "coverage-manifest.json").write_text(json.dumps({**identity, "units": []}), encoding="utf-8")
+            (staging_root / "concept-manifest.json").write_text(json.dumps({**identity, "concepts": [{"target": target}]}), encoding="utf-8")
 
             report_path = staging_root / "metadata-report.json"
             report = process_book_metadata(book_root, profile_path, report_path)

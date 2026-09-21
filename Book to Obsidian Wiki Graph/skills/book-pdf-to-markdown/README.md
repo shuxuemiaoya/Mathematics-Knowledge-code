@@ -60,3 +60,15 @@ Do not expose an OCR-off option. Split inputs over 200 pages or 200 MB, convert 
 - Emit compact JSON on stdout and progress on stderr.
 
 Handoff only when status is `completed`, OCR is confirmed forced, page coverage is complete, the raw Markdown is nonempty, all reported assets exist, every local image link resolves, and the PDF still matches the profile hash.
+
+Page coverage is checked against zero-based `page_idx` values returned in
+MinerU `*_content_list.json` / `*_middle.json` (`pdf_info`) inventories, not
+against uploaded part ranges alone. Missing output indices or missing page
+inventories block publication. A blank page must be represented explicitly in
+the returned page inventory. This is a structural coverage check; formula and
+text recognition accuracy still requires source review.
+
+The converter persists `<output-stem>.conversion-report.json` beside the raw
+Markdown. It binds the Markdown hash, asset snapshot, part page evidence and
+source/profile identity. Supply it to runtime completion as
+`--artifact pdf-conversion-report=<path>` alongside the Markdown `file`.

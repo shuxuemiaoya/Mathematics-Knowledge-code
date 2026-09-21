@@ -15,7 +15,8 @@ Require a valid profile, matching coverage manifest, and completed TOC split. Re
 C:\Users\Oven\OneDrive\桌面\新建文件夹 (3)\概念提取与Markdown排版美化.md
 ```
 
-If the profile disables concepts, record the stage as skipped.
+If the profile has no enabled concept category, skip extraction and run the
+concepts audit; complete the runtime stage with that passed audit only.
 
 ## Extract
 
@@ -54,6 +55,23 @@ only the reviewed defining occurrence, and writes the manifest. Do not use the
 script to decide which terms qualify as concepts. If a defining term is inside
 LaTeX, retain it in the source and reject the candidate unless another complete,
 linkable defining occurrence exists.
+
+Each approved candidate must include `source_note_sha256`; the planner records
+it before review. Changed notes require a new review. Application prepares all
+definitions, source links and the manifest before writing, and retains an
+identity-bound `concept-publication.json` in staging for interrupted retries.
+Do not delete that journal or infer permission to overwrite existing notes.
+An existing concept can be reused only with its reviewed
+`existing_target_sha256` and identical normalized content; other existing
+concepts require explicit reconciliation before applying candidates.
+
+Both `vault-root` and `relative` note links are supported. For several concepts
+defined in the same paragraph, compute all replacements against the original
+source and apply them from the end backwards; one inserted link must not break
+another candidate's reviewed anchor. Overlapping term spans require review.
+Publication guards include the reviewed source files, handoffs and any reused
+concept files. Changes after planning block the commit instead of being adopted
+as a new overwrite baseline.
 
 Use the smallest source-derived range that contains the complete formal
 definition. A reviewed range must not cross a functional callout, H4-H6

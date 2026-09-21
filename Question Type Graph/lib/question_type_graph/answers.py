@@ -571,30 +571,33 @@ def plan_matches(profile_path: Path, adapter_path: Path, content_manifest_path: 
 
 
 def extract_choice_answer(body: str) -> str | None:
-    """Extract a publisher-stated choice answer without guessing from prose.
+    """Extract a publisher-stated choice answer without guessing from prose."""
+    # 1. Direct authoritative answer header (e.g. 【答案】 C, 答案: B, 【正确答案】 AD, 【答案】 $C$)
+    m_ans = re.search(r"(?:【(?:正确答案|答案)】|答案\s*[:：]?)\s*\$?([A-F]{1,4})\$?(?:\b|[。\s\n$])", body)
+    if m_ans:
+        return m_ans.group(1).upper()
 
-    OCR sometimes drops the leading ``【N】D`` record while preserving a
-    conclusive phrase such as ``故选:D`` at the end of the explanation.  The
-    conclusion is authoritative evidence and should still render as a
-    separate answer field.  Only explicit answer/conclusion phrases are
-    accepted; isolated capital letters in mathematical prose are ignored.
-    """
+    # 2. Numbered option header on line (e.g. 1. D, 1. 【答案】 C)
     lines = body.strip().splitlines()
-    if lines:
-        first_line = lines[0].strip()
+    for l in lines[:3]:
         header = re.match(
-            r"^(?:#{1,6}\s*)?【?\d+】?[\.、\s]*([A-F]{1,4})\b\s*(?:【?(?:解析|详解)】?)?\s*",
-            first_line,
+            r"^(?:#{1,6}\s*)?(?:第\s*)?【?\d+】?(?:题\s*[:：]?)?[\.、\s]*\$?([A-F]{1,4})\$?(?:\b|[。\s$])\s*(?:【?(?:解析|详解)】?)?\s*",
+            l.strip(),
         )
         if header:
             return header.group(1).upper()
 
-    m_conc = re.search(r"(?:故选|选|因此选|故选：|选：)\s*([A-D]+)\b|(?:故|则)?\s*([A-D])\s*项正确", body)
+    # 3. Conclusive choice phrase (故选 C, 选 D, 故选: $A$, B项正确)
+    m_conc = re.search(
+        r"(?:故选|因此选|故选[：:]|选[：:]|选(?!项))\s*[:：]?\s*\$?([A-D]+)\$?(?:\b|[。\s\n$])|(?:故|则)?\s*\$?([A-D])\$?\s*项正确",
+        body,
+    )
     if m_conc:
         return (m_conc.group(1) or m_conc.group(2)).upper()
 
+    # 4. Trailing conclusion pattern
     conclusion_pattern = re.compile(
-        r"(?:故\s*选|应\s*选|选|选项(?:为|是|有)?|答案(?:为|是)?|也就是|即)\s*[：:]?\s*([A-F]+)\b|\b([A-F])\s*选项\b",
+        r"(?:故\s*选|应\s*选|选(?!项)|选项(?:为|是|有)?|答案(?:为|是)?|也就是|即)\s*[：:]?\s*\$?([A-F]+)\$?(?:\b|[。\s$])|\b([A-F])\s*选项\b",
         re.IGNORECASE,
     )
     matches = list(conclusion_pattern.finditer(body))
@@ -705,19 +708,22 @@ def format_answer_callout_with_metadata(
         confidence = "HIGH"
 
     # Check leading 【正确答案】 or 【答案】
-    if not answer_value and re.match(r"^\s*(?:#{1,6}\s*)?【(?:正确答案|答案)】", source_body):
+    if not answer_value and re.match(r"^\s*(?:#{1,6}\s*)?(?:[1-9]\d?[.．、]\s*)?【(?:正确答案|答案)】", source_body):
         m_head = re.match(
-            r"^\s*(?:#{1,6}\s*)?【(?:正确答案|答案)】\s*(.*?)(?=(?:\n\s*)*【(?:解析|详解|分析|思路导航|解答|解法|证法|证明|提示)】|(?:\n\s*)*(?<!见)(?:解析|详解)\s*[：:]|【(?:更多习题信息|智慧中小学)|$)",
+            r"^\s*(?:#{1,6}\s*)?(?:[1-9]\d?[.．、]\s*)?【(?:正确答案|答案)】\s*(.*?)(?=(?:\n\s*)*【(?:解析|详解|分析|思路导航|解答|解法|证法|证明|提示)】|(?:\n\s*)*(?<!见)(?:解析|详解)\s*[：:]|【(?:更多习题信息|智慧中小学)|$)",
             source_body,
             flags=re.DOTALL,
         )
         if m_head:
             val = m_head.group(1).strip()
             val = re.split(r"【", val)[0].strip()
-            if val:
+            if val and "\n" not in val and len(val) <= 80:
                 answer_value = val
                 source_body = source_body[m_head.end():].strip()
                 source_body = re.sub(r"^\s*【(?:解析|详解|解答|解法)】\s*(?=(?:#{1,6}\s*)?【(?:分析|思路导航)】)", "", source_body).strip()
+            elif re.match(r"^\$?[A-F]{1,4}\$?$", val.strip()):
+                answer_value = re.sub(r"[\$]", "", val.strip())
+                source_body = source_body[m_head.end():].strip()
 
     # 2. Split out 分析 if present
     analysis_text = None
@@ -749,7 +755,10 @@ def format_answer_callout_with_metadata(
 
     # Check 故选: A / 选 C / 项正确 (authoritative conclusion wins over damaged header)
     if not answer_value:
-        m_choice = re.search(r"(?:故选|选|因此选|故选：|选：)\s*([A-D]+)\b|(?:故|则)?\s*([A-D])\s*项正确", resolution_body or source_body)
+        m_choice = re.search(
+            r"(?:故选|因此选|故选[：:]|选[：:]|选(?!项))\s*[:：]?\s*\$?([A-D]+)\$?(?:\b|[。\s\n$])|(?:故|则)?\s*\$?([A-D])\$?\s*项正确",
+            resolution_body or source_body,
+        )
         if m_choice:
             answer_value = (m_choice.group(1) or m_choice.group(2)).strip().upper()
             confidence = "HIGH"
@@ -862,7 +871,11 @@ def format_answer_callout_with_metadata(
 
     # Check 故选 / 应选
     if not answer_value:
-        m_opt = re.search(r"(?:故\s*选|应\s*选|选|选项(?:为|是|有)?|答案(?:为|是)?|也就是|即)\s*[：:]?\s*([A-F]+)\b|\b([A-F])\s*选项\b", resolution_body, re.IGNORECASE)
+        m_opt = re.search(
+            r"(?:故\s*选|应\s*选|选|选项(?:为|是|有)?|答案(?:为|是)?|也就是|即)\s*[：:]?\s*\$?([A-F]+)\$?(?:\b|[。\s$])|\b([A-F])\s*选项\b",
+            resolution_body,
+            re.IGNORECASE,
+        )
         if m_opt:
             answer_value = (m_opt.group(1) or m_opt.group(2)).upper()
             confidence = "MEDIUM"

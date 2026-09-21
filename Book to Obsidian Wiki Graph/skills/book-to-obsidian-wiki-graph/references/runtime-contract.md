@@ -119,11 +119,30 @@ Use `plan` for the next stage and `resume` after interruption. Both re-hash
 recorded artifacts. A changed output invalidates that stage and all downstream
 stages, without discarding earlier valid work.
 
+`begin` also validates completed handoffs and inherits the preceding stage's
+outputs as inputs. `complete` rejects input files changed during execution.
+`apply` records the component's host and process ID: recovery refuses a live
+process or an owner on another host. An interrupted `running` stage without a
+live execution lease becomes `failed` and can begin again. Prefer `apply` for
+process-aware recovery; `begin` alone cannot track a separately launched process.
+Every state-changing begin, complete or resume checks all execution leases
+before proceeding, including leases on failed stages and before upstream
+invalidation. On Windows the liveness check queries a process handle instead of
+sending `os.kill(pid, 0)`; that call is not a safe probe on Windows.
+Retry the same component with the same staging/profile/inputs. Split and concept
+publication journals roll forward only when every target matches the recorded
+before or after digest; any unrelated edit blocks recovery.
+Transaction guards retain the original read hashes, including reused files that
+are not in the write set. The publisher does not resnapshot a late edit as an
+authorized overwrite. An OS-backed journal lock rejects concurrent publishers,
+and each target is checked again immediately before its write.
+
 ## Strict Handoffs
 
 `validate <kind> <path>` supports:
 
 - `book-profile`, `toc-manifest`, `toc-format-report`;
+- `pdf-conversion-report`, `metadata-report`;
 - `split-manifest`, `lesson-flow-manifest`, `coverage-manifest`,
   `concept-manifest`;
 - `markdown-report`, `graph-manifest`, `audit-report`,
@@ -156,13 +175,15 @@ Stage completion also requires the artifact set owned by that stage:
 
 | Stage | Required output kinds |
 | --- | --- |
-| PDF conversion / Markdown registration | `file` |
+| PDF conversion | `file`, `pdf-conversion-report` (declare as `--artifact`; converter status is `completed`) |
+| Markdown registration | `file` matching the frozen source digest |
 | TOC formatting | `file`, `toc-manifest`, `toc-format-report` |
 | TOC splitting | `directory`, `split-manifest`, `lesson-flow-manifest` when enabled, `coverage-manifest`, split `audit-report` |
 | Concepts | `concept-manifest` when enabled, concepts `audit-report` |
 | Markdown standardization | `markdown-report`, formatting `audit-report` |
 | Pre-canvas audit | pre-canvas `audit-report` |
 | Canvas | `file`, `graph-manifest`, plus `canvas-style-report` when `canvas.style_reference` is configured |
+| Metadata tagging | `metadata-report` |
 | Final audit | final `audit-report`, final corpus `tree`, plus `reference-parity-report` when the profile freezes a reference |
 
 Passing a failed report as a generic output does not bypass the gate.
@@ -175,6 +196,14 @@ file output. `style_review_required` blocks Canvas-stage completion.
 `directory` verifies that a shared corpus exists but permits expected downstream
 edits. `tree` records a complete directory digest and is reserved for the final
 corpus snapshot so resume detects post-completion drift.
+
+TOC reports bind the declared candidate path/hash, the actual TOC manifest hash,
+and a recorded Markdown input. Audit, Markdown and metadata reports contain a
+`corpus_snapshot` with the absolute root, sorted per-file hashes and aggregate
+hash. `complete` recomputes the snapshot. Audits additionally record their input
+manifest and reviewed-repair evidence hashes. Keep reports outside the corpus,
+in staging. A report generated before a later edit cannot complete the stage.
+See `../../../WORKFLOW-INTEGRITY.md` for content evidence and legacy artifacts.
 
 ## Confidence Review
 
@@ -236,7 +265,7 @@ Run `book-graph-audit` with:
 - `--stage concepts` after concept extraction;
 - `--stage formatting` after Markdown standardization;
 - `--stage pre-canvas` before canvas planning;
-- `--stage final` after the optional canvas.
+- `--stage final` after metadata tagging and the optional canvas.
 
 The early gates permit transformations that belong to later stages but still
 enforce all invariants already due. The final gate requires a canvas when the

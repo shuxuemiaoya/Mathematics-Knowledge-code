@@ -10,6 +10,10 @@ Batch inject and validate YAML Frontmatter File Properties (Metadata) into Obsid
 ## Inputs
 
 Require a valid `book-profile.json` in staging and an existing book note tree under `book_root`.
+Also require `coverage-manifest.json` and, when concepts are enabled,
+`concept-manifest.json` in staging. Their profile/source identities must match.
+The actual Markdown inventory must equal their combined targets before tagging;
+unmanaged existing notes block the batch rather than receiving inferred metadata.
 
 ## Metadata Injection & Tagging Rules
 
@@ -79,11 +83,15 @@ python scripts\tag_book_metadata.py "<book_root>" `
   --output "<staging>\metadata-report.json"
 ```
 
-The script updates all `.md` files under `<book_root>` atomically and outputs `metadata-report.json`.
+The script validates the entire owned batch, checks its original input hashes,
+then replaces individual files atomically and outputs `metadata-report.json`
+outside the book tree. A detected edit during preparation blocks publication.
 
 ## Gate
 
 - All Markdown notes must contain valid YAML frontmatter delimiters (`---`).
 - All 8 required metadata fields must be present and hold valid values.
+- For general books, only source and node type are required; textbook grade and
+  educational estimates are not synthesized.
 - Every `目录` node must also carry `组织类型`; do not infer a source atom's
   type solely from its containing directory when reviewed architecture exists.

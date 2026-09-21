@@ -375,6 +375,8 @@ def main(argv: list[str] | None = None) -> int:
             "stage": "book-toc-formatting",
             "status": "passed",
             "profile": manifest.get("profile"),
+            "toc_manifest": str(manifest_path),
+            "toc_manifest_sha256": sha256_file(manifest_path),
             "source_sha256": manifest.get("source_sha256"),
             "input_markdown": str(source),
             "input_markdown_sha256": actual_input_hash,

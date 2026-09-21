@@ -13,6 +13,7 @@
 | Formatting audit | `book-graph-audit --stage formatting` | standardized corpus | audit report | Markdown rules, links, assets, callout continuity, and callout semantic ownership pass |
 | Pre-audit | `book-graph-audit --stage pre-canvas` | complete note corpus | audit report | `status: passed` |
 | Canvas | `book-graph-canvas` | passed notes, graph plan, approved same-book reference review, and frozen same-series style reference when configured | `.canvas`, graph manifest, and `canvas-style-report.json` when configured | compiler passes; retained same-book topology is preserved; same-series visual metrics pass |
+| Metadata | `book-graph-metadata` | current notes and profile | YAML frontmatter, metadata report | typed YAML round trip; corpus snapshot; textbook/general-book validation |
 | Final audit | `book-graph-audit --stage final` | final corpus | final report | `status: passed` |
 
 TOC formatting and TOC splitting are one uninterrupted transition: a passed formatting report triggers splitting immediately.

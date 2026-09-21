@@ -9,12 +9,16 @@ import hashlib
 import json
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
+from book_graph_integrity import corpus_snapshot
 
 
 for _stream in (sys.stdout, sys.stderr):
@@ -181,6 +185,9 @@ def require_fields(
 
 
 ARTIFACT_FIELDS: dict[str, dict[str, type | tuple[type, ...]]] = {
+    "pdf-conversion-report": {"schema_version": int, "profile": str, "source_sha256": str,
+        "status": str, "target_md": str, "target_md_sha256": str, "page_count": int,
+        "parts": list, "validation": dict},
     "file": {},
     "directory": {},
     "tree": {},
@@ -343,6 +350,7 @@ ARTIFACT_FIELDS: dict[str, dict[str, type | tuple[type, ...]]] = {
 
 
 PROFILE_BOUND_KINDS = {
+    "pdf-conversion-report",
     "toc-manifest",
     "toc-format-report",
     "split-manifest",
@@ -1307,12 +1315,71 @@ def validate_records(
     return validated
 
 
+def windows_process_is_alive(pid: int) -> bool:
+    # os.kill(pid, 0) is not a liveness probe on Windows: it may terminate it.
+    import ctypes
+    from ctypes import wintypes
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    kernel.OpenProcess.restype = wintypes.HANDLE
+    kernel.WaitForSingleObject.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+    kernel.WaitForSingleObject.restype = wintypes.DWORD
+    kernel.CloseHandle.argtypes = (wintypes.HANDLE,)
+    kernel.CloseHandle.restype = wintypes.BOOL
+    handle = kernel.OpenProcess(0x00100000, False, pid)  # SYNCHRONIZE only
+    if not handle:
+        error = ctypes.get_last_error()
+        if error == 87:  # ERROR_INVALID_PARAMETER: PID no longer exists
+            return False
+        raise ctypes.WinError(error)
+    try:
+        result = kernel.WaitForSingleObject(handle, 0)
+        if result == 0:
+            return False
+        if result == 258:  # WAIT_TIMEOUT
+            return True
+        raise ctypes.WinError(ctypes.get_last_error())
+    finally:
+        kernel.CloseHandle(handle)
+
+
+def process_is_alive(pid: int) -> bool:
+    if sys.platform == "win32":
+        return windows_process_is_alive(pid)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
+
+
+def ensure_no_live_execution(state: dict[str, Any]) -> None:
+    # Check every lease before invalidating anything: a missing upstream artifact
+    # must not erase the identity of a worker that is still writing downstream.
+    for stage in state["stages"]:
+        lease = stage.get("execution")
+        if not lease:
+            continue
+        if lease.get("host") != socket.gethostname():
+            raise PipelineError("Cannot recover a stage owned by another host")
+        pid = lease.get("pid")
+        if type(pid) is not int or pid <= 0:
+            raise PipelineError("Invalid component execution lease")
+        try:
+            alive = process_is_alive(pid)
+        except OSError as exc:
+            raise PipelineError("Cannot establish whether the stage component is still running") from exc
+        if alive:
+            raise PipelineError("Stage component is still running; state change refused")
+
+
 def begin_stage(
     state: dict[str, Any],
     stage_name: str,
     inputs: list[tuple[str, Path]],
 ) -> dict[str, Any]:
     profile_path, _ = ensure_state_identity(state)
+    ensure_no_live_execution(state)
     index = stage_index(state, stage_name)
     stage = state["stages"][index]
     expected = first_incomplete_stage(state)
@@ -1324,6 +1391,12 @@ def begin_stage(
         )
     if stage["status"] not in {"pending", "failed"}:
         raise PipelineError(f"stage cannot begin from status {stage['status']}")
+    validate_resume(state)
+    if first_incomplete_stage(state)["name"] != stage_name:
+        raise PipelineError("Upstream artifacts changed; resume from the invalidated stage")
+    inherited = [(record["kind"], Path(record["path"]))
+                 for record in state["stages"][index - 1].get("outputs", [])] if index else []
+    inputs = list(dict.fromkeys([*inherited, *inputs]))
     stage["inputs"] = validate_records(
         inputs,
         profile_path=profile_path,
@@ -1335,6 +1408,7 @@ def begin_stage(
     stage["completed_at"] = None
     stage["duration_seconds"] = None
     stage["error"] = None
+    stage.pop("execution", None)
     state["status"] = "active"
     state["updated_at"] = utc_now()
     telemetry = state["telemetry"]
@@ -1354,7 +1428,7 @@ def required_output_kinds(
     stage_name: str, profile: dict[str, Any]
 ) -> set[str]:
     requirements = {
-        "pdf-conversion": {"file"},
+        "pdf-conversion": {"file", "pdf-conversion-report"},
         "markdown-registration": {"file"},
         "toc-formatting": {"file", "toc-manifest", "toc-format-report"},
         "toc-splitting": {
@@ -1401,10 +1475,16 @@ def complete_stage(
     review_queue: Path | None = None,
 ) -> dict[str, Any]:
     profile_path, profile = ensure_state_identity(state)
+    ensure_no_live_execution(state)
     index = stage_index(state, stage_name)
     stage = state["stages"][index]
     if stage["status"] != "running":
         raise PipelineError(f"stage {stage_name} is not running")
+    for record in stage.get("inputs", []):
+        if record["kind"] not in {"directory", "tree"}:
+            path = Path(record["path"])
+            if not path.is_file() or sha256_file(path) != record["sha256"]:
+                raise IdentityError(f"Stage input changed while running: {path}")
     validated_outputs = validate_records(
         outputs,
         profile_path=profile_path,
@@ -1429,6 +1509,7 @@ def complete_stage(
             f"stage {stage_name} is missing required artifact kinds: "
             f"{sorted(missing_kinds)}"
         )
+    validate_handoff_bindings(stage, declared, profile)
     for kind, path in declared:
         if kind not in PASS_STATUS_KINDS:
             continue
@@ -1542,6 +1623,59 @@ def complete_stage(
     return stage
 
 
+def validate_handoff_bindings(stage: dict, declared: list[tuple[str, Path]], profile: dict) -> None:
+    files = {str(path.resolve()): sha256_file(path) for kind, path in declared if kind == "file"}
+    inputs = {record["sha256"] for record in stage.get("inputs", []) if record["kind"] == "file"}
+    book_root = Path(profile["paths"]["book_root"]).resolve()
+    if stage.get("name") == "markdown-registration" and profile["source"]["sha256"] not in files.values():
+        raise IdentityError("Registered Markdown does not match the frozen source")
+    for kind, path in declared:
+        if kind in {"file", "directory", "tree"}:
+            if kind in {"directory", "tree"} and path.resolve() != book_root:
+                raise IdentityError("Declared corpus root differs from profile")
+            continue
+        payload = read_json(path)
+        if kind == "toc-format-report":
+            candidate = str(Path(payload.get("candidate_markdown", "")).resolve())
+            if files.get(candidate) != payload.get("candidate_markdown_sha256"):
+                raise IdentityError("TOC report candidate digest does not match declared Markdown")
+            if payload["input_markdown_sha256"] not in inputs:
+                raise IdentityError("TOC report input is not a frozen stage input")
+            manifest_paths = [p.resolve() for k, p in declared if k == "toc-manifest"]
+            bound_manifest = Path(payload.get("toc_manifest", "")).resolve()
+            if bound_manifest not in manifest_paths or sha256_file(bound_manifest) != payload.get("toc_manifest_sha256"):
+                raise IdentityError("TOC report was generated from a different manifest")
+            manifests = [read_json(p) for p in manifest_paths]
+            if any(m.get("input_markdown_sha256") != payload["input_markdown_sha256"] for m in manifests):
+                raise IdentityError("TOC manifest/report input digest mismatch")
+        if kind in {"audit-report", "markdown-report", "metadata-report"}:
+            if payload.get("corpus_snapshot") != corpus_snapshot(book_root):
+                raise IdentityError(f"{kind} is stale or missing a corpus snapshot")
+            for evidence_path, digest in payload.get("evidence_files", {}).items():
+                evidence = Path(evidence_path)
+                if not evidence.is_file() or sha256_file(evidence) != digest:
+                    raise IdentityError(f"{kind} input evidence changed: {evidence}")
+        if kind == "split-manifest" and payload.get("input_markdown_sha256") not in inputs:
+            raise IdentityError("Split manifest input is not a frozen stage input")
+        if kind == "pdf-conversion-report":
+            if payload.get("status") != "completed" or not payload.get("validation", {}).get("page_coverage_complete"):
+                raise IdentityError("PDF conversion output pages are not verified")
+            candidate = str(Path(payload["target_md"]).resolve())
+            if files.get(candidate) != payload["target_md_sha256"]:
+                raise IdentityError("PDF conversion report Markdown digest mismatch")
+            seen = []
+            for part in payload["parts"]:
+                evidence = part.get("output_page_evidence", {})
+                count = part["end_page"] - part["start_page"] + 1
+                if evidence.get("page_indices") != list(range(count)) or not evidence.get("inventories"):
+                    raise IdentityError("PDF conversion output page evidence missing")
+                seen.extend(range(part["start_page"], part["end_page"] + 1))
+            if seen != list(range(1, payload["page_count"] + 1)):
+                raise IdentityError("PDF conversion page ranges incomplete")
+            if payload.get("asset_snapshot") != corpus_snapshot(Path(payload["asset_root"])):
+                raise IdentityError("PDF conversion assets changed")
+
+
 def fail_stage(
     state: dict[str, Any],
     stage_name: str,
@@ -1591,7 +1725,12 @@ def invalidate_stage_and_downstream(
 
 def validate_resume(state: dict[str, Any]) -> dict[str, Any]:
     ensure_state_identity(state)
+    ensure_no_live_execution(state)
     for index, stage in enumerate(state["stages"]):
+        if stage["status"] == "running":
+            stage.pop("execution", None)
+            fail_stage(state, stage["name"], message="Interrupted stage; rerun its identity-bound publication")
+            state.setdefault("resume_events", []).append({"interrupted_stage": stage["name"], "at": utc_now()})
         if stage["status"] != "completed":
             continue
         records = [
@@ -2505,15 +2644,21 @@ def main(argv: list[str] | None = None) -> int:
                         "next_stage": args.stage,
                     }
                 else:
+                    stage["execution"] = {"host": socket.gethostname(), "pid": os.getpid()}
+                    write_json_atomic(state_path, state)
                     try:
-                        process = subprocess.run(
+                        child = subprocess.Popen(
                             stage_command,
-                            check=False,
-                            capture_output=True,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
                             text=True,
                             encoding="utf-8",
                             errors="replace",
                         )
+                        stage["execution"]["pid"] = child.pid
+                        write_json_atomic(state_path, state)
+                        stdout, stderr = child.communicate()
+                        process = subprocess.CompletedProcess(stage_command, child.returncode, stdout, stderr)
                     except OSError as exc:
                         fail_stage(
                             state,
@@ -2524,6 +2669,8 @@ def main(argv: list[str] | None = None) -> int:
                         raise PipelineError(
                             f"component launch failed: {exc}"
                         ) from exc
+                    stage.pop("execution", None)
+                    write_json_atomic(state_path, state)
                     if process.returncode != 0:
                         stage = fail_stage(
                             state,

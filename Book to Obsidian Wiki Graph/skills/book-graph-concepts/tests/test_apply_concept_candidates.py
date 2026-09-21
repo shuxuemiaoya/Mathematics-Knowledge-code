@@ -13,6 +13,13 @@ SPEC.loader.exec_module(MODULE)
 
 
 def write_json(path: Path, value: dict) -> None:
+    if "paths" in value:
+        value["paths"]["staging_root"] = str(path.parent)
+    for candidate in value.get("concepts", []):
+        if "definition_source" in candidate:
+            profile_path = next(p for p in (path.parent / "profile.json", path.parent / "book-profile.json") if p.exists())
+            book = Path(json.loads(profile_path.read_text())["paths"]["book_root"])
+            candidate["source_note_sha256"] = MODULE.sha256_file(book / candidate["definition_source"])
     path.write_text(json.dumps(value, ensure_ascii=False), encoding="utf-8")
 
 

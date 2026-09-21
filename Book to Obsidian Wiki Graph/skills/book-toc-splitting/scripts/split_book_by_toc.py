@@ -16,6 +16,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
+from book_graph_integrity import ALGORITHM, content_sha256, content_tokens, corpus_snapshot, owned_ranges, link_destinations
+from book_graph_transaction import atomic_write
+
 
 SCRIPT_DIRECTORY = Path(__file__).resolve().parent
 if str(SCRIPT_DIRECTORY) not in sys.path:
@@ -200,6 +204,8 @@ def load_nodes(
     if len(roots) != 1 or roots[0].category != "root":
         raise SplitError("Split manifest needs exactly one root-category node")
     root = roots[0]
+    if (root.start_line, root.end_line) != (1, line_count):
+        raise SplitError("Root range must cover the complete source Markdown")
 
     children: dict[str, list[SplitNode]] = {key: [] for key in nodes}
     for node in nodes.values():
@@ -233,6 +239,16 @@ def load_nodes(
     missing_toc = sorted(toc_keys - set(used_toc_keys))
     if missing_toc:
         raise SplitError("Split manifest omits TOC keys: " + ", ".join(missing_toc))
+    for node in nodes.values():
+        seen = set()
+        current = node
+        while current.parent_key is not None:
+            if current.key in seen:
+                raise SplitError("Cycle in split ownership")
+            seen.add(current.key)
+            current = nodes[current.parent_key]
+        if current.key != root.key:
+            raise SplitError("Every node must be reachable from the root")
     return nodes, root
 
 
@@ -1112,6 +1128,8 @@ def write_split(
     vault_root = Path(profile["paths"]["vault_root"]).resolve()
     links = profile.get("links", {})
     excluded = line_exclusions(toc_manifest)
+    if any(line < 1 or line > len(lines) for line in excluded):
+        raise SplitError("TOC exclusion ranges lie outside the source")
     validate_semantic_review(
         split_manifest, nodes, lines, excluded, profile
     )
@@ -1126,6 +1144,32 @@ def write_split(
         if isinstance(lesson, dict) and isinstance(lesson.get("node_key"), str)
     }
 
+    staging_root = Path(profile["paths"]["staging_root"]).resolve()
+    staging_root.mkdir(parents=True, exist_ok=True)
+    coverage_path = staging_root / "coverage-manifest.json"
+    journal = staging_root / "split-publication.json"
+    identity = {
+        "source": sha256_file(source), "profile": profile,
+        "toc": toc_manifest, "split": split_manifest, "lesson_flow": lesson_flow_manifest,
+        "output_root": str(output_root.resolve()),
+    }
+    if journal.exists():
+        plan = json.loads(journal.read_text(encoding="utf-8"))
+        if plan["identity"] != identity:
+            raise SplitError("Split publication belongs to different inputs")
+        staged = Path(plan["temporary"])
+        actual = output_root if output_root.exists() else staged
+        if not actual.is_dir() or corpus_snapshot(actual)["files"] != plan["files"]:
+            raise SplitError("Split publication content drift; refusing to overwrite")
+        if not output_root.exists():
+            staged.rename(output_root)
+        expected = json.dumps(plan["coverage"], ensure_ascii=False, indent=2) + "\n"
+        if coverage_path.exists() and coverage_path.read_text(encoding="utf-8") != expected:
+            raise SplitError("Coverage manifest changed since split publication")
+        atomic_write(coverage_path, expected)
+        return plan["result"]
+    if coverage_path.exists():
+        raise FileExistsError("Coverage manifest already exists without a matching publication journal")
     if output_root.exists():
         raise FileExistsError(
             f"Output root already exists; choose a new target or resume explicitly: {output_root}"
@@ -1154,6 +1198,24 @@ def write_split(
                 book_title,
                 lesson_flow=lesson_flow_by_node.get(node.key),
             )
+            owned = owned_ranges(node.start_line, node.end_line,
+                [(child.start_line, child.end_line) for child in nodes.values()
+                 if child.parent_key == node.key], excluded)
+            source_text = "\n".join(lines[number - 1] for left, right in owned
+                                    for number in range(left, right + 1)).strip()
+            if source_text:
+                try:
+                    expected_text = normalize_entry_heading(source_text, node, book_title)
+                except SplitError as exc:
+                    if "empty after title removal" not in str(exc):
+                        raise
+                    expected_text = ""
+                # Child links and reviewed previews add text; every owned source
+                # token must still occur in order before asset destinations move.
+                rendered_tokens = iter(content_tokens(rendered))
+                if any(not any(found == token for found in rendered_tokens)
+                       for token in content_tokens(expected_text)):
+                    raise SplitError(f"Rendered node loses or reorders owned source content: {node.key}")
             destination = target_path(node, temporary, categories)
             destination.parent.mkdir(parents=True, exist_ok=True)
             final_target = target_path(node, output_root, categories)
@@ -1176,9 +1238,11 @@ def write_split(
                     "target": final_target.relative_to(output_root).as_posix(),
                     "status": "assigned",
                     "line_range": [node.start_line, node.end_line],
+                    "owned_ranges": owned,
+                    "content_sha256": content_sha256(rendered),
+                    "link_destinations": link_destinations(rendered),
                 }
             )
-        shutil.move(str(temporary), str(output_root))
     except Exception:
         shutil.rmtree(temporary, ignore_errors=True)
         raise
@@ -1187,16 +1251,12 @@ def write_split(
         "schema_version": 1,
         "profile": split_manifest.get("profile"),
         "source_sha256": split_manifest.get("source_sha256"),
+        "integrity": {"algorithm": ALGORITHM,
+            "source_markdown": {"path": str(source.resolve()), "sha256": sha256_file(source), "line_count": len(lines)},
+            "expected_keys": sorted(nodes), "excluded_lines": sorted(excluded)},
         "units": coverage_units,
     }
-    staging_root = Path(profile["paths"]["staging_root"]).resolve()
-    staging_root.mkdir(parents=True, exist_ok=True)
-    coverage_path = staging_root / "coverage-manifest.json"
-    coverage_path.write_text(
-        json.dumps(coverage, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
-    return {
+    result = {
         "notes": note_count,
         "assets_copied": asset_count,
         "categories": categories,
@@ -1204,6 +1264,12 @@ def write_split(
         "root_note": str(target_path(root, output_root, categories)),
         "node_architecture": architecture_summary,
     }
+    atomic_write(journal, json.dumps({"identity": identity, "temporary": str(temporary),
+        "files": corpus_snapshot(temporary)["files"], "coverage": coverage, "result": result},
+        ensure_ascii=False, indent=2) + "\n")
+    temporary.rename(output_root)
+    atomic_write(coverage_path, json.dumps(coverage, ensure_ascii=False, indent=2) + "\n")
+    return result
 
 
 def validate_identity(

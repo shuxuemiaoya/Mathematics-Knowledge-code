@@ -14,6 +14,7 @@ import shutil
 import tempfile
 import time
 from typing import Any
+import unicodedata
 from urllib import request as urllib_request
 from urllib.parse import urlparse, urlsplit
 import zipfile
@@ -82,38 +83,238 @@ def safe_component(value: str, fallback: str = "node") -> str:
 
 def safe_filename(value: str, fallback: str) -> str:
     path = Path(value)
-    return safe_component(path.stem, Path(fallback).stem) + path.suffix.lower()
+    clean = re.sub(r'[/\\:*?"<>|]', '_', path.stem).strip()
+    return (clean or fallback) + path.suffix.lower()
 
 
 def clean_section_title(title: str) -> str:
-    if any(kw in title for kw in ("必做题", "选做题", "附加题")):
-        return "解答题"
-    range_match = re.search(r"第(?P<s1>\d+)题至第(?P<s2>\d+)题", title)
-    if range_match:
-        s1, s2 = int(range_match.group("s1")), int(range_match.group("s2"))
-        if s2 <= 14 and s1 > 1:
-            return "选择题"
-        elif s2 <= 14 and s1 == 1:
-            return "填空题"
-        elif s2 <= 17:
-            return "选择题"
-        else:
-            return "解答题"
-    for kw in ("单选题", "多选题", "选择题", "填空题", "解答题", "计算题", "证明题", "应用题"):
-        if kw in title:
-            if kw in ("计算题", "证明题", "应用题"):
-                return "解答题"
-            return kw
     cleaned = title.split("：", 1)[0].split(":", 1)[0].strip()
-    cleaned = re.sub(r"[（(].*?[）)]", "", cleaned).strip()
-    match = re.match(r"^([一二三四五六七八九十]+)", cleaned)
-    if match:
-        return match.group(1)
     return cleaned
 
 
 def normalize_match(value: str) -> str:
     return re.sub(r"[^\w\u4e00-\u9fff]+", "", value, flags=re.UNICODE).casefold()
+
+
+CJK_SUPP_MAP = {
+    "⻘": "青", "⻓": "长", "⻔": "门", "⻚": "页", "⻦": "鸟", "⻥": "鱼",
+    "⻮": "齿", "⻢": "马", "⻝": "食", "⻎": "辶", "⺶": "羊", "⺼": "肉",
+    "⻄": "西", "⾦": "金", "⽊": "木", "⽔": "水", "⽕": "火", "⼟": "土",
+    "⼭": "山", "⽉": "月", "⼀": "一", "⾼": "高", "⼆": "二", "⼗": "十",
+    "九": "九"
+}
+
+
+def normalize_cjk_text(text: str) -> str:
+    translated = text.translate(str.maketrans(CJK_SUPP_MAP))
+    return unicodedata.normalize("NFKC", translated)
+
+
+def extract_title_from_pdf(pdf_path: Path) -> str | None:
+    try:
+        reader = PdfReader(pdf_path)
+        if not reader.pages:
+            return None
+        text = reader.pages[0].extract_text() or ""
+        text = normalize_cjk_text(text)
+        lines = [l.strip() for l in text.splitlines() if l.strip()]
+        for line in lines[:8]:
+            clean_l = re.sub(r"\s+", "", line)
+            if re.search(r"(?:19|20)\d{2}.*?(?:试卷|试题)", clean_l):
+                return clean_l
+        first_chunk = re.sub(r"\s+", "", text[:400])
+        m = re.search(r"((?:19|20)\d{2}[-~–—]\d{4}学年.*?(?:试卷|试题)(?:（.*?）)?)", first_chunk)
+        if m:
+            return m.group(1)
+    except Exception:
+        return None
+    return None
+
+
+def standardize_paper_title(raw_title_or_path: str | Path, pdf_path: Path | None = None) -> str:
+    path = Path(raw_title_or_path)
+    title = path.stem
+    actual_pdf = pdf_path or (path if path.suffix.casefold() == ".pdf" and path.is_file() else None)
+
+    title = normalize_cjk_text(title)
+
+    is_anonymous = bool(re.match(r"^(?:xPad_paper_|paper_|doc_|[a-fA-F0-9_-]{16,})", title))
+    if is_anonymous and actual_pdf and actual_pdf.is_file():
+        extracted = extract_title_from_pdf(actual_pdf)
+        if extracted:
+            title = extracted
+
+    title = re.sub(r"_答案分开版本(?:_\d+)?", "", title)
+    title = re.sub(r"_解析版(?:_\d+)?", "", title)
+    title = re.sub(r"[-_]\d{10,}$", "", title)
+    title = re.sub(r"[❖★◆■▲▼●]+", "", title)
+    title = re.sub(r"(\d{4})\s*[~～–—_]\s*(\d{4})", r"\1-\2", title)
+    title = title.replace("(", "（").replace(")", "）")
+    title = re.sub(r"\s+", "", title)
+    return title.strip("-_ ")
+
+
+def analyze_paper_metadata_rules(title: str) -> dict[str, str]:
+    meta = {
+        "年份": "",
+        "学校": "",
+        "地区": "",
+        "年级": "",
+        "学期": "",
+        "考试种类": "",
+    }
+    # 1. 年份
+    m_year = re.search(r"(20\d{2}\s*[-~～–—_]\s*20\d{2}|20\d{2})", title)
+    if m_year:
+        meta["年份"] = re.sub(r"\s*[~～–—_]\s*", "-", m_year.group(1))
+
+    # 2. 年级
+    m_grade = re.search(r"(高[一二三]|初[一二三]|七年级|八年级|九年级)", title)
+    if m_grade:
+        meta["年级"] = m_grade.group(1)
+
+    # 3. 学期
+    if re.search(r"[（\(]?上[期学]?[）\)]?|高[一二三]上", title):
+        meta["学期"] = "上"
+    elif re.search(r"[（\(]?下[期学]?[）\)]?|高[一二三]下", title):
+        meta["学期"] = "下"
+
+    # 4. 考试种类
+    if "第一次月考" in title or "第1次月考" in title or "一月考" in title:
+        meta["考试种类"] = "第一次月考"
+    elif "第二次月考" in title or "第2次月考" in title or "二月考" in title:
+        meta["考试种类"] = "第二次月考"
+    elif "第三次月考" in title or "第3次月考" in title or "三月考" in title:
+        meta["考试种类"] = "第三次月考"
+    elif "月考" in title:
+        m_month = re.search(r"(\d+月份)", title)
+        meta["考试种类"] = f"月考（{m_month.group(1)}）" if m_month else "月考"
+    elif "期中" in title:
+        meta["考试种类"] = "期中"
+    elif "期末" in title:
+        meta["考试种类"] = "期末"
+    elif "开学" in title:
+        meta["考试种类"] = "开学考"
+    elif "模拟" in title or "一模" in title or "二模" in title or "三模" in title:
+        meta["考试种类"] = "模拟考"
+    elif "质检" in title or "质量检测" in title or "调研" in title:
+        meta["考试种类"] = "质检"
+    elif "联考" in title:
+        meta["考试种类"] = "联考"
+    else:
+        meta["考试种类"] = "期中"
+
+    # 5. 地区
+    regions = [
+        "内蒙古", "呼和浩特", "包头", "赤峰", "乌海", "通辽", "鄂尔多斯",
+        "呼伦贝尔", "巴彦淖尔", "乌兰察布", "兴安盟", "锡林郭勒", "阿拉善",
+        "北京", "上海", "天津", "重庆", "河北", "山西", "辽宁", "吉林", "黑龙江",
+        "江苏", "浙江", "安徽", "福建", "江西", "山东", "河南", "湖北", "湖南",
+        "广东", "海南", "四川", "贵州", "云南", "陕西", "甘肃", "青海", "宁夏", "新疆"
+    ]
+    found_regions = [r for r in regions if r in title]
+    if "内蒙古" in found_regions and len(found_regions) > 1:
+        other = [r for r in found_regions if r != "内蒙古"][0]
+        meta["地区"] = f"内蒙古{other}"
+    elif found_regions:
+        meta["地区"] = found_regions[0]
+
+    # 6. 学校
+    cleaned = title
+    if meta["年份"]:
+        cleaned = cleaned.replace(meta["年份"], "")
+    cleaned = re.sub(r"学年|试卷|数学|（理科）|（文科）|理科|文科|答案分开版本|解析版", "", cleaned)
+    school_matches = re.findall(r"((?:[^\s（\(]+?)?(?:[一二三四五六七八九十\d]+中(?:学)?|高级中学|中学|附中|外校|实验学校|名校联盟))", cleaned)
+    if school_matches:
+        sch = school_matches[-1]
+        sch = re.sub(r"^[^\s]*?[区县旗]", "", sch)
+        sch = re.sub(r"^内蒙古", "", sch)
+        meta["学校"] = sch
+
+    return meta
+
+
+def call_llm_json(prompt: str, env: dict[str, str] | None = None, system_prompt: str = "") -> dict[str, Any] | None:
+    env_map = env or {}
+    api_key = (
+        os.environ.get("OPENAI_API_KEY")
+        or env_map.get("OPENAI_API_KEY")
+        or os.environ.get("DEEPSEEK_API_KEY")
+        or env_map.get("DEEPSEEK_API_KEY")
+        or os.environ.get("LLM_API_KEY")
+        or env_map.get("LLM_API_KEY")
+        or os.environ.get("DASHSCOPE_API_KEY")
+        or env_map.get("DASHSCOPE_API_KEY")
+        or os.environ.get("QWEN_API_KEY")
+        or env_map.get("QWEN_API_KEY")
+    )
+    if not api_key:
+        return None
+
+    base_url = (
+        os.environ.get("LLM_BASE_URL")
+        or env_map.get("LLM_BASE_URL")
+        or os.environ.get("OPENAI_BASE_URL")
+        or env_map.get("OPENAI_BASE_URL")
+    )
+    if not base_url:
+        if "deepseek" in api_key.lower() or os.environ.get("DEEPSEEK_API_KEY") or env_map.get("DEEPSEEK_API_KEY"):
+            base_url = "https://api.deepseek.com/v1"
+            model = "deepseek-chat"
+        elif os.environ.get("DASHSCOPE_API_KEY") or env_map.get("DASHSCOPE_API_KEY"):
+            base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+            model = "qwen-plus"
+        else:
+            base_url = "https://api.openai.com/v1"
+            model = "gpt-4o-mini"
+    else:
+        model = os.environ.get("LLM_MODEL") or env_map.get("LLM_MODEL") or "deepseek-chat"
+
+    url = f"{base_url.rstrip('/')}/chat/completions"
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": prompt})
+    payload = {
+        "model": model,
+        "messages": messages,
+        "temperature": 0.1,
+    }
+    req = urllib_request.Request(
+        url,
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib_request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            content = data["choices"][0]["message"]["content"]
+            m = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", content)
+            raw_json = m.group(1) if m else content
+            return json.loads(raw_json)
+    except Exception:
+        return None
+
+
+def analyze_paper_metadata(title: str, env: dict[str, str] | None = None) -> dict[str, str]:
+    meta = analyze_paper_metadata_rules(title)
+    llm_res = call_llm_json(
+        f"请分析以下试卷标题，提取JSON属性：年份、学校、地区、年级、学期、考试种类。\n"
+        f"注意：考试种类必须分类为以下之一：期中、期末、第一次月考、第二次月考、第三次月考、月考、开学考、模拟考、质检、联考。\n"
+        f"试卷标题：{title}",
+        env=env,
+        system_prompt="你是一个教育试卷元数据分析专家，请只输出纯JSON对象，包含keys: 年份, 学校, 地区, 年级, 学期, 考试种类。"
+    )
+    if isinstance(llm_res, dict):
+        for k in ["年份", "学校", "地区", "年级", "学期", "考试种类"]:
+            val = str(llm_res.get(k, "")).strip()
+            if val:
+                meta[k] = val
+    return meta
 
 
 def parse_env(path: Path | None) -> dict[str, str]:
@@ -508,19 +709,19 @@ def expected_count(title: str) -> int | None:
 
 def split_inline_markers(text: str) -> str:
     text = re.sub(
-        r"(?<!^)\s*(?=(?:#{1,6}\s*)?(?:【|\[)(?:答案|解析|分析|详解|解答(?!题)|思路点拨|试题解析|思路分析|小问\s*\d+\s*详解)(?:】|\])?[:：]?|(?:答案|解析|分析|详解|解答(?!题))[:：])",
+        r"(?<!^)[ \t]*(?=(?:【|\[)(?:答案|解析|分析|详解|解答(?!题)|思路点拨|试题解析|思路分析|小问\s*\d+\s*详解)(?:】|\])?[:：]?|(?:答案|解析|分析|详解|解答(?!题))[:：])",
         "\n",
         text,
     )
-    text = re.sub(r"([^\n])\s*(?=[一二三四五六七八九十]+[、.．])", r"\1\n", text)
-    text = re.sub(r"([^\n])\s*(?=[\(（]\d{1,2}[\)）]\s*[\u4e00-\u9fa5\$])", r"\1\n", text)
+    text = re.sub(r"(?<=[。．.！!？?）\)])[ \t]*(?=[一二三四五六七八九十]+[、.．])", "\n", text)
+    text = re.sub(r"(?<=[。．.！!？?）\)])[ \t]*(?=[\(（]\d{1,2}[\)）][ \t]*[\u4e00-\u9fa5\$])", "\n", text)
     text = re.sub(
-        r"(?<!^)\s*(?=(?:(?<=[。\.\!\?！\？\)])|(?<=正确\.)|(?<=错误\.))\s*\d+[.．、]\s*(?:[\u4e00-\u9fa5]|\$|[A-Za-z]|\(ND|（))",
+        r"(?<!^)[ \t]*(?=(?:(?<=[。\.\!\?！\？\)])|(?<=正确\.)|(?<=错误\.))\s*\d+[.．、][ \t]*(?:[\u4e00-\u9fa5]|\$|[A-Za-z]|\(ND|（))",
         "\n",
         text,
     )
     text = re.sub(
-        r"(?<=[。．.！!？?）\)])\s*(?=\d+[.．、]\s*[\u4e00-\u9fa5\$])",
+        r"(?<=[。．.！!？?）\)])[ \t]*(?=\d+[.．、][ \t]*[\u4e00-\u9fa5\$])",
         "\n",
         text,
     )
@@ -554,7 +755,14 @@ def first_solution_index(lines: list[str]) -> int | None:
     return None
 
 
+def is_zuodaqu_line(line: str) -> bool:
+    clean = re.sub(r"[#\s*：:\-]", "", line)
+    return clean in ("作答区", "作答区域", "答题区", "答题区域")
+
+
 def is_question_line(line: str) -> bool:
+    if is_zuodaqu_line(line):
+        return False
     match = QUESTION_RE.match(line)
     if not match:
         return False
@@ -707,105 +915,205 @@ def extract_standalone_answers(markdown: str) -> tuple[dict[int, str], dict[int,
 
 def parse_sections(markdown: str) -> tuple[list[str], list[dict[str, Any]], list[dict[str, Any]]]:
     extracted_answers, extracted_solutions = extract_standalone_answers(markdown)
-    split_lines_raw: list[str] = []
-    for raw_line in markdown.splitlines():
-        split_lines_raw.extend(split_inline_markers(raw_line).splitlines() or [""])
-    markdown = repair_missing_question_numbers("\n".join(split_lines_raw))
+    markdown = repair_missing_question_numbers(markdown)
     lines: list[str] = []
     source_line_numbers: list[int] = []
     for source_line_number, raw_line in enumerate(markdown.splitlines(), 1):
-        split_lines = split_inline_markers(raw_line).splitlines() or [""]
-        lines.extend(split_lines)
-        source_line_numbers.extend([source_line_number] * len(split_lines))
+        if is_zuodaqu_line(raw_line):
+            continue
+        if re.match(r"^\s*#{1,6}\s*", raw_line):
+            lines.append(raw_line)
+            source_line_numbers.append(source_line_number)
+        else:
+            split_lines = split_inline_markers(raw_line).splitlines() or [""]
+            for sl in split_lines:
+                if not is_zuodaqu_line(sl):
+                    lines.append(sl)
+                    source_line_numbers.append(source_line_number)
+    
     raw_sections: list[dict[str, Any]] = []
     for index, line in enumerate(lines):
         matched, title = is_section_heading(line)
         if matched:
-            raw_sections.append({"title": title, "heading_line": source_line_numbers[index], "start_index": index})
+            raw_sections.append({
+                "title": title,
+                "clean_title": clean_section_title(title),
+                "heading_line": source_line_numbers[index],
+                "start_index": index,
+            })
     if not raw_sections:
-        raw_sections.append({"title": "一、试卷全图", "heading_line": 1, "start_index": 0})
-    grouped_sections: dict[str, list[dict[str, Any]]] = {}
+        raw_sections.append({"title": "一、试卷全图", "clean_title": "一、试卷全图", "heading_line": 1, "start_index": 0})
+
+    # Detect answer boundary (two-part question-answer format)
+    seen_titles: set[str] = set()
+    q_sections: list[dict[str, Any]] = []
+    ans_sections: list[dict[str, Any]] = []
+    ans_boundary_index: int | None = None
+
     for s in raw_sections:
-        ct = clean_section_title(s["title"])
-        grouped_sections.setdefault(ct, []).append(s)
-
-    sections: list[dict[str, Any]] = []
-    for ct, s_list in grouped_sections.items():
-        if len(s_list) == 1:
-            sections.append(s_list[0])
+        clean_t = s["clean_title"]
+        title_lower = s["title"].lower()
+        is_ans_sec = any(kw in clean_t or kw in title_lower for kw in ("参考答案", "答案与解析", "试题解析", "答案及解析"))
+        
+        if (clean_t in seen_titles or is_ans_sec) and ans_boundary_index is None:
+            ans_boundary_index = s["start_index"]
+            ans_sections.append(s)
+        elif ans_boundary_index is not None:
+            ans_sections.append(s)
         else:
-            best_s = s_list[0]
-            best_count = -1
-            for s in s_list:
-                start_idx = s["start_index"]
-                next_raws = [rs["start_index"] for rs in raw_sections if rs["start_index"] > start_idx]
-                end_idx = min(next_raws) if next_raws else len(lines)
-                q_count = sum(1 for idx in range(start_idx + 1, end_idx) if is_question_line(lines[idx]))
-                if q_count > best_count:
-                    best_count = q_count
-                    best_s = s
-            sections.append(best_s)
+            seen_titles.add(clean_t)
+            q_sections.append(s)
 
-    sections.sort(key=lambda item: item["start_index"])
+    if ans_boundary_index is None:
+        for idx, line in enumerate(lines):
+            if re.match(r"^\s*#{1,6}\s*.*(?:参考答案|答案与解析|试题解析|答案及解析)", line) or re.match(r"^\s*【(?:参考答案|答案与解析|试题解析)】", line):
+                ans_boundary_index = idx
+                ans_sections.append({
+                    "title": line.strip().lstrip("#").strip(),
+                    "clean_title": "参考答案",
+                    "heading_line": source_line_numbers[idx],
+                    "start_index": idx,
+                })
+                break
+
+    sections = q_sections if q_sections else raw_sections
+    
+    # Parse answer blocks per answer section
+    sec_answers: dict[int, dict[int, str]] = {}
+    ans_pat = re.compile(r"^\s*(?:#{1,6}\s*)?(?P<num>\d{1,2})[.．、]\s*(?P<body>.*)")
+    
+    for a_idx, a_sec in enumerate(ans_sections):
+        start = a_sec["start_index"] + 1
+        end = ans_sections[a_idx + 1]["start_index"] if a_idx + 1 < len(ans_sections) else len(lines)
+        sub_lines = lines[start:end]
+        
+        ans_starts: list[tuple[int, int]] = []
+        for l_idx, l in enumerate(sub_lines):
+            m = ans_pat.match(l)
+            if m:
+                num = int(m.group("num"))
+                if 1 <= num <= 35:
+                    ans_starts.append((l_idx, num))
+        
+        sec_answers[a_idx] = {}
+        for pos, (l_idx, num) in enumerate(ans_starts):
+            b_end = ans_starts[pos + 1][0] if pos + 1 < len(ans_starts) else len(sub_lines)
+            body = "\n".join(sub_lines[l_idx:b_end]).strip()
+            sec_answers[a_idx][num] = body
+
+    def lookup_answer(sec_idx: int, local_num: int, global_num: int) -> str | None:
+        if sec_idx in sec_answers and local_num in sec_answers[sec_idx]:
+            return sec_answers[sec_idx][local_num]
+        for a_map in sec_answers.values():
+            if global_num in a_map:
+                return a_map[global_num]
+        if len(sec_answers) == 1 and 0 in sec_answers and local_num in sec_answers[0]:
+            return sec_answers[0][local_num]
+        return None
+
+    def format_solution_from_body(ans_body: str, choice: bool, fill_in: bool = False, q_lines: list[str] | None = None) -> list[str]:
+        # Strip leading question number like "1、", "1." or "## 15."
+        cleaned = re.sub(r"^\s*(?:#{1,6}\s*)?\d{1,2}[.．、]\s*", "", ans_body.strip()).strip()
+        q_text = "\n".join(q_lines or [])
+
+        if choice:
+            c_ans = extract_choice_answer(cleaned)
+            ans_str = c_ans if c_ans else "详见解析"
+        elif fill_in:
+            f_ans = extract_fill_answer(cleaned, q_text)
+            ans_str = f_ans if f_ans else "详见解析"
+        else:
+            ans_str = "详见解析"
+
+        # 剥除可能残留的开头的【答案】及行内答案文本（直到换行或下一个【分析】/【解答】/【解析】标记）
+        cleaned = re.sub(r"^\s*【答案】.*?(?=(?:\n|【解析】|【分析】|【解答】|$))", "", cleaned).strip()
+        # 清理难度标记行（如 难度 | 容易，## 难度 等）
+        cleaned = re.sub(r"(?:\n|^)\s*#{0,6}\s*(?:难度\s*\|?|【难度】).*?(?=\n|$)", "", cleaned).strip()
+
+        if cleaned.startswith("【解答】"):
+            cleaned = "【解析】" + cleaned[4:].strip()
+
+        if "【解答】" in cleaned and "【解析】" not in cleaned:
+            cleaned = cleaned.replace("【解答】", "【解析】")
+
+        if "【解析】" in cleaned or "【分析】" in cleaned:
+            return [f"【答案】{ans_str}", cleaned]
+        else:
+            return [
+                f"【答案】{ans_str}",
+                "【分析】本题解析推导如下：",
+                f"【解析】\n{cleaned}".strip(),
+            ]
+
     questions: list[dict[str, Any]] = []
+    global_q_count = 0
+
     for section_index, section in enumerate(sections):
-        end = sections[section_index + 1]["start_index"] if section_index + 1 < len(sections) else len(lines)
+        end = sections[section_index + 1]["start_index"] if section_index + 1 < len(sections) else (ans_boundary_index if ans_boundary_index else len(lines))
         starts = [index for index in range(section["start_index"] + 1, end) if is_question_line(lines[index])]
         if not starts:
             raise ReviewRequired(f"Section has no numbered questions: {section['title']}")
+
+        first_match = QUESTION_RE.match(lines[starts[0]])
+        first_num = int(first_match.group("number")) if first_match else 1
+        resets_at_one = (first_num == 1 and global_q_count > 0)
+
         for position, start in enumerate(starts):
             question_end = starts[position + 1] if position + 1 < len(starts) else end
             block = lines[start:question_end]
+            match = QUESTION_RE.match(lines[start])
+            local_num = int(match.group("number")) if match else (position + 1)
+            global_num = global_q_count + local_num if resets_at_one else local_num
+
             solution_offset = first_solution_index(block)
             if solution_offset is None:
-                solution_offset = len(block)
                 question_lines = block
-                match = QUESTION_RE.match(lines[start])
-                q_num = int(match.group("number")) if match else None
-                st_ans = extracted_answers.get(q_num) if q_num else None
-                st_sol = extracted_solutions.get(q_num) if q_num else None
-                if st_ans or st_sol:
-                    ans_str = st_ans if st_ans else "详见解析"
-                    sol_str = st_sol if st_sol else ""
-                    if "【解答】" in sol_str and "【解析】" not in sol_str:
-                        sol_str = sol_str.replace("【解答】", "【解析】")
-                    
-                    if "【分析】" in sol_str:
-                        solution_lines = [
-                            f"【答案】{ans_str}",
-                            sol_str
-                        ]
-                    else:
-                        sol_formatted = sol_str if sol_str.startswith("【解析】") else f"【解析】\n{sol_str}"
-                        solution_lines = [
-                            f"【答案】{ans_str}",
-                            "【分析】本题解析推导如下：",
-                            sol_formatted
-                        ]
-                else:
-                    solution_lines = [
-                        "【答案】详见解析",
-                        "【分析】本题为考场高考真题，解析推导如下：",
-                        "【解析】"
-                    ]
                 source_sol_line = source_line_numbers[start]
+                ans_body = lookup_answer(section_index, local_num, global_num)
+                if ans_body:
+                    is_choice = is_choice_question("\n".join(question_lines), section["title"])
+                    is_fill = is_fill_in_question("\n".join(question_lines), section["title"])
+                    solution_lines = format_solution_from_body(ans_body, is_choice, is_fill, question_lines)
+                else:
+                    st_ans = extracted_answers.get(local_num) or extracted_answers.get(global_num)
+                    st_sol = extracted_solutions.get(local_num) or extracted_solutions.get(global_num)
+                    if st_ans or st_sol:
+                        ans_str = st_ans if st_ans else "详见解析"
+                        sol_str = st_sol if st_sol else ""
+                        if "【解答】" in sol_str and "【解析】" not in sol_str:
+                            sol_str = sol_str.replace("【解答】", "【解析】")
+                        if "【分析】" in sol_str:
+                            solution_lines = [f"【答案】{ans_str}", sol_str]
+                        else:
+                            sol_formatted = sol_str if sol_str.startswith("【解析】") else f"【解析】\n{sol_str}"
+                            solution_lines = [f"【答案】{ans_str}", "【分析】本题解析推导如下：", sol_formatted]
+                    else:
+                        raise ReviewRequired(f"Question {local_num} (global {global_num}) in {section['title']} has no explicit publisher solution marker")
             else:
                 question_lines = block[:solution_offset]
                 solution_lines = block[solution_offset:]
                 source_sol_line = source_line_numbers[start + solution_offset]
-            match = QUESTION_RE.match(lines[start])
+
+            question_lines = [l for l in question_lines if not is_zuodaqu_line(l)]
+            clean_q_body = "\n".join(question_lines).strip()
+            clean_q_body = re.sub(r"(?:\n|^)\s*#{0,6}\s*作答区[:：]?\s*(?=\n|$)", "", clean_q_body)
+            clean_q_body = re.sub(r"(?:\n|^)\s*#{0,6}\s*(?:难度\s*\|?|【难度】).*?(?=\n|$)", "", clean_q_body).rstrip() + "\n"
+
             questions.append({
-                "number": int(match.group("number")),
+                "number": global_num,
+                "local_number": local_num,
                 "section_index": section_index,
                 "source_start_line": source_line_numbers[start],
                 "source_solution_line": source_sol_line,
-                "question_body": "\n".join(question_lines).rstrip() + "\n",
+                "question_body": clean_q_body,
                 "solution_body": "\n".join(solution_lines).rstrip() + "\n",
             })
         section["end_index"] = end
         section["expected_count"] = expected_count(section["title"])
         section["detected_count"] = len(starts)
+        global_q_count = questions[-1]["number"]
 
+    # Deduplicate within same question number if any
     deduped_questions: list[dict[str, Any]] = []
     seen_numbers: set[int] = set()
     for q in questions:
@@ -898,9 +1206,90 @@ def load_provenance_blocks(path: Path) -> list[dict[str, Any]]:
     return result
 
 
-def is_choice_question(body: str) -> bool:
-    values = set(re.findall(r"(?<![A-Za-z])([A-D])[.．、]", body))
-    return values == {"A", "B", "C", "D"}
+def is_choice_question(body: str, section_title: str = "") -> bool:
+    if any(k in section_title for k in ("单选", "多选", "选择题")):
+        return True
+    values = set(re.findall(r"(?<![A-Za-z])([A-D])[.．、\s]", body))
+    if {"A", "B", "C", "D"}.issubset(values):
+        return True
+    if re.search(r"(?:故\s*选|应\s*选|故答案(?:为|是|选)|本题选)\s*[：:]?\s*\$?\s*[A-D]", body):
+        return True
+    return False
+
+
+def is_fill_in_question(body: str, section_title: str = "") -> bool:
+    if "填空" in section_title:
+        return True
+    if "____" in body or "__" in body:
+        return True
+    return False
+
+
+def extract_choice_answer(solution_body: str) -> str | None:
+    patterns = [
+        r"(?:故\s*选|应\s*选|故答案(?:为|是|选)|正确答案(?:为|是|选)|本题选|所以选|选)\s*[：:]?\s*\$?\s*([A-D]+(?:\s*[,，、]\s*[A-D]+)*)\b",
+        r"【答案】\s*\$?\s*([A-D]+(?:\s*[,，、]\s*[A-D]+)*)\b",
+        r"(?:^|\n)\s*答案\s*[：:]?\s*\$?\s*([A-D]+(?:\s*[,，、]\s*[A-D]+)*)\b",
+        r"故选\s*[：:]?\s*\$?\s*([A-D])",
+    ]
+    for pat in patterns:
+        m = re.findall(pat, solution_body, re.IGNORECASE)
+        if m:
+            raw = m[-1]
+            ans = re.sub(r"[\s,，、\$]", "", raw).upper()
+            if ans and all(c in "ABCD" for c in ans):
+                return ans
+    return None
+
+
+def extract_fill_answer(solution_body: str, question_body: str = "", env: dict[str, str] | None = None) -> str | None:
+    def _clean_str(val: str) -> str:
+        s = val.strip()
+        s = re.sub(r"\s*【点评】.*$", "", s).strip()
+        s = re.sub(r"\s*[.。]\s*(\$?)$", r"\1", s).strip()
+        return s
+
+    # 1. 故答案为: ...
+    m = re.search(r"(?:故答案为|答案为|故答案是|答案是)[：:\s]*(.+?)(?=\n\n|\n[【#]|$)", solution_body)
+    if m:
+        ans = _clean_str(m.group(1))
+        if ans and ans != "详见解析":
+            return ans
+
+    # 2. Check for circled proposition true/false conclusion: e.g. ① ... 为真命题，② ... 为假命题
+    prop_matches = re.findall(r"([①②③④⑤⑥⑦⑧⑨⑩])[^，。\n]*?为真命题", solution_body)
+    if prop_matches and any(k in question_body or k in solution_body for k in ("真命题", "序号")):
+        ans = "".join(prop_matches)
+        if ans:
+            return ans
+
+    # 3. Explicit 【答案】 marker at beginning
+    m_top = re.search(r"【答案】\s*(.+?)(?=\n|【|$)", solution_body)
+    if m_top:
+        ans = m_top.group(1).strip().rstrip(".").rstrip("。").strip()
+        if ans and ans != "详见解析":
+            return ans
+
+    # 4. 综上所述 / 故 ... 等于 / 值为 ...
+    m_val = re.search(r"(?:综上所述|所以|故).*?(?:的值为|等于|方程为|距离是|结果为)[：:\s]*(.+?)(?=\.|\n|$)", solution_body)
+    if m_val:
+        ans = m_val.group(1).strip().rstrip(".").rstrip("。").strip()
+        if ans and len(ans) < 100 and ans != "详见解析":
+            return ans
+
+    # 5. Try LLM if configured
+    if env or os.environ.get("OPENAI_API_KEY") or os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("LLM_API_KEY"):
+        prompt = (
+            f"请从以下填空题和解析中提取最终的简明答案（数值、表达式或序号），严禁输出'详见解析'，直接返回答案内容：\n"
+            f"题目：\n{question_body}\n\n解析：\n{solution_body}"
+        )
+        llm_res = call_llm_json(prompt, env=env, system_prompt="你是一名数学阅卷老师。只返回纯文本答案本身，不要有任何多余文字或解释。")
+        if isinstance(llm_res, dict) and llm_res.get("answer"):
+            return str(llm_res["answer"]).strip()
+        elif isinstance(llm_res, str) and llm_res.strip():
+            return llm_res.strip()
+
+    return None
 
 
 def compact_answer(value: str) -> str:
@@ -943,45 +1332,68 @@ def detail_content(lines: list[str], markers: list[tuple[str, int, int]]) -> tup
     return "\n\n".join(item for item in chunks if item).strip(), labels
 
 
-def solution_fields(solution_body: str, choice: bool, recovered: dict[str, Any] | None) -> dict[str, Any]:
+def solution_fields(
+    solution_body: str,
+    choice: bool,
+    recovered: dict[str, Any] | None,
+    fill_in: bool = False,
+    question_body: str = "",
+    env: dict[str, str] | None = None,
+) -> dict[str, Any]:
     lines, markers = marked_chunks(solution_body)
     by_name: dict[str, list[tuple[str, int, int]]] = {}
     for marker in markers:
         by_name.setdefault(marker[0], []).append(marker)
     explicit_answer = content_after_marker(lines, by_name["答案"][0]) if by_name.get("答案") else ""
     compact_explicit = compact_answer(explicit_answer)
-    conclusion = re.findall(r"(?:故\s*选|应\s*选|答案(?:为|是)?)\s*[：:]?\s*([A-F]+)\b", solution_body, re.IGNORECASE)
+
     if choice:
+        c_ans = extract_choice_answer(solution_body)
         if re.fullmatch(r"[A-F]+", compact_explicit, re.IGNORECASE):
             answer = compact_explicit.upper()
             answer_source = "explicit-answer"
-        elif conclusion:
-            answer = conclusion[-1].upper()
-            answer_source = "explicit-conclusion"
         elif (recovered or {}).get("answer"):
             answer = str(recovered.get("answer", "")).upper()
             answer_source = "pdf-text-recovery"
-        else:
-            answer = compact_explicit if compact_explicit else "详见解析"
-            answer_source = "fallback"
-    else:
-        fill_conclusion = re.search(r"故答案为[：:\s]*(.+?)(?=\.|\n|【|$)", solution_body)
-        if (recovered or {}).get("answer"):
-            answer = str(recovered.get("answer", "")).strip()
-            answer_source = "recovered-answer"
-        elif fill_conclusion:
-            answer = fill_conclusion.group(1).strip()
+        elif c_ans:
+            answer = c_ans
             answer_source = "explicit-conclusion"
         else:
-            answer = compact_explicit if compact_explicit and len(compact_explicit) <= 400 else "详见解析"
-            answer_source = "explicit-answer" if answer != "详见解析" else "publisher-solution"
-        if answer.startswith("为：") or answer.startswith("为:"):
-            answer = answer[2:].strip()
-        if answer.startswith("故答案为：") or answer.startswith("故答案为:"):
-            answer = answer[5:].strip()
-        answer = re.sub(r"\s*【点评】.*$", "", answer).rstrip(".").strip()
-        if not answer:
+            raise ReviewRequired(f"Choice question has no valid option answer: {solution_body[:200]}")
+    elif fill_in:
+        f_ans = extract_fill_answer(solution_body, question_body, env=env)
+        if compact_explicit and compact_explicit != "详见解析" and len(compact_explicit) <= 400:
+            answer = compact_explicit
+            answer_source = "explicit-answer"
+        elif (recovered or {}).get("answer"):
+            answer = str(recovered.get("answer", "")).strip()
+            answer_source = "recovered-answer"
+        elif f_ans:
+            answer = f_ans
+            answer_source = "explicit-conclusion"
+        else:
+            raise ReviewRequired(f"Fill-in question has no valid answer: {solution_body[:200]}")
+    else:
+        fill_conclusion = re.search(r"故答案为[：:\s]*(.+?)(?=\.|\n|【|$)", solution_body)
+        if fill_conclusion:
+            answer = fill_conclusion.group(1).strip()
+            answer_source = "explicit-conclusion"
+        elif compact_explicit and compact_explicit != "详见解析" and len(compact_explicit) <= 400:
+            answer = compact_explicit
+            answer_source = "explicit-answer"
+        else:
             answer = "详见解析"
+            answer_source = "publisher-solution"
+
+    if answer.startswith("为：") or answer.startswith("为:"):
+        answer = answer[2:].strip()
+    if answer.startswith("故答案为：") or answer.startswith("故答案为:"):
+        answer = answer[5:].strip()
+    answer = re.sub(r"\s*【点评】.*$", "", answer).strip()
+    answer = re.sub(r"\s*[.。]\s*(\$?)$", r"\1", answer).strip()
+    if not answer:
+        answer = "详见解析" if (not choice and not fill_in) else "无"
+
     detailed_explanation, detail_markers = detail_content(lines, by_name.get("详解", []))
     analysis = "本题未单列分析。"
     analysis_remainder = ""
@@ -1122,11 +1534,13 @@ def rebase_images(text: str, depth: int) -> str:
 
 
 def output_graph_root(output_root: Path, title: str) -> Path:
-    year_match = re.search(r"(?:19|20)\d{2}", title)
-    parent = output_root
-    if year_match and output_root.name != year_match.group(0):
-        parent = output_root / year_match.group(0)
-    return parent / safe_component(title)
+    if output_root.name == "按年份分类":
+        year_match = re.search(r"(?:19|20)\d{2}", title)
+        parent = output_root / year_match.group(0) if year_match else output_root
+    else:
+        parent = output_root
+    clean_name = re.sub(r'[/\\:*?"<>|]', '_', title).strip()
+    return parent / clean_name
 
 
 def copy_assets(asset_root: Path | None, graph_root: Path) -> int:
@@ -1157,6 +1571,7 @@ def audit_manifest(manifest_path: Path, overwrite: bool = True) -> dict[str, Any
     manifest = load_json(manifest_path)
     graph_root = Path(manifest["graph_root"])
     source = Path(manifest["source_pdf"])
+    vault_root = Path(manifest["vault_root"])
     errors: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
     numbers = [int(item["number"]) for item in manifest["questions"]]
@@ -1165,27 +1580,22 @@ def audit_manifest(manifest_path: Path, overwrite: bool = True) -> dict[str, Any
     for section in manifest["sections"]:
         if section.get("expected_count") is not None and section["expected_count"] != section["detected_count"]:
             warnings.append({"kind": "section-count-mismatch", "section": section["title"]})
-        section_path = Path(section["note_path"])
-        if not section_path.is_file():
-            errors.append({"kind": "missing-section-note", "section": section["title"]})
-        else:
-            section_text = section_path.read_text(encoding="utf-8")
-            for question in [item for item in manifest["questions"] if item["section_index"] == section["index"]]:
-                q_path = Path(question["question_path"])
-                if section_text.count(vault_embed(q_path, Path(manifest["vault_root"]))) != 1:
-                    errors.append({"kind": "question-embed", "number": question["number"]})
     for question in manifest["questions"]:
         q_path = Path(question["question_path"])
         a_path = Path(question["answer_path"])
         if not q_path.is_file() or not a_path.is_file():
             errors.append({"kind": "missing-note", "number": question["number"]})
             continue
+        if q_path.parent != graph_root / "questions":
+            errors.append({"kind": "unexpected-question-dir", "path": str(q_path)})
+        if a_path.parent != graph_root / "questions" / "answers":
+            errors.append({"kind": "unexpected-answer-dir", "path": str(a_path)})
         q_text = q_path.read_text(encoding="utf-8")
         a_text = a_path.read_text(encoding="utf-8")
         body_match = re.search(r"<!-- question-source:start -->\n(?P<body>.*?)\n<!-- question-source:end -->", q_text, re.DOTALL)
         if body_match is None or sha256_text(body_match.group("body").rstrip() + "\n") != question["question_body_sha256"]:
             errors.append({"kind": "question-content-drift", "number": question["number"]})
-        if q_text.count(vault_embed(a_path, Path(manifest["vault_root"]))) != 1:
+        if q_text.count(f"![[{a_path.stem}]]") != 1 and q_text.count(vault_embed(a_path, vault_root)) != 1:
             errors.append({"kind": "answer-embed", "number": question["number"]})
         required = (
             "> [!faq]- ",
@@ -1227,8 +1637,18 @@ def audit_manifest(manifest_path: Path, overwrite: bool = True) -> dict[str, Any
             warnings.append({"kind": "missing-pdf-answer-evidence", "number": question["number"]})
         if question["explanation_char_count"] < 8 or "本题未单列解析" in a_text:
             warnings.append({"kind": "insubstantial-explanation", "number": question["number"]})
-        if manifest.get("provenance_block_count", 0) and not question.get("source_provenance"):
-            warnings.append({"kind": "missing-source-provenance", "number": question["number"]})
+        sec = question.get("section", "")
+        is_choice = question.get("choice") or any(k in sec for k in ("选择", "单选", "多选"))
+        is_fill = question.get("fill_in") or "填空" in sec
+        ans = question.get("answer", "")
+        if is_choice or is_fill:
+            if not ans or ans == "详见解析":
+                errors.append({
+                    "kind": "invalid-choice-or-fill-answer",
+                    "number": question["number"],
+                    "section": sec,
+                    "answer": ans,
+                })
         for path, text in ((q_path, q_text), (a_path, a_text)):
             for destination in local_image_errors(path, text, graph_root=graph_root):
                 errors.append({"kind": "broken-image", "number": question["number"], "destination": destination})
@@ -1237,25 +1657,35 @@ def audit_manifest(manifest_path: Path, overwrite: bool = True) -> dict[str, Any
         errors.append({"kind": "missing-root-note"})
     else:
         root_text = root_note.read_text(encoding="utf-8")
-        for section in manifest["sections"]:
-            section_path = Path(section["note_path"])
-            if root_text.count(vault_embed(section_path, Path(manifest["vault_root"]))) != 1:
-                errors.append({"kind": "section-embed", "section": section["title"]})
+        for key in ["年份", "学校", "地区", "年级", "学期", "考试种类"]:
+            if f"{key}:" not in root_text:
+                errors.append({"kind": "missing-paper-attribute", "key": key})
+        for question in manifest["questions"]:
+            q_path = Path(question["question_path"])
+            if root_text.count(vault_embed(q_path, vault_root)) != 1:
+                errors.append({"kind": "question-embed-in-root", "number": question["number"]})
     image_root = graph_root / "images"
     for path in graph_root.rglob("*"):
         if path.is_file() and path.suffix.casefold() == ".canvas":
             errors.append({"kind": "unexpected-canvas", "path": str(path)})
-        elif path.is_file() and path.suffix.casefold() not in {".md", ".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"}:
+        elif path.is_file() and path.suffix.casefold() not in {".md", ".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg", ".json"}:
             warnings.append({"kind": "unexpected-output-type", "path": str(path)})
         stem = path.stem if path.is_file() else path.name
-        if image_root not in path.parents and any(char != "_" and not char.isalnum() for char in stem):
+        if image_root not in path.parents and any(char in '/\\:*?"<>|' for char in stem):
             errors.append({"kind": "unsafe-generated-path", "path": str(path)})
-    question_note_count = sum(1 for path in graph_root.rglob("Q*.md") if path.parent.name == "题目")
-    answer_note_count = sum(1 for path in graph_root.rglob("Q*A1.md") if path.parent.name == "answers")
-    if question_note_count != len(manifest["questions"]):
-        errors.append({"kind": "question-file-count", "actual": question_note_count})
-    if answer_note_count != len(manifest["questions"]):
-        errors.append({"kind": "answer-file-count", "actual": answer_note_count})
+    for child in graph_root.iterdir():
+        if child.is_dir() and child.name not in {"images", "questions", ".staging", ".exam-paper-parser"}:
+            errors.append({"kind": "unexpected-subdirectory", "path": str(child)})
+    if (graph_root / "questions").is_dir():
+        for child in (graph_root / "questions").iterdir():
+            if child.is_dir() and child.name != "answers":
+                errors.append({"kind": "unexpected-question-subdirectory", "path": str(child)})
+    question_notes = list((graph_root / "questions").glob("Q*.md")) if (graph_root / "questions").is_dir() else []
+    answer_notes = list((graph_root / "questions" / "answers").glob("Q*A1.md")) if (graph_root / "questions" / "answers").is_dir() else []
+    if len(question_notes) != len(manifest["questions"]):
+        errors.append({"kind": "question-file-count", "actual": len(question_notes)})
+    if len(answer_notes) != len(manifest["questions"]):
+        errors.append({"kind": "answer-file-count", "actual": len(answer_notes)})
     if not source.is_file() or sha256_file(source) != manifest["source_sha256"]:
         errors.append({"kind": "source-drift"})
     raw_markdown = Path(manifest["raw_markdown"])
@@ -1294,7 +1724,7 @@ def parse_paper(source: Path, markdown_path: Path, asset_root: Path | None, args
     for section in sections:
         if section["expected_count"] is not None and section["expected_count"] != section["detected_count"]:
             warnings.append({"kind": "section-count-mismatch", "section": section["title"], "expected": section["expected_count"], "detected": section["detected_count"]})
-    title = args.title or source.stem
+    title = args.title or standardize_paper_title(source.stem, pdf_path=source)
     vault_root = Path(args.vault_root).expanduser().resolve()
     output_root = Path(args.output_root).expanduser().resolve()
     graph_root = Path(args.graph_root).expanduser().resolve() if args.graph_root else output_graph_root(output_root, title)
@@ -1318,41 +1748,88 @@ def parse_paper(source: Path, markdown_path: Path, asset_root: Path | None, args
         if candidate.is_file():
             provenance_blocks = load_provenance_blocks(candidate)
     pdf_answers = pdf_choice_answers(source)
+    env_file = resolve_env_file(getattr(args, "env_file", None))
+    env = parse_env(env_file)
+    paper_meta = analyze_paper_metadata(title, env)
+
     for question in questions:
+        sec_title = sections[question["section_index"]]["title"]
         question["provenance"] = provenance_for(question["question_body"], provenance_blocks)
-        question["choice"] = is_choice_question(question["question_body"])
+        question["choice"] = is_choice_question(question["question_body"], sec_title)
+        question["fill_in"] = is_fill_in_question(question["question_body"], sec_title)
         recovered = pdf_answers.get(question["number"]) if question["choice"] else None
-        question["solution_fields"] = solution_fields(question["solution_body"], question["choice"], recovered)
+        question["solution_fields"] = solution_fields(
+            question["solution_body"],
+            question["choice"],
+            recovered,
+            fill_in=question["fill_in"],
+            question_body=question["question_body"],
+            env=env,
+        )
         question["pdf_answer_recovery"] = (
             recovered if question["solution_fields"]["answer_source"] == "pdf-text-recovery" else None
         )
         question["identity"] = sha256_text(f"{source_hash}\n{question['number']}\n{question['question_body']}")
     qids = allocate_qids(registry_path, [item["identity"] for item in questions], vault_root)
     copied_assets = copy_assets(asset_root, graph_root)
-    section_notes: list[Path] = []
+    
     manifest_questions: list[dict[str, Any]] = []
+    manifest_sections: list[dict[str, Any]] = []
+    root_note = graph_root / safe_filename(f"{title}.md", "exam.md")
+    root_lines: list[str] = [
+        "---",
+        f'title: "{title}"',
+        'type: "exam_paper"',
+        f'年份: "{paper_meta.get("年份", "")}"',
+        f'学校: "{paper_meta.get("学校", "")}"',
+        f'地区: "{paper_meta.get("地区", "")}"',
+        f'年级: "{paper_meta.get("年级", "")}"',
+        f'学期: "{paper_meta.get("学期", "")}"',
+        f'考试种类: "{paper_meta.get("考试种类", "")}"',
+        f'question_count: {len(questions)}',
+        f'created_at: "{time.strftime("%Y-%m-%d")}"',
+        "---",
+        "",
+        f"# {title}",
+        "",
+    ]
+    
+    questions_dir = graph_root / "questions"
+    answers_dir = questions_dir / "answers"
+    questions_dir.mkdir(parents=True, exist_ok=True)
+    answers_dir.mkdir(parents=True, exist_ok=True)
+
     for section_index, section in enumerate(sections):
-        folder_label = safe_component(clean_section_title(section["title"]))
-        section_dir = graph_root / folder_label
-        section_note = section_dir / f"{folder_label}.md"
-        section_notes.append(section_note)
-        embeds: list[str] = []
+        sec_title = clean_section_title(section["title"])
+        root_lines.append(f"## {sec_title}\n")
+        section_qids: list[str] = []
         for question in [item for item in questions if item["section_index"] == section_index]:
             qid = qids[question["identity"]]
-            q_path = section_dir / "题目" / f"{qid}.md"
-            a_path = section_dir / "题目" / "answers" / f"{qid}A1.md"
-            q_body = rebase_images(question["question_body"], 2)
-            solution_body = rebase_images(question["solution_body"], 3)
+            section_qids.append(qid)
+            q_path = questions_dir / f"{qid}.md"
+            a_path = answers_dir / f"{qid}A1.md"
+            q_body = rebase_images(question["question_body"], 1)
+            solution_body = rebase_images(question["solution_body"], 2)
             fields = dict(question["solution_fields"])
-            fields["analysis"] = rebase_images(fields["analysis"], 3)
-            fields["explanation"] = rebase_images(fields["explanation"], 3)
+            fields["analysis"] = rebase_images(fields["analysis"], 2)
+            fields["explanation"] = rebase_images(fields["explanation"], 2)
             provenance = question["provenance"] or {}
+            sec_num = question["section_index"] + 1
+            local_num = question["local_number"]
             metadata = [
                 "---",
-                f'question_id: "exam:{source_hash[:12]}:{question["number"]}"',
-                f'question_number: "{question["number"]}"',
+                f'question_id: "exam:{source_hash[:12]}:{sec_num}:{local_num}"',
+                f'question_number: "{local_num}"',
                 f'context_key: "{source_hash[:12]}"',
-                f'question_source: "{section_note}"',
+                f'question_source: "{root_note}"',
+                f'source_paper: "[[{title}]]"',
+                f'section: "{sec_title}"',
+                f'年份: "{paper_meta.get("年份", "")}"',
+                f'学校: "{paper_meta.get("学校", "")}"',
+                f'地区: "{paper_meta.get("地区", "")}"',
+                f'年级: "{paper_meta.get("年级", "")}"',
+                f'学期: "{paper_meta.get("学期", "")}"',
+                f'考试种类: "{paper_meta.get("考试种类", "")}"',
                 f"question_body_sha256: {sha256_text(q_body)}",
             ]
             if provenance.get("source_page") is not None:
@@ -1364,7 +1841,7 @@ def parse_paper(source: Path, markdown_path: Path, asset_root: Path | None, args
             metadata.extend([
                 f"source_markdown_line: {question['source_start_line']}",
                 'question_kind: "exam-question"',
-                'answer_handling: "separate-authoritative"',
+                'answer_handling: "external"',
                 '重要程度: "重要"',
                 "answer_status: matched",
                 "---",
@@ -1372,21 +1849,27 @@ def parse_paper(source: Path, markdown_path: Path, asset_root: Path | None, args
                 q_body.rstrip(),
                 "<!-- question-source:end -->",
                 "",
-                vault_embed(a_path, vault_root),
+                f"![[{qid}A1]]",
                 "",
             ])
             write_text(q_path, "\n".join(metadata))
             write_text(a_path, format_answer_note(qid, solution_body, fields, f"{title}解析"))
-            embeds.append(vault_embed(q_path, vault_root))
+            root_lines.append(vault_embed(q_path, vault_root))
+            root_lines.append("")
             manifest_questions.append({
                 "number": question["number"],
+                "local_number": question["local_number"],
+                "question_number": str(question["local_number"]),
                 "qid": qid,
                 "section_index": section_index,
+                "section": sec_title,
+                "clean_section": sec_title,
                 "question_path": str(q_path),
                 "answer_path": str(a_path),
                 "question_body_sha256": sha256_text(q_body),
                 "solution_body_sha256": sha256_text(solution_body),
                 "choice": question["choice"],
+                "fill_in": question["fill_in"],
                 "answer": fields["answer"],
                 "answer_source": fields["answer_source"],
                 "explanation_char_count": len(normalize_match(fields["explanation"])),
@@ -1396,10 +1879,15 @@ def parse_paper(source: Path, markdown_path: Path, asset_root: Path | None, args
                 "source_provenance": provenance or None,
                 "pdf_answer_recovery": question["pdf_answer_recovery"],
             })
-        write_text(section_note, f"## {section['title']}\n\n" + "\n".join(embeds) + "\n")
-    preamble = "\n".join(lines[: sections[0]["start_index"]]).rstrip()
-    root_note = graph_root / safe_filename(f"{title}.md", "exam.md")
-    write_text(root_note, preamble + "\n\n" + "\n".join(vault_embed(path, vault_root) for path in section_notes) + "\n")
+        manifest_sections.append({
+            "index": section_index,
+            "title": section["title"],
+            "clean_title": sec_title,
+            "expected_count": section.get("expected_count"),
+            "detected_count": section.get("detected_count"),
+            "qids": section_qids,
+        })
+    write_text(root_note, "\n".join(root_lines).rstrip() + "\n")
     manifest_path = staging_root / "exam-paper-manifest.json"
     final_audit = staging_root / "final-audit-report.json"
     manifest = {
@@ -1414,24 +1902,16 @@ def parse_paper(source: Path, markdown_path: Path, asset_root: Path | None, args
         "graph_root": str(graph_root),
         "staging_root": str(staging_root),
         "root_note": str(root_note),
+        "paper_metadata": paper_meta,
         "final_audit_report": str(final_audit),
         "registry": str(registry_path),
         "provenance_block_count": len(provenance_blocks),
-        "sections": [
-            {
-                "index": index,
-                "title": item["title"],
-                "expected_count": item["expected_count"],
-                "detected_count": item["detected_count"],
-                "note_path": str(section_notes[index]),
-            }
-            for index, item in enumerate(sections)
-        ],
+        "sections": manifest_sections,
         "questions": manifest_questions,
         "metrics": {
             "question_count": len(manifest_questions),
             "answer_count": len(manifest_questions),
-            "section_count": len(sections),
+            "section_count": len(manifest_sections),
             "asset_count": copied_assets,
             "pdf_answer_recovery_count": sum(1 for item in manifest_questions if item["pdf_answer_recovery"]),
             "llm_calls": 0,
@@ -1441,10 +1921,18 @@ def parse_paper(source: Path, markdown_path: Path, asset_root: Path | None, args
         },
     }
     write_json(manifest_path, manifest)
-    audit = audit_manifest(manifest_path)
+    audit = audit_manifest(manifest_path, overwrite=args.overwrite)
     manifest["status"] = audit["status"]
     write_json(manifest_path, manifest)
-    return {**audit, "metrics": manifest["metrics"], "root_note": str(root_note)}
+    return {
+        "schema_version": 1,
+        "stage": "exam-paper-parser",
+        "status": audit["status"],
+        "manifest": str(manifest_path),
+        "graph_root": str(graph_root),
+        "root_note": str(root_note),
+        "metrics": manifest["metrics"],
+    }
 
 
 def resolve_source(value: str) -> Path:
@@ -1482,7 +1970,9 @@ def command_batch(args: argparse.Namespace) -> dict[str, Any]:
     sources = list(dict.fromkeys(str(resolve_source(value)) for value in args.source_pdfs))
     targets: dict[Path, str] = {}
     for source in sources:
-        target = output_graph_root(Path(args.output_root).expanduser().resolve(), Path(source).stem)
+        source_path = Path(source)
+        clean_title = standardize_paper_title(source_path.stem, pdf_path=source_path)
+        target = output_graph_root(Path(args.output_root).expanduser().resolve(), clean_title)
         if target in targets:
             raise ParserError(f"Batch output collision for {targets[target]} and {source}: {target}")
         targets[target] = source

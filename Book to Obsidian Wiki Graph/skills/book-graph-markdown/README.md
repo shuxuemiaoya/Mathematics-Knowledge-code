@@ -21,6 +21,12 @@ Treat that user-supplied file as the canonical formatting contract. The local
 reference is a checked-in operational rendering of Task 2 and must not weaken
 or replace the source contract.
 
+Before any write, the Markdown inventory must match the union of coverage and
+concept targets. Unmanaged notes (including independent question/answer graphs)
+block a whole-corpus pass. Do not add them to manifests merely to bypass this
+check; refinement requires a separately reviewed ownership scope. Notes and
+handoffs are hashed before preparation and checked again before publication.
+
 ## Standardize
 
 Process every generated note in source order:
@@ -90,6 +96,16 @@ require exactly one target match, write atomically without backups, and emit a
 hash-backed report. Never hide a source repair inside the general presentation
 pass.
 
+Do not automatically join spaced digits or otherwise repair TeX during
+presentation formatting. A reviewed repair requires `before_sha256`, a
+specific `reason`, and source `evidence` for each operation. All repairs are
+prepared before publication and recovered through a staging journal. The
+report records before/after content fingerprints without replacing the
+original coverage baseline. Pass every applicable report, in application
+order, to subsequent audits using repeated `--content-repair-report <path>`.
+Omitting the report, editing its recipe, or breaking the fingerprint chain
+blocks the audit.
+
 ## Report
 
 Write `markdown-standardization-report.json` with:
@@ -97,6 +113,7 @@ Write `markdown-standardization-report.json` with:
 - `schema_version`, `stage: markdown-standardization`, and `status`;
 - the absolute `profile` path and frozen `source_sha256`;
 - `input_corpus_sha256` and `output_corpus_sha256`;
+- a `corpus_snapshot` binding the actual files checked by the report;
 - a `protected_invariants` object covering headings, tables, links, images,
   formula numbering, source order, and quoted-body callout continuity, with every
   value a passing boolean;

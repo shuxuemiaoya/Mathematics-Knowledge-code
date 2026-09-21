@@ -18,6 +18,10 @@ from urllib import error as urllib_error
 from urllib import request as urllib_request
 from urllib.parse import urlparse, urlsplit
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
+from book_graph_integrity import corpus_snapshot
+from book_graph_transaction import atomic_write
+
 
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
@@ -495,6 +499,35 @@ def unresolved_staged_asset_links(
     return unresolved
 
 
+def output_page_evidence(zip_path: Path, page_count: int) -> dict[str, Any]:
+    """Check output page indices, never infer OCR coverage from submitted ranges."""
+    indices: set[int] = set()
+    inventories = []
+    with zipfile.ZipFile(zip_path) as archive:
+        for member in archive.namelist():
+            name = Path(member).name
+            if not (name.endswith("_content_list.json") or name == "content_list.json"
+                    or name.endswith("_middle.json") or name == "middle.json"):
+                continue
+            raw = archive.read(member)
+            payload = json.loads(raw)
+            pages = payload.get("pdf_info", []) if isinstance(payload, dict) else payload
+            if not isinstance(pages, list):
+                raise ConversionError(f"Invalid MinerU page inventory: {member}")
+            found = {page["page_idx"] for page in pages
+                     if isinstance(page, dict) and type(page.get("page_idx")) is int}
+            if any(index < 0 or index >= page_count for index in found):
+                raise ConversionError(f"Out-of-range output page index: {member}")
+            indices.update(found)
+            inventories.append({"member": member, "sha256": hashlib.sha256(raw).hexdigest(),
+                                "page_indices": sorted(found)})
+    missing = sorted(set(range(page_count)) - indices)
+    if missing or not inventories:
+        raise ConversionError(f"OCR output page coverage unverified; missing zero-based pages: {missing}")
+    return {"page_indices": sorted(indices), "inventories": inventories,
+            "result_zip_sha256": sha256_file(zip_path)}
+
+
 def extract_result(
     zip_path: Path,
     namespace: str,
@@ -619,6 +652,7 @@ def convert(
         parts = prepare_parts(source, temp_dir / "parts")
         validate_coverage(parts, page_count)
         markdown_parts: dict[int, str] = {}
+        page_evidence: dict[int, dict] = {}
         total_assets = 0
         staged_assets_base = temp_dir / "final-assets"
 
@@ -636,6 +670,8 @@ def convert(
                 part = part_by_id.get(data_id)
                 if part is None:
                     raise ConversionError(f"MinerU returned unknown data_id: {data_id}")
+                if part not in batch or part.index in markdown_parts:
+                    raise ConversionError(f"MinerU returned duplicate or wrong-batch part: {data_id}")
                 if result.get("state") == "failed":
                     raise MineruError(
                         f"MinerU failed part {part.index}: {result.get('err_msg', '')}"
@@ -645,6 +681,7 @@ def convert(
                     raise MineruError(f"MinerU part {part.index} has no full_zip_url")
                 zip_path = temp_dir / "zips" / f"part-{part.index:03d}.zip"
                 client.download(str(zip_url), zip_path)
+                page_evidence[part.index] = output_page_evidence(zip_path, part.end_page - part.start_page + 1)
                 namespace = source.stem
                 staged_asset_root = staged_assets_base
                 if part.count > 1:
@@ -686,7 +723,7 @@ def convert(
     if len(reported_assets) != total_assets:
         raise ConversionError("Extracted asset count does not match committed assets")
 
-    return {
+    report = {
         "schema_version": 1,
         "stage": "book-pdf-to-markdown",
         "status": "completed",
@@ -696,7 +733,9 @@ def convert(
         "page_count": page_count,
         "size_bytes": source.stat().st_size,
         "target_md": str(target),
+        "target_md_sha256": sha256_file(target),
         "asset_root": str(asset_root),
+        "asset_snapshot": corpus_snapshot(asset_root),
         "asset_count": total_assets,
         "ocr_forced": True,
         "model_version": "vlm",
@@ -709,6 +748,7 @@ def convert(
                 "index": part.index,
                 "start_page": part.start_page,
                 "end_page": part.end_page,
+                "output_page_evidence": page_evidence[part.index],
             }
             for part in parts
         ],
@@ -719,6 +759,10 @@ def convert(
             "assets_committed": True,
         },
     }
+    # Persist the identity-bound handoff even when the CLI stdout is lost.
+    report_path = target.with_suffix(".conversion-report.json")
+    atomic_write(report_path, json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    return report
 
 
 def build_parser() -> argparse.ArgumentParser:

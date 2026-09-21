@@ -272,7 +272,7 @@ the host platform's Codex skill location; do not maintain copied duplicates.
 
 | 文档路径 | 作用与功能说明 |
 | :--- | :--- |
-| [`agents/question-type-graph-agent.md`](file:///Users/oven/Documents/Mathematics-Knowledge-code/Question%20Type%20Graph/agents/question-type-graph-agent.md) | **专职 Agent 的完整 System Prompt 与实战经验库**。包含系统提示词、实战总结（如【反思】模块独立 Callout、短答案提取、星级难度自动注入、三级大纲防扁平化、高考真题汇编适配、教师版交错解析等规则）。 |
+| [`agents/question-type-graph-agent.md`](file:///Users/oven/Documents/Mathematics-Knowledge-code/Question%20Type%20Graph/agents/question-type-graph-agent.md) | **专职 Agent 的完整 System Prompt 与实战经验库**。包含系统提示词、实战总结（如【反思】模块独立 Callout、短答案提取、星级难度自动注入、三级大纲防扁平化、高考真题汇编适配、教师版交错解析、必刷题多重训练带题序解耦与选择题高精度覆盖规则）。 |
 | [`agents/CHANGELOG.md`](file:///Users/oven/Documents/Mathematics-Knowledge-code/Question%20Type%20Graph/agents/CHANGELOG.md) | **Agent 版本演进与变更记录**。详细记录 Agent 提示词、规则集与核心规范的历次版本修复、功能新增与行为演进历史。 |
 
 ### 3.3 各阶段流水线技能与参考规范 (`skills/`)

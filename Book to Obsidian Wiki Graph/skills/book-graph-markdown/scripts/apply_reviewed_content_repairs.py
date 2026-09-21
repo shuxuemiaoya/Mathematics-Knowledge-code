@@ -8,8 +8,13 @@ import hashlib
 import json
 import os
 import tempfile
+import sys
 from pathlib import Path
 from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
+from book_graph_integrity import content_sha256
+from book_graph_transaction import commit_transaction, resume_transaction
 
 
 def sha256_file(path: Path) -> str:
@@ -97,12 +102,13 @@ def main() -> int:
     args = parser.parse_args()
     if not args.reviewer_confirmed:
         parser.error("--reviewer-confirmed is required")
-    if args.report.exists() and not args.overwrite_report:
-        parser.error("--overwrite-report is required for an existing report")
 
     profile_path = args.profile.resolve()
-    profile = json.loads(profile_path.read_text(encoding="utf-8-sig"))
     repairs_path = args.repairs.resolve()
+    report_path = args.report.resolve()
+    guards = {path: sha256_file(path) for path in (profile_path, repairs_path)}
+    guards[report_path] = sha256_file(report_path) if report_path.exists() else None
+    profile = json.loads(profile_path.read_text(encoding="utf-8-sig"))
     payload = json.loads(repairs_path.read_text(encoding="utf-8-sig"))
     if payload.get("reviewer_confirmed") is not True:
         raise ValueError("repair artifact is not reviewer-confirmed")
@@ -111,8 +117,18 @@ def main() -> int:
     if payload.get("source_sha256") != profile["source"]["sha256"]:
         raise ValueError("repair artifact source identity mismatch")
 
+    identity = {"profile_sha256": guards[profile_path], "repairs_sha256": guards[repairs_path],
+                "report": str(args.report.resolve())}
+    journal = Path(profile["paths"]["staging_root"]) / ("repair-publication-" + identity["repairs_sha256"] + ".json")
+    if resume_transaction(journal, identity, writer=atomic_write):
+        print(args.report.read_text(encoding="utf-8"))
+        return 0
+    if args.report.exists() and not args.overwrite_report:
+        parser.error("--overwrite-report is required for an existing report")
+
     book_root = Path(profile["paths"]["book_root"]).resolve()
     results: list[dict[str, Any]] = []
+    pending: dict[Path, str] = {}
     for index, repair in enumerate(payload.get("repairs", []), start=1):
         relative = repair.get("path")
         if not isinstance(relative, str) or not relative:
@@ -132,12 +148,19 @@ def main() -> int:
             raise ValueError(
                 f"repairs[{index}] has unsupported operation {operation!r}"
             )
-        before = target.read_text(encoding="utf-8-sig")
-        before_hash = sha256_file(target)
+        before = pending.get(target)
+        if before is None:
+            before = target.read_bytes().decode("utf-8")
+            guards[target] = hashlib.sha256(before.encode("utf-8")).hexdigest()
+        before_hash = hashlib.sha256(before.encode("utf-8")).hexdigest()
+        if repair.get("before_sha256") != before_hash:
+            raise ValueError(f"repairs[{index}] reviewed input hash missing or changed")
+        if not repair.get("reason") or not repair.get("evidence"):
+            raise ValueError(f"repairs[{index}] review reason and source evidence are required")
         after = handler(before, repair)
         if after == before:
             raise ValueError(f"repairs[{index}] made no change: {relative}")
-        atomic_write(target, after)
+        pending[target] = after
         results.append(
             {
                 "path": relative,
@@ -145,7 +168,9 @@ def main() -> int:
                 "reason": repair.get("reason"),
                 "evidence": repair.get("evidence"),
                 "before_sha256": before_hash,
-                "after_sha256": sha256_file(target),
+                "after_sha256": hashlib.sha256(after.encode("utf-8")).hexdigest(),
+                "before_content_sha256": content_sha256(before),
+                "after_content_sha256": content_sha256(after),
             }
         )
 
@@ -156,14 +181,17 @@ def main() -> int:
         "profile": str(profile_path),
         "source_sha256": profile["source"]["sha256"],
         "repairs": str(repairs_path),
+        "repairs_sha256": guards[repairs_path],
+        "reviewer_confirmed": True,
         "repair_count": len(results),
         "files": results,
     }
     args.report.parent.mkdir(parents=True, exist_ok=True)
-    atomic_write(
+    writes = [*pending.items(), (
         args.report.resolve(),
         json.dumps(report, ensure_ascii=False, indent=2) + "\n",
-    )
+    )]
+    commit_transaction(journal, identity, writes, guards=guards, writer=atomic_write)
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0
 

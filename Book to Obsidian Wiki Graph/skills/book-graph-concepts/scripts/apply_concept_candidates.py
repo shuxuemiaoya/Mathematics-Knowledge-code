@@ -8,7 +8,12 @@ import json
 import os
 import re
 import tempfile
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
+from book_graph_integrity import content_sha256, sha256_file, link_destinations
+from book_graph_transaction import commit_transaction, resume_transaction
 
 
 def load_json(path: Path) -> dict:
@@ -36,14 +41,16 @@ def category_directory(profile: dict, role: str) -> str:
     raise ValueError(f"profile has no enabled {role!r} category")
 
 
-def note_target(profile: dict, path: Path) -> str:
+def note_target(profile: dict, path: Path, source_directory: Path | None = None) -> str:
     mode = profile["links"]["note_mode"]
     encode_spaces = profile["links"].get("encode_spaces", False)
     if mode == "vault-root":
         root = Path(profile["paths"]["vault_root"])
         target = "/" + path.resolve().relative_to(root.resolve()).as_posix()
     elif mode == "relative":
-        raise ValueError("relative links require a source directory")
+        if source_directory is None:
+            raise ValueError("relative links require a source directory")
+        target = Path(os.path.relpath(path.resolve(), source_directory.resolve())).as_posix()
     else:
         raise ValueError(f"unsupported note mode: {mode}")
     return target.replace(" ", "%20") if encode_spaces else target
@@ -211,6 +218,13 @@ def link_first_defining_occurrence(
     link_text: str,
     target: str,
 ) -> None:
+    start, end, replacement = defining_replacement(lines, ranges, anchor=anchor, link_text=link_text, target=target)
+    text = "\n".join(lines)
+    lines[:] = (text[:start] + replacement + text[end:]).split("\n")
+
+
+def defining_replacement(lines: list[str], ranges: list[tuple[int, int]], *,
+                         anchor: str, link_text: str, target: str) -> tuple[int, int, str]:
     start, end = next(
         (start, end)
         for start, end in ranges
@@ -221,10 +235,9 @@ def link_first_defining_occurrence(
     if anchor_offset < 0:
         raise ValueError("anchor disappeared before source replacement")
     term_offset = anchor.find(link_text)
-    absolute = anchor_offset + term_offset
+    absolute = sum(len(line) + 1 for line in lines[:start - 1]) + anchor_offset + term_offset
     linked = f"[{link_text}]({target})"
-    segment = segment[:absolute] + linked + segment[absolute + len(link_text) :]
-    lines[start - 1 : end] = segment.split("\n")
+    return absolute, absolute + len(link_text), linked
 
 
 def apply_candidates(
@@ -233,13 +246,28 @@ def apply_candidates(
     candidates_path: Path,
     manifest_path: Path,
 ) -> dict:
+    profile_path, coverage_path, candidates_path, manifest_path = (
+        path.resolve() for path in (profile_path, coverage_path, candidates_path, manifest_path)
+    )
+    guards = {path: sha256_file(path) for path in (profile_path, coverage_path, candidates_path)}
     profile = load_json(profile_path)
     coverage = load_json(coverage_path)
     payload = load_json(candidates_path)
-    book_root = Path(profile["paths"]["book_root"])
+    book_root = Path(profile["paths"]["book_root"]).resolve()
     concept_dir = book_root / category_directory(profile, "concept")
-    if concept_dir.exists() and any(concept_dir.iterdir()):
-        raise ValueError(f"concept directory is not empty: {concept_dir}")
+    if not concept_dir.resolve().is_relative_to(book_root):
+        raise ValueError("concept directory lies outside book")
+    journal = Path(profile["paths"]["staging_root"]) / "concept-publication.json"
+    identity = {"profile": str(profile_path), "profile_sha256": guards[profile_path],
+        "coverage_sha256": guards[coverage_path], "candidates_sha256": guards[candidates_path],
+        "manifest": str(manifest_path.resolve())}
+    if resume_transaction(journal, identity, writer=atomic_write):
+        manifest = load_json(manifest_path)
+        return {"status": "passed", "concepts": len(manifest["concepts"]),
+            "manifest": str(manifest_path), "resumed": True}
+    if manifest_path.exists():
+        raise FileExistsError("concept manifest exists without a matching publication journal")
+    guards[manifest_path] = None
 
     candidates = payload.get("concepts", [])
     if candidates and payload.get("status") != "approved":
@@ -259,12 +287,22 @@ def apply_candidates(
     names = [candidate["name"] for candidate in candidates]
     if len(names) != len(set(names)):
         raise ValueError("concept candidate names must be unique")
+    expected_targets = {concept_dir / f"{name}.md" for name in names}
+    if any(not p.resolve().is_relative_to(concept_dir.resolve()) or p.parent != concept_dir for p in expected_targets):
+        raise ValueError("concept name must be a single filename")
+    if concept_dir.exists() and any(p not in expected_targets for p in concept_dir.rglob("*") if p.is_file()):
+        raise ValueError(f"concept directory is not empty: unreviewed targets in {concept_dir}")
 
     sources: dict[str, list[str]] = {}
     validated: list[tuple[dict, list[tuple[int, int]], str]] = []
     for candidate in candidates:
         source_rel = candidate["definition_source"].replace("\\", "/")
         source = book_root / Path(source_rel)
+        if not source.resolve().is_relative_to(book_root.resolve()):
+            raise ValueError("definition source lies outside book")
+        if candidate.get("source_note_sha256") != sha256_file(source):
+            raise ValueError(f"{source_rel}: reviewed source digest missing or changed")
+        guards[source.resolve()] = candidate["source_note_sha256"]
         if source_rel not in sources:
             sources[source_rel] = source.read_text(encoding="utf-8").splitlines()
         ranges, definition = validate_candidate(candidate, sources[source_rel])
@@ -276,21 +314,24 @@ def apply_candidates(
     }
     source_keys = source_key_by_target(coverage)
     manifest_concepts: list[dict] = []
+    writes: list[tuple[Path, str]] = []
+    replacements: dict[str, list[tuple[int, int, str]]] = {}
 
     for candidate, ranges, definition in validated:
         name = candidate["name"]
         source_rel = candidate["definition_source"].replace("\\", "/")
         source_path = book_root / Path(source_rel)
         concept_path = concept_targets[name]
-        source_link = note_target(profile, source_path)
-        concept_link = note_target(profile, concept_path)
-        link_first_defining_occurrence(
+        source_link = note_target(profile, source_path, concept_path.parent)
+        concept_link = note_target(profile, concept_path, source_path.parent)
+        replacement = defining_replacement(
             sources[source_rel],
             ranges,
             anchor=candidate["anchor_text"],
             link_text=candidate.get("link_text", name),
             target=concept_link,
         )
+        replacements.setdefault(source_rel, []).append(replacement)
         standalone_definition = detach_definition_from_source_callout(definition)
         body = (
             f"# {name}\n\n"
@@ -298,10 +339,22 @@ def apply_candidates(
             f"## 定义\n\n"
             f"{standalone_definition}\n"
         )
-        atomic_write(concept_path, body)
+        if concept_path.exists():
+            existing = concept_path.read_text(encoding="utf-8")
+            if (candidate.get("existing_target_sha256") != sha256_file(concept_path)
+                    or content_sha256(existing) != content_sha256(body)
+                    or link_destinations(existing) != link_destinations(body)):
+                raise ValueError(f"existing concept requires an exact reviewed reuse: {concept_path}")
+            guards[concept_path.resolve()] = candidate["existing_target_sha256"]
+            body = existing
+        else:
+            guards[concept_path.resolve()] = None
+            writes.append((concept_path, body))
         manifest_concepts.append(
             {
                 "name": name,
+                "content_sha256": content_sha256(body),
+                "source_note_sha256": candidate["source_note_sha256"],
                 "definition_source": source_rel,
                 "definition_unit": source_keys.get(source_rel, source_rel),
                 "target": concept_path.relative_to(book_root).as_posix(),
@@ -315,7 +368,16 @@ def apply_candidates(
         )
 
     for source_rel, lines in sources.items():
-        atomic_write(book_root / Path(source_rel), "\n".join(lines) + "\n")
+        original = "\n".join(lines) + "\n"
+        edits = sorted(replacements[source_rel])
+        if any(left[1] > right[0] for left, right in zip(edits, edits[1:])):
+            raise ValueError(f"overlapping defining terms require review: {source_rel}")
+        after = original
+        for start, end, replacement in reversed(edits):
+            after = after[:start] + replacement + after[end:]
+        if content_sha256(original) != content_sha256(after):
+            raise ValueError(f"concept links changed source content: {source_rel}")
+        writes.append((book_root / Path(source_rel), after))
 
     manifest = {
         "schema_version": 1,
@@ -324,10 +386,11 @@ def apply_candidates(
         "concepts": manifest_concepts,
         "rejected": payload.get("rejected", []),
     }
-    atomic_write(
+    writes.append((
         manifest_path,
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
-    )
+    ))
+    commit_transaction(journal, identity, writes, guards=guards, writer=atomic_write)
     return {
         "status": "passed",
         "concepts": len(manifest_concepts),

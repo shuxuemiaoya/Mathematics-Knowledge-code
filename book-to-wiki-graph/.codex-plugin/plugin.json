@@ -1,6 +1,6 @@
 {
   "name": "book-to-wiki-graph",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "description": "Convert books into scope-aware introductions, fully attributed TOC indexes, LLM-led teaching atoms, audited relation graphs, and three-level knowledge constellations.",
   "author": {
     "name": "Local developer"

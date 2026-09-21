@@ -1,0 +1,88 @@
+{
+  "mode": "read-only; standardize_text and invariants in memory",
+  "book_root": "/Users/oven/Documents/ovenmathmap/高中/课堂同步/智慧中小学/必修第一册",
+  "markdown_files": 1316,
+  "all_invariants_passed": 770,
+  "content_preservation_failed": 0,
+  "callout_compatibility_failed": 546,
+  "all_callout_failures_in_answers": true,
+  "sample_failures": [
+    {
+      "path": "第一章 集合与常用逻辑用语/1.1 集合的概念/test/对点训练/answers/Q00051054A1.md",
+      "failures": [
+        "quoted_body_callout_continuity"
+      ]
+    },
+    {
+      "path": "第一章 集合与常用逻辑用语/1.1 集合的概念/test/对点训练/answers/Q00051055A1.md",
+      "failures": [
+        "quoted_body_callout_continuity"
+      ]
+    },
+    {
+      "path": "第一章 集合与常用逻辑用语/1.1 集合的概念/test/对点训练/answers/Q00051056A1.md",
+      "failures": [
+        "quoted_body_callout_continuity"
+      ]
+    },
+    {
+      "path": "第一章 集合与常用逻辑用语/1.1 集合的概念/test/对点训练/answers/Q00051057A1.md",
+      "failures": [
+        "quoted_body_callout_continuity"
+      ]
+    },
+    {
+      "path": "第一章 集合与常用逻辑用语/1.1 集合的概念/test/对点训练/answers/Q00055928A1.md",
+      "failures": [
+        "quoted_body_callout_continuity"
+      ]
+    },
+    {
+      "path": "第一章 集合与常用逻辑用语/1.1 集合的概念/test/对点训练/answers/Q00055929A1.md",
+      "failures": [
+        "quoted_body_callout_continuity"
+      ]
+    },
+    {
+      "path": "第一章 集合与常用逻辑用语/1.1 集合的概念/test/对点训练/answers/Q00055930A1.md",
+      "failures": [
+        "quoted_body_callout_continuity"
+      ]
+    },
+    {
+      "path": "第一章 集合与常用逻辑用语/1.1 集合的概念/test/对点训练/answers/Q00055931A1.md",
+      "failures": [
+        "quoted_body_callout_continuity"
+      ]
+    },
+    {
+      "path": "第一章 集合与常用逻辑用语/1.1 集合的概念/test/对点训练/answers/Q00055932A1.md",
+      "failures": [
+        "quoted_body_callout_continuity"
+      ]
+    },
+    {
+      "path": "第一章 集合与常用逻辑用语/1.1 集合的概念/test/对点训练/answers/Q00055933A1.md",
+      "failures": [
+        "quoted_body_callout_continuity"
+      ]
+    },
+    {
+      "path": "第一章 集合与常用逻辑用语/1.1 集合的概念/test/对点训练/answers/Q00055934A1.md",
+      "failures": [
+        "quoted_body_callout_continuity"
+      ]
+    },
+    {
+      "path": "第一章 集合与常用逻辑用语/1.1 集合的概念/test/对点训练/answers/Q00055935A1.md",
+      "failures": [
+        "quoted_body_callout_continuity"
+      ]
+    }
+  ],
+  "limitations": [
+    "Not a full pipeline audit or OCR verification",
+    "Existing answers have a different callout contract; do not rewrite them to satisfy this agent",
+    "No vault files were written by this check"
+  ]
+}

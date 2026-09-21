@@ -1,13 +1,15 @@
 # Output contract
 
-The graph root contains:
+The graph root contains a completely flat layout without section subfolders and without canvas:
 
 ```text
-<paper>.md
-images/
-<section>/<section>.md
-<section>/题目/Q00000001.md
-<section>/题目/answers/Q00000001A1.md
+<paper>.md                    # Master paper note embedding all Q*.md under section headings
+images/                       # Extracted images (if any)
+Q00000001.md                 # Atomic question note embedding Q00000001A1.md
+Q00000001A1.md               # Standalone authoritative solution callout note
+Q00000002.md
+Q00000002A1.md
+...
 ```
 
 Each question note has source identity, printed number, page/bbox when available,

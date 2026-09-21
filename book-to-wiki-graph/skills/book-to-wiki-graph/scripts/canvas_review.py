@@ -226,6 +226,51 @@ def validate(jobs_path: Path, decisions_path: Path) -> dict[str, Any]:
     return {"status": "failed" if errors else ("review_required" if review else "passed"), "errors": errors, "review_items": review, "counts": {"jobs": len(expected), "decisions": len(by_id), "errors": len(errors), "review_items": len(review)}}
 
 
+def seal_decisions(
+    jobs_path: Path, draft_path: Path, output: Path, overwrite: bool = False,
+) -> dict[str, Any]:
+    """Bind Agent-authored evaluations to the exact Canvas and PNG bytes.
+
+    The command deliberately does not generate observations, scores, verdicts,
+    or actions.  It only removes repetitive digest transcription from a draft
+    written after the Agent has viewed every PNG, while requiring exact job
+    coverage before the sealed decision artifact can be finalized.
+    """
+    jobs_path = jobs_path.expanduser().resolve()
+    draft_path = draft_path.expanduser().resolve()
+    output = output.expanduser().resolve()
+    jobs = load_json(jobs_path)
+    draft = load_json(draft_path)
+    verify(jobs, "canvas-review-jobs")
+    raw = draft.get("decisions")
+    if not isinstance(raw, list):
+        raise CanvasReviewError("Decision draft must contain a decisions array")
+    expected = {str(item["job_id"]): item for item in jobs.get("jobs", [])}
+    supplied = {
+        str(item.get("job_id")): item
+        for item in raw if isinstance(item, dict) and item.get("job_id")
+    }
+    if len(supplied) != len(raw) or set(supplied) != set(expected):
+        raise CanvasReviewError(
+            "Decision draft must cover every Canvas review job exactly once"
+        )
+    bound: list[dict[str, Any]] = []
+    for job in jobs.get("jobs", []):
+        item = dict(supplied[str(job["job_id"])])
+        item["canvas_sha256"] = job["canvas_sha256"]
+        item["png_sha256"] = job["png_sha256"]
+        bound.append(item)
+    payload = seal({
+        "schema_version": 1,
+        "kind": "canvas-review-decisions",
+        "canvas_review_jobs_sha256": jobs["artifact_sha256"],
+        "reviewer": draft.get("reviewer"),
+        "decisions": bound,
+    })
+    atomic_json(output, payload, overwrite)
+    return payload
+
+
 def finalize(jobs_path: Path, decisions_path: Path, output_dir: Path, overwrite: bool = False) -> dict[str, Any]:
     jobs_path, decisions_path, output_dir = jobs_path.expanduser().resolve(), decisions_path.expanduser().resolve(), output_dir.expanduser().resolve()
     jobs, decisions = load_json(jobs_path), load_json(decisions_path)
@@ -264,6 +309,11 @@ def main() -> int:
     validate_parser = sub.add_parser("validate")
     validate_parser.add_argument("jobs", type=Path)
     validate_parser.add_argument("decisions", type=Path)
+    seal_parser = sub.add_parser("seal-decisions")
+    seal_parser.add_argument("jobs", type=Path)
+    seal_parser.add_argument("draft", type=Path)
+    seal_parser.add_argument("--output", type=Path, required=True)
+    seal_parser.add_argument("--overwrite", action="store_true")
     finalize_parser = sub.add_parser("finalize")
     finalize_parser.add_argument("jobs", type=Path)
     finalize_parser.add_argument("decisions", type=Path)
@@ -276,6 +326,12 @@ def main() -> int:
             output = {"status": "passed", "jobs": len(result["jobs"]), "output": str(args.output.expanduser().resolve())}
         elif args.command == "validate":
             output = validate(args.jobs, args.decisions)
+        elif args.command == "seal-decisions":
+            result = seal_decisions(args.jobs, args.draft, args.output, args.overwrite)
+            output = {
+                "status": "passed", "decisions": len(result["decisions"]),
+                "output": str(args.output.expanduser().resolve()),
+            }
         else:
             output = finalize(args.jobs, args.decisions, args.output_dir, args.overwrite)
             output["status"] = output["status"]

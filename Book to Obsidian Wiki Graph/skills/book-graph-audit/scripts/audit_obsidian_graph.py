@@ -14,6 +14,12 @@ import urllib.parse
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
+from book_graph_integrity import ALGORITHM, content_sha256, corpus_snapshot, parse_frontmatter, link_destinations
+from book_graph_integrity import reviewed_content_changes, expected_content_hash
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "book-graph-metadata" / "scripts"))
+from tag_book_metadata import validate_file_metadata
+
 
 LESSON_FLOW_SCRIPT_DIRECTORY = (
     Path(__file__).resolve().parents[2]
@@ -681,6 +687,7 @@ def audit_coverage(
     *,
     expected_profile: Path | None = None,
     book_root: Path | None = None,
+    content_changes: dict | None = None,
 ) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
     if coverage_path is None:
         return None, []
@@ -730,6 +737,27 @@ def audit_coverage(
 
     keys: set[str] = set()
     orders: set[int] = set()
+    integrity = data.get("integrity", {})
+    if integrity.get("algorithm") != ALGORITHM:
+        errors.append({"code": "coverage-content-evidence-missing"})
+    evidence = integrity.get("source_markdown", {})
+    try:
+        frozen_source = Path(evidence["path"])
+        if sha256_file(frozen_source) != evidence["sha256"]:
+            raise ValueError("frozen formatted source changed")
+        line_count = len(frozen_source.read_text(encoding="utf-8-sig").splitlines())
+        if line_count != evidence["line_count"]:
+            raise ValueError("source line count changed")
+        line_owners = collections.Counter(integrity.get("excluded_lines", []))
+        for unit in units:
+            for left, right in unit.get("owned_ranges", []):
+                if not (1 <= left <= right <= line_count):
+                    raise ValueError("invalid owned source range")
+                line_owners.update(range(left, right + 1))
+        if set(line_owners) != set(range(1, line_count + 1)) or any(n != 1 for n in line_owners.values()):
+            raise ValueError("source lines are missing or have multiple owners")
+    except (OSError, KeyError, TypeError, ValueError, AttributeError) as exc:
+        errors.append({"code": "coverage-source-evidence-invalid", "detail": str(exc)})
     unresolved = 0
     for index, unit in enumerate(units):
         if not isinstance(unit, dict):
@@ -765,7 +793,19 @@ def audit_coverage(
         elif book_root is not None:
             decoded = urllib.parse.unquote(target.split("#", 1)[0])
             target_path = (book_root / decoded.replace("/", os.sep)).resolve()
-            if not target_exists(target_path):
+            if not target_path.is_relative_to(book_root.resolve()):
+                errors.append({"code": "coverage-target-outside-book", "target": target})
+            elif target_path.is_file():
+                try:
+                    target_text = target_path.read_text(encoding="utf-8-sig")
+                    if content_sha256(target_text) != expected_content_hash(unit.get("content_sha256"), target, content_changes or {}):
+                        errors.append({"code": "coverage-content-changed", "target": target})
+                    current_links = iter(link_destinations(target_text))
+                    if any(not any(found == expected for found in current_links) for expected in unit.get("link_destinations", [])):
+                        errors.append({"code": "coverage-link-destination-changed", "target": target})
+                except (ValueError, RuntimeError) as exc:
+                    errors.append({"code": "coverage-content-invalid", "target": target, "detail": str(exc)})
+            else:
                 errors.append(
                     {
                         "code": "coverage-target-missing",
@@ -775,6 +815,8 @@ def audit_coverage(
                     }
                 )
 
+    if sorted(keys) != integrity.get("expected_keys"):
+        errors.append({"code": "coverage-expected-keys-mismatch"})
     summary = {
         "path": str(coverage_path),
         "units": len(units),
@@ -1023,6 +1065,7 @@ def audit_concept_manifest(
     expected_source_sha256: str | None,
     expected_profile: Path | None,
     book_root: Path,
+    content_changes: dict | None = None,
 ) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
     if manifest_path is None:
         return None, []
@@ -1088,7 +1131,15 @@ def audit_concept_manifest(
         targets.add(target)
         decoded = urllib.parse.unquote(target.split("#", 1)[0])
         resolved = (book_root / decoded.replace("/", os.sep)).resolve()
-        if not target_exists(resolved):
+        if not resolved.is_relative_to(book_root.resolve()):
+            errors.append({"code": "concept-target-outside-book", "target": target})
+        elif resolved.is_file():
+            try:
+                if content_sha256(resolved.read_text(encoding="utf-8-sig")) != expected_content_hash(concept.get("content_sha256"), target, content_changes or {}):
+                    errors.append({"code": "concept-content-changed", "target": target})
+            except (ValueError, RuntimeError) as exc:
+                errors.append({"code": "concept-content-invalid", "target": target, "detail": str(exc)})
+        else:
             errors.append(
                 {
                     "code": "concept-manifest-target-missing-on-disk",
@@ -1124,6 +1175,7 @@ def audit_book(
     lesson_flow_manifest: Path | None = None,
     profile_path: Path | None = None,
     stage: str = "pre-canvas",
+    content_repair_reports: list[Path] | None = None,
 ) -> dict[str, Any]:
     if stage not in AUDIT_STAGES:
         raise ValueError(f"unsupported audit stage: {stage}")
@@ -1144,6 +1196,7 @@ def audit_book(
     lesson_flow_summary: dict[str, Any] | None = None
     node_architecture_summary: dict[str, Any] | None = None
     split_manifest_payload: dict[str, Any] | None = None
+    split_manifest_path: Path | None = None
     untitled_architecture_paths: set[Path] = set()
 
     if profile_path is not None:
@@ -1208,7 +1261,7 @@ def audit_book(
             concept_config = profile_category(profile, "concept")
             if concept_config and concept_config.get("enabled", True):
                 concept_directory = str(concept_config.get("directory", "概念"))
-            elif concept_config and not concept_config.get("enabled", True):
+            else:
                 concept_directory = ""
             canvas_profile = profile.get("canvas", {})
             profile_canvas_enabled = bool(canvas_profile.get("enabled", False))
@@ -1339,11 +1392,18 @@ def audit_book(
     elif expected_source_sha256:
         errors.append({"code": "expected-source-hash-without-source"})
 
+    content_repair_reports = content_repair_reports or []
+    content_changes = {}
+    try:
+        content_changes = reviewed_content_changes(content_repair_reports, profile_path, expected_source_sha256)
+    except Exception as exc:
+        errors.append({"code": "content-repair-evidence-invalid", "detail": str(exc)})
     coverage_summary, coverage_errors = audit_coverage(
         coverage_manifest,
         expected_source_sha256,
         expected_profile=profile_path,
         book_root=book_root,
+        content_changes=content_changes,
     )
     errors.extend(coverage_errors)
     if coverage_manifest is None:
@@ -1357,6 +1417,7 @@ def audit_book(
         expected_source_sha256=expected_source_sha256,
         expected_profile=profile_path,
         book_root=book_root,
+        content_changes=content_changes,
     )
     errors.extend(concept_manifest_errors)
     if concept_directory and concept_manifest is None and require_concepts:
@@ -1410,6 +1471,14 @@ def audit_book(
         category_files[source_category] += 1
         text = path.read_text(encoding="utf-8-sig")
         body_text = strip_yaml_frontmatter(text)
+        try:
+            metadata, body_text = parse_frontmatter(text)
+            if stage == "final" and profile_path:
+                general = "textbook" not in str(profile.get("book", {}).get("kind", "mathematics-textbook"))
+                for detail in validate_file_metadata(metadata, general=general):
+                    errors.append({"code": "metadata-invalid", "path": str(path), "detail": detail})
+        except Exception as exc:
+            errors.append({"code": "frontmatter-invalid", "path": str(path), "detail": str(exc)})
         if not body_text.strip():
             empty_notes += 1
             errors.append(
@@ -1756,6 +1825,11 @@ def audit_book(
 
     report = {
         "schema_version": 1,
+        "corpus_snapshot": corpus_snapshot(book_root),
+        "evidence_files": {str(path.resolve()): sha256_file(path) for path in
+            (coverage_manifest, concept_manifest, lesson_flow_manifest, split_manifest_path, *content_repair_reports,
+             *(Path(json.loads(p.read_text(encoding="utf-8"))["repairs"]) for p in content_repair_reports if content_changes))
+            if isinstance(path, Path) and path.is_file()},
         "stage": stage,
         "status": "passed" if not errors else "failed",
         "book_root": str(book_root),
@@ -1836,6 +1910,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--coverage-manifest", type=Path)
     parser.add_argument("--concept-manifest", type=Path)
     parser.add_argument("--lesson-flow-manifest", type=Path)
+    parser.add_argument("--content-repair-report", type=Path, action="append", default=[])
     parser.add_argument("--json-out", type=Path)
     return parser.parse_args(argv)
 
@@ -1863,6 +1938,7 @@ def main(argv: list[str] | None = None) -> int:
             ),
             profile_path=args.profile.resolve() if args.profile else None,
             stage=args.stage,
+            content_repair_reports=[p.resolve() for p in args.content_repair_report],
         )
         output = json.dumps(report, ensure_ascii=False, indent=2)
         print(output)

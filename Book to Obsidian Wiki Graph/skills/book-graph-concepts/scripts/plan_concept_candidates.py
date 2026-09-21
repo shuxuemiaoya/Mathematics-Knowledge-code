@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -333,6 +334,7 @@ def plan_candidates(
                 hits[term].append(
                     {
                         "definition_source": source.relative_to(book_root).as_posix(),
+                        "source_note_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
                         "definition_start_line": start,
                         "definition_end_line": end,
                         "anchor_text": surface,

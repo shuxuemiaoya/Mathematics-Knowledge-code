@@ -120,11 +120,12 @@ class StandardizeMarkdownTests(unittest.TestCase):
         )
         self.assertTrue(MODULE.invariants(source, output)["links"])
 
-    def test_removes_stranded_functional_heading_without_body(self):
+    def test_preserves_stranded_functional_label_without_body(self):
         source = "知识正文。\n\n#### 思考\n"
         output, changes = MODULE.standardize_text(source)
-        self.assertEqual(output, "知识正文。\n")
-        self.assertEqual(changes["removed_artifact_headings"], 1)
+        self.assertEqual(output, "知识正文。\n\n思考\n")
+        self.assertEqual(changes["removed_artifact_headings"], 0)
+        self.assertTrue(MODULE.invariants(source, output)["source_order"])
 
     def test_repairs_child_link_already_quoted_by_an_older_pass(self):
         source = (
@@ -302,7 +303,7 @@ class StandardizeMarkdownTests(unittest.TestCase):
         self.assertIn("正文。", output)
         self.assertEqual(changes["removed_artifact_headings"], 2)
 
-    def test_repairs_spaced_digits_only_inside_math(self):
+    def test_spaced_digits_require_review_before_math_repair(self):
         source = (
             "页码 1 0 不改。\n\n"
             "$L=1 0\\lg(1 0^{-1 2})$\n\n"
@@ -310,9 +311,8 @@ class StandardizeMarkdownTests(unittest.TestCase):
         )
         output, changes = MODULE.standardize_text(source)
         self.assertIn("页码 1 0 不改。", output)
-        self.assertIn("$L=10\\lg(10^{-12})$", output)
-        self.assertIn("$$y=0.03t+1.11$$", output)
-        self.assertGreater(changes["repaired_ocr_math_fragments"], 0)
+        self.assertEqual(output, source)
+        self.assertEqual(changes["repaired_ocr_math_fragments"], 0)
 
     def test_does_not_convert_example_cross_reference(self):
         source = "例 1 中命题（1）给出了一个充分条件。\n\n例7的结果还可以表示为：\n"

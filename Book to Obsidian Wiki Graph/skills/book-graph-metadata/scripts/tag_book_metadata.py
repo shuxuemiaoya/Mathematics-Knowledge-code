@@ -12,6 +12,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
+from book_graph_integrity import parse_frontmatter, corpus_snapshot
+from book_graph_transaction import atomic_write, guarded_write_batch
+from book_graph_scope import managed_notes
+
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
         _stream.reconfigure(encoding="utf-8")
@@ -90,44 +95,26 @@ def write_json_atomic(path: Path, payload: Any, overwrite: bool = True) -> None:
         temporary.unlink(missing_ok=True)
 
 
-def parse_frontmatter(content: str) -> tuple[dict[str, str], str]:
-    """Extract existing YAML frontmatter key-values and remaining content."""
-    pattern = r"^---\s*\n(.*?)\n---\s*\n(.*)$"
-    match = re.match(pattern, content, re.DOTALL)
-    if not match:
-        return {}, content
-
-    yaml_block = match.group(1)
-    body = match.group(2)
-    metadata: dict[str, str] = {}
-    for line in yaml_block.splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if ":" in line:
-            key, val = line.split(":", 1)
-            metadata[key.strip()] = val.strip()
-    return metadata, body
-
-
-def format_frontmatter(metadata: dict[str, str], body: str) -> str:
+def format_frontmatter(metadata: dict[str, Any], body: str) -> str:
     """Serialize frontmatter dictionary and append body content."""
-    lines = ["---"]
-    for key, val in metadata.items():
-        lines.append(f"{key}: {val}")
-    lines.append("---")
-    lines.append(body if body.startswith("\n") else "\n" + body)
-    return "\n".join(lines)
+    import yaml
+    rendered = "---\n" + yaml.safe_dump(metadata, allow_unicode=True, sort_keys=False) + "---\n" + body
+    restored, restored_body = parse_frontmatter(rendered)
+    if restored != metadata or restored_body != body:
+        raise ValueError("YAML round-trip changed metadata or body")
+    return rendered
 
 
 def infer_grade(title: str, edition: str) -> str:
     combined = f"{title} {edition}".casefold()
-    if "选择性" in combined or "选修" in combined or "第二册" in combined or "第三册" in combined:
-        return "高二"
-    if "必修一" in combined or "第一册" in combined or "必修1" in combined:
-        return "高一"
     if "高三" in combined:
         return "高三"
+    if "选择性" in combined or "选修" in combined:
+        return "高二"
+    if "必修" in combined or "第一册" in combined:
+        return "高一"
+    if "高二" in combined or "第二册" in combined or "第三册" in combined:
+        return "高二"
     return "高一"
 
 
@@ -272,7 +259,12 @@ def derive_metadata_for_file(
     book_edition = profile.get("book", {}).get("edition", "")
 
     source = override_source or existing.get("来源") or infer_source(profile)
-    grade = override_grade or existing.get("年级") or infer_grade(book_title, book_edition)
+    if "textbook" not in str(profile.get("book", {}).get("kind", "mathematics-textbook")):
+        metadata = dict(existing)
+        metadata["来源"] = source
+        metadata.setdefault("节点类型", "内容")
+        return metadata
+    grade = override_grade or existing.get("年级") or profile.get("book", {}).get("grade") or infer_grade(book_title, book_edition)
     architecture_metadata = architecture_metadata or {}
     node_type = (
         architecture_metadata.get("节点类型")
@@ -298,19 +290,31 @@ def derive_metadata_for_file(
     metadata["难度"] = difficulty
     metadata["重要程度"] = importance
     metadata["推荐层级"] = tier
+    estimates = dict(existing.get("元数据估算", {}))
+    for field in ("时长", "难度", "重要程度", "推荐层级"):
+        if field not in existing:
+            estimates[field] = "heuristic-v1"
+    if estimates:
+        metadata["元数据估算"] = estimates
     return metadata
 
 
-def validate_file_metadata(metadata: dict[str, str]) -> list[str]:
+def validate_file_metadata(metadata: dict[str, Any], *, general: bool = False) -> list[str]:
     errors: list[str] = []
     required_keys = ["来源", "年级", "节点类型", "章节", "时长", "难度", "重要程度", "推荐层级"]
+    if general:
+        required_keys = ["来源", "节点类型"]
     for key in required_keys:
-        if key not in metadata or not metadata[key].strip():
+        if not isinstance(metadata.get(key), str) or not metadata[key].strip():
             errors.append(f"missing metadata field: {key}")
 
+    if general:
+        return errors
+    if errors:
+        return errors
     if "节点类型" in metadata and metadata["节点类型"] not in VALID_NODE_TYPES:
         errors.append(f"invalid 节点类型: {metadata['节点类型']}")
-    if metadata.get("节点类型") == "目录" and not metadata.get("组织类型", "").strip():
+    if metadata.get("节点类型") == "目录" and (not isinstance(metadata.get("组织类型"), str) or not metadata["组织类型"].strip()):
         errors.append("目录节点缺少组织类型")
     if "时长" in metadata and metadata["时长"] not in VALID_DURATIONS:
         errors.append(f"invalid 时长: {metadata['时长']}")
@@ -336,7 +340,15 @@ def process_book_metadata(
 ) -> dict[str, Any]:
     book_root = book_root.resolve()
     profile_path = profile_path.resolve()
+    guards = {profile_path: sha256_file(profile_path)}
     profile = read_json(profile_path)
+    if book_root != Path(profile["paths"]["book_root"]).resolve():
+        raise ValueError("metadata book_root does not match profile")
+    if output_report_path.exists() and not overwrite:
+        raise FileExistsError(output_report_path)
+    if output_report_path.resolve().is_relative_to(book_root):
+        raise ValueError("Keep the metadata report outside the managed corpus")
+    general = "textbook" not in str(profile.get("book", {}).get("kind", "mathematics-textbook"))
     source_sha256 = profile.get("source", {}).get("sha256", "")
     if split_manifest_path is None:
         candidate = Path(profile.get("paths", {}).get("staging_root", "")) / "split-manifest.json"
@@ -350,13 +362,16 @@ def process_book_metadata(
         split_manifest, profile, book_root
     )
 
-    md_files = sorted(f for f in book_root.rglob("*.md") if f.is_file())
+    md_files, evidence = managed_notes(profile, profile_path)
+    guards.update(evidence)
     tagged_count = 0
     errors: list[str] = []
     categories_summary: dict[str, int] = {}
+    pending: list[tuple[Path, str]] = []
 
     for file_path in md_files:
         try:
+            guards[file_path] = sha256_file(file_path)
             content = file_path.read_text(encoding="utf-8")
             existing_meta, body = parse_frontmatter(content)
             metadata = derive_metadata_for_file(
@@ -367,7 +382,7 @@ def process_book_metadata(
                 override_grade=override_grade,
                 architecture_metadata=architecture_by_path.get(file_path.resolve()),
             )
-            file_errors = validate_file_metadata(metadata)
+            file_errors = validate_file_metadata(metadata, general=general)
             if file_errors:
                 rel = file_path.relative_to(book_root).as_posix()
                 for err in file_errors:
@@ -379,12 +394,16 @@ def process_book_metadata(
 
             new_content = format_frontmatter(metadata, body)
             if new_content != content:
-                file_path.write_text(new_content, encoding="utf-8")
+                pending.append((file_path, new_content))
             tagged_count += 1
         except Exception as exc:
             rel = file_path.relative_to(book_root).as_posix()
             errors.append(f"{rel}: failed to process ({type(exc).__name__}: {exc})")
 
+    if not errors:
+        guarded_write_batch(pending, guards, writer=atomic_write)
+    else:
+        tagged_count = 0
     status = "passed" if not errors else "failed"
     report = {
         "schema_version": SCHEMA_VERSION,
@@ -399,6 +418,8 @@ def process_book_metadata(
             str(split_manifest_path.resolve()) if split_manifest_path else None
         ),
         "errors": errors,
+        "corpus_snapshot": corpus_snapshot(book_root),
+        "evidence_files": {str(path): digest for path, digest in evidence.items()},
     }
 
     write_json_atomic(output_report_path, report, overwrite=overwrite)

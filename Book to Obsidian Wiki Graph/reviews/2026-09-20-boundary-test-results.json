@@ -1,0 +1,75 @@
+{
+  "status": "passed",
+  "total_tests": 278,
+  "live_ocr": false,
+  "native_windows_tested": false,
+  "syntax_checked_files": 37,
+  "suites": [
+    {
+      "suite": "skills/book-graph-audit/tests",
+      "returncode": 0,
+      "tests": 33,
+      "output": ".................................\n----------------------------------------------------------------------\nRan 33 tests in 0.093s\n\nOK\n"
+    },
+    {
+      "suite": "skills/book-graph-canvas/tests",
+      "returncode": 0,
+      "tests": 6,
+      "output": "......\n----------------------------------------------------------------------\nRan 6 tests in 0.009s\n\nOK\n"
+    },
+    {
+      "suite": "skills/book-graph-concepts/tests",
+      "returncode": 0,
+      "tests": 32,
+      "output": "................................\n----------------------------------------------------------------------\nRan 32 tests in 0.018s\n\nOK\n"
+    },
+    {
+      "suite": "skills/book-graph-intake/tests",
+      "returncode": 0,
+      "tests": 9,
+      "output": ".........\n----------------------------------------------------------------------\nRan 9 tests in 0.008s\n\nOK\n"
+    },
+    {
+      "suite": "skills/book-graph-markdown/tests",
+      "returncode": 0,
+      "tests": 29,
+      "output": ".............................\n----------------------------------------------------------------------\nRan 29 tests in 0.003s\n\nOK\n"
+    },
+    {
+      "suite": "skills/book-graph-metadata/tests",
+      "returncode": 0,
+      "tests": 5,
+      "output": ".....\n----------------------------------------------------------------------\nRan 5 tests in 0.025s\n\nOK\n"
+    },
+    {
+      "suite": "skills/book-pdf-to-markdown/tests",
+      "returncode": 0,
+      "tests": 7,
+      "output": ".......\n----------------------------------------------------------------------\nRan 7 tests in 0.002s\n\nOK\n"
+    },
+    {
+      "suite": "skills/book-to-obsidian-wiki-graph/tests",
+      "returncode": 0,
+      "tests": 31,
+      "output": "...............................\n----------------------------------------------------------------------\nRan 31 tests in 0.099s\n\nOK\n"
+    },
+    {
+      "suite": "skills/book-toc-formatting/tests",
+      "returncode": 0,
+      "tests": 14,
+      "output": "..............\n----------------------------------------------------------------------\nRan 14 tests in 0.002s\n\nOK\n"
+    },
+    {
+      "suite": "skills/book-toc-splitting/tests",
+      "returncode": 0,
+      "tests": 79,
+      "output": "...............................................................................\n----------------------------------------------------------------------\nRan 79 tests in 0.046s\n\nOK\n"
+    },
+    {
+      "suite": "tests",
+      "returncode": 0,
+      "tests": 33,
+      "output": "...........Uploading part 1/1 in batch 1\n.Uploading part 1/1 in batch 1\n.....................\n----------------------------------------------------------------------\nRan 33 tests in 0.246s\n\nOK\n"
+    }
+  ]
+}

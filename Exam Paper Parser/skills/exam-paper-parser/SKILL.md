@@ -29,6 +29,8 @@ Use `run` with `--markdown` to consume an existing MinerU result without another
 
 ## Fast-path contract
 
+- **Stage 0 Title Standardization**: Automatically standardizes paper titles (`standardize_paper_title`) by stripping timestamp suffixes, recovering anonymous `xPad_paper_` names from PDF page 1 text, normalizing Kangxi/CJK radicals, unifying school years (`2024-2025`), and converting ASCII parentheses to standard Chinese `（）`.
+- **Flat Layout without Subfolders**: Questions (`Q*.md`) and answers (`Q*A1.md`) are saved directly in the paper directory alongside `<paper>.md`. No section subfolders (`一_单选题/`, etc.) or `题目/answers` subfolders are created.
 - Keep the PDF and OCR Markdown immutable.
 - Cache OCR by PDF SHA-256 and reuse it automatically.
 - Recognize standard question-section headings and a continuous global numeric ledger.

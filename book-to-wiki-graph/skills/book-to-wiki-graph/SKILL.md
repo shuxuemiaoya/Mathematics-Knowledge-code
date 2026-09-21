@@ -62,6 +62,23 @@ plugin is separate and must not be modified by this workflow.
    independently reusable knowledge with a different dependency structure.
 6. Run `finalize`. Stop if the final status is not `passed` or
    `atomization-review-queue.json` has unresolved items.
+   When repairing a legacy, already-materialized corpus whose sealed final
+   split one book/chapter/section introduction into paragraph or image
+   continuations, do not hand-edit Markdown. After the current Agent confirms
+   the exact source-complete merge, use
+   `scripts/migrate_scoped_introductions.py` to rebind atomization and relation
+   finals, then rematerialize into staging. The migration accepts only one
+   owner/role and blank-only gaps, removes redundant heading-free introduction
+   wrappers, deletes fragment-to-fragment pseudo-relations, and leaves other
+   boundary defects blocked for their normal organizer review.
+   If rematerialization then exposes a legacy printed subsection as
+   exercise-only, or a source-labelled exercise run crosses its next sibling,
+   do not weaken validation. Use
+   `scripts/migrate_legacy_organizer_ownership.py` against the validated legacy
+   materialized manifest. It may only nest a reviewed heading-free teaching
+   topic under its printed subsection or create reviewed exercise-group
+   organizers. Atom ranges, categories, prose, and semantic claims stay fixed;
+   owner keys, organizer paths, and bound digests are updated together.
 7. Before Markdown materialization, invoke `$knowledge-relation-mapper` with
    `prepare-concepts ... --atomization-final ...`. Stable temporary keys are
    computed from organizer, range, and category. Its first pass extracts
@@ -275,6 +292,16 @@ python scripts/atomize_book.py finalize \
   <staging_root>/round-2-decisions.json \
   --output-dir <staging_root>
 
+# Legacy repair only, after an Agent has reviewed the complete source span.
+python scripts/migrate_scoped_introductions.py \
+  <legacy_base_manifest> <legacy_atomization_final> <legacy_relation_final> \
+  --output-dir <repair_staging>
+
+python scripts/migrate_legacy_organizer_ownership.py \
+  <repaired_base_manifest> <repaired_atomization_final> \
+  <repaired_relation_final> <legacy_materialized_manifest> \
+  --output-dir <repair_staging_2>
+
 python ../knowledge-relation-mapper/scripts/relate_book.py prepare-concepts \
   <staging_root>/refined-draft-book-graph.json \
   --atomization-final <staging_root>/atomization-final.json \
@@ -325,6 +352,10 @@ python scripts/canvas_review.py prepare <book-root>/Canvas/canvas-index.json \
 
 # The current Agent views every jobs[*].png_path and writes decisions with
 # logic evidence before visual suggestions.
+python scripts/canvas_review.py seal-decisions \
+  <staging-root>/canvas-review-jobs.json \
+  <staging-root>/canvas-review-draft.json \
+  --output <staging-root>/canvas-review-decisions.json
 python scripts/canvas_review.py finalize \
   <staging-root>/canvas-review-jobs.json \
   <staging-root>/canvas-review-decisions.json \

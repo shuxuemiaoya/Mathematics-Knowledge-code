@@ -217,7 +217,7 @@ class PipelineRuntimeTests(unittest.TestCase):
             MODULE.write_json_atomic(state_path, state)
             MODULE.capture_stage_checkpoint(state_path, state, "intake")
             raw = root / "staging" / "source.raw.md"
-            raw.write_text("# Raw\n", encoding="utf-8")
+            raw.write_bytes((root / "source.md").read_bytes())
             MODULE.begin_stage(
                 state,
                 "markdown-registration",
@@ -561,7 +561,7 @@ class PipelineRuntimeTests(unittest.TestCase):
             _, _, _, profile = self.make_profile(root)
             state = MODULE.init_state(profile)
             raw = root / "staging" / "source.raw.md"
-            raw.write_text("# Raw\n", encoding="utf-8")
+            raw.write_bytes((root / "source.md").read_bytes())
             MODULE.begin_stage(
                 state,
                 "markdown-registration",
